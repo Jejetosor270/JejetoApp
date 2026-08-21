@@ -1,6 +1,6 @@
 # MB Procurement ERP
 
-Internal procurement-finance software for MB Interiors, a French interior-design SAS. The application will manage clients, projects and buildings, supplier procurement packages, landed costs, selling prices, VAT, currencies, payment schedules, delivery forecasts, cash exposure, and profitability.
+Internal procurement-finance software for interior-design studio. The application will manage clients, projects and buildings, supplier procurement packages, landed costs, selling prices, VAT, currencies, payment schedules, delivery forecasts, cash exposure, and profitability.
 
 The central procurement object is a supplier package/order. This is not an inventory, warehouse, product/SKU, room-specification, or statutory-accounting system.
 
