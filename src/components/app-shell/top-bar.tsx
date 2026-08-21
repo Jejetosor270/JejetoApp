@@ -1,0 +1,35 @@
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { MobileNavigation } from "@/components/app-shell/mobile-navigation";
+
+export function TopBar() {
+  return (
+    <header className="bg-background/95 sticky top-0 z-30 flex h-16 items-center justify-between border-b px-4 backdrop-blur-sm sm:px-6 lg:px-8">
+      <div className="flex min-w-0 items-center gap-2">
+        <MobileNavigation />
+        <div className="hidden items-center gap-2 text-sm sm:flex">
+          <span className="font-medium">Workspace</span>
+          <span aria-hidden="true" className="text-muted-foreground">
+            /
+          </span>
+          <span className="text-muted-foreground">Foundation</span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Badge
+          variant="outline"
+          className="border-positive/25 bg-positive-muted text-positive hidden sm:inline-flex"
+        >
+          Foundation ready
+        </Badge>
+        <div className="bg-border h-5 w-px" aria-hidden="true" />
+        <Avatar className="size-8 border">
+          <AvatarFallback className="bg-card text-xs font-semibold">
+            MB
+          </AvatarFallback>
+        </Avatar>
+      </div>
+    </header>
+  );
+}

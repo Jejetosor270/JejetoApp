@@ -1,0 +1,544 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  USER
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum ProcurementOrderStatus {
+  DRAFT
+  QUOTED
+  APPROVED
+  ORDERED
+  DEPOSIT_DUE
+  DEPOSIT_PAID
+  IN_PRODUCTION
+  READY
+  BALANCE_DUE
+  PAID
+  IN_TRANSIT
+  DELIVERED
+  CLOSED
+  CANCELLED
+}
+
+enum FinancialState {
+  BUDGET
+  COMMITTED
+  ACTUAL
+}
+
+enum ProcurementCostCategory {
+  SUPPLIER_PURCHASE
+  SUPPLIER_DISCOUNT
+  FREIGHT
+  CUSTOMS_DUTIES
+  MISCELLANEOUS
+}
+
+enum FreightTreatment {
+  INCLUDED_IN_PACKAGE_PRICE
+  RECHARGED_SEPARATELY
+  NOT_APPLICABLE
+}
+
+enum VatTreatment {
+  DOMESTIC
+  INTRA_EU_SUPPLY
+  INTRA_EU_ACQUISITION
+  REVERSE_CHARGE
+  EXPORT
+  IMPORT
+  EXEMPT
+  OUT_OF_SCOPE
+  CUSTOM
+}
+
+enum VatDirection {
+  INPUT
+  OUTPUT
+}
+
+enum PaymentStatus {
+  UPCOMING
+  DUE_SOON
+  DUE
+  OVERDUE
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+model User {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(160)
+  email       String   @unique @db.VarChar(320)
+  authSubject String?  @unique @db.VarChar(255)
+  role        UserRole @default(USER)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?  @db.Uuid
+  updatedById String?  @db.Uuid
+
+  createdBy User? @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("UserUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  createdUsers User[] @relation("UserCreatedBy")
+  updatedUsers User[] @relation("UserUpdatedBy")
+
+  managedProjects Project[] @relation("ProjectManager")
+
+  createdClients              Client[]                     @relation("ClientCreatedBy")
+  updatedClients              Client[]                     @relation("ClientUpdatedBy")
+  createdSuppliers            Supplier[]                   @relation("SupplierCreatedBy")
+  updatedSuppliers            Supplier[]                   @relation("SupplierUpdatedBy")
+  createdProjects             Project[]                    @relation("ProjectCreatedBy")
+  updatedProjects             Project[]                    @relation("ProjectUpdatedBy")
+  createdBuildings            Building[]                   @relation("BuildingCreatedBy")
+  updatedBuildings            Building[]                   @relation("BuildingUpdatedBy")
+  createdOrders               ProcurementOrder[]           @relation("ProcurementOrderCreatedBy")
+  updatedOrders               ProcurementOrder[]           @relation("ProcurementOrderUpdatedBy")
+  linkedOrderBuildings        ProcurementOrderBuilding[]   @relation("OrderBuildingCreatedBy")
+  createdOrderFinancials      ProcurementOrderFinancials[] @relation("OrderFinancialsCreatedBy")
+  updatedOrderFinancials      ProcurementOrderFinancials[] @relation("OrderFinancialsUpdatedBy")
+  createdCostLines            ProcurementOrderCostLine[]   @relation("CostLineCreatedBy")
+  updatedCostLines            ProcurementOrderCostLine[]   @relation("CostLineUpdatedBy")
+  createdVatEntries           ProcurementOrderVatEntry[]   @relation("VatEntryCreatedBy")
+  updatedVatEntries           ProcurementOrderVatEntry[]   @relation("VatEntryUpdatedBy")
+  createdSupplierInstallments SupplierPaymentInstallment[] @relation("SupplierInstallmentCreatedBy")
+  updatedSupplierInstallments SupplierPaymentInstallment[] @relation("SupplierInstallmentUpdatedBy")
+  createdSupplierPayments     SupplierPayment[]            @relation("SupplierPaymentCreatedBy")
+  updatedSupplierPayments     SupplierPayment[]            @relation("SupplierPaymentUpdatedBy")
+  createdClientInstallments   ClientPaymentInstallment[]   @relation("ClientInstallmentCreatedBy")
+  updatedClientInstallments   ClientPaymentInstallment[]   @relation("ClientInstallmentUpdatedBy")
+  createdClientReceipts       ClientReceipt[]              @relation("ClientReceiptCreatedBy")
+  updatedClientReceipts       ClientReceipt[]              @relation("ClientReceiptUpdatedBy")
+
+  @@index([isActive])
+  @@map("users")
+}
+
+model Currency {
+  code       String   @id @db.Char(3)
+  name       String   @db.VarChar(80)
+  minorUnits Int      @default(2)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  clients   Client[]           @relation("ClientDefaultCurrency")
+  suppliers Supplier[]         @relation("SupplierDefaultCurrency")
+  projects  Project[]          @relation("ProjectReportingCurrency")
+  orders    ProcurementOrder[] @relation("OrderCurrency")
+
+  financialsSellingOriginal  ProcurementOrderFinancials[] @relation("FinancialsSellingOriginalCurrency")
+  financialsSellingReporting ProcurementOrderFinancials[] @relation("FinancialsSellingReportingCurrency")
+  costLinesOriginal          ProcurementOrderCostLine[]   @relation("CostLineOriginalCurrency")
+  costLinesReporting         ProcurementOrderCostLine[]   @relation("CostLineReportingCurrency")
+  vatEntriesOriginal         ProcurementOrderVatEntry[]   @relation("VatEntryOriginalCurrency")
+  vatEntriesReporting        ProcurementOrderVatEntry[]   @relation("VatEntryReportingCurrency")
+  supplierInstallments       SupplierPaymentInstallment[] @relation("SupplierInstallmentCurrency")
+  supplierInstallmentReports SupplierPaymentInstallment[] @relation("SupplierInstallmentReportingCurrency")
+  supplierPayments           SupplierPayment[]            @relation("SupplierPaymentCurrency")
+  supplierPaymentReports     SupplierPayment[]            @relation("SupplierPaymentReportingCurrency")
+  clientInstallments         ClientPaymentInstallment[]   @relation("ClientInstallmentCurrency")
+  clientInstallmentReports   ClientPaymentInstallment[]   @relation("ClientInstallmentReportingCurrency")
+  clientReceipts             ClientReceipt[]              @relation("ClientReceiptCurrency")
+  clientReceiptReports       ClientReceipt[]              @relation("ClientReceiptReportingCurrency")
+
+  @@index([isActive])
+  @@map("currencies")
+}
+
+model Client {
+  id                  String   @id @default(uuid()) @db.Uuid
+  legalName           String   @db.VarChar(200)
+  displayName         String   @db.VarChar(160)
+  billingAddressLine1 String?  @db.VarChar(200)
+  billingAddressLine2 String?  @db.VarChar(200)
+  billingCity         String?  @db.VarChar(120)
+  billingPostalCode   String?  @db.VarChar(32)
+  countryCode         String?  @db.Char(2)
+  vatNumber           String?  @db.VarChar(64)
+  defaultCurrencyCode String   @db.Char(3)
+  contactName         String?  @db.VarChar(160)
+  email               String?  @db.VarChar(320)
+  phone               String?  @db.VarChar(50)
+  notes               String?  @db.Text
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  createdById         String?  @db.Uuid
+  updatedById         String?  @db.Uuid
+
+  defaultCurrency Currency  @relation("ClientDefaultCurrency", fields: [defaultCurrencyCode], references: [code], onDelete: Restrict)
+  createdBy       User?     @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy       User?     @relation("ClientUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  projects        Project[]
+
+  @@index([displayName])
+  @@index([isActive])
+  @@map("clients")
+}
+
+model Supplier {
+  id                      String   @id @default(uuid()) @db.Uuid
+  legalName               String   @db.VarChar(200)
+  displayName             String   @db.VarChar(160)
+  addressLine1            String?  @db.VarChar(200)
+  addressLine2            String?  @db.VarChar(200)
+  city                    String?  @db.VarChar(120)
+  postalCode              String?  @db.VarChar(32)
+  countryCode             String?  @db.Char(2)
+  vatNumber               String?  @db.VarChar(64)
+  defaultCurrencyCode     String   @db.Char(3)
+  contactName             String?  @db.VarChar(160)
+  email                   String?  @db.VarChar(320)
+  phone                   String?  @db.VarChar(50)
+  defaultPaymentTermsDays Int?
+  defaultLeadTimeWeeks    Int?
+  notes                   String?  @db.Text
+  isActive                Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  createdById             String?  @db.Uuid
+  updatedById             String?  @db.Uuid
+
+  defaultCurrency Currency           @relation("SupplierDefaultCurrency", fields: [defaultCurrencyCode], references: [code], onDelete: Restrict)
+  createdBy       User?              @relation("SupplierCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy       User?              @relation("SupplierUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  orders          ProcurementOrder[]
+
+  @@index([displayName])
+  @@index([isActive])
+  @@map("suppliers")
+}
+
+model Project {
+  id                     String        @id @default(uuid()) @db.Uuid
+  name                   String        @db.VarChar(200)
+  code                   String        @unique @db.VarChar(40)
+  clientId               String        @db.Uuid
+  countryCode            String?       @db.Char(2)
+  reportingCurrencyCode  String        @db.Char(3)
+  projectManagerId       String?       @db.Uuid
+  startDate              DateTime?     @db.Date
+  expectedCompletionDate DateTime?     @db.Date
+  status                 ProjectStatus @default(PLANNING)
+  notes                  String?       @db.Text
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  createdById            String?       @db.Uuid
+  updatedById            String?       @db.Uuid
+
+  client             Client                     @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  reportingCurrency  Currency                   @relation("ProjectReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
+  projectManager     User?                      @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
+  createdBy          User?                      @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy          User?                      @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  buildings          Building[]
+  orders             ProcurementOrder[]
+  clientInstallments ClientPaymentInstallment[]
+
+  @@index([clientId])
+  @@index([projectManagerId])
+  @@index([status])
+  @@map("projects")
+}
+
+model Building {
+  id          String   @id @default(uuid()) @db.Uuid
+  projectId   String   @db.Uuid
+  name        String   @db.VarChar(160)
+  shortCode   String   @db.VarChar(32)
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?  @db.Uuid
+  updatedById String?  @db.Uuid
+
+  project   Project                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  createdBy User?                      @relation("BuildingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?                      @relation("BuildingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  orders    ProcurementOrderBuilding[]
+
+  @@unique([projectId, shortCode])
+  @@index([projectId, isActive])
+  @@map("buildings")
+}
+
+model ProcurementOrder {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  orderNumber           String                 @unique @db.VarChar(50)
+  packageName           String                 @db.VarChar(200)
+  projectId             String                 @db.Uuid
+  supplierId            String                 @db.Uuid
+  orderCurrencyCode     String                 @db.Char(3)
+  status                ProcurementOrderStatus @default(DRAFT)
+  freightTreatment      FreightTreatment       @default(NOT_APPLICABLE)
+  quoteDate             DateTime?              @db.Date
+  orderDate             DateTime?              @db.Date
+  acknowledgementDate   DateTime?              @db.Date
+  leadTimeWeeks         Int?
+  estimatedProductionAt DateTime?              @db.Date
+  actualProductionAt    DateTime?              @db.Date
+  estimatedDispatchAt   DateTime?              @db.Date
+  actualDispatchAt      DateTime?              @db.Date
+  estimatedDeliveryAt   DateTime?              @db.Date
+  actualDeliveryAt      DateTime?              @db.Date
+  notes                 String?                @db.Text
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  createdById           String?                @db.Uuid
+  updatedById           String?                @db.Uuid
+
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  supplier      Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  orderCurrency Currency @relation("OrderCurrency", fields: [orderCurrencyCode], references: [code], onDelete: Restrict)
+  createdBy     User?    @relation("ProcurementOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy     User?    @relation("ProcurementOrderUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  buildings            ProcurementOrderBuilding[]
+  financials           ProcurementOrderFinancials[]
+  supplierInstallments SupplierPaymentInstallment[]
+
+  @@index([projectId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([estimatedDeliveryAt])
+  @@map("procurement_orders")
+}
+
+model ProcurementOrderBuilding {
+  orderId     String   @db.Uuid
+  buildingId  String   @db.Uuid
+  createdAt   DateTime @default(now())
+  createdById String?  @db.Uuid
+
+  order     ProcurementOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  building  Building         @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  createdBy User?            @relation("OrderBuildingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@id([orderId, buildingId])
+  @@index([buildingId])
+  @@map("procurement_order_buildings")
+}
+
+/// One normalized record per order and financial state. Landed cost and gross profit
+/// are derived from its line items and pricing fields rather than stored as stale totals.
+model ProcurementOrderFinancials {
+  id                                String         @id @default(uuid()) @db.Uuid
+  orderId                           String         @db.Uuid
+  state                             FinancialState
+  targetMarginRate                  Decimal?       @db.Decimal(9, 6)
+  sellingPriceOriginalAmount        Decimal?       @db.Decimal(19, 4)
+  sellingPriceOriginalCurrencyCode  String?        @db.Char(3)
+  sellingPriceFxRate                Decimal?       @db.Decimal(20, 10)
+  sellingPriceReportingAmount       Decimal?       @db.Decimal(19, 4)
+  sellingPriceReportingCurrencyCode String?        @db.Char(3)
+  notes                             String?        @db.Text
+  createdAt                         DateTime       @default(now())
+  updatedAt                         DateTime       @updatedAt
+  createdById                       String?        @db.Uuid
+  updatedById                       String?        @db.Uuid
+
+  order                         ProcurementOrder           @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  sellingPriceOriginalCurrency  Currency?                  @relation("FinancialsSellingOriginalCurrency", fields: [sellingPriceOriginalCurrencyCode], references: [code], onDelete: Restrict)
+  sellingPriceReportingCurrency Currency?                  @relation("FinancialsSellingReportingCurrency", fields: [sellingPriceReportingCurrencyCode], references: [code], onDelete: Restrict)
+  createdBy                     User?                      @relation("OrderFinancialsCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy                     User?                      @relation("OrderFinancialsUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  costLines                     ProcurementOrderCostLine[]
+  vatEntries                    ProcurementOrderVatEntry[]
+
+  @@unique([orderId, state])
+  @@index([state])
+  @@map("procurement_order_financials")
+}
+
+model ProcurementOrderCostLine {
+  id                    String                  @id @default(uuid()) @db.Uuid
+  financialsId          String                  @db.Uuid
+  category              ProcurementCostCategory
+  description           String?                 @db.VarChar(200)
+  originalAmount        Decimal                 @db.Decimal(19, 4)
+  originalCurrencyCode  String                  @db.Char(3)
+  fxRateToReporting     Decimal?                @db.Decimal(20, 10)
+  reportingAmount       Decimal?                @db.Decimal(19, 4)
+  reportingCurrencyCode String                  @db.Char(3)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  createdById           String?                 @db.Uuid
+  updatedById           String?                 @db.Uuid
+
+  financials        ProcurementOrderFinancials @relation(fields: [financialsId], references: [id], onDelete: Restrict)
+  originalCurrency  Currency                   @relation("CostLineOriginalCurrency", fields: [originalCurrencyCode], references: [code], onDelete: Restrict)
+  reportingCurrency Currency                   @relation("CostLineReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
+  createdBy         User?                      @relation("CostLineCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy         User?                      @relation("CostLineUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([financialsId, category])
+  @@map("procurement_order_cost_lines")
+}
+
+model ProcurementOrderVatEntry {
+  id                    String       @id @default(uuid()) @db.Uuid
+  financialsId          String       @db.Uuid
+  direction             VatDirection
+  treatment             VatTreatment
+  countryCode           String?      @db.Char(2)
+  customTreatmentNote   String?      @db.VarChar(240)
+  taxableBaseAmount     Decimal      @db.Decimal(19, 4)
+  vatRate               Decimal?     @db.Decimal(9, 6)
+  vatAmount             Decimal      @db.Decimal(19, 4)
+  originalCurrencyCode  String       @db.Char(3)
+  fxRateToReporting     Decimal?     @db.Decimal(20, 10)
+  reportingTaxableBase  Decimal?     @db.Decimal(19, 4)
+  reportingVatAmount    Decimal?     @db.Decimal(19, 4)
+  reportingCurrencyCode String       @db.Char(3)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  createdById           String?      @db.Uuid
+  updatedById           String?      @db.Uuid
+
+  financials        ProcurementOrderFinancials @relation(fields: [financialsId], references: [id], onDelete: Restrict)
+  originalCurrency  Currency                   @relation("VatEntryOriginalCurrency", fields: [originalCurrencyCode], references: [code], onDelete: Restrict)
+  reportingCurrency Currency                   @relation("VatEntryReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
+  createdBy         User?                      @relation("VatEntryCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy         User?                      @relation("VatEntryUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([financialsId, direction])
+  @@map("procurement_order_vat_entries")
+}
+
+model SupplierPaymentInstallment {
+  id                      String        @id @default(uuid()) @db.Uuid
+  orderId                 String        @db.Uuid
+  sequence                Int
+  description             String        @db.VarChar(200)
+  percentageRate          Decimal?      @db.Decimal(9, 6)
+  expectedAmount          Decimal?      @db.Decimal(19, 4)
+  currencyCode            String        @db.Char(3)
+  expectedDueDate         DateTime?     @db.Date
+  expectedFxRate          Decimal?      @db.Decimal(20, 10)
+  expectedReportingAmount Decimal?      @db.Decimal(19, 4)
+  reportingCurrencyCode   String        @db.Char(3)
+  status                  PaymentStatus @default(UPCOMING)
+  notes                   String?       @db.Text
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  createdById             String?       @db.Uuid
+  updatedById             String?       @db.Uuid
+
+  order             ProcurementOrder  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  currency          Currency          @relation("SupplierInstallmentCurrency", fields: [currencyCode], references: [code], onDelete: Restrict)
+  reportingCurrency Currency          @relation("SupplierInstallmentReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
+  createdBy         User?             @relation("SupplierInstallmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy         User?             @relation("SupplierInstallmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  payments          SupplierPayment[]
+
+  @@unique([orderId, sequence])
+  @@index([status, expectedDueDate])
+  @@map("supplier_payment_installments")
+}
+
+model SupplierPayment {
+  id                    String   @id @default(uuid()) @db.Uuid
+  installmentId         String   @db.Uuid
+  amount                Decimal  @db.Decimal(19, 4)
+  currencyCode          String   @db.Char(3)
+  paidAt                DateTime @db.Date
+  fxRateToReporting     Decimal? @db.Decimal(20, 10)
+  reportingAmount       Decimal? @db.Decimal(19, 4)
+  reportingCurrencyCode String   @db.Char(3)
+  paymentReference      String?  @db.VarChar(120)
+  notes                 String?  @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  createdById           String?  @db.Uuid
+  updatedById           String?  @db.Uuid
+
+  installment       SupplierPaymentInstallment @relation(fields: [installmentId], references: [id], onDelete: Restrict)
+  currency          Currency                   @relation("SupplierPaymentCurrency", fields: [currencyCode], references: [code], onDelete: Restrict)
+  reportingCurrency Currency                   @relation("SupplierPaymentReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
+  createdBy         User?                      @relation("SupplierPaymentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy         User?                      @relation("SupplierPaymentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([installmentId, paidAt])
+  @@map("supplier_payments")
+}
+
+model ClientPaymentInstallment {
+  id                      String        @id @default(uuid()) @db.Uuid
+  projectId               String        @db.Uuid
+  sequence                Int
+  description             String        @db.VarChar(200)
+  percentageRate          Decimal?      @db.Decimal(9, 6)
+  expectedAmount          Decimal?      @db.Decimal(19, 4)
+  currencyCode            String        @db.Char(3)
+  expectedDate            DateTime?     @db.Date
+  expectedFxRate          Decimal?      @db.Decimal(20, 10)
+  expectedReportingAmount Decimal?      @db.Decimal(19, 4)
+  reportingCurrencyCode   String        @db.Char(3)
+  status                  PaymentStatus @default(UPCOMING)
+  reference               String?       @db.VarChar(120)
+  notes                   String?       @db.Text
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  createdById             String?       @db.Uuid
+  updatedById             String?       @db.Uuid
+
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  currency          Currency        @relation("ClientInstallmentCurrency", fields: [currencyCode], references: [code], onDelete: Restrict)
+  reportingCurrency Currency        @relation("ClientInstallmentReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
+  createdBy         User?           @relation("ClientInstallmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy         User?           @relation("ClientInstallmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  receipts          ClientReceipt[]
+
+  @@unique([projectId, sequence])
+  @@index([status, expectedDate])
+  @@map("client_payment_installments")
+}
+
+model ClientReceipt {
+  id                    String   @id @default(uuid()) @db.Uuid
+  installmentId         String   @db.Uuid
+  amount                Decimal  @db.Decimal(19, 4)
+  currencyCode          String   @db.Char(3)
+  receivedAt            DateTime @db.Date
+  fxRateToReporting     Decimal? @db.Decimal(20, 10)
+  reportingAmount       Decimal? @db.Decimal(19, 4)
+  reportingCurrencyCode String   @db.Char(3)
+  receiptReference      String?  @db.VarChar(120)
+  notes                 String?  @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  createdById           String?  @db.Uuid
+  updatedById           String?  @db.Uuid
+
+  installment       ClientPaymentInstallment @relation(fields: [installmentId], references: [id], onDelete: Restrict)
+  currency          Currency                 @relation("ClientReceiptCurrency", fields: [currencyCode], references: [code], onDelete: Restrict)
+  reportingCurrency Currency                 @relation("ClientReceiptReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
+  createdBy         User?                    @relation("ClientReceiptCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy         User?                    @relation("ClientReceiptUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([installmentId, receivedAt])
+  @@map("client_receipts")
+}

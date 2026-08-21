@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MB Procurement">
+  <rect width="64" height="64" rx="12" fill="#174c8c" />
+  <path
+    fill="#fff"
+    d="M14 18h8.2l9.8 16.1L41.8 18H50v28h-7V29.3L34.9 43h-5.8L21 29.3V46h-7V18Z"
+  />
+</svg>
