@@ -46,6 +46,10 @@ export default async function OrderPage({
                 order.sellingCurrencyCode,
               )}
             </p>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Original selling currency · reporting in{" "}
+              {order.project.reportingCurrencyCode}
+            </p>
           </div>
         </div>
         {order.description ? (
@@ -54,7 +58,7 @@ export default async function OrderPage({
           </p>
         ) : null}
       </header>
-      <section className="grid gap-3 lg:grid-cols-3">
+      <section className="grid gap-3 xl:grid-cols-3">
         {order.financialStates.map((financial) => (
           <article
             className="bg-card rounded-lg border p-4"
@@ -90,13 +94,93 @@ export default async function OrderPage({
               <dd className="financial-figure text-right">
                 {formatMoney(financial.miscellaneous, order.orderCurrencyCode)}
               </dd>
-              <dt className="border-t pt-2 font-medium">Landed cost</dt>
+              <dt className="border-t pt-2 font-medium">Landed cost HT</dt>
               <dd className="financial-figure border-t pt-2 text-right font-semibold">
                 {formatMoney(financial.landedCost, order.orderCurrencyCode)}
               </dd>
+              <dt className="text-muted-foreground">Input VAT</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  financial.inputVat?.amount ?? null,
+                  order.orderCurrencyCode,
+                )}
+              </dd>
+              <dt className="text-muted-foreground">Purchase TTC</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  financial.inputVat?.totalIncludingVat ?? null,
+                  order.orderCurrencyCode,
+                )}
+              </dd>
+              <dt className="text-muted-foreground">Input VAT treatment</dt>
+              <dd className="text-right text-xs">
+                {financial.inputVat
+                  ? `${financial.inputVat.treatment.replaceAll("_", " ")} · ${financial.inputVat.recoverability?.replaceAll("_", " ")}`
+                  : "—"}
+              </dd>
+              {financial.inputVat ? (
+                <>
+                  <dt className="text-muted-foreground">Input VAT basis</dt>
+                  <dd className="text-right text-xs">
+                    {financial.inputVat.amountIsManual
+                      ? "Manual amount"
+                      : "Calculated from rate"}
+                  </dd>
+                </>
+              ) : null}
+              <dt className="border-t pt-2 font-medium">
+                Economic cost ({order.project.reportingCurrencyCode})
+              </dt>
+              <dd className="financial-figure border-t pt-2 text-right font-semibold">
+                {formatMoney(
+                  financial.reportingEconomicLandedCost,
+                  order.project.reportingCurrencyCode,
+                )}
+              </dd>
+              <dt className="text-muted-foreground">Selling HT</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  order.totalSellingRevenue,
+                  order.sellingCurrencyCode,
+                )}
+              </dd>
+              <dt className="text-muted-foreground">Output VAT</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  financial.outputVat?.amount ?? null,
+                  order.sellingCurrencyCode,
+                )}
+              </dd>
+              <dt className="text-muted-foreground">Selling TTC</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  financial.outputVat?.totalIncludingVat ?? null,
+                  order.sellingCurrencyCode,
+                )}
+              </dd>
+              {financial.outputVat ? (
+                <>
+                  <dt className="text-muted-foreground">Output VAT basis</dt>
+                  <dd className="text-right text-xs">
+                    {financial.outputVat.amountIsManual
+                      ? "Manual amount"
+                      : "Calculated from rate"}
+                  </dd>
+                </>
+              ) : null}
+              <dt className="text-muted-foreground">Selling reporting</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  financial.reportingSellingRevenue,
+                  order.project.reportingCurrencyCode,
+                )}
+              </dd>
               <dt className="text-muted-foreground">Gross profit</dt>
               <dd className="financial-figure text-right">
-                {formatMoney(financial.grossProfit, order.sellingCurrencyCode)}
+                {formatMoney(
+                  financial.grossProfit,
+                  order.project.reportingCurrencyCode,
+                )}
               </dd>
               <dt className="text-muted-foreground">Gross margin</dt>
               <dd className="financial-figure text-right font-medium">
@@ -107,6 +191,27 @@ export default async function OrderPage({
                 {formatRate(financial.markupRate)}
               </dd>
             </dl>
+            <div className="text-muted-foreground mt-4 border-t pt-3 text-xs">
+              <p>
+                Purchase FX:{" "}
+                {financial.purchaseFxRate ??
+                  (order.orderCurrencyCode ===
+                  order.project.reportingCurrencyCode
+                    ? "1 (same currency)"
+                    : "Missing")}
+                {" · "}Selling FX:{" "}
+                {financial.sellingFxRate ??
+                  (order.sellingCurrencyCode ===
+                  order.project.reportingCurrencyCode
+                    ? "1 (same currency)"
+                    : "Missing")}
+              </p>
+              {financial.missingFx.length ? (
+                <p className="text-destructive mt-2 font-medium">
+                  Incomplete: missing {financial.missingFx.join(", ")}.
+                </p>
+              ) : null}
+            </div>
           </article>
         ))}
       </section>

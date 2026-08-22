@@ -5,7 +5,10 @@ import { ProjectDetail } from "@/app/(app)/projects/[projectId]/project-detail";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listProjectFormOptions } from "@/lib/master-data/lookups";
 import { getProject } from "@/lib/master-data/projects";
-import { listProjectOrders } from "@/lib/procurement/orders";
+import {
+  listProjectOrders,
+  projectProcurementSummary,
+} from "@/lib/procurement/orders";
 
 export const metadata: Metadata = { title: "Project" };
 
@@ -23,6 +26,7 @@ export default async function ProjectPage({
   ]);
   if (!result) notFound();
   const { buildings, project } = result;
+  const procurementSummary = projectProcurementSummary(orders);
   return (
     <ProjectDetail
       buildings={buildings}
@@ -35,7 +39,8 @@ export default async function ProjectPage({
           (state) => state.state === "COMMITTED",
         );
         return {
-          committedLandedCost: committed?.landedCost ?? null,
+          committedLandedCost: committed?.reportingEconomicLandedCost ?? null,
+          conversionComplete: committed?.conversionComplete ?? true,
           grossMarginRate: committed?.grossMarginRate ?? null,
           id: order.id,
           orderCurrencyCode: order.orderCurrencyCode,
@@ -44,7 +49,7 @@ export default async function ProjectPage({
           sellingCurrencyCode: order.sellingCurrencyCode,
           status: order.status,
           supplierName: order.supplier.displayName,
-          totalSellingRevenue: order.totalSellingRevenue,
+          totalSellingRevenue: committed?.reportingSellingRevenue ?? null,
         };
       })}
       project={{
@@ -53,6 +58,7 @@ export default async function ProjectPage({
           project.expectedCompletionDate?.toISOString() ?? null,
         startDate: project.startDate?.toISOString() ?? null,
       }}
+      procurementSummary={procurementSummary}
       statuses={options.statuses}
     />
   );

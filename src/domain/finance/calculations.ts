@@ -15,6 +15,23 @@ interface LandedCostInput {
   miscellaneous?: FinancialDecimal;
 }
 
+interface CurrencyConversionInput {
+  originalAmount: FinancialDecimal;
+  originalCurrencyCode: string;
+  reportingCurrencyCode: string;
+  fxRateToReporting?: FinancialDecimal | null | undefined;
+}
+
+interface CrossCurrencyPricingInput {
+  economicLandedCost: FinancialDecimal;
+  purchaseCurrencyCode: string;
+  purchaseFxRateToReporting?: FinancialDecimal | null | undefined;
+  reportingCurrencyCode: string;
+  sellingCurrencyCode: string;
+  sellingFxRateToReporting?: FinancialDecimal | null | undefined;
+  sellingRevenue: FinancialDecimal;
+}
+
 export type FreightTreatmentValue =
   "INCLUDED_IN_PACKAGE_PRICE" | "RECHARGED_SEPARATELY" | "NOT_APPLICABLE";
 
@@ -186,4 +203,86 @@ export function convertCurrency(
   }
 
   return decimal(originalAmount).times(rate);
+}
+
+/**
+ * Converts to project reporting currency using the convention
+ * 1 original-currency unit = X reporting-currency units.
+ * A missing foreign-currency rate deliberately produces an incomplete value.
+ */
+export function reportingAmount({
+  fxRateToReporting,
+  originalAmount,
+  originalCurrencyCode,
+  reportingCurrencyCode,
+}: CurrencyConversionInput): Decimal | null {
+  const amount = nonNegative(originalAmount, "Original amount");
+
+  if (originalCurrencyCode === reportingCurrencyCode) return amount;
+  if (fxRateToReporting === null || fxRateToReporting === undefined)
+    return null;
+  return convertCurrency(amount, fxRateToReporting);
+}
+
+/** VAT amount from an HT taxable base and a fractional rate such as 0.20. */
+export function vatAmount(
+  taxableBase: FinancialDecimal,
+  vatRate: FinancialDecimal,
+): Decimal {
+  const base = nonNegative(taxableBase, "VAT taxable base");
+  const rate = nonNegative(vatRate, "VAT rate");
+
+  if (rate.greaterThan(ONE)) {
+    throw new RangeError("VAT rate cannot exceed 100%.");
+  }
+  return base.times(rate);
+}
+
+/** HT plus VAT; VAT remains separate from commercial revenue. */
+export function amountIncludingVat(
+  amountExcludingVat: FinancialDecimal,
+  taxAmount: FinancialDecimal,
+): Decimal {
+  return nonNegative(amountExcludingVat, "Amount excluding VAT").plus(
+    nonNegative(taxAmount, "VAT amount"),
+  );
+}
+
+/** Only non-recoverable input VAT increases economic landed cost. */
+export function economicLandedCost(
+  landedCostExcludingVat: FinancialDecimal,
+  nonRecoverableInputVat: FinancialDecimal = ZERO,
+): Decimal {
+  return nonNegative(landedCostExcludingVat, "Landed cost HT").plus(
+    nonNegative(nonRecoverableInputVat, "Non-recoverable input VAT"),
+  );
+}
+
+/** Calculates margin only after both commercial sides share a currency. */
+export function crossCurrencyFinancialMetrics({
+  economicLandedCost: cost,
+  purchaseCurrencyCode,
+  purchaseFxRateToReporting,
+  reportingCurrencyCode,
+  sellingCurrencyCode,
+  sellingFxRateToReporting,
+  sellingRevenue,
+}: CrossCurrencyPricingInput): FinancialMetrics | null {
+  const reportingCost = reportingAmount({
+    fxRateToReporting: purchaseFxRateToReporting,
+    originalAmount: cost,
+    originalCurrencyCode: purchaseCurrencyCode,
+    reportingCurrencyCode,
+  });
+  const reportingRevenue = reportingAmount({
+    fxRateToReporting: sellingFxRateToReporting,
+    originalAmount: sellingRevenue,
+    originalCurrencyCode: sellingCurrencyCode,
+    reportingCurrencyCode,
+  });
+  if (reportingCost === null || reportingRevenue === null) return null;
+  return financialMetrics({
+    landedCost: reportingCost,
+    sellingPrice: reportingRevenue,
+  });
 }

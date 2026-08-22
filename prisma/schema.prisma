@@ -80,6 +80,11 @@ enum VatDirection {
   OUTPUT
 }
 
+enum VatRecoverability {
+  RECOVERABLE
+  NON_RECOVERABLE
+}
+
 enum PaymentStatus {
   UPCOMING
   DUE_SOON
@@ -91,19 +96,19 @@ enum PaymentStatus {
 }
 
 model User {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String   @db.VarChar(160)
-  email       String   @unique @db.VarChar(320)
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @db.VarChar(160)
+  email        String   @unique @db.VarChar(320)
   /// Nullable only for historical, pre-authentication records. Such records are inactive
   /// and cannot establish an employee session.
   passwordHash String?  @db.VarChar(255)
-  authSubject String?  @unique @db.VarChar(255)
-  role        UserRole @default(USER)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  createdById String?  @db.Uuid
-  updatedById String?  @db.Uuid
+  authSubject  String?  @unique @db.VarChar(255)
+  role         UserRole @default(USER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdById  String?  @db.Uuid
+  updatedById  String?  @db.Uuid
 
   createdBy User? @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy User? @relation("UserUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
@@ -151,10 +156,10 @@ model Currency {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  clients   Client[]           @relation("ClientDefaultCurrency")
-  suppliers Supplier[]         @relation("SupplierDefaultCurrency")
-  projects  Project[]          @relation("ProjectReportingCurrency")
-  orders    ProcurementOrder[] @relation("OrderCurrency")
+  clients       Client[]           @relation("ClientDefaultCurrency")
+  suppliers     Supplier[]         @relation("SupplierDefaultCurrency")
+  projects      Project[]          @relation("ProjectReportingCurrency")
+  orders        ProcurementOrder[] @relation("OrderCurrency")
   sellingOrders ProcurementOrder[] @relation("OrderSellingCurrency")
 
   costLinesOriginal          ProcurementOrderCostLine[]   @relation("CostLineOriginalCurrency")
@@ -206,28 +211,28 @@ model Client {
 }
 
 model Supplier {
-  id                      String   @id @default(uuid()) @db.Uuid
-  legalName               String   @db.VarChar(200)
-  displayName             String   @db.VarChar(160)
-  addressLine1            String?  @db.VarChar(200)
-  addressLine2            String?  @db.VarChar(200)
-  city                    String?  @db.VarChar(120)
-  postalCode              String?  @db.VarChar(32)
-  countryCode             String?  @db.Char(2)
-  vatNumber               String?  @db.VarChar(64)
-  defaultCurrencyCode     String   @db.Char(3)
-  defaultPaymentTermsNotes String? @db.VarChar(240)
-  contactName             String?  @db.VarChar(160)
-  email                   String?  @db.VarChar(320)
-  phone                   String?  @db.VarChar(50)
-  defaultPaymentTermsDays Int?
-  defaultLeadTimeWeeks    Int?
-  notes                   String?  @db.Text
-  isActive                Boolean  @default(true)
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-  createdById             String?  @db.Uuid
-  updatedById             String?  @db.Uuid
+  id                       String   @id @default(uuid()) @db.Uuid
+  legalName                String   @db.VarChar(200)
+  displayName              String   @db.VarChar(160)
+  addressLine1             String?  @db.VarChar(200)
+  addressLine2             String?  @db.VarChar(200)
+  city                     String?  @db.VarChar(120)
+  postalCode               String?  @db.VarChar(32)
+  countryCode              String?  @db.Char(2)
+  vatNumber                String?  @db.VarChar(64)
+  defaultCurrencyCode      String   @db.Char(3)
+  defaultPaymentTermsNotes String?  @db.VarChar(240)
+  contactName              String?  @db.VarChar(160)
+  email                    String?  @db.VarChar(320)
+  phone                    String?  @db.VarChar(50)
+  defaultPaymentTermsDays  Int?
+  defaultLeadTimeWeeks     Int?
+  notes                    String?  @db.Text
+  isActive                 Boolean  @default(true)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  createdById              String?  @db.Uuid
+  updatedById              String?  @db.Uuid
 
   defaultCurrency Currency           @relation("SupplierDefaultCurrency", fields: [defaultCurrencyCode], references: [code], onDelete: Restrict)
   createdBy       User?              @relation("SupplierCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -294,46 +299,46 @@ model Building {
 }
 
 model ProcurementOrder {
-  id                    String                 @id @default(uuid()) @db.Uuid
-  orderNumber           String                 @unique @db.VarChar(50)
-  packageName           String                 @db.VarChar(200)
-  description           String?                @db.Text
-  category              String?                @db.VarChar(80)
-  projectId             String                 @db.Uuid
-  supplierId            String                 @db.Uuid
-  orderCurrencyCode     String                 @db.Char(3)
-  supplierQuoteReference String?               @db.VarChar(120)
-  supplierOrderConfirmationReference String?   @db.VarChar(120)
-  status                ProcurementOrderStatus @default(DRAFT)
-  freightTreatment      FreightTreatment       @default(NOT_APPLICABLE)
-  pricingMode           PricingMode            @default(SELLING_PRICE)
-  pricingSourceState    FinancialState          @default(COMMITTED)
-  sellingPriceAmount    Decimal?                @db.Decimal(19, 4)
-  sellingCurrencyCode   String                  @db.Char(3)
-  freightResaleAmount   Decimal?                @db.Decimal(19, 4)
-  targetMarginRate      Decimal?                @db.Decimal(9, 6)
-  quoteDate             DateTime?              @db.Date
-  orderDate             DateTime?              @db.Date
-  acknowledgementDate   DateTime?              @db.Date
-  leadTimeWeeks         Int?
-  estimatedProductionAt DateTime?              @db.Date
-  actualProductionAt    DateTime?              @db.Date
-  estimatedDispatchAt   DateTime?              @db.Date
-  actualDispatchAt      DateTime?              @db.Date
-  estimatedDeliveryAt   DateTime?              @db.Date
-  actualDeliveryAt      DateTime?              @db.Date
-  notes                 String?                @db.Text
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  createdById           String?                @db.Uuid
-  updatedById           String?                @db.Uuid
+  id                                 String                 @id @default(uuid()) @db.Uuid
+  orderNumber                        String                 @unique @db.VarChar(50)
+  packageName                        String                 @db.VarChar(200)
+  description                        String?                @db.Text
+  category                           String?                @db.VarChar(80)
+  projectId                          String                 @db.Uuid
+  supplierId                         String                 @db.Uuid
+  orderCurrencyCode                  String                 @db.Char(3)
+  supplierQuoteReference             String?                @db.VarChar(120)
+  supplierOrderConfirmationReference String?                @db.VarChar(120)
+  status                             ProcurementOrderStatus @default(DRAFT)
+  freightTreatment                   FreightTreatment       @default(NOT_APPLICABLE)
+  pricingMode                        PricingMode            @default(SELLING_PRICE)
+  pricingSourceState                 FinancialState         @default(COMMITTED)
+  sellingPriceAmount                 Decimal?               @db.Decimal(19, 4)
+  sellingCurrencyCode                String                 @db.Char(3)
+  freightResaleAmount                Decimal?               @db.Decimal(19, 4)
+  targetMarginRate                   Decimal?               @db.Decimal(9, 6)
+  quoteDate                          DateTime?              @db.Date
+  orderDate                          DateTime?              @db.Date
+  acknowledgementDate                DateTime?              @db.Date
+  leadTimeWeeks                      Int?
+  estimatedProductionAt              DateTime?              @db.Date
+  actualProductionAt                 DateTime?              @db.Date
+  estimatedDispatchAt                DateTime?              @db.Date
+  actualDispatchAt                   DateTime?              @db.Date
+  estimatedDeliveryAt                DateTime?              @db.Date
+  actualDeliveryAt                   DateTime?              @db.Date
+  notes                              String?                @db.Text
+  createdAt                          DateTime               @default(now())
+  updatedAt                          DateTime               @updatedAt
+  createdById                        String?                @db.Uuid
+  updatedById                        String?                @db.Uuid
 
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  supplier      Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  orderCurrency Currency @relation("OrderCurrency", fields: [orderCurrencyCode], references: [code], onDelete: Restrict)
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  supplier        Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  orderCurrency   Currency @relation("OrderCurrency", fields: [orderCurrencyCode], references: [code], onDelete: Restrict)
   sellingCurrency Currency @relation("OrderSellingCurrency", fields: [sellingCurrencyCode], references: [code], onDelete: Restrict)
-  createdBy     User?    @relation("ProcurementOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy     User?    @relation("ProcurementOrderUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdBy       User?    @relation("ProcurementOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy       User?    @relation("ProcurementOrderUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   buildings            ProcurementOrderBuilding[]
   financials           ProcurementOrderFinancials[]
@@ -364,14 +369,15 @@ model ProcurementOrderBuilding {
 /// One normalized record per order and financial state. Landed cost and gross profit
 /// are derived from its line items and pricing fields rather than stored as stale totals.
 model ProcurementOrderFinancials {
-  id          String         @id @default(uuid()) @db.Uuid
-  orderId     String         @db.Uuid
-  state       FinancialState
-  notes       String?        @db.Text
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  createdById String?        @db.Uuid
-  updatedById String?        @db.Uuid
+  id                       String         @id @default(uuid()) @db.Uuid
+  orderId                  String         @db.Uuid
+  state                    FinancialState
+  sellingFxRateToReporting Decimal?       @db.Decimal(20, 10)
+  notes                    String?        @db.Text
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+  createdById              String?        @db.Uuid
+  updatedById              String?        @db.Uuid
 
   order      ProcurementOrder           @relation(fields: [orderId], references: [id], onDelete: Restrict)
   createdBy  User?                      @relation("OrderFinancialsCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -410,24 +416,26 @@ model ProcurementOrderCostLine {
 }
 
 model ProcurementOrderVatEntry {
-  id                    String       @id @default(uuid()) @db.Uuid
-  financialsId          String       @db.Uuid
+  id                    String             @id @default(uuid()) @db.Uuid
+  financialsId          String             @db.Uuid
   direction             VatDirection
   treatment             VatTreatment
-  countryCode           String?      @db.Char(2)
-  customTreatmentNote   String?      @db.VarChar(240)
-  taxableBaseAmount     Decimal      @db.Decimal(19, 4)
-  vatRate               Decimal?     @db.Decimal(9, 6)
-  vatAmount             Decimal      @db.Decimal(19, 4)
-  originalCurrencyCode  String       @db.Char(3)
-  fxRateToReporting     Decimal?     @db.Decimal(20, 10)
-  reportingTaxableBase  Decimal?     @db.Decimal(19, 4)
-  reportingVatAmount    Decimal?     @db.Decimal(19, 4)
-  reportingCurrencyCode String       @db.Char(3)
-  createdAt             DateTime     @default(now())
-  updatedAt             DateTime     @updatedAt
-  createdById           String?      @db.Uuid
-  updatedById           String?      @db.Uuid
+  recoverability        VatRecoverability?
+  countryCode           String?            @db.Char(2)
+  customTreatmentNote   String?            @db.VarChar(240)
+  taxableBaseAmount     Decimal            @db.Decimal(19, 4)
+  vatRate               Decimal?           @db.Decimal(9, 6)
+  vatAmount             Decimal            @db.Decimal(19, 4)
+  isAmountOverride      Boolean            @default(false)
+  originalCurrencyCode  String             @db.Char(3)
+  fxRateToReporting     Decimal?           @db.Decimal(20, 10)
+  reportingTaxableBase  Decimal?           @db.Decimal(19, 4)
+  reportingVatAmount    Decimal?           @db.Decimal(19, 4)
+  reportingCurrencyCode String             @db.Char(3)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  createdById           String?            @db.Uuid
+  updatedById           String?            @db.Uuid
 
   financials        ProcurementOrderFinancials @relation(fields: [financialsId], references: [id], onDelete: Restrict)
   originalCurrency  Currency                   @relation("VatEntryOriginalCurrency", fields: [originalCurrencyCode], references: [code], onDelete: Restrict)

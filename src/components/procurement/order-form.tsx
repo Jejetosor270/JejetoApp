@@ -14,6 +14,7 @@ import {
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { initialOrderActionState } from "@/components/procurement/action-state";
+import { countries } from "@/config/countries";
 import { rateToPercentInput } from "@/domain/procurement/presentation";
 
 interface BuildingOption {
@@ -24,29 +25,48 @@ interface BuildingOption {
 }
 interface ProjectOption {
   buildings: BuildingOption[];
+  client: { defaultCurrencyCode: string };
   id: string;
   name: string;
   reportingCurrencyCode: string;
 }
 interface SupplierOption {
+  defaultCurrencyCode: string;
   displayName: string;
   id: string;
+}
+interface VatView {
+  amount: string;
+  amountIsManual: boolean;
+  countryCode: string | null;
+  customTreatmentNote: string | null;
+  rate: string | null;
+  recoverability: string | null;
+  taxableBase: string;
+  treatment: string;
 }
 interface FinancialStateView {
   customsDuties: string | null;
   freight: string | null;
+  inputVat: VatView | null;
   miscellaneous: string | null;
+  outputVat: VatView | null;
+  purchaseFxRate: string | null;
+  sellingFxRate: string | null;
   state: string;
   supplierDiscount: string | null;
   supplierPurchase: string | null;
 }
 export interface OrderFormOptions {
+  currencies: { code: string; name: string }[];
   financialStates: string[];
   freightTreatments: string[];
   pricingModes: string[];
   projects: ProjectOption[];
   statuses: string[];
   suppliers: SupplierOption[];
+  vatRecoverabilities: string[];
+  vatTreatments: string[];
 }
 export interface EditableOrder {
   buildingIds: string[];
@@ -64,6 +84,7 @@ export interface EditableOrder {
   pricingMode: string;
   pricingSourceState: string;
   project: { id: string; name: string };
+  sellingCurrencyCode: string;
   status: string;
   supplier: SupplierOption;
   supplierOrderConfirmationReference: string | null;
@@ -94,73 +115,295 @@ const labels: Record<string, string> = {
   RECHARGED_SEPARATELY: "Recharged separately",
   SELLING_PRICE: "Enter selling price",
   TARGET_MARGIN: "Calculate from target margin",
+  CUSTOM: "Custom",
+  DOMESTIC: "Domestic",
+  EXEMPT: "Exempt",
+  EXPORT: "Export",
+  IMPORT: "Import",
+  INTRA_EU_ACQUISITION: "Intra-EU acquisition",
+  INTRA_EU_SUPPLY: "Intra-EU supply",
+  NON_RECOVERABLE: "Non-recoverable",
+  OUT_OF_SCOPE: "Out of scope",
+  RECOVERABLE: "Recoverable",
+  REVERSE_CHARGE: "Reverse charge",
 };
 
 function FinancialFields({
-  currency,
+  options,
   order,
+  purchaseCurrency,
+  reportingCurrency,
+  sellingCurrency,
   state,
 }: {
-  currency: string;
+  options: OrderFormOptions;
   order?: EditableOrder | undefined;
+  purchaseCurrency: string;
+  reportingCurrency: string;
+  sellingCurrency: string;
   state: string;
 }) {
   const values = order?.financialStates.find((item) => item.state === state);
   return (
-    <fieldset className="bg-muted/20 rounded-lg border p-3">
+    <fieldset className="bg-muted/20 space-y-4 rounded-lg border p-3">
       <legend className="px-1 text-sm font-semibold">
         {labels[state] ?? state}
       </legend>
-      <p className="text-muted-foreground mb-3 text-xs">
-        Amounts HT · {currency || "project currency"}
-      </p>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <Field label="Supplier/list purchase">
-          <input
-            className={inputClassName}
-            defaultValue={values?.supplierPurchase ?? ""}
-            inputMode="decimal"
-            name={`${state}_supplierPurchase`}
-            placeholder="0.00"
-          />
-        </Field>
-        <Field label="Supplier discount">
-          <input
-            className={inputClassName}
-            defaultValue={values?.supplierDiscount ?? ""}
-            inputMode="decimal"
-            name={`${state}_supplierDiscount`}
-            placeholder="0.00"
-          />
-        </Field>
-        <Field label="Freight cost">
-          <input
-            className={inputClassName}
-            defaultValue={values?.freight ?? ""}
-            inputMode="decimal"
-            name={`${state}_freight`}
-            placeholder="0.00"
-          />
-        </Field>
-        <Field label="Customs / duties">
-          <input
-            className={inputClassName}
-            defaultValue={values?.customsDuties ?? ""}
-            inputMode="decimal"
-            name={`${state}_customsDuties`}
-            placeholder="0.00"
-          />
-        </Field>
-        <Field label="Miscellaneous">
-          <input
-            className={inputClassName}
-            defaultValue={values?.miscellaneous ?? ""}
-            inputMode="decimal"
-            name={`${state}_miscellaneous`}
-            placeholder="0.00"
-          />
-        </Field>
+      <div>
+        <p className="text-muted-foreground mb-3 text-xs">
+          Purchase cost HT · {purchaseCurrency || "purchase currency"}
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <Field label="Supplier/list purchase">
+            <input
+              className={inputClassName}
+              defaultValue={values?.supplierPurchase ?? ""}
+              inputMode="decimal"
+              name={`${state}_supplierPurchase`}
+              placeholder="0.00"
+            />
+          </Field>
+          <Field label="Supplier discount">
+            <input
+              className={inputClassName}
+              defaultValue={values?.supplierDiscount ?? ""}
+              inputMode="decimal"
+              name={`${state}_supplierDiscount`}
+              placeholder="0.00"
+            />
+          </Field>
+          <Field label="Freight cost">
+            <input
+              className={inputClassName}
+              defaultValue={values?.freight ?? ""}
+              inputMode="decimal"
+              name={`${state}_freight`}
+              placeholder="0.00"
+            />
+          </Field>
+          <Field label="Customs / duties">
+            <input
+              className={inputClassName}
+              defaultValue={values?.customsDuties ?? ""}
+              inputMode="decimal"
+              name={`${state}_customsDuties`}
+              placeholder="0.00"
+            />
+          </Field>
+          <Field label="Miscellaneous">
+            <input
+              className={inputClassName}
+              defaultValue={values?.miscellaneous ?? ""}
+              inputMode="decimal"
+              name={`${state}_miscellaneous`}
+              placeholder="0.00"
+            />
+          </Field>
+        </div>
       </div>
+      <section>
+        <h4 className="text-xs font-semibold">Currency / FX</h4>
+        <p className="text-muted-foreground mt-1 text-xs">
+          Manual convention: 1 original-currency unit = X{" "}
+          {reportingCurrency || "reporting-currency"} units.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <Field
+            label={`Purchase FX (${purchaseCurrency || "purchase"} → ${reportingCurrency || "reporting"})`}
+          >
+            <input
+              className={`${inputClassName} ${purchaseCurrency === reportingCurrency ? "bg-muted" : ""}`}
+              defaultValue={values?.purchaseFxRate ?? ""}
+              disabled={purchaseCurrency === reportingCurrency}
+              inputMode="decimal"
+              name={`${state}_purchaseFxRate`}
+              placeholder={
+                purchaseCurrency === reportingCurrency
+                  ? "1 (automatic)"
+                  : "e.g. 0.857500"
+              }
+            />
+          </Field>
+          <Field
+            label={`Selling FX (${sellingCurrency || "selling"} → ${reportingCurrency || "reporting"})`}
+          >
+            <input
+              className={`${inputClassName} ${sellingCurrency === reportingCurrency ? "bg-muted" : ""}`}
+              defaultValue={values?.sellingFxRate ?? ""}
+              disabled={sellingCurrency === reportingCurrency}
+              inputMode="decimal"
+              name={`${state}_sellingFxRate`}
+              placeholder={
+                sellingCurrency === reportingCurrency
+                  ? "1 (automatic)"
+                  : "e.g. 1.170000"
+              }
+            />
+          </Field>
+        </div>
+      </section>
+      <section className="grid gap-3 xl:grid-cols-2">
+        <div className="bg-background/60 rounded-md border p-3">
+          <h4 className="text-xs font-semibold">Purchase VAT</h4>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Field label="Treatment">
+              <select
+                className={inputClassName}
+                defaultValue={values?.inputVat?.treatment ?? ""}
+                name={`${state}_inputVatTreatment`}
+              >
+                <option value="">Not recorded</option>
+                {options.vatTreatments.map((value) => (
+                  <option key={value} value={value}>
+                    {labels[value] ?? value}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Recoverability">
+              <select
+                className={inputClassName}
+                defaultValue={values?.inputVat?.recoverability ?? ""}
+                name={`${state}_inputVatRecoverability`}
+              >
+                <option value="">Choose</option>
+                {options.vatRecoverabilities.map((value) => (
+                  <option key={value} value={value}>
+                    {labels[value] ?? value}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={`Taxable purchase HT (${purchaseCurrency})`}>
+              <input
+                className={inputClassName}
+                defaultValue={values?.inputVat?.taxableBase ?? ""}
+                inputMode="decimal"
+                name={`${state}_inputVatTaxableBase`}
+                placeholder="0.00"
+              />
+            </Field>
+            <Field label="VAT rate %">
+              <input
+                className={inputClassName}
+                defaultValue={rateToPercentInput(
+                  values?.inputVat?.rate ?? null,
+                )}
+                inputMode="decimal"
+                name={`${state}_inputVatRate`}
+                placeholder="20.00"
+              />
+            </Field>
+            <Field label={`VAT amount override (${purchaseCurrency})`}>
+              <input
+                className={inputClassName}
+                defaultValue={
+                  values?.inputVat?.amountIsManual ? values.inputVat.amount : ""
+                }
+                inputMode="decimal"
+                name={`${state}_inputVatAmount`}
+                placeholder="Leave blank to calculate"
+              />
+            </Field>
+            <Field label="Transaction country">
+              <select
+                className={inputClassName}
+                defaultValue={values?.inputVat?.countryCode ?? ""}
+                name={`${state}_inputVatCountryCode`}
+              >
+                <option value="">Not specified</option>
+                {countries.map((country) => (
+                  <option key={country.code} value={country.code}>
+                    {country.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">
+              Custom treatment note
+              <input
+                className={inputClassName}
+                defaultValue={values?.inputVat?.customTreatmentNote ?? ""}
+                name={`${state}_inputVatCustomTreatmentNote`}
+              />
+            </label>
+          </div>
+        </div>
+        <div className="bg-background/60 rounded-md border p-3">
+          <h4 className="text-xs font-semibold">Sales VAT</h4>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Field label="Treatment">
+              <select
+                className={inputClassName}
+                defaultValue={values?.outputVat?.treatment ?? ""}
+                name={`${state}_outputVatTreatment`}
+              >
+                <option value="">Not recorded</option>
+                {options.vatTreatments.map((value) => (
+                  <option key={value} value={value}>
+                    {labels[value] ?? value}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={`Taxable selling HT (${sellingCurrency})`}>
+              <input
+                className={inputClassName}
+                defaultValue={values?.outputVat?.taxableBase ?? ""}
+                inputMode="decimal"
+                name={`${state}_outputVatTaxableBase`}
+                placeholder="0.00"
+              />
+            </Field>
+            <Field label="VAT rate %">
+              <input
+                className={inputClassName}
+                defaultValue={rateToPercentInput(
+                  values?.outputVat?.rate ?? null,
+                )}
+                inputMode="decimal"
+                name={`${state}_outputVatRate`}
+                placeholder="20.00"
+              />
+            </Field>
+            <Field label={`VAT amount override (${sellingCurrency})`}>
+              <input
+                className={inputClassName}
+                defaultValue={
+                  values?.outputVat?.amountIsManual
+                    ? values.outputVat.amount
+                    : ""
+                }
+                inputMode="decimal"
+                name={`${state}_outputVatAmount`}
+                placeholder="Leave blank to calculate"
+              />
+            </Field>
+            <Field label="Transaction country">
+              <select
+                className={inputClassName}
+                defaultValue={values?.outputVat?.countryCode ?? ""}
+                name={`${state}_outputVatCountryCode`}
+              >
+                <option value="">Not specified</option>
+                {countries.map((country) => (
+                  <option key={country.code} value={country.code}>
+                    {country.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">
+              Custom treatment note
+              <input
+                className={inputClassName}
+                defaultValue={values?.outputVat?.customTreatmentNote ?? ""}
+                name={`${state}_outputVatCustomTreatmentNote`}
+              />
+            </label>
+          </div>
+        </div>
+      </section>
     </fieldset>
   );
 }
@@ -183,6 +426,27 @@ export function OrderForm({
   );
   const [projectId, setProjectId] = useState(
     order?.project.id ?? options.projects[0]?.id ?? "",
+  );
+  const [supplierId, setSupplierId] = useState(
+    order?.supplier.id ?? options.suppliers[0]?.id ?? "",
+  );
+  const initialProject = options.projects.find(
+    (item) => item.id === (order?.project.id ?? options.projects[0]?.id),
+  );
+  const initialSupplier = options.suppliers.find(
+    (item) => item.id === (order?.supplier.id ?? options.suppliers[0]?.id),
+  );
+  const [purchaseCurrency, setPurchaseCurrency] = useState(
+    order?.orderCurrencyCode ??
+      initialSupplier?.defaultCurrencyCode ??
+      initialProject?.reportingCurrencyCode ??
+      "EUR",
+  );
+  const [sellingCurrency, setSellingCurrency] = useState(
+    order?.sellingCurrencyCode ??
+      initialProject?.client.defaultCurrencyCode ??
+      initialProject?.reportingCurrencyCode ??
+      "EUR",
   );
   const [pricingMode, setPricingMode] = useState(
     order?.pricingMode ?? "SELLING_PRICE",
@@ -209,7 +473,8 @@ export function OrderForm({
             {order ? "Edit procurement order" : "Create procurement order"}
           </h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            Supplier package-level data; no products, rooms, or VAT.
+            Supplier package values with explicit original currencies, manual
+            FX, and management VAT classifications.
           </p>
         </div>
         {onCancel ? (
@@ -266,7 +531,18 @@ export function OrderForm({
             <select
               className={inputClassName}
               name="projectId"
-              onChange={(event) => setProjectId(event.target.value)}
+              onChange={(event) => {
+                const nextProject = options.projects.find(
+                  (item) => item.id === event.target.value,
+                );
+                setProjectId(event.target.value);
+                if (!isEditing && nextProject) {
+                  setSellingCurrency(
+                    nextProject.client.defaultCurrencyCode ||
+                      nextProject.reportingCurrencyCode,
+                  );
+                }
+              }}
               value={projectId}
             >
               {options.projects.map((item) => (
@@ -279,8 +555,17 @@ export function OrderForm({
           <Field label="Supplier">
             <select
               className={inputClassName}
-              defaultValue={order?.supplier.id}
               name="supplierId"
+              onChange={(event) => {
+                const nextSupplier = options.suppliers.find(
+                  (item) => item.id === event.target.value,
+                );
+                setSupplierId(event.target.value);
+                if (!isEditing && nextSupplier) {
+                  setPurchaseCurrency(nextSupplier.defaultCurrencyCode);
+                }
+              }}
+              value={supplierId}
             >
               {options.suppliers.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
@@ -289,14 +574,39 @@ export function OrderForm({
               ))}
             </select>
           </Field>
-          <Field label="Purchase / reporting currency">
+          <Field label="Purchase currency">
+            <select
+              className={inputClassName}
+              name="orderCurrencyCode"
+              onChange={(event) => setPurchaseCurrency(event.target.value)}
+              value={purchaseCurrency}
+            >
+              {options.currencies.map((currency) => (
+                <option key={currency.code} value={currency.code}>
+                  {currency.code} — {currency.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Selling currency">
+            <select
+              className={inputClassName}
+              name="sellingCurrencyCode"
+              onChange={(event) => setSellingCurrency(event.target.value)}
+              value={sellingCurrency}
+            >
+              {options.currencies.map((currency) => (
+                <option key={currency.code} value={currency.code}>
+                  {currency.code} — {currency.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Project reporting currency">
             <input
               className={`${inputClassName} bg-muted`}
-              name="orderCurrencyCode"
               readOnly
-              value={
-                project?.reportingCurrencyCode ?? order?.orderCurrencyCode ?? ""
-              }
+              value={project?.reportingCurrencyCode ?? ""}
             />
           </Field>
           <Field label="Supplier quote reference">
@@ -374,9 +684,12 @@ export function OrderForm({
           </div>
           {options.financialStates.map((financialState) => (
             <FinancialFields
-              currency={project?.reportingCurrencyCode ?? ""}
               key={financialState}
+              options={options}
               order={order}
+              purchaseCurrency={purchaseCurrency}
+              reportingCurrency={project?.reportingCurrencyCode ?? ""}
+              sellingCurrency={sellingCurrency}
               state={financialState}
             />
           ))}

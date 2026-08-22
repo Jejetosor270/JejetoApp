@@ -6,6 +6,7 @@ const transactionMocks = vi.hoisted(() => ({
   procurementOrder: { create: vi.fn() },
   procurementOrderCostLine: { createMany: vi.fn(), deleteMany: vi.fn() },
   procurementOrderFinancials: { findUnique: vi.fn(), upsert: vi.fn() },
+  procurementOrderVatEntry: { createMany: vi.fn(), deleteMany: vi.fn() },
 }));
 
 const databaseMocks = vi.hoisted(() => ({
@@ -47,6 +48,7 @@ function orderInput() {
     pricingSourceState: "BUDGET",
     projectId,
     sellingPriceAmount: "100000",
+    sellingCurrencyCode: "EUR",
     status: "DRAFT",
     supplierId,
   });
@@ -111,6 +113,74 @@ describe("procurement order writes", () => {
 
     await expect(createOrder(actorId, orderInput())).rejects.toThrow(
       "Every selected building",
+    );
+  });
+
+  it("preserves original values and writes converted FX and VAT values", async () => {
+    databaseMocks.project.findUnique.mockResolvedValue({
+      id: projectId,
+      reportingCurrencyCode: "EUR",
+    });
+    databaseMocks.supplier.findUnique.mockResolvedValue({ id: supplierId });
+    databaseMocks.currency.findFirst.mockResolvedValue({ code: "active" });
+    databaseMocks.building.findMany.mockResolvedValue([{ id: buildingId }]);
+    transactionMocks.procurementOrder.create.mockResolvedValue({ id: orderId });
+    transactionMocks.procurementOrderFinancials.findUnique.mockResolvedValue(
+      null,
+    );
+    transactionMocks.procurementOrderFinancials.upsert.mockResolvedValue({
+      id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+    });
+    const input = createOrderInputSchema.parse({
+      ...orderInput(),
+      financialStates: [
+        {
+          inputVatRate: "20",
+          inputVatRecoverability: "NON_RECOVERABLE",
+          inputVatTaxableBase: "65000",
+          inputVatTreatment: "IMPORT",
+          purchaseFxRate: "0.8575",
+          sellingFxRate: "1.17",
+          state: "BUDGET",
+          supplierPurchase: "65000",
+        },
+        { state: "COMMITTED" },
+        { state: "ACTUAL" },
+      ],
+      orderCurrencyCode: "USD",
+      sellingCurrencyCode: "GBP",
+    });
+
+    await createOrder(actorId, input);
+
+    expect(
+      transactionMocks.procurementOrderCostLine.createMany,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            fxRateToReporting: "0.8575000000",
+            originalAmount: "65000.0000",
+            originalCurrencyCode: "USD",
+            reportingAmount: "55737.5000",
+            reportingCurrencyCode: "EUR",
+          }),
+        ]),
+      }),
+    );
+    expect(
+      transactionMocks.procurementOrderVatEntry.createMany,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            direction: "INPUT",
+            recoverability: "NON_RECOVERABLE",
+            reportingVatAmount: "11147.5000",
+            vatAmount: "13000.0000",
+          }),
+        ]),
+      }),
     );
   });
 });

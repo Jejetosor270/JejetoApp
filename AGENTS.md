@@ -64,6 +64,15 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 - Master-data writes require the authenticated ADMIN or MANAGER actor and always set `createdById`/`updatedById` server-side.
 - Store optional countries as ISO-style two-letter codes and render labels from `src/config/countries`; currencies remain relational `Currency` records.
 
+## Phase 5 country, currency, and VAT rules
+
+- Supported country definitions and EU membership live in `src/config/countries`; country codes are ISO 3166-1 alpha-2. EU membership may provide hints but must never choose a VAT treatment automatically. GB and CH are non-EU.
+- Order purchase currency, order selling currency, and Project reporting currency are independent sources of truth. Changing a master-data default never rewrites an Order.
+- Preserve original contractual amounts. Manual FX uses `1 original-currency unit = X project-reporting-currency units`; each BUDGET, COMMITTED, and ACTUAL state may preserve different purchase and selling rates.
+- Missing foreign-currency FX keeps reporting values and margin explicitly incomplete. Never subtract values in different currencies or fabricate a conversion.
+- INPUT (purchase) and OUTPUT (sales) VAT are independent, explicitly selected management classifications. VAT rates are fractional Decimal values and are not inferred as legal conclusions from country.
+- Recoverable input VAT is excluded from landed cost and profit. Non-recoverable input VAT is added to economic landed cost. Output VAT is excluded from revenue and profit; margin remains based on comparable reporting-currency HT/economic values.
+
 ## Database conventions
 
 - UUID primary keys; UTC timestamps; `@db.Date` for business dates without time-of-day meaning.

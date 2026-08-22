@@ -1,6 +1,7 @@
 import "dotenv/config";
 
 import { PrismaPg } from "@prisma/adapter-pg";
+import Decimal from "decimal.js";
 
 import {
   FinancialState,
@@ -13,6 +14,7 @@ import {
   ProjectStatus,
   UserRole,
   VatDirection,
+  VatRecoverability,
   VatTreatment,
 } from "../src/generated/prisma/client";
 
@@ -47,6 +49,12 @@ const ids = {
   order2ActualPurchaseCost: "71000000-0000-4000-8000-000000000010",
   inputVat: "72000000-0000-4000-8000-000000000001",
   outputVat: "72000000-0000-4000-8000-000000000002",
+  budgetInputVat: "72000000-0000-4000-8000-000000000003",
+  budgetOutputVat: "72000000-0000-4000-8000-000000000004",
+  actualInputVat: "72000000-0000-4000-8000-000000000005",
+  actualOutputVat: "72000000-0000-4000-8000-000000000006",
+  order2InputVat: "72000000-0000-4000-8000-000000000007",
+  order2OutputVat: "72000000-0000-4000-8000-000000000008",
   supplierInstallment1: "80000000-0000-4000-8000-000000000001",
   supplierInstallment2: "80000000-0000-4000-8000-000000000002",
   supplierInstallment3: "80000000-0000-4000-8000-000000000003",
@@ -133,6 +141,7 @@ async function seedRepresentativeProject(): Promise<void> {
   await prisma.supplier.upsert({
     where: { id: ids.supplier },
     update: {
+      defaultCurrencyCode: "USD",
       defaultPaymentTermsNotes: "Example development data only.",
       displayName: "Example Supplier",
       legalName: "Example Supplier Ltd.",
@@ -142,7 +151,7 @@ async function seedRepresentativeProject(): Promise<void> {
       legalName: "Example Supplier Ltd.",
       displayName: "Example Supplier",
       countryCode: "IT",
-      defaultCurrencyCode: "EUR",
+      defaultCurrencyCode: "USD",
       defaultLeadTimeWeeks: 14,
       defaultPaymentTermsDays: 30,
       defaultPaymentTermsNotes: "Example development data only.",
@@ -155,13 +164,16 @@ async function seedRepresentativeProject(): Promise<void> {
 
   await prisma.supplier.upsert({
     where: { id: ids.supplier2 },
-    update: { displayName: "Example Supplier Two" },
+    update: {
+      defaultCurrencyCode: "CHF",
+      displayName: "Example Supplier Two",
+    },
     create: {
       id: ids.supplier2,
       legalName: "Example Supplier Two Ltd.",
       displayName: "Example Supplier Two",
       countryCode: "FR",
-      defaultCurrencyCode: "EUR",
+      defaultCurrencyCode: "CHF",
       defaultLeadTimeWeeks: 10,
       isActive: true,
       notes: "Example development data only.",
@@ -250,6 +262,7 @@ async function seedRepresentativeProject(): Promise<void> {
   await prisma.procurementOrder.upsert({
     where: { id: ids.order },
     update: {
+      orderCurrencyCode: "USD",
       packageName: "Loose Furniture Package",
       pricingMode: PricingMode.SELLING_PRICE,
       sellingCurrencyCode: "EUR",
@@ -263,7 +276,7 @@ async function seedRepresentativeProject(): Promise<void> {
       packageName: "Loose Furniture Package",
       projectId: ids.project,
       supplierId: ids.supplier,
-      orderCurrencyCode: "EUR",
+      orderCurrencyCode: "USD",
       sellingCurrencyCode: "EUR",
       sellingPriceAmount: "90000.0000",
       status: ProcurementOrderStatus.ORDERED,
@@ -296,7 +309,8 @@ async function seedRepresentativeProject(): Promise<void> {
       freightResaleAmount: "2000.0000",
       freightTreatment: FreightTreatment.RECHARGED_SEPARATELY,
       pricingMode: PricingMode.TARGET_MARGIN,
-      sellingCurrencyCode: "EUR",
+      orderCurrencyCode: "CHF",
+      sellingCurrencyCode: "GBP",
       sellingPriceAmount: null,
       targetMarginRate: "0.250000",
     },
@@ -307,8 +321,8 @@ async function seedRepresentativeProject(): Promise<void> {
       category: "Lighting",
       projectId: ids.project2,
       supplierId: ids.supplier2,
-      orderCurrencyCode: "EUR",
-      sellingCurrencyCode: "EUR",
+      orderCurrencyCode: "CHF",
+      sellingCurrencyCode: "GBP",
       pricingMode: PricingMode.TARGET_MARGIN,
       pricingSourceState: FinancialState.COMMITTED,
       targetMarginRate: "0.250000",
@@ -337,10 +351,14 @@ async function seedRepresentativeProject(): Promise<void> {
 
   await prisma.procurementOrderFinancials.upsert({
     where: { id: ids.financials },
-    update: { state: FinancialState.COMMITTED },
+    update: {
+      sellingFxRateToReporting: null,
+      state: FinancialState.COMMITTED,
+    },
     create: {
       id: ids.financials,
       orderId: ids.order,
+      sellingFxRateToReporting: null,
       state: FinancialState.COMMITTED,
       createdById: admin.id,
       updatedById: admin.id,
@@ -351,32 +369,40 @@ async function seedRepresentativeProject(): Promise<void> {
     [
       {
         id: ids.budgetFinancials,
+        sellingFxRateToReporting: null,
         state: FinancialState.BUDGET,
       },
       {
         id: ids.actualFinancials,
         state: FinancialState.ACTUAL,
         orderId: ids.order,
+        sellingFxRateToReporting: null,
       },
       {
         id: ids.order2BudgetFinancials,
         state: FinancialState.BUDGET,
         orderId: ids.order2,
+        sellingFxRateToReporting: "1.1800000000",
       },
       {
         id: ids.order2CommittedFinancials,
         state: FinancialState.COMMITTED,
         orderId: ids.order2,
+        sellingFxRateToReporting: "1.1700000000",
       },
       {
         id: ids.order2ActualFinancials,
         state: FinancialState.ACTUAL,
         orderId: ids.order2,
+        sellingFxRateToReporting: "1.1600000000",
       },
     ].map((financials) =>
       prisma.procurementOrderFinancials.upsert({
         where: { id: financials.id },
-        update: { state: financials.state },
+        update: {
+          sellingFxRateToReporting: financials.sellingFxRateToReporting,
+          state: financials.state,
+        },
         create: {
           ...financials,
           orderId: financials.orderId ?? ids.order,
@@ -460,73 +486,196 @@ async function seedRepresentativeProject(): Promise<void> {
     },
   ];
 
+  const purchaseFxByFinancialsId: Record<string, string> = {
+    [ids.budgetFinancials]: "0.9000000000",
+    [ids.financials]: "0.8700000000",
+    [ids.actualFinancials]: "0.8550000000",
+    [ids.order2BudgetFinancials]: "1.0300000000",
+    [ids.order2CommittedFinancials]: "1.0400000000",
+    [ids.order2ActualFinancials]: "1.0500000000",
+  };
+  const order2Financials = new Set<string>([
+    ids.order2BudgetFinancials,
+    ids.order2CommittedFinancials,
+    ids.order2ActualFinancials,
+  ]);
+
   await Promise.all(
-    costLines.map((line) =>
-      prisma.procurementOrderCostLine.upsert({
+    costLines.map((line) => {
+      const fxRateToReporting = purchaseFxByFinancialsId[line.financialsId];
+      if (!fxRateToReporting) {
+        throw new Error("Missing fictional seed FX rate.");
+      }
+      const originalCurrencyCode = order2Financials.has(line.financialsId)
+        ? "CHF"
+        : "USD";
+      const reportingAmount = new Decimal(line.originalAmount)
+        .times(fxRateToReporting)
+        .toFixed(4);
+      return prisma.procurementOrderCostLine.upsert({
         where: { id: line.id },
         update: {
           category: line.category,
           description: line.description,
+          fxRateToReporting,
           originalAmount: line.originalAmount,
-          reportingAmount: line.originalAmount,
+          originalCurrencyCode,
+          reportingAmount,
+          reportingCurrencyCode: "EUR",
         },
         create: {
           ...line,
           financialsId: line.financialsId,
-          originalCurrencyCode: "EUR",
-          fxRateToReporting: "1.0000000000",
-          reportingAmount: line.originalAmount,
+          originalCurrencyCode,
+          fxRateToReporting,
+          reportingAmount,
           reportingCurrencyCode: "EUR",
           createdById: admin.id,
           updatedById: admin.id,
         },
-      }),
-    ),
+      });
+    }),
   );
 
-  await prisma.procurementOrderVatEntry.upsert({
-    where: { id: ids.inputVat },
-    update: { treatment: VatTreatment.INTRA_EU_ACQUISITION },
-    create: {
+  const vatEntries = [
+    {
+      id: ids.budgetInputVat,
+      financialsId: ids.budgetFinancials,
+      direction: VatDirection.INPUT,
+      treatment: VatTreatment.DOMESTIC,
+      recoverability: VatRecoverability.RECOVERABLE,
+      countryCode: "FR",
+      taxableBaseAmount: "65000.0000",
+      vatRate: "0.200000",
+      vatAmount: "13000.0000",
+      originalCurrencyCode: "USD",
+      fxRateToReporting: "0.9000000000",
+      reportingTaxableBase: "58500.0000",
+      reportingVatAmount: "11700.0000",
+    },
+    {
+      id: ids.budgetOutputVat,
+      financialsId: ids.budgetFinancials,
+      direction: VatDirection.OUTPUT,
+      treatment: VatTreatment.DOMESTIC,
+      recoverability: null,
+      countryCode: "BE",
+      taxableBaseAmount: "90000.0000",
+      vatRate: "0.200000",
+      vatAmount: "18000.0000",
+      originalCurrencyCode: "EUR",
+      fxRateToReporting: null,
+      reportingTaxableBase: "90000.0000",
+      reportingVatAmount: "18000.0000",
+    },
+    {
       id: ids.inputVat,
       financialsId: ids.financials,
       direction: VatDirection.INPUT,
       treatment: VatTreatment.INTRA_EU_ACQUISITION,
+      recoverability: VatRecoverability.RECOVERABLE,
       countryCode: "IT",
       taxableBaseAmount: "57000.0000",
       vatRate: "0.000000",
       vatAmount: "0.0000",
-      originalCurrencyCode: "EUR",
-      fxRateToReporting: "1.0000000000",
-      reportingTaxableBase: "57000.0000",
+      originalCurrencyCode: "USD",
+      fxRateToReporting: "0.8700000000",
+      reportingTaxableBase: "49590.0000",
       reportingVatAmount: "0.0000",
-      reportingCurrencyCode: "EUR",
-      createdById: admin.id,
-      updatedById: admin.id,
     },
-  });
-
-  await prisma.procurementOrderVatEntry.upsert({
-    where: { id: ids.outputVat },
-    update: { treatment: VatTreatment.INTRA_EU_SUPPLY },
-    create: {
+    {
       id: ids.outputVat,
       financialsId: ids.financials,
       direction: VatDirection.OUTPUT,
       treatment: VatTreatment.INTRA_EU_SUPPLY,
+      recoverability: null,
       countryCode: "BE",
       taxableBaseAmount: "90000.0000",
       vatRate: "0.000000",
       vatAmount: "0.0000",
       originalCurrencyCode: "EUR",
-      fxRateToReporting: "1.0000000000",
+      fxRateToReporting: null,
       reportingTaxableBase: "90000.0000",
       reportingVatAmount: "0.0000",
-      reportingCurrencyCode: "EUR",
-      createdById: admin.id,
-      updatedById: admin.id,
     },
-  });
+    {
+      id: ids.actualInputVat,
+      financialsId: ids.actualFinancials,
+      direction: VatDirection.INPUT,
+      treatment: VatTreatment.REVERSE_CHARGE,
+      recoverability: VatRecoverability.RECOVERABLE,
+      countryCode: "IT",
+      taxableBaseAmount: "61000.0000",
+      vatRate: "0.000000",
+      vatAmount: "0.0000",
+      originalCurrencyCode: "USD",
+      fxRateToReporting: "0.8550000000",
+      reportingTaxableBase: "52155.0000",
+      reportingVatAmount: "0.0000",
+    },
+    {
+      id: ids.actualOutputVat,
+      financialsId: ids.actualFinancials,
+      direction: VatDirection.OUTPUT,
+      treatment: VatTreatment.REVERSE_CHARGE,
+      recoverability: null,
+      countryCode: "BE",
+      taxableBaseAmount: "90000.0000",
+      vatRate: "0.000000",
+      vatAmount: "0.0000",
+      originalCurrencyCode: "EUR",
+      fxRateToReporting: null,
+      reportingTaxableBase: "90000.0000",
+      reportingVatAmount: "0.0000",
+    },
+    {
+      id: ids.order2InputVat,
+      financialsId: ids.order2CommittedFinancials,
+      direction: VatDirection.INPUT,
+      treatment: VatTreatment.IMPORT,
+      recoverability: VatRecoverability.NON_RECOVERABLE,
+      countryCode: "CH",
+      taxableBaseAmount: "30000.0000",
+      vatRate: "0.080000",
+      vatAmount: "2400.0000",
+      originalCurrencyCode: "CHF",
+      fxRateToReporting: "1.0400000000",
+      reportingTaxableBase: "31200.0000",
+      reportingVatAmount: "2496.0000",
+    },
+    {
+      id: ids.order2OutputVat,
+      financialsId: ids.order2CommittedFinancials,
+      direction: VatDirection.OUTPUT,
+      treatment: VatTreatment.EXPORT,
+      recoverability: null,
+      countryCode: "GB",
+      taxableBaseAmount: "50000.0000",
+      vatRate: "0.000000",
+      vatAmount: "0.0000",
+      originalCurrencyCode: "GBP",
+      fxRateToReporting: "1.1700000000",
+      reportingTaxableBase: "58500.0000",
+      reportingVatAmount: "0.0000",
+    },
+  ];
+
+  await Promise.all(
+    vatEntries.map((entry) => {
+      const { id, ...values } = entry;
+      return prisma.procurementOrderVatEntry.upsert({
+        where: { id },
+        update: { ...values, updatedById: admin.id },
+        create: {
+          id,
+          ...values,
+          reportingCurrencyCode: "EUR",
+          createdById: admin.id,
+          updatedById: admin.id,
+        },
+      });
+    }),
+  );
 
   const supplierInstallments = [
     {

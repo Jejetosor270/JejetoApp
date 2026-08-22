@@ -53,6 +53,7 @@ interface BuildingView {
 }
 interface ProjectOrderView {
   committedLandedCost: string | null;
+  conversionComplete: boolean;
   grossMarginRate: string | null;
   id: string;
   orderCurrencyCode: string;
@@ -62,6 +63,13 @@ interface ProjectOrderView {
   status: string;
   supplierName: string;
   totalSellingRevenue: string | null;
+}
+interface ProcurementSummaryView {
+  convertedOrderCount: number;
+  incompleteOrderCount: number;
+  totalCommittedEconomicCost: string;
+  totalCommittedGrossProfit: string;
+  totalCommittedSellingRevenue: string;
 }
 const statusLabels: Record<string, string> = {
   ACTIVE: "Active",
@@ -342,6 +350,7 @@ export function ProjectDetail({
   managers,
   orders,
   project,
+  procurementSummary,
   statuses,
 }: {
   buildings: BuildingView[];
@@ -351,6 +360,7 @@ export function ProjectDetail({
   managers: Option[];
   orders: ProjectOrderView[];
   project: ProjectView;
+  procurementSummary: ProcurementSummaryView;
   statuses: string[];
 }) {
   const [editingProject, setEditingProject] = useState(false);
@@ -418,6 +428,48 @@ export function ProjectDetail({
             </Link>
           ) : null}
         </div>
+        <div className="bg-muted/15 grid gap-3 border-b p-4 sm:grid-cols-3">
+          <div>
+            <p className="text-muted-foreground text-xs">
+              Committed economic cost
+            </p>
+            <p className="financial-figure mt-1 font-semibold">
+              {formatMoney(
+                procurementSummary.totalCommittedEconomicCost,
+                project.reportingCurrencyCode,
+              )}
+            </p>
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs">
+              Committed selling revenue HT
+            </p>
+            <p className="financial-figure mt-1 font-semibold">
+              {formatMoney(
+                procurementSummary.totalCommittedSellingRevenue,
+                project.reportingCurrencyCode,
+              )}
+            </p>
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs">
+              Committed gross profit
+            </p>
+            <p className="financial-figure mt-1 font-semibold">
+              {formatMoney(
+                procurementSummary.totalCommittedGrossProfit,
+                project.reportingCurrencyCode,
+              )}
+            </p>
+          </div>
+          {procurementSummary.incompleteOrderCount ? (
+            <p className="text-destructive text-xs sm:col-span-3">
+              Partial summary: {procurementSummary.incompleteOrderCount}{" "}
+              order(s) need FX before they can be included.{" "}
+              {procurementSummary.convertedOrderCount} order(s) are included.
+            </p>
+          ) : null}
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[50rem] text-left text-sm">
             <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
@@ -451,13 +503,18 @@ export function ProjectDetail({
                   <td className="financial-figure px-4 py-3 text-right">
                     {formatMoney(
                       order.committedLandedCost,
-                      order.orderCurrencyCode,
+                      project.reportingCurrencyCode,
                     )}
+                    {!order.conversionComplete ? (
+                      <span className="text-destructive block text-xs">
+                        FX incomplete
+                      </span>
+                    ) : null}
                   </td>
                   <td className="financial-figure px-4 py-3 text-right">
                     {formatMoney(
                       order.totalSellingRevenue,
-                      order.sellingCurrencyCode,
+                      project.reportingCurrencyCode,
                     )}
                   </td>
                   <td className="financial-figure px-4 py-3 text-right">

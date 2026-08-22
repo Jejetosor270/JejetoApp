@@ -45,7 +45,13 @@ export function OrderTable({ orders }: { orders: OrderSummary[] }) {
                       {order.orderNumber}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 font-medium">{order.packageName}</td>
+                  <td className="px-4 py-3 font-medium">
+                    {order.packageName}
+                    <span className="text-muted-foreground mt-0.5 block text-xs font-normal">
+                      Buy {order.orderCurrencyCode} · sell{" "}
+                      {order.sellingCurrencyCode}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">{order.project.name}</td>
                   <td className="px-4 py-3">{order.supplier.displayName}</td>
                   <td className="px-4 py-3">
@@ -56,15 +62,20 @@ export function OrderTable({ orders }: { orders: OrderSummary[] }) {
                   </td>
                   <td className="financial-figure px-4 py-3 text-right">
                     {formatMoney(
-                      committed?.landedCost ?? null,
-                      order.orderCurrencyCode,
+                      committed?.reportingEconomicLandedCost ?? null,
+                      order.project.reportingCurrencyCode,
                     )}
                   </td>
                   <td className="financial-figure px-4 py-3 text-right">
                     {formatMoney(
-                      order.totalSellingRevenue,
-                      order.sellingCurrencyCode,
+                      committed?.reportingSellingRevenue ?? null,
+                      order.project.reportingCurrencyCode,
                     )}
+                    {committed?.outputVat ? (
+                      <span className="text-muted-foreground block text-xs">
+                        {committed.outputVat.treatment.replaceAll("_", " ")}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="financial-figure px-4 py-3 text-right font-medium">
                     {formatRate(committed?.grossMarginRate ?? null)}
