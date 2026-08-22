@@ -1,8 +1,11 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import {
+  AccountControl,
+  type AccountControlUser,
+} from "@/components/app-shell/account-control";
 import { MobileNavigation } from "@/components/app-shell/mobile-navigation";
 
-export function TopBar() {
+export function TopBar({ user }: { user: AccountControlUser }) {
   return (
     <header className="bg-background/95 sticky top-0 z-30 flex h-16 items-center justify-between border-b px-4 backdrop-blur-sm sm:px-6 lg:px-8">
       <div className="flex min-w-0 items-center gap-2">
@@ -23,12 +26,11 @@ export function TopBar() {
         >
           Foundation ready
         </Badge>
-        <div className="bg-border h-5 w-px" aria-hidden="true" />
-        <Avatar className="size-8 border">
-          <AvatarFallback className="bg-card text-xs font-semibold">
-            MB
-          </AvatarFallback>
-        </Avatar>
+        <div
+          className="bg-border hidden h-5 w-px sm:block"
+          aria-hidden="true"
+        />
+        <AccountControl user={user} />
       </div>
     </header>
   );

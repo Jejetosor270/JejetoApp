@@ -69,7 +69,10 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 - Keep strict types; do not use `any`, non-null assertions for unvalidated input, giant components, scattered constants, or ignored errors.
 - Validate all server inputs with Zod. Normalize emails/codes in services and enforce authorization server-side.
 - Never expose Prisma, connection strings, or secrets to client components. Never commit `.env`, credentials, tokens, real customer data, or real employee credentials.
-- Authentication and roles are Phase 2. Until implemented, do not imply the shell is protected or production-ready for employee access.
+- Authentication is Auth.js credentials-only with bcrypt password hashes and an encrypted HTTP-only session cookie. There is no public sign-up, invitation, social login, magic link, or password-reset email flow.
+- All ERP routes must resolve the current active database user through `requireUser()`; mutations must authorize server-side with `requireRole()` or `requireAdmin()`. Do not rely on session claims or hidden navigation for authorization.
+- Roles are `ADMIN`, `MANAGER`, and `USER`. Only ADMIN can manage employee accounts. Preserve the transactional rule that the final active ADMIN cannot be deactivated or demoted.
+- Inactive and credential-less historical users cannot authenticate. Do not delete employees referenced by historical records. Obtain the current database user ID from the server auth helper for future `createdBy` and `updatedBy` writes.
 - Prefer small cohesive modules, accessible semantic markup, early returns, and parallel independent I/O.
 
 ## UI conventions

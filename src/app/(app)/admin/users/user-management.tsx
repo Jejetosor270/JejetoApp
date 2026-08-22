@@ -1,0 +1,359 @@
+"use client";
+
+import { LoaderCircle, Pencil, Plus, UserCog, Users } from "lucide-react";
+import { useActionState, useEffect, useRef, useState } from "react";
+
+import {
+  createEmployeeAction,
+  initialUserActionState,
+  updateEmployeeAction,
+} from "@/app/(app)/admin/users/actions";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
+type EmployeeRole = "ADMIN" | "MANAGER" | "USER";
+
+interface EmployeeView {
+  createdAt: string;
+  email: string;
+  id: string;
+  isActive: boolean;
+  name: string;
+  role: EmployeeRole;
+  updatedAt: string;
+}
+
+const inputClassName =
+  "border-input bg-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-lg border px-3 text-sm outline-none focus-visible:ring-3";
+
+function roleLabel(role: EmployeeRole): string {
+  return role[0] + role.slice(1).toLowerCase();
+}
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function ActionFeedback({
+  message,
+  status,
+}: {
+  message?: string | undefined;
+  status?: "error" | "success" | undefined;
+}) {
+  if (!message || !status) {
+    return null;
+  }
+
+  return (
+    <p
+      className={
+        status === "error"
+          ? "text-destructive text-sm"
+          : "text-positive text-sm"
+      }
+      role={status === "error" ? "alert" : "status"}
+    >
+      {message}
+    </p>
+  );
+}
+
+function CreateEmployeeForm() {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [state, formAction, isPending] = useActionState(
+    createEmployeeAction,
+    initialUserActionState,
+  );
+
+  useEffect(() => {
+    if (state.status === "success") {
+      formRef.current?.reset();
+    }
+  }, [state.status]);
+
+  return (
+    <section
+      aria-labelledby="create-employee-heading"
+      className="bg-card rounded-lg border p-4 sm:p-5"
+    >
+      <div className="mb-4 flex items-start gap-3">
+        <span className="bg-primary/10 text-primary flex size-8 items-center justify-center rounded-md">
+          <Plus aria-hidden="true" className="size-4" />
+        </span>
+        <div>
+          <h2 id="create-employee-heading" className="text-sm font-semibold">
+            Create employee account
+          </h2>
+          <p className="text-muted-foreground mt-0.5 text-xs">
+            Accounts are internal only. The employee sets no account up
+            publicly.
+          </p>
+        </div>
+      </div>
+      <form
+        action={formAction}
+        className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+        ref={formRef}
+      >
+        <label className="grid gap-1.5 text-sm font-medium">
+          Name
+          <input className={inputClassName} name="name" required />
+        </label>
+        <label className="grid gap-1.5 text-sm font-medium">
+          Email
+          <input
+            autoComplete="off"
+            className={inputClassName}
+            name="email"
+            required
+            type="email"
+          />
+        </label>
+        <label className="grid gap-1.5 text-sm font-medium">
+          Initial password
+          <input
+            autoComplete="new-password"
+            className={inputClassName}
+            minLength={12}
+            name="password"
+            required
+            type="password"
+          />
+        </label>
+        <label className="grid gap-1.5 text-sm font-medium">
+          Role
+          <select className={inputClassName} defaultValue="USER" name="role">
+            <option value="USER">User</option>
+            <option value="MANAGER">Manager</option>
+            <option value="ADMIN">Administrator</option>
+          </select>
+        </label>
+        <div className="flex items-end gap-3 xl:col-span-4">
+          <Button disabled={isPending} type="submit">
+            {isPending ? (
+              <LoaderCircle
+                aria-hidden="true"
+                className="animate-spin"
+                data-icon="inline-start"
+              />
+            ) : (
+              <Plus aria-hidden="true" data-icon="inline-start" />
+            )}
+            Create account
+          </Button>
+          <ActionFeedback message={state.message} status={state.status} />
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function EditEmployeeForm({
+  employee,
+  onClose,
+}: {
+  employee: EmployeeView;
+  onClose: () => void;
+}) {
+  const [state, formAction, isPending] = useActionState(
+    updateEmployeeAction,
+    initialUserActionState,
+  );
+
+  useEffect(() => {
+    if (state.status === "success") {
+      onClose();
+    }
+  }, [onClose, state.status]);
+
+  return (
+    <section
+      aria-labelledby="edit-employee-heading"
+      className="bg-card rounded-lg border p-4 sm:p-5"
+    >
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <span className="bg-muted text-foreground flex size-8 items-center justify-center rounded-md">
+            <UserCog aria-hidden="true" className="size-4" />
+          </span>
+          <div>
+            <h2 id="edit-employee-heading" className="text-sm font-semibold">
+              Edit employee account
+            </h2>
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              Passwords are intentionally not changed from this screen.
+            </p>
+          </div>
+        </div>
+        <Button onClick={onClose} size="sm" type="button" variant="ghost">
+          Close
+        </Button>
+      </div>
+      <form
+        action={formAction}
+        className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+      >
+        <input name="id" type="hidden" value={employee.id} />
+        <label className="grid gap-1.5 text-sm font-medium">
+          Name
+          <input
+            className={inputClassName}
+            defaultValue={employee.name}
+            name="name"
+            required
+          />
+        </label>
+        <label className="grid gap-1.5 text-sm font-medium">
+          Email
+          <input
+            className={inputClassName}
+            defaultValue={employee.email}
+            name="email"
+            required
+            type="email"
+          />
+        </label>
+        <label className="grid gap-1.5 text-sm font-medium">
+          Role
+          <select
+            className={inputClassName}
+            defaultValue={employee.role}
+            name="role"
+          >
+            <option value="USER">User</option>
+            <option value="MANAGER">Manager</option>
+            <option value="ADMIN">Administrator</option>
+          </select>
+        </label>
+        <label className="flex h-9 items-center gap-2 self-end text-sm font-medium">
+          <input
+            className="accent-primary size-4"
+            defaultChecked={employee.isActive}
+            name="isActive"
+            type="checkbox"
+          />
+          Account active
+        </label>
+        <div className="flex items-center gap-3 md:col-span-2 xl:col-span-4">
+          <Button disabled={isPending} type="submit">
+            {isPending ? (
+              <LoaderCircle
+                aria-hidden="true"
+                className="animate-spin"
+                data-icon="inline-start"
+              />
+            ) : null}
+            Save changes
+          </Button>
+          <ActionFeedback message={state.message} status={state.status} />
+        </div>
+      </form>
+    </section>
+  );
+}
+
+export function UserManagement({ employees }: { employees: EmployeeView[] }) {
+  const [editingEmployee, setEditingEmployee] = useState<EmployeeView | null>(
+    null,
+  );
+
+  return (
+    <div className="space-y-6">
+      <section className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-primary mb-2 flex items-center gap-2 text-xs font-medium tracking-[0.08em] uppercase">
+            <Users aria-hidden="true" className="size-3.5" />
+            Administration
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Employee accounts
+          </h1>
+          <p className="text-muted-foreground mt-2 text-sm leading-6">
+            Create and maintain the internal accounts permitted to access MB
+            Procurement.
+          </p>
+        </div>
+        <Badge className="w-fit" variant="outline">
+          {employees.filter((employee) => employee.isActive).length} active
+        </Badge>
+      </section>
+
+      <CreateEmployeeForm />
+
+      {editingEmployee ? (
+        <EditEmployeeForm
+          employee={editingEmployee}
+          onClose={() => setEditingEmployee(null)}
+        />
+      ) : null}
+
+      <section
+        aria-labelledby="employee-list-heading"
+        className="bg-card overflow-hidden rounded-lg border"
+      >
+        <div className="border-b px-4 py-3.5 sm:px-5">
+          <h2 id="employee-list-heading" className="text-sm font-semibold">
+            Internal users
+          </h2>
+          <p className="text-muted-foreground mt-0.5 text-xs">
+            Inactive accounts remain available for historical attribution but
+            cannot sign in.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[43rem] text-left text-sm">
+            <thead className="bg-muted/40 text-muted-foreground border-b text-xs font-medium">
+              <tr>
+                <th className="px-4 py-3 font-medium sm:px-5">Name</th>
+                <th className="px-4 py-3 font-medium">Email</th>
+                <th className="px-4 py-3 font-medium">Role</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Created</th>
+                <th className="px-4 py-3 text-right font-medium">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {employees.map((employee) => (
+                <tr key={employee.id} className="hover:bg-muted/25">
+                  <td className="px-4 py-3 font-medium sm:px-5">
+                    {employee.name}
+                  </td>
+                  <td className="text-muted-foreground px-4 py-3">
+                    {employee.email}
+                  </td>
+                  <td className="px-4 py-3">{roleLabel(employee.role)}</td>
+                  <td className="px-4 py-3">
+                    <Badge
+                      variant={employee.isActive ? "secondary" : "outline"}
+                    >
+                      {employee.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </td>
+                  <td className="text-muted-foreground px-4 py-3 text-xs">
+                    {formatDate(employee.createdAt)}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button
+                      onClick={() => setEditingEmployee(employee)}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <Pencil aria-hidden="true" data-icon="inline-start" />
+                      Edit
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}

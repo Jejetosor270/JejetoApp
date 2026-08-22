@@ -80,14 +80,14 @@ async function seedRepresentativeProject(): Promise<void> {
     where: { id: ids.admin },
     update: {
       email: "admin@mb-interiors.example.invalid",
-      isActive: true,
+      isActive: false,
       name: "Development Administrator",
       role: UserRole.ADMIN,
     },
     create: {
       id: ids.admin,
       email: "admin@mb-interiors.example.invalid",
-      isActive: true,
+      isActive: false,
       name: "Development Administrator",
       role: UserRole.ADMIN,
     },

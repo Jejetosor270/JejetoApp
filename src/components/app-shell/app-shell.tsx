@@ -2,8 +2,15 @@ import type { ReactNode } from "react";
 
 import { SidebarNavigation } from "@/components/app-shell/sidebar-navigation";
 import { TopBar } from "@/components/app-shell/top-bar";
+import type { AccountControlUser } from "@/components/app-shell/account-control";
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  user,
+}: {
+  children: ReactNode;
+  user: AccountControlUser;
+}) {
   return (
     <div className="min-h-svh lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
       <a
@@ -16,7 +23,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <SidebarNavigation />
       </aside>
       <div className="flex min-h-svh min-w-0 flex-col lg:col-start-2">
-        <TopBar />
+        <TopBar user={user} />
         <main
           id="main-content"
           className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8"

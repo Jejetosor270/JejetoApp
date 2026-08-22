@@ -6,16 +6,17 @@ The central procurement object is a supplier package/order. This is not an inven
 
 ## Current status
 
-Phase 1 — Initial Setup & Foundation is complete. The repository currently provides:
+Phase 2 — Authentication & Users is complete. The repository currently provides:
 
 - a responsive application shell and design-system foundations;
 - a normalized PostgreSQL/Prisma data model and initial migration;
 - exact-decimal finance functions with unit tests;
-- environment validation and lazy server-only database access;
+- environment validation, lazy server-only database access, and Auth.js employee sessions;
+- ADMIN-managed employee accounts with roles, active/inactive controls, and bootstrap support;
 - fictional, idempotent development seed infrastructure;
 - formatting, linting, type checking, coverage, CI, and production-build tooling.
 
-Authentication and operational CRUD are intentionally not implemented. Phase 2 will add employee authentication, secure sessions, roles, and protected routes.
+Operational procurement CRUD is intentionally not implemented. Phase 3 will add clients, suppliers, projects, and buildings.
 
 ## Technical stack
 
@@ -25,6 +26,7 @@ Authentication and operational CRUD are intentionally not implemented. Phase 2 w
 - PostgreSQL
 - Prisma ORM 7 with the `pg` driver adapter
 - Zod, date-fns, and decimal.js
+- Auth.js credentials provider and bcrypt password hashing
 - Vitest with V8/LCOV coverage
 - ESLint and Prettier
 
@@ -70,7 +72,7 @@ No database is required to render or build the Phase 1 shell.
 
 8. Open [http://localhost:3000](http://localhost:3000).
 
-The seed is fictional, idempotent, and refuses to run when `NODE_ENV=production`. It creates four currencies, one development administrator without credentials, a sample client/supplier/project, three villas, one two-villa package, cost/VAT examples, and payment schedules.
+The seed is fictional, idempotent, and refuses to run when `NODE_ENV=production`. It creates four currencies, one inactive development administrator without credentials, a sample client/supplier/project, three villas, one two-villa package, cost/VAT examples, and payment schedules.
 
 ## Environment configuration
 
@@ -78,29 +80,52 @@ The seed is fictional, idempotent, and refuses to run when `NODE_ENV=production`
 | -------------- | --------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `DATABASE_URL` | Yes for database access           | Pooled PostgreSQL URL used by the deployed application and local runtime                        |
 | `DIRECT_URL`   | Recommended for hosted PostgreSQL | Direct PostgreSQL URL used by Prisma migrations and seed commands; falls back to `DATABASE_URL` |
+| `AUTH_SECRET`  | Yes for employee authentication   | High-entropy secret used by Auth.js to encrypt secure HTTP-only employee session cookies        |
 
 Keep `.env` local. Vercel values belong in Project Settings → Environment Variables or should be injected by a Marketplace database integration. Never prefix database variables with `NEXT_PUBLIC_`.
 
+Generate `AUTH_SECRET` with `npm exec auth secret`. Use one stable, unique value for each Vercel environment; changing it signs out existing employees.
+
+## Employee authentication
+
+The application is private: there is no public sign-up, invitation, social login, magic link, or password-reset email flow. Auth.js uses email/password credentials with bcrypt password hashes and encrypted, HTTP-only eight-hour sessions. Every protected server request loads the current user from PostgreSQL, so inactive employees and changed roles lose useful access immediately.
+
+All ERP routes require an active employee account. `ADMIN`, `MANAGER`, and `USER` are the available roles; authorization helpers centralize role checks, and only `ADMIN` can access `/admin/users`. Administrators create and edit employee accounts there. The last active administrator cannot be deactivated or demoted.
+
+### First administrator
+
+After applying the Phase 2 migration, establish the first administrator once from a trusted PowerShell session. Do not put this password in Git or a Vercel build setting:
+
+```powershell
+$env:BOOTSTRAP_ADMIN_NAME = "Your administrator name"
+$env:BOOTSTRAP_ADMIN_EMAIL = "administrator@your-company.example"
+$env:BOOTSTRAP_ADMIN_PASSWORD = "a-unique-password-with-at-least-12-characters"
+npm run users:bootstrap-admin
+```
+
+The command refuses to create another administrator while an active administrator exists. It is intentionally separate from the fictional development seed and is safe to use against the configured Neon database.
+
 ## Development commands
 
-| Command                 | Purpose                                              |
-| ----------------------- | ---------------------------------------------------- |
-| `npm run dev`           | Start the local Next.js server                       |
-| `npm run build`         | Create a production build                            |
-| `npm run start`         | Serve an existing production build                   |
-| `npm run typecheck`     | Run strict TypeScript checking                       |
-| `npm run lint`          | Run ESLint with zero warnings allowed                |
-| `npm test`              | Run unit tests once                                  |
-| `npm run test:watch`    | Run tests while editing                              |
-| `npm run test:coverage` | Produce terminal and `coverage/lcov.info` reports    |
-| `npm run format`        | Apply Prettier formatting                            |
-| `npm run format:check`  | Verify formatting without edits                      |
-| `npm run db:generate`   | Regenerate the ignored Prisma Client                 |
-| `npm run db:validate`   | Validate the Prisma schema                           |
-| `npm run db:migrate`    | Create and apply a development migration             |
-| `npm run db:deploy`     | Apply committed migrations without creating new ones |
-| `npm run db:seed`       | Load representative fictional development data       |
-| `npm run db:studio`     | Open Prisma Studio                                   |
+| Command                         | Purpose                                                            |
+| ------------------------------- | ------------------------------------------------------------------ |
+| `npm run dev`                   | Start the local Next.js server                                     |
+| `npm run build`                 | Create a production build                                          |
+| `npm run start`                 | Serve an existing production build                                 |
+| `npm run typecheck`             | Run strict TypeScript checking                                     |
+| `npm run lint`                  | Run ESLint with zero warnings allowed                              |
+| `npm test`                      | Run unit tests once                                                |
+| `npm run test:watch`            | Run tests while editing                                            |
+| `npm run test:coverage`         | Produce terminal and `coverage/lcov.info` reports                  |
+| `npm run format`                | Apply Prettier formatting                                          |
+| `npm run format:check`          | Verify formatting without edits                                    |
+| `npm run db:generate`           | Regenerate the ignored Prisma Client                               |
+| `npm run db:validate`           | Validate the Prisma schema                                         |
+| `npm run db:migrate`            | Create and apply a development migration                           |
+| `npm run db:deploy`             | Apply committed migrations without creating new ones               |
+| `npm run db:seed`               | Load representative fictional development data                     |
+| `npm run db:studio`             | Open Prisma Studio                                                 |
+| `npm run users:bootstrap-admin` | Create the first active ADMIN from temporary environment variables |
 
 Before committing, run:
 
@@ -125,7 +150,7 @@ The initial migration is committed in `prisma/migrations`. The schema deliberate
 - explicit order-to-building links;
 - restricted deletion on historical business relations and nullable audit-user links.
 
-For a schema change, edit `prisma/schema.prisma`, run `npm run db:migrate`, inspect the generated SQL, and commit both schema and migration. Never edit a migration already applied to a shared database.
+For a schema change, edit `prisma/schema.prisma`, run `npm run db:migrate`, inspect the generated SQL, and commit both schema and migration. Never edit a migration already applied to a shared database. Phase 2 includes `20260822000000_add_employee_password_hash`; apply it with `npm run db:deploy` using the production `DIRECT_URL` before testing login on Vercel.
 
 ## GitHub workflow
 
@@ -140,8 +165,9 @@ Do not commit `.env`, `.vercel`, `node_modules`, `.next`, generated Prisma Clien
 3. Keep the detected Next.js framework, repository root, install command, and build command unchanged. `postinstall` automatically generates Prisma Client.
 4. From Vercel Marketplace, provision a managed PostgreSQL integration such as Neon, or connect an existing PostgreSQL provider.
 5. Map the provider's pooled connection URL to `DATABASE_URL` for Development, Preview, and Production. Map its direct URL to `DIRECT_URL` where available.
-6. Before the first schema-dependent production release, run `npm run db:deploy` once from a trusted machine or controlled CI job using the production direct URL.
-7. Deploy. Git-connected Vercel projects automatically create previews for branches/pull requests and production deployments from the configured production branch.
+6. Set a unique `AUTH_SECRET` for Development, Preview, and Production. Generate it with `npm exec auth secret`; never expose it to the browser.
+7. Before the first schema-dependent production release, run `npm run db:deploy` once from a trusted machine or controlled CI job using the production direct URL.
+8. Deploy. Git-connected Vercel projects automatically create previews for branches/pull requests and production deployments from the configured production branch.
 
 Do not run database migrations inside every Vercel build: concurrent preview builds could race. The application uses the Node.js runtime and a small connection pool; the database module initializes lazily, so build-time rendering does not require a live connection.
 
@@ -161,6 +187,8 @@ src/components/app-shell/  Composed responsive application shell
 src/components/ui/         Owned shadcn/ui component source
 src/config/                Static navigation configuration
 src/domain/finance/        Pure exact-decimal finance logic and tests
+src/domain/users/          Password, validation, authorization, and user safety rules
+src/lib/auth/              Server-only current-user and Auth.js configuration
 src/lib/                   Database, environment, and shared utilities
 ```
 
