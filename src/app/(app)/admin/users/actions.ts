@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import {
   createEmployeeInputSchema,
+  resetEmployeePasswordInputSchema,
   updateEmployeeInputSchema,
 } from "@/domain/users/validation";
 import { requireAdmin } from "@/lib/auth/current-user";
@@ -12,10 +13,20 @@ import {
   createEmployee,
   isDuplicateEmailError,
   isExpectedEmployeeUpdateError,
+  resetEmployeePassword,
   updateEmployee,
 } from "@/lib/users/employee-management";
 
+export interface UpdatedEmployeeActionData {
+  email: string;
+  id: string;
+  isActive: boolean;
+  name: string;
+  role: "ADMIN" | "MANAGER" | "USER";
+}
+
 export interface UserActionState {
+  employee?: UpdatedEmployeeActionData;
   message?: string;
   status?: "error" | "success";
 }
@@ -41,6 +52,16 @@ function unexpectedErrorState(): UserActionState {
     message: "We could not save this employee account. Please try again.",
     status: "error",
   };
+}
+
+function toUpdatedEmployeeActionData(employee: {
+  email: string;
+  id: string;
+  isActive: boolean;
+  name: string;
+  role: "ADMIN" | "MANAGER" | "USER";
+}): UpdatedEmployeeActionData {
+  return employee;
 }
 
 export async function createEmployeeAction(
@@ -95,7 +116,13 @@ export async function updateEmployeeAction(
   }
 
   try {
-    await updateEmployee(administrator.id, input.data);
+    const employee = await updateEmployee(administrator.id, input.data);
+    revalidatePath("/admin/users");
+    return {
+      employee: toUpdatedEmployeeActionData(employee),
+      message: "Employee account updated.",
+      status: "success",
+    };
   } catch (error) {
     if (isDuplicateEmailError(error) || isExpectedEmployeeUpdateError(error)) {
       return {
@@ -110,7 +137,40 @@ export async function updateEmployeeAction(
     console.error("Unable to update employee account.", error);
     return unexpectedErrorState();
   }
+}
+
+export async function resetEmployeePasswordAction(
+  _: UserActionState,
+  formData: FormData,
+): Promise<UserActionState> {
+  const administrator = await requireAdmin();
+  const input = resetEmployeePasswordInputSchema.safeParse({
+    id: getFormString(formData, "id"),
+    password: getFormString(formData, "password"),
+    passwordConfirmation: getFormString(formData, "passwordConfirmation"),
+  });
+
+  if (!input.success) {
+    return validationErrorState(input.error);
+  }
+
+  try {
+    await resetEmployeePassword(administrator.id, input.data);
+  } catch (error) {
+    if (isExpectedEmployeeUpdateError(error)) {
+      return {
+        message: error instanceof Error ? error.message : "Employee not found.",
+        status: "error",
+      };
+    }
+
+    console.error("Unable to reset employee password.", error);
+    return {
+      message: "We could not update this password. Please try again.",
+      status: "error",
+    };
+  }
 
   revalidatePath("/admin/users");
-  return { message: "Employee account updated.", status: "success" };
+  return { message: "Password updated.", status: "success" };
 }

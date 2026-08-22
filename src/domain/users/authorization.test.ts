@@ -12,7 +12,7 @@ describe("role authorization", () => {
     expect(hasRequiredRole(UserRole.ADMIN, [UserRole.ADMIN])).toBe(true);
   });
 
-  it("rejects non-administrators from administrative actions", () => {
+  it("rejects non-administrators from employee password management", () => {
     expect(hasRequiredRole(UserRole.MANAGER, [UserRole.ADMIN])).toBe(false);
     expect(hasRequiredRole(UserRole.USER, [UserRole.ADMIN])).toBe(false);
     expect(() =>

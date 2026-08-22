@@ -4,12 +4,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { hash } from "bcryptjs";
 import { z } from "zod";
 
+import { bootstrapAdminInputSchema } from "../src/domain/users/bootstrap-validation";
 import { PrismaClient, UserRole } from "../src/generated/prisma/client";
 
-const bootstrapEnvironmentSchema = z.object({
-  BOOTSTRAP_ADMIN_EMAIL: z.string().trim().toLowerCase().pipe(z.email()),
-  BOOTSTRAP_ADMIN_NAME: z.string().trim().min(2).max(160),
-  BOOTSTRAP_ADMIN_PASSWORD: z.string().min(12),
+const bootstrapEnvironmentSchema = bootstrapAdminInputSchema.extend({
   DATABASE_URL: z.string().min(1).optional(),
   DIRECT_URL: z.string().min(1).optional(),
 });

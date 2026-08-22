@@ -2,8 +2,9 @@ import { truncates } from "bcryptjs";
 import { z } from "zod";
 
 import { UserRole } from "@/generated/prisma/client";
+import { minimumPasswordLength } from "@/domain/users/password-policy";
 
-export const minimumPasswordLength = 12;
+export { minimumPasswordLength } from "@/domain/users/password-policy";
 
 export function normalizeEmail(value: string): string {
   return value.trim().toLowerCase();
@@ -53,6 +54,23 @@ export const updateEmployeeInputSchema = z.object({
   role: z.enum(UserRole),
 });
 
+export const resetEmployeePasswordInputSchema = z
+  .object({
+    id: z.uuid("Invalid user."),
+    password: passwordSchema,
+    passwordConfirmation: z.string(),
+  })
+  .refine(
+    ({ password, passwordConfirmation }) => password === passwordConfirmation,
+    {
+      error: "Passwords do not match.",
+      path: ["passwordConfirmation"],
+    },
+  );
+
 export type CreateEmployeeInput = z.infer<typeof createEmployeeInputSchema>;
 export type LoginInput = z.infer<typeof loginInputSchema>;
+export type ResetEmployeePasswordInput = z.infer<
+  typeof resetEmployeePasswordInputSchema
+>;
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeInputSchema>;

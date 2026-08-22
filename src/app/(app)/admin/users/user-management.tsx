@@ -1,15 +1,32 @@
 "use client";
 
-import { LoaderCircle, Pencil, Plus, UserCog, Users } from "lucide-react";
-import { useActionState, useEffect, useRef, useState } from "react";
+import {
+  KeyRound,
+  LoaderCircle,
+  Pencil,
+  Plus,
+  UserCog,
+  Users,
+} from "lucide-react";
+import {
+  useActionState,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   createEmployeeAction,
   initialUserActionState,
+  resetEmployeePasswordAction,
   updateEmployeeAction,
+  type UpdatedEmployeeActionData,
 } from "@/app/(app)/admin/users/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { minimumPasswordLength } from "@/domain/users/password-policy";
+import { useRouter } from "next/navigation";
 
 type EmployeeRole = "ADMIN" | "MANAGER" | "USER";
 
@@ -119,7 +136,7 @@ function CreateEmployeeForm() {
           <input
             autoComplete="new-password"
             className={inputClassName}
-            minLength={12}
+            minLength={minimumPasswordLength}
             name="password"
             required
             type="password"
@@ -156,20 +173,24 @@ function CreateEmployeeForm() {
 function EditEmployeeForm({
   employee,
   onClose,
+  onUpdated,
 }: {
   employee: EmployeeView;
   onClose: () => void;
+  onUpdated: (employee: UpdatedEmployeeActionData) => void;
 }) {
+  const router = useRouter();
   const [state, formAction, isPending] = useActionState(
     updateEmployeeAction,
     initialUserActionState,
   );
 
   useEffect(() => {
-    if (state.status === "success") {
-      onClose();
+    if (state.status === "success" && state.employee) {
+      onUpdated(state.employee);
+      router.refresh();
     }
-  }, [onClose, state.status]);
+  }, [onUpdated, router, state.employee, state.status]);
 
   return (
     <section
@@ -186,7 +207,7 @@ function EditEmployeeForm({
               Edit employee account
             </h2>
             <p className="text-muted-foreground mt-0.5 text-xs">
-              Passwords are intentionally not changed from this screen.
+              Update account details separately from password changes.
             </p>
           </div>
         </div>
@@ -253,13 +274,113 @@ function EditEmployeeForm({
           <ActionFeedback message={state.message} status={state.status} />
         </div>
       </form>
+      <PasswordResetForm employeeId={employee.id} />
+    </section>
+  );
+}
+
+function PasswordResetForm({ employeeId }: { employeeId: string }) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [state, formAction, isPending] = useActionState(
+    resetEmployeePasswordAction,
+    initialUserActionState,
+  );
+
+  useEffect(() => {
+    if (state.status === "success") {
+      formRef.current?.reset();
+    }
+  }, [state.status]);
+
+  return (
+    <section
+      className="bg-muted/30 mt-5 border-t pt-5"
+      aria-labelledby="password-reset-heading"
+    >
+      <div className="mb-3 flex items-start gap-3">
+        <span className="bg-background text-foreground flex size-8 items-center justify-center rounded-md border">
+          <KeyRound aria-hidden="true" className="size-4" />
+        </span>
+        <div>
+          <h3 id="password-reset-heading" className="text-sm font-semibold">
+            Change password
+          </h3>
+          <p className="text-muted-foreground mt-0.5 text-xs">
+            Set a new password for this employee. The current password is never
+            displayed.
+          </p>
+        </div>
+      </div>
+      <form
+        action={formAction}
+        className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+        ref={formRef}
+      >
+        <input name="id" type="hidden" value={employeeId} />
+        <label className="grid gap-1.5 text-sm font-medium">
+          New password
+          <input
+            autoComplete="new-password"
+            className={inputClassName}
+            minLength={minimumPasswordLength}
+            name="password"
+            required
+            type="password"
+          />
+        </label>
+        <label className="grid gap-1.5 text-sm font-medium">
+          Confirm new password
+          <input
+            autoComplete="new-password"
+            className={inputClassName}
+            minLength={minimumPasswordLength}
+            name="passwordConfirmation"
+            required
+            type="password"
+          />
+        </label>
+        <div className="flex items-end gap-3 md:col-span-2 xl:col-span-2">
+          <Button disabled={isPending} type="submit" variant="outline">
+            {isPending ? (
+              <LoaderCircle
+                aria-hidden="true"
+                className="animate-spin"
+                data-icon="inline-start"
+              />
+            ) : (
+              <KeyRound aria-hidden="true" data-icon="inline-start" />
+            )}
+            Update password
+          </Button>
+          <ActionFeedback message={state.message} status={state.status} />
+        </div>
+      </form>
     </section>
   );
 }
 
 export function UserManagement({ employees }: { employees: EmployeeView[] }) {
+  const [displayedEmployees, setDisplayedEmployees] = useState(employees);
   const [editingEmployee, setEditingEmployee] = useState<EmployeeView | null>(
     null,
+  );
+
+  const handleEmployeeUpdated = useCallback(
+    (updatedEmployee: UpdatedEmployeeActionData) => {
+      setDisplayedEmployees((currentEmployees) =>
+        currentEmployees.map((employee) =>
+          employee.id === updatedEmployee.id
+            ? { ...employee, ...updatedEmployee }
+            : employee,
+        ),
+      );
+      setEditingEmployee((currentEmployee) =>
+        currentEmployee?.id === updatedEmployee.id
+          ? { ...currentEmployee, ...updatedEmployee }
+          : currentEmployee,
+      );
+    },
+    [],
   );
 
   return (
@@ -279,7 +400,8 @@ export function UserManagement({ employees }: { employees: EmployeeView[] }) {
           </p>
         </div>
         <Badge className="w-fit" variant="outline">
-          {employees.filter((employee) => employee.isActive).length} active
+          {displayedEmployees.filter((employee) => employee.isActive).length}{" "}
+          active
         </Badge>
       </section>
 
@@ -289,6 +411,7 @@ export function UserManagement({ employees }: { employees: EmployeeView[] }) {
         <EditEmployeeForm
           employee={editingEmployee}
           onClose={() => setEditingEmployee(null)}
+          onUpdated={handleEmployeeUpdated}
         />
       ) : null}
 
@@ -318,7 +441,7 @@ export function UserManagement({ employees }: { employees: EmployeeView[] }) {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {employees.map((employee) => (
+              {displayedEmployees.map((employee) => (
                 <tr key={employee.id} className="hover:bg-muted/25">
                   <td className="px-4 py-3 font-medium sm:px-5">
                     {employee.name}

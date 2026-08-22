@@ -8,6 +8,7 @@ import {
 } from "@/domain/users/user-rules";
 import type {
   CreateEmployeeInput,
+  ResetEmployeePasswordInput,
   UpdateEmployeeInput,
 } from "@/domain/users/validation";
 import { getDatabase } from "@/lib/db";
@@ -104,12 +105,34 @@ export async function updateEmployee(
   );
 }
 
-export function isDuplicateEmailError(error: unknown): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2002"
-  );
+export async function resetEmployeePassword(
+  actorId: string,
+  input: ResetEmployeePasswordInput,
+): Promise<ManagedEmployee> {
+  const passwordHash = await hashPassword(input.password);
+
+  try {
+    return await getDatabase().user.update({
+      where: { id: input.id },
+      data: {
+        passwordHash,
+        updatedById: actorId,
+      },
+      select: employeeSelect,
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      throw new EmployeeNotFoundError();
+    }
+
+    throw error;
+  }
 }
+
+export { isDuplicateEmailError } from "@/domain/users/persistence-errors";
 
 export function isExpectedEmployeeUpdateError(error: unknown): boolean {
   return (

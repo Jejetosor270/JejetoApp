@@ -11,9 +11,13 @@ export const metadata: Metadata = {
 export default async function UserManagementPage() {
   await requireAdmin();
   const employees = await listManagedEmployees();
+  const employeeListVersion = employees
+    .map((employee) => `${employee.id}:${employee.updatedAt.toISOString()}`)
+    .join("|");
 
   return (
     <UserManagement
+      key={employeeListVersion}
       employees={employees.map((employee) => ({
         ...employee,
         createdAt: employee.createdAt.toISOString(),
