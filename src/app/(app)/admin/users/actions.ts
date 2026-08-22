@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import type {
+  UpdatedEmployeeActionData,
+  UserActionState,
+} from "@/app/(app)/admin/users/action-state";
 import {
   createEmployeeInputSchema,
   resetEmployeePasswordInputSchema,
@@ -16,22 +20,6 @@ import {
   resetEmployeePassword,
   updateEmployee,
 } from "@/lib/users/employee-management";
-
-export interface UpdatedEmployeeActionData {
-  email: string;
-  id: string;
-  isActive: boolean;
-  name: string;
-  role: "ADMIN" | "MANAGER" | "USER";
-}
-
-export interface UserActionState {
-  employee?: UpdatedEmployeeActionData;
-  message?: string;
-  status?: "error" | "success";
-}
-
-export const initialUserActionState: UserActionState = {};
 
 function getFormString(formData: FormData, name: string): string | undefined {
   const value = formData.get(name);

@@ -18,11 +18,13 @@ import {
 
 import {
   createEmployeeAction,
-  initialUserActionState,
   resetEmployeePasswordAction,
   updateEmployeeAction,
-  type UpdatedEmployeeActionData,
 } from "@/app/(app)/admin/users/actions";
+import {
+  initialUserActionState,
+  type UpdatedEmployeeActionData,
+} from "@/app/(app)/admin/users/action-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { minimumPasswordLength } from "@/domain/users/password-policy";
