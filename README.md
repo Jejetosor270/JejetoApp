@@ -6,7 +6,8 @@ An internal procurement and financial management platform designed to track supp
 
 - Secure employee authentication with ADMIN, MANAGER, and USER roles
 - ADMIN-managed employee accounts, including activation and password changes
-- A normalized foundation for projects, suppliers, procurement packages, and payment schedules
+- Client, supplier, project, and building master-data management
+- A normalized foundation for later procurement packages and payment schedules
 - Exact-decimal financial calculation utilities
 - Responsive internal workspace shell
 
@@ -65,4 +66,4 @@ The application is designed for Vercel with PostgreSQL. Configure the environmen
 
 ## Status
 
-Phase 2 — Authentication and user management is complete. The next planned phase adds operational master data.
+Phase 3 — Clients, suppliers, projects, and buildings is complete. The next planned phase adds procurement orders and financial workflows.

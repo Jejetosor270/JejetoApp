@@ -54,6 +54,13 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 - `prisma/schema.prisma`: relational model; `prisma/migrations`: immutable migration history; `prisma/seed.ts`: fictional development data only.
 - `src/generated/prisma` is generated and ignored. Never edit or import its internals from client components.
 
+## Phase 3 master data
+
+- The operational hierarchy is Client → Project → Building; suppliers are separate reusable master data.
+- Archive Clients, Suppliers, and Buildings with `isActive`; archive Projects with `ProjectStatus.ARCHIVED`. Do not expose destructive deletion.
+- Master-data writes require the authenticated ADMIN or MANAGER actor and always set `createdById`/`updatedById` server-side.
+- Store optional countries as ISO-style two-letter codes and render labels from `src/config/countries`; currencies remain relational `Currency` records.
+
 ## Database conventions
 
 - UUID primary keys; UTC timestamps; `@db.Date` for business dates without time-of-day meaning.

@@ -79,14 +79,14 @@ async function seedRepresentativeProject(): Promise<void> {
   const admin = await prisma.user.upsert({
     where: { id: ids.admin },
     update: {
-      email: "admin@mb-interiors.example.invalid",
+      email: "admin@example.invalid",
       isActive: false,
       name: "Development Administrator",
       role: UserRole.ADMIN,
     },
     create: {
       id: ids.admin,
-      email: "admin@mb-interiors.example.invalid",
+      email: "admin@example.invalid",
       isActive: false,
       name: "Development Administrator",
       role: UserRole.ADMIN,
@@ -96,14 +96,15 @@ async function seedRepresentativeProject(): Promise<void> {
   await prisma.client.upsert({
     where: { id: ids.client },
     update: {
-      displayName: "Eligo Bled (fictional)",
-      legalName: "Eligo Bled Development d.o.o. (fictional)",
+      countryCode: "BE",
+      displayName: "Example Client",
+      legalName: "Example Client Ltd.",
     },
     create: {
       id: ids.client,
-      legalName: "Eligo Bled Development d.o.o. (fictional)",
-      displayName: "Eligo Bled (fictional)",
-      countryCode: "SI",
+      legalName: "Example Client Ltd.",
+      displayName: "Example Client",
+      countryCode: "BE",
       defaultCurrencyCode: "EUR",
       isActive: true,
       notes: "Representative development data only.",
@@ -115,17 +116,19 @@ async function seedRepresentativeProject(): Promise<void> {
   await prisma.supplier.upsert({
     where: { id: ids.supplier },
     update: {
-      displayName: "Nord Atelier Furnishings (fictional)",
-      legalName: "Nord Atelier Furnishings S.r.l. (fictional)",
+      defaultPaymentTermsNotes: "Example development data only.",
+      displayName: "Example Supplier",
+      legalName: "Example Supplier Ltd.",
     },
     create: {
       id: ids.supplier,
-      legalName: "Nord Atelier Furnishings S.r.l. (fictional)",
-      displayName: "Nord Atelier Furnishings (fictional)",
+      legalName: "Example Supplier Ltd.",
+      displayName: "Example Supplier",
       countryCode: "IT",
       defaultCurrencyCode: "EUR",
       defaultLeadTimeWeeks: 14,
       defaultPaymentTermsDays: 30,
+      defaultPaymentTermsNotes: "Example development data only.",
       isActive: true,
       notes: "Representative development data only.",
       createdById: admin.id,
@@ -135,14 +138,19 @@ async function seedRepresentativeProject(): Promise<void> {
 
   await prisma.project.upsert({
     where: { id: ids.project },
-    update: { name: "Bled Hill Villas", status: ProjectStatus.ACTIVE },
+    update: {
+      code: "DEMO-001",
+      countryCode: "BE",
+      name: "Example Project",
+      status: ProjectStatus.ACTIVE,
+    },
     create: {
       id: ids.project,
       clientId: ids.client,
-      code: "BHV-001",
-      countryCode: "SI",
+      code: "DEMO-001",
+      countryCode: "BE",
       expectedCompletionDate: new Date("2027-06-30T00:00:00.000Z"),
-      name: "Bled Hill Villas",
+      name: "Example Project",
       projectManagerId: admin.id,
       reportingCurrencyCode: "EUR",
       startDate: new Date("2026-06-01T00:00:00.000Z"),
@@ -182,7 +190,7 @@ async function seedRepresentativeProject(): Promise<void> {
     },
     create: {
       id: ids.order,
-      orderNumber: "BHV-001-PO-001",
+      orderNumber: "DEMO-001-PO-001",
       packageName: "Loose Furniture Package",
       projectId: ids.project,
       supplierId: ids.supplier,
@@ -304,7 +312,7 @@ async function seedRepresentativeProject(): Promise<void> {
       financialsId: ids.financials,
       direction: VatDirection.OUTPUT,
       treatment: VatTreatment.INTRA_EU_SUPPLY,
-      countryCode: "SI",
+      countryCode: "BE",
       taxableBaseAmount: "90000.0000",
       vatRate: "0.000000",
       vatAmount: "0.0000",

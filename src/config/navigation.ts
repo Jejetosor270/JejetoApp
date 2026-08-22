@@ -37,7 +37,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
       {
         href: "/projects",
         icon: FolderKanban,
-        isAvailable: false,
+        isAvailable: true,
         label: "Projects",
       },
       { href: "/orders", icon: Package, isAvailable: false, label: "Orders" },
@@ -61,13 +61,13 @@ export const navigationGroups: readonly NavigationGroup[] = [
       {
         href: "/suppliers",
         icon: Truck,
-        isAvailable: false,
+        isAvailable: true,
         label: "Suppliers",
       },
       {
         href: "/clients",
         icon: Building2,
-        isAvailable: false,
+        isAvailable: true,
         label: "Clients",
       },
     ],

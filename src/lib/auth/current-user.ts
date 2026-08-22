@@ -78,3 +78,11 @@ export async function requireRole(
 export async function requireAdmin(): Promise<AuthenticatedUser> {
   return requireRole([UserRole.ADMIN]);
 }
+
+export async function requireMasterDataEditor(): Promise<AuthenticatedUser> {
+  return requireRole([UserRole.ADMIN, UserRole.MANAGER]);
+}
+
+export function canEditMasterData(role: UserRole): boolean {
+  return role === UserRole.ADMIN || role === UserRole.MANAGER;
+}
