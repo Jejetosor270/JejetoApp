@@ -7,6 +7,8 @@ An internal procurement and financial management platform designed to track supp
 - Secure employee authentication with ADMIN, MANAGER, and USER roles
 - ADMIN-managed employee accounts, including activation and password changes
 - Client, supplier, project, and building master-data management
+- Supplier-package procurement orders with Budget, Committed, and Actual cost states
+- Decimal-safe landed-cost, selling-price, gross-margin, and markup calculations
 - A normalized foundation for later procurement packages and payment schedules
 - Exact-decimal financial calculation utilities
 - Responsive internal workspace shell
@@ -66,4 +68,4 @@ The application is designed for Vercel with PostgreSQL. Configure the environmen
 
 ## Status
 
-Phase 3 — Clients, suppliers, projects, and buildings is complete. The next planned phase adds procurement orders and financial workflows.
+Phase 4 — Procurement orders and the margin engine is complete. The next planned phase adds VAT and multi-currency workflows.

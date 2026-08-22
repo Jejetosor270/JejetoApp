@@ -35,8 +35,11 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 
 ## Financial and payment architecture
 
+- A Procurement Order is a supplier-level project package, never a product, SKU, room, or inventory item; it may relate to several Buildings in its Project.
 - `ProcurementOrderFinancials` represents BUDGET, COMMITTED, or ACTUAL; the unique order/state pair is optional until known.
 - Cost components are normalized `ProcurementOrderCostLine` records. Do not add three copied sets of financial columns or persist derived landed-cost/margin totals that can become stale.
+- Commercial pricing is shared by the order. `SELLING_PRICE` stores the manually entered package price; `TARGET_MARGIN` stores the target rate and derives package price from the selected BUDGET, COMMITTED, or ACTUAL cost state.
+- Separately recharged freight is added once to total selling revenue and backed out of the calculated package price in target-margin mode. Freight remains part of landed cost regardless of commercial treatment.
 - INPUT and OUTPUT VAT are independent entries. VAT is neither revenue nor cost by default, no VAT rate is hardcoded, and unusual treatments remain representable.
 - Preserve original amount/currency, manual FX rate, converted amount, and reporting currency. ISO currency codes are relational data, not a closed enum.
 - Supplier schedules and client schedules are distinct. Actual payments/receipts are child transactions so partial settlement remains auditable.

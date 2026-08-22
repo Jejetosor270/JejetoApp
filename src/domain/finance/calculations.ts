@@ -15,6 +15,15 @@ interface LandedCostInput {
   miscellaneous?: FinancialDecimal;
 }
 
+export type FreightTreatmentValue =
+  "INCLUDED_IN_PACKAGE_PRICE" | "RECHARGED_SEPARATELY" | "NOT_APPLICABLE";
+
+export interface FinancialMetrics {
+  grossMarginRate: Decimal | null;
+  grossProfit: Decimal;
+  markupRate: Decimal | null;
+}
+
 const ZERO = new Decimal(0);
 const ONE = new Decimal(1);
 
@@ -104,6 +113,65 @@ export function landedCost({
     .plus(nonNegative(freight, "Freight"))
     .plus(nonNegative(customsDuties, "Customs duties"))
     .plus(nonNegative(miscellaneous, "Miscellaneous cost"));
+}
+
+/** Package selling price plus freight only when freight is recharged separately. */
+export function totalSellingRevenue(
+  packageSellingPrice: FinancialDecimal,
+  freightTreatment: FreightTreatmentValue,
+  freightResale: FinancialDecimal = ZERO,
+): Decimal {
+  const packageRevenue = nonNegative(
+    packageSellingPrice,
+    "Package selling price",
+  );
+  const recharge = nonNegative(freightResale, "Freight resale");
+
+  return freightTreatment === "RECHARGED_SEPARATELY"
+    ? packageRevenue.plus(recharge)
+    : packageRevenue;
+}
+
+/**
+ * Calculates the package price required to achieve a target margin after any
+ * separately recharged freight is included in total selling revenue.
+ */
+export function packageSellingPriceFromTargetMargin(
+  landedCostAmount: FinancialDecimal,
+  targetMarginRate: FinancialDecimal,
+  freightTreatment: FreightTreatmentValue,
+  freightResale: FinancialDecimal = ZERO,
+): Decimal {
+  const requiredRevenue = sellingPriceFromTargetMargin(
+    landedCostAmount,
+    targetMarginRate,
+  );
+  const recharge =
+    freightTreatment === "RECHARGED_SEPARATELY"
+      ? nonNegative(freightResale, "Freight resale")
+      : ZERO;
+  const packagePrice = requiredRevenue.minus(recharge);
+
+  if (packagePrice.isNegative()) {
+    throw new RangeError(
+      "Freight resale cannot exceed the selling revenue required by the target margin.",
+    );
+  }
+
+  return packagePrice;
+}
+
+/** Returns explicit null rates when a zero denominator makes a rate undefined. */
+export function financialMetrics(input: PricingInput): FinancialMetrics {
+  const landed = nonNegative(input.landedCost, "Landed cost");
+  const selling = nonNegative(input.sellingPrice, "Selling price");
+  const profit = grossProfit({ landedCost: landed, sellingPrice: selling });
+
+  return {
+    grossMarginRate: selling.isZero() ? null : profit.dividedBy(selling),
+    grossProfit: profit,
+    markupRate: landed.isZero() ? null : profit.dividedBy(landed),
+  };
 }
 
 /** Converts an amount using a manually entered quote-to-reporting currency FX rate. */

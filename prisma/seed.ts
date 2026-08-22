@@ -9,6 +9,7 @@ import {
   PrismaClient,
   ProcurementCostCategory,
   ProcurementOrderStatus,
+  PricingMode,
   ProjectStatus,
   UserRole,
   VatDirection,
@@ -19,15 +20,31 @@ const ids = {
   admin: "10000000-0000-4000-8000-000000000001",
   client: "20000000-0000-4000-8000-000000000001",
   supplier: "30000000-0000-4000-8000-000000000001",
+  supplier2: "30000000-0000-4000-8000-000000000002",
   project: "40000000-0000-4000-8000-000000000001",
+  project2: "40000000-0000-4000-8000-000000000002",
   villa1: "50000000-0000-4000-8000-000000000001",
   villa2: "50000000-0000-4000-8000-000000000002",
   villa3: "50000000-0000-4000-8000-000000000003",
+  buildingA: "50000000-0000-4000-8000-000000000004",
   order: "60000000-0000-4000-8000-000000000001",
+  order2: "60000000-0000-4000-8000-000000000002",
   financials: "70000000-0000-4000-8000-000000000001",
+  budgetFinancials: "70000000-0000-4000-8000-000000000002",
+  actualFinancials: "70000000-0000-4000-8000-000000000003",
+  order2BudgetFinancials: "70000000-0000-4000-8000-000000000004",
+  order2CommittedFinancials: "70000000-0000-4000-8000-000000000005",
+  order2ActualFinancials: "70000000-0000-4000-8000-000000000006",
   purchaseCost: "71000000-0000-4000-8000-000000000001",
   discountCost: "71000000-0000-4000-8000-000000000002",
   freightCost: "71000000-0000-4000-8000-000000000003",
+  budgetPurchaseCost: "71000000-0000-4000-8000-000000000004",
+  budgetFreightCost: "71000000-0000-4000-8000-000000000005",
+  actualPurchaseCost: "71000000-0000-4000-8000-000000000006",
+  actualFreightCost: "71000000-0000-4000-8000-000000000007",
+  order2BudgetPurchaseCost: "71000000-0000-4000-8000-000000000008",
+  order2CommittedPurchaseCost: "71000000-0000-4000-8000-000000000009",
+  order2ActualPurchaseCost: "71000000-0000-4000-8000-000000000010",
   inputVat: "72000000-0000-4000-8000-000000000001",
   outputVat: "72000000-0000-4000-8000-000000000002",
   supplierInstallment1: "80000000-0000-4000-8000-000000000001",
@@ -136,6 +153,23 @@ async function seedRepresentativeProject(): Promise<void> {
     },
   });
 
+  await prisma.supplier.upsert({
+    where: { id: ids.supplier2 },
+    update: { displayName: "Example Supplier Two" },
+    create: {
+      id: ids.supplier2,
+      legalName: "Example Supplier Two Ltd.",
+      displayName: "Example Supplier Two",
+      countryCode: "FR",
+      defaultCurrencyCode: "EUR",
+      defaultLeadTimeWeeks: 10,
+      isActive: true,
+      notes: "Example development data only.",
+      createdById: admin.id,
+      updatedById: admin.id,
+    },
+  });
+
   await prisma.project.upsert({
     where: { id: ids.project },
     update: {
@@ -156,6 +190,24 @@ async function seedRepresentativeProject(): Promise<void> {
       startDate: new Date("2026-06-01T00:00:00.000Z"),
       status: ProjectStatus.ACTIVE,
       notes: "Representative development project.",
+      createdById: admin.id,
+      updatedById: admin.id,
+    },
+  });
+
+  await prisma.project.upsert({
+    where: { id: ids.project2 },
+    update: { name: "Example Project Two", status: ProjectStatus.PLANNING },
+    create: {
+      id: ids.project2,
+      clientId: ids.client,
+      code: "DEMO-002",
+      countryCode: "FR",
+      name: "Example Project Two",
+      projectManagerId: admin.id,
+      reportingCurrencyCode: "EUR",
+      status: ProjectStatus.PLANNING,
+      notes: "Example development project.",
       createdById: admin.id,
       updatedById: admin.id,
     },
@@ -182,10 +234,27 @@ async function seedRepresentativeProject(): Promise<void> {
     ),
   );
 
+  await prisma.building.upsert({
+    where: { id: ids.buildingA },
+    update: { name: "Building A", shortCode: "A" },
+    create: {
+      id: ids.buildingA,
+      name: "Building A",
+      shortCode: "A",
+      projectId: ids.project2,
+      createdById: admin.id,
+      updatedById: admin.id,
+    },
+  });
+
   await prisma.procurementOrder.upsert({
     where: { id: ids.order },
     update: {
       packageName: "Loose Furniture Package",
+      pricingMode: PricingMode.SELLING_PRICE,
+      sellingCurrencyCode: "EUR",
+      sellingPriceAmount: "90000.0000",
+      targetMarginRate: null,
       status: ProcurementOrderStatus.ORDERED,
     },
     create: {
@@ -195,6 +264,8 @@ async function seedRepresentativeProject(): Promise<void> {
       projectId: ids.project,
       supplierId: ids.supplier,
       orderCurrencyCode: "EUR",
+      sellingCurrencyCode: "EUR",
+      sellingPriceAmount: "90000.0000",
       status: ProcurementOrderStatus.ORDERED,
       freightTreatment: FreightTreatment.INCLUDED_IN_PACKAGE_PRICE,
       orderDate: new Date("2026-08-03T00:00:00.000Z"),
@@ -219,42 +290,173 @@ async function seedRepresentativeProject(): Promise<void> {
     ),
   );
 
-  await prisma.procurementOrderFinancials.upsert({
-    where: { id: ids.financials },
-    update: { targetMarginRate: "0.300000" },
+  await prisma.procurementOrder.upsert({
+    where: { id: ids.order2 },
+    update: {
+      freightResaleAmount: "2000.0000",
+      freightTreatment: FreightTreatment.RECHARGED_SEPARATELY,
+      pricingMode: PricingMode.TARGET_MARGIN,
+      sellingCurrencyCode: "EUR",
+      sellingPriceAmount: null,
+      targetMarginRate: "0.250000",
+    },
     create: {
-      id: ids.financials,
-      orderId: ids.order,
-      state: FinancialState.COMMITTED,
-      targetMarginRate: "0.300000",
-      sellingPriceOriginalAmount: "90000.0000",
-      sellingPriceOriginalCurrencyCode: "EUR",
-      sellingPriceFxRate: "1.0000000000",
-      sellingPriceReportingAmount: "90000.0000",
-      sellingPriceReportingCurrencyCode: "EUR",
+      id: ids.order2,
+      orderNumber: "DEMO-002-PO-001",
+      packageName: "Decorative Lighting Package",
+      category: "Lighting",
+      projectId: ids.project2,
+      supplierId: ids.supplier2,
+      orderCurrencyCode: "EUR",
+      sellingCurrencyCode: "EUR",
+      pricingMode: PricingMode.TARGET_MARGIN,
+      pricingSourceState: FinancialState.COMMITTED,
+      targetMarginRate: "0.250000",
+      freightTreatment: FreightTreatment.RECHARGED_SEPARATELY,
+      freightResaleAmount: "2000.0000",
+      status: ProcurementOrderStatus.QUOTED,
       createdById: admin.id,
       updatedById: admin.id,
     },
   });
 
+  await prisma.procurementOrderBuilding.upsert({
+    where: {
+      orderId_buildingId: {
+        orderId: ids.order2,
+        buildingId: ids.buildingA,
+      },
+    },
+    update: {},
+    create: {
+      orderId: ids.order2,
+      buildingId: ids.buildingA,
+      createdById: admin.id,
+    },
+  });
+
+  await prisma.procurementOrderFinancials.upsert({
+    where: { id: ids.financials },
+    update: { state: FinancialState.COMMITTED },
+    create: {
+      id: ids.financials,
+      orderId: ids.order,
+      state: FinancialState.COMMITTED,
+      createdById: admin.id,
+      updatedById: admin.id,
+    },
+  });
+
+  await Promise.all(
+    [
+      {
+        id: ids.budgetFinancials,
+        state: FinancialState.BUDGET,
+      },
+      {
+        id: ids.actualFinancials,
+        state: FinancialState.ACTUAL,
+        orderId: ids.order,
+      },
+      {
+        id: ids.order2BudgetFinancials,
+        state: FinancialState.BUDGET,
+        orderId: ids.order2,
+      },
+      {
+        id: ids.order2CommittedFinancials,
+        state: FinancialState.COMMITTED,
+        orderId: ids.order2,
+      },
+      {
+        id: ids.order2ActualFinancials,
+        state: FinancialState.ACTUAL,
+        orderId: ids.order2,
+      },
+    ].map((financials) =>
+      prisma.procurementOrderFinancials.upsert({
+        where: { id: financials.id },
+        update: { state: financials.state },
+        create: {
+          ...financials,
+          orderId: financials.orderId ?? ids.order,
+          createdById: admin.id,
+          updatedById: admin.id,
+        },
+      }),
+    ),
+  );
+
   const costLines = [
     {
       id: ids.purchaseCost,
+      financialsId: ids.financials,
       category: ProcurementCostCategory.SUPPLIER_PURCHASE,
       description: "Accepted supplier package",
       originalAmount: "60000.0000",
     },
     {
       id: ids.discountCost,
+      financialsId: ids.financials,
       category: ProcurementCostCategory.SUPPLIER_DISCOUNT,
       description: "Commercial supplier discount",
       originalAmount: "3000.0000",
     },
     {
       id: ids.freightCost,
+      financialsId: ids.financials,
       category: ProcurementCostCategory.FREIGHT,
       description: "Forecast inbound freight",
       originalAmount: "5000.0000",
+    },
+    {
+      id: ids.budgetPurchaseCost,
+      financialsId: ids.budgetFinancials,
+      category: ProcurementCostCategory.SUPPLIER_PURCHASE,
+      description: "Budget supplier package",
+      originalAmount: "65000.0000",
+    },
+    {
+      id: ids.budgetFreightCost,
+      financialsId: ids.budgetFinancials,
+      category: ProcurementCostCategory.FREIGHT,
+      description: "Budget freight",
+      originalAmount: "5500.0000",
+    },
+    {
+      id: ids.actualPurchaseCost,
+      financialsId: ids.actualFinancials,
+      category: ProcurementCostCategory.SUPPLIER_PURCHASE,
+      description: "Actual supplier package",
+      originalAmount: "61000.0000",
+    },
+    {
+      id: ids.actualFreightCost,
+      financialsId: ids.actualFinancials,
+      category: ProcurementCostCategory.FREIGHT,
+      description: "Actual freight",
+      originalAmount: "5200.0000",
+    },
+    {
+      id: ids.order2BudgetPurchaseCost,
+      financialsId: ids.order2BudgetFinancials,
+      category: ProcurementCostCategory.SUPPLIER_PURCHASE,
+      description: "Budget supplier package",
+      originalAmount: "32000.0000",
+    },
+    {
+      id: ids.order2CommittedPurchaseCost,
+      financialsId: ids.order2CommittedFinancials,
+      category: ProcurementCostCategory.SUPPLIER_PURCHASE,
+      description: "Committed supplier package",
+      originalAmount: "30000.0000",
+    },
+    {
+      id: ids.order2ActualPurchaseCost,
+      financialsId: ids.order2ActualFinancials,
+      category: ProcurementCostCategory.SUPPLIER_PURCHASE,
+      description: "Actual supplier package",
+      originalAmount: "30500.0000",
     },
   ];
 
@@ -270,7 +472,7 @@ async function seedRepresentativeProject(): Promise<void> {
         },
         create: {
           ...line,
-          financialsId: ids.financials,
+          financialsId: line.financialsId,
           originalCurrencyCode: "EUR",
           fxRateToReporting: "1.0000000000",
           reportingAmount: line.originalAmount,

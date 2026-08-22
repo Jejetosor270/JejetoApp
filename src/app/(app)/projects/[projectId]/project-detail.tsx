@@ -1,6 +1,7 @@
 "use client";
 
 import { Pencil, Plus } from "lucide-react";
+import Link from "next/link";
 import { useActionState, useState } from "react";
 
 import {
@@ -18,6 +19,7 @@ import {
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
 import { countries } from "@/config/countries";
+import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 
 interface Option {
   id: string;
@@ -48,6 +50,18 @@ interface BuildingView {
   isActive: boolean;
   name: string;
   shortCode: string;
+}
+interface ProjectOrderView {
+  committedLandedCost: string | null;
+  grossMarginRate: string | null;
+  id: string;
+  orderCurrencyCode: string;
+  orderNumber: string;
+  packageName: string;
+  sellingCurrencyCode: string;
+  status: string;
+  supplierName: string;
+  totalSellingRevenue: string | null;
 }
 const statusLabels: Record<string, string> = {
   ACTIVE: "Active",
@@ -326,6 +340,7 @@ export function ProjectDetail({
   clients,
   currencies,
   managers,
+  orders,
   project,
   statuses,
 }: {
@@ -334,6 +349,7 @@ export function ProjectDetail({
   clients: { id: string; displayName: string }[];
   currencies: CurrencyOption[];
   managers: Option[];
+  orders: ProjectOrderView[];
   project: ProjectView;
   statuses: string[];
 }) {
@@ -382,6 +398,79 @@ export function ProjectDetail({
         {project.notes ? (
           <p className="text-muted-foreground mt-5 border-t pt-4 text-sm leading-6">
             {project.notes}
+          </p>
+        ) : null}
+      </section>
+      <section className="bg-card overflow-hidden rounded-lg border">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div>
+            <h2 className="text-sm font-semibold">Procurement orders</h2>
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              Supplier packages assigned to this project.
+            </p>
+          </div>
+          {canEdit ? (
+            <Link
+              className="border-input inline-flex h-8 items-center rounded-lg border px-3 text-sm font-medium"
+              href="/orders"
+            >
+              Manage orders
+            </Link>
+          ) : null}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[50rem] text-left text-sm">
+            <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
+              <tr>
+                <th className="px-4 py-3">Package</th>
+                <th className="px-4 py-3">Supplier</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-right">Committed landed</th>
+                <th className="px-4 py-3 text-right">Selling revenue</th>
+                <th className="px-4 py-3 text-right">Margin</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {orders.map((order) => (
+                <tr key={order.id}>
+                  <td className="px-4 py-3">
+                    <Link
+                      className="font-medium hover:underline"
+                      href={`/orders/${order.id}`}
+                    >
+                      {order.packageName}
+                    </Link>
+                    <span className="text-muted-foreground ml-2 font-mono text-xs">
+                      {order.orderNumber}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">{order.supplierName}</td>
+                  <td className="px-4 py-3">
+                    {order.status.replaceAll("_", " ")}
+                  </td>
+                  <td className="financial-figure px-4 py-3 text-right">
+                    {formatMoney(
+                      order.committedLandedCost,
+                      order.orderCurrencyCode,
+                    )}
+                  </td>
+                  <td className="financial-figure px-4 py-3 text-right">
+                    {formatMoney(
+                      order.totalSellingRevenue,
+                      order.sellingCurrencyCode,
+                    )}
+                  </td>
+                  <td className="financial-figure px-4 py-3 text-right">
+                    {formatRate(order.grossMarginRate)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {orders.length === 0 ? (
+          <p className="text-muted-foreground px-4 py-8 text-sm">
+            No procurement orders have been added to this project.
           </p>
         ) : null}
       </section>

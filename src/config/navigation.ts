@@ -40,7 +40,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
         isAvailable: true,
         label: "Projects",
       },
-      { href: "/orders", icon: Package, isAvailable: false, label: "Orders" },
+      { href: "/orders", icon: Package, isAvailable: true, label: "Orders" },
       {
         href: "/payments",
         icon: WalletCards,
