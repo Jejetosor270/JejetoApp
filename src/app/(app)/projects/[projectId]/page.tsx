@@ -5,6 +5,7 @@ import { ProjectDetail } from "@/app/(app)/projects/[projectId]/project-detail";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listProjectFormOptions } from "@/lib/master-data/lookups";
 import { getProject } from "@/lib/master-data/projects";
+import { getProjectPaymentSummary } from "@/lib/payments/payments";
 import {
   listProjectOrders,
   projectProcurementSummary,
@@ -18,13 +19,14 @@ export default async function ProjectPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const [user, options, result, orders] = await Promise.all([
+  const [user, options, result, orders, paymentSummary] = await Promise.all([
     requireUser(),
     listProjectFormOptions(),
     getProject(projectId),
     listProjectOrders(projectId),
+    getProjectPaymentSummary(projectId),
   ]);
-  if (!result) notFound();
+  if (!result || !paymentSummary) notFound();
   const { buildings, project } = result;
   const procurementSummary = projectProcurementSummary(orders);
   return (
@@ -55,6 +57,7 @@ export default async function ProjectPage({
           project.expectedCompletionDate?.toISOString() ?? null,
         startDate: project.startDate?.toISOString() ?? null,
       }}
+      paymentSummary={paymentSummary}
       procurementSummary={procurementSummary}
       statuses={options.statuses}
     />

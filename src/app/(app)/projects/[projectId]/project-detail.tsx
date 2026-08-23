@@ -71,6 +71,21 @@ interface ProcurementSummaryView {
   totalGrossProfit: string;
   totalSellingRevenue: string;
 }
+interface ProjectPaymentSummaryView {
+  cashIn: {
+    incompleteAmountCount: number;
+    outstanding: string;
+    paid: string;
+    scheduled: string;
+  };
+  cashOut: {
+    incompleteAmountCount: number;
+    outstanding: string;
+    paid: string;
+    scheduled: string;
+  };
+  reportingCurrencyCode: string;
+}
 const statusLabels: Record<string, string> = {
   ACTIVE: "Active",
   ARCHIVED: "Archived",
@@ -349,6 +364,7 @@ export function ProjectDetail({
   currencies,
   managers,
   orders,
+  paymentSummary,
   project,
   procurementSummary,
   statuses,
@@ -359,6 +375,7 @@ export function ProjectDetail({
   currencies: CurrencyOption[];
   managers: Option[];
   orders: ProjectOrderView[];
+  paymentSummary: ProjectPaymentSummaryView;
   project: ProjectView;
   procurementSummary: ProcurementSummaryView;
   statuses: string[];
@@ -410,6 +427,80 @@ export function ProjectDetail({
             {project.notes}
           </p>
         ) : null}
+      </section>
+      <section className="bg-card rounded-lg border p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Payment overview</h2>
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              Expected and actual cash converted to{" "}
+              {paymentSummary.reportingCurrencyCode} where FX is available.
+            </p>
+          </div>
+          <Link
+            className="border-input inline-flex h-8 items-center rounded-lg border px-3 text-sm font-medium"
+            href={`/payments?projectId=${project.id}`}
+          >
+            View payments
+          </Link>
+        </div>
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+          {[
+            ["Cash out · Supplier Payments", paymentSummary.cashOut, "Paid"],
+            ["Cash in · Client Receipts", paymentSummary.cashIn, "Received"],
+          ].map(([title, flow, paidLabel]) => {
+            const values = flow as ProjectPaymentSummaryView["cashIn"];
+            return (
+              <article
+                className="bg-muted/20 rounded-lg border p-3"
+                key={title as string}
+              >
+                <h3 className="text-xs font-semibold tracking-wide uppercase">
+                  {title as string}
+                </h3>
+                <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <dt className="text-muted-foreground text-xs">Scheduled</dt>
+                    <dd className="financial-figure mt-1 font-semibold">
+                      {formatMoney(
+                        values.scheduled,
+                        paymentSummary.reportingCurrencyCode,
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground text-xs">
+                      {paidLabel as string}
+                    </dt>
+                    <dd className="financial-figure mt-1 font-semibold">
+                      {formatMoney(
+                        values.paid,
+                        paymentSummary.reportingCurrencyCode,
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground text-xs">
+                      Outstanding
+                    </dt>
+                    <dd className="financial-figure mt-1 font-semibold">
+                      {formatMoney(
+                        values.outstanding,
+                        paymentSummary.reportingCurrencyCode,
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+                {values.incompleteAmountCount > 0 ? (
+                  <p className="text-destructive mt-2 text-xs">
+                    {values.incompleteAmountCount} amount(s) are excluded
+                    because installment FX is missing.
+                  </p>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
       </section>
       <section className="bg-card overflow-hidden rounded-lg border">
         <div className="flex items-center justify-between border-b px-4 py-3">

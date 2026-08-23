@@ -1,0 +1,47 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  addWeeksToDateOnly,
+  addMonthsToDateOnly,
+  businessToday,
+  dateOnlyToDate,
+  dateToDateOnly,
+  formatDateOnly,
+  isDateOnly,
+  monthBounds,
+  monthGrid,
+} from "@/domain/payments/dates";
+
+describe("date-only payment helpers", () => {
+  it("round-trips business dates without timezone shifts", () => {
+    expect(dateToDateOnly(dateOnlyToDate("2026-09-15"))).toBe("2026-09-15");
+    expect(formatDateOnly("2026-09-15")).toBe("15 Sep 2026");
+  });
+
+  it("adds lead-time weeks in UTC date space", () => {
+    expect(addWeeksToDateOnly("2026-08-31", 6)).toBe("2026-10-12");
+  });
+
+  it("adds preset months without overflowing month-end", () => {
+    expect(addMonthsToDateOnly("2026-01-31", 1)).toBe("2026-02-28");
+  });
+
+  it("validates real calendar dates", () => {
+    expect(isDateOnly("2026-02-28")).toBe(true);
+    expect(isDateOnly("2026-02-30")).toBe(false);
+  });
+
+  it("uses the Paris business day around a UTC boundary", () => {
+    expect(businessToday(new Date("2026-08-22T22:30:00.000Z"))).toBe(
+      "2026-08-23",
+    );
+  });
+
+  it("builds stable month boundaries and a Monday-first grid", () => {
+    expect(monthBounds("2026-09")).toEqual({
+      end: "2026-09-30",
+      start: "2026-09-01",
+    });
+    expect(monthGrid("2026-09")[0]?.date).toBe("2026-08-31");
+  });
+});

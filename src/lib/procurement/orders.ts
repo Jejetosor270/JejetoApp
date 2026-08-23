@@ -26,6 +26,11 @@ import type {
   CreateOrderInput,
   UpdateOrderInput,
 } from "@/domain/procurement/validation";
+import {
+  addWeeksToDateOnly,
+  dateOnlyToDate,
+  dateToDateOnly,
+} from "@/domain/payments/dates";
 import { getDatabase } from "@/lib/db";
 
 import { ProcurementNotFoundError, ProcurementRelationError } from "./errors";
@@ -39,7 +44,12 @@ const orderInclude = {
   costLines: true,
   project: { select: { id: true, name: true, reportingCurrencyCode: true } },
   supplier: {
-    select: { defaultCurrencyCode: true, displayName: true, id: true },
+    select: {
+      defaultCurrencyCode: true,
+      defaultLeadTimeWeeks: true,
+      displayName: true,
+      id: true,
+    },
   },
   vatEntries: true,
 } satisfies Prisma.ProcurementOrderInclude;
@@ -80,24 +90,34 @@ export interface OrderCostSummary {
   sellingFxRate: string | null;
 }
 export interface OrderSummary {
+  actualDeliveryDate: string | null;
   buildingIds: string[];
   buildings: string[];
   category: string | null;
   costs: OrderCostSummary;
   description: string | null;
+  expectedDeliveryDate: string | null;
+  expectedReadyDate: string | null;
   freightResaleAmount: string | null;
   freightTreatment: FreightTreatment;
   id: string;
+  leadTimeWeeks: number | null;
   notes: string | null;
   orderCurrencyCode: string;
   orderNumber: string;
+  orderDate: string | null;
   packageName: string;
   packageSellingPrice: string | null;
   pricingMode: PricingMode;
   project: { id: string; name: string; reportingCurrencyCode: string };
   sellingCurrencyCode: string;
   status: ProcurementOrderStatus;
-  supplier: { defaultCurrencyCode: string; displayName: string; id: string };
+  supplier: {
+    defaultCurrencyCode: string;
+    defaultLeadTimeWeeks: number | null;
+    displayName: string;
+    id: string;
+  };
   supplierOrderConfirmationReference: string | null;
   supplierQuoteReference: string | null;
   targetMarginRate: string | null;
@@ -285,18 +305,29 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
   if (landed && reportingLanded === null) missingFx.push("purchase FX");
   if (totalRevenue && reportingRevenue === null) missingFx.push("selling FX");
   return {
+    actualDeliveryDate: order.actualDeliveryDate
+      ? dateToDateOnly(order.actualDeliveryDate)
+      : null,
     buildingIds: order.buildings.map(({ buildingId }) => buildingId),
     buildings: order.buildings.map(
       ({ building }) => building.shortCode || building.name,
     ),
     category: order.category,
     description: order.description,
+    expectedDeliveryDate: order.expectedDeliveryDate
+      ? dateToDateOnly(order.expectedDeliveryDate)
+      : null,
+    expectedReadyDate: order.expectedReadyDate
+      ? dateToDateOnly(order.expectedReadyDate)
+      : null,
     freightResaleAmount: order.freightResaleAmount?.toString() ?? null,
     freightTreatment: order.freightTreatment,
     id: order.id,
+    leadTimeWeeks: order.leadTimeWeeks,
     notes: order.notes,
     orderCurrencyCode: order.orderCurrencyCode,
     orderNumber: order.orderNumber,
+    orderDate: order.orderDate ? dateToDateOnly(order.orderDate) : null,
     packageName: order.packageName,
     packageSellingPrice: packagePrice?.toString() ?? null,
     pricingMode: order.pricingMode,
@@ -489,17 +520,33 @@ async function assertRelations(input: CreateOrderInput): Promise<string> {
   return project.reportingCurrencyCode;
 }
 function orderData(input: CreateOrderInput, reportingCurrencyCode: string) {
+  const expectedReadyDate =
+    input.expectedReadyDate ??
+    (input.orderDate !== undefined && input.leadTimeWeeks !== undefined
+      ? addWeeksToDateOnly(input.orderDate, input.leadTimeWeeks)
+      : undefined);
   return {
+    actualDeliveryDate: input.actualDeliveryDate
+      ? dateOnlyToDate(input.actualDeliveryDate)
+      : null,
     category: input.category ?? null,
     description: input.description ?? null,
+    expectedDeliveryDate: input.expectedDeliveryDate
+      ? dateOnlyToDate(input.expectedDeliveryDate)
+      : null,
+    expectedReadyDate: expectedReadyDate
+      ? dateOnlyToDate(expectedReadyDate)
+      : null,
     freightResaleAmount:
       input.freightTreatment === FreightTreatment.RECHARGED_SEPARATELY
         ? (input.freightResaleAmount ?? null)
         : null,
     freightTreatment: input.freightTreatment,
     notes: input.notes ?? null,
+    leadTimeWeeks: input.leadTimeWeeks ?? null,
     orderCurrencyCode: input.orderCurrencyCode,
     orderNumber: input.orderNumber,
+    orderDate: input.orderDate ? dateOnlyToDate(input.orderDate) : null,
     packageName: input.packageName,
     pricingMode: input.pricingMode,
     projectId: input.projectId,
@@ -636,7 +683,12 @@ export async function listOrderOptions() {
     }),
     database.supplier.findMany({
       orderBy: [{ isActive: "desc" }, { displayName: "asc" }],
-      select: { defaultCurrencyCode: true, displayName: true, id: true },
+      select: {
+        defaultCurrencyCode: true,
+        defaultLeadTimeWeeks: true,
+        displayName: true,
+        id: true,
+      },
     }),
     database.currency.findMany({
       orderBy: { code: "asc" },

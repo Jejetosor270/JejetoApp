@@ -9,6 +9,7 @@ import {
   VatTreatment,
 } from "@/generated/prisma/client";
 import { isSupportedCountryCode } from "@/config/countries";
+import { isDateOnly } from "@/domain/payments/dates";
 
 const optionalText = (maximum: number) =>
   z.preprocess(
@@ -77,6 +78,20 @@ const optionalTargetMargin = z.preprocess(
     .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
     .optional(),
 );
+const optionalDateOnly = z.preprocess(
+  (value) =>
+    typeof value === "string" && value.trim() === "" ? undefined : value,
+  z
+    .string()
+    .trim()
+    .refine(isDateOnly, "Enter a valid business date.")
+    .optional(),
+);
+const optionalLeadTime = z.preprocess(
+  (value) =>
+    typeof value === "string" && value.trim() === "" ? undefined : value,
+  z.coerce.number().int().min(0).max(520).optional(),
+);
 
 const orderFields = {
   buildingIds: z
@@ -86,11 +101,14 @@ const orderFields = {
       "A building can only be selected once.",
     ),
   category: optionalText(80),
+  actualDeliveryDate: optionalDateOnly,
   customsDuties: optionalMoney("Customs and duties"),
   description: optionalText(4000),
   freight: optionalMoney("Freight"),
   freightResaleAmount: optionalMoney("Freight resale"),
   freightTreatment: z.enum(FreightTreatment),
+  expectedDeliveryDate: optionalDateOnly,
+  expectedReadyDate: optionalDateOnly,
   inputVatAmount: optionalMoney("Input VAT amount"),
   inputVatCountryCode: optionalCountryCode,
   inputVatCustomTreatmentNote: optionalText(240),
@@ -99,6 +117,7 @@ const orderFields = {
   inputVatTaxableBase: optionalMoney("Input VAT taxable base"),
   inputVatTreatment: optionalEnum(VatTreatment),
   miscellaneous: optionalMoney("Miscellaneous cost"),
+  leadTimeWeeks: optionalLeadTime,
   notes: optionalText(4000),
   orderCurrencyCode: z
     .string()
@@ -106,6 +125,7 @@ const orderFields = {
     .toUpperCase()
     .regex(/^[A-Z]{3}$/),
   orderNumber: z.string().trim().min(2).max(50),
+  orderDate: optionalDateOnly,
   outputVatAmount: optionalMoney("Output VAT amount"),
   outputVatCountryCode: optionalCountryCode,
   outputVatCustomTreatmentNote: optionalText(240),

@@ -5,12 +5,15 @@ function stringValue(formData: FormData, name: string): string | undefined {
 
 export function orderFormValues(formData: FormData) {
   return {
+    actualDeliveryDate: stringValue(formData, "actualDeliveryDate"),
     buildingIds: formData
       .getAll("buildingIds")
       .filter((value): value is string => typeof value === "string"),
     category: stringValue(formData, "category"),
     customsDuties: stringValue(formData, "customsDuties"),
     description: stringValue(formData, "description"),
+    expectedDeliveryDate: stringValue(formData, "expectedDeliveryDate"),
+    expectedReadyDate: stringValue(formData, "expectedReadyDate"),
     freight: stringValue(formData, "freight"),
     freightResaleAmount: stringValue(formData, "freightResaleAmount"),
     freightTreatment: stringValue(formData, "freightTreatment"),
@@ -25,9 +28,11 @@ export function orderFormValues(formData: FormData) {
     inputVatTaxableBase: stringValue(formData, "inputVatTaxableBase"),
     inputVatTreatment: stringValue(formData, "inputVatTreatment"),
     miscellaneous: stringValue(formData, "miscellaneous"),
+    leadTimeWeeks: stringValue(formData, "leadTimeWeeks"),
     notes: stringValue(formData, "notes"),
     orderCurrencyCode: stringValue(formData, "orderCurrencyCode"),
     orderNumber: stringValue(formData, "orderNumber"),
+    orderDate: stringValue(formData, "orderDate"),
     outputVatAmount: stringValue(formData, "outputVatAmount"),
     outputVatCountryCode: stringValue(formData, "outputVatCountryCode"),
     outputVatCustomTreatmentNote: stringValue(

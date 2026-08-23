@@ -43,6 +43,12 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 - INPUT and OUTPUT VAT are independent entries. VAT is neither revenue nor cost by default, no VAT rate is hardcoded, and unusual treatments remain representable.
 - Preserve original amount/currency, manual FX rate, converted amount, and reporting currency. ISO currency codes are relational data, not a closed enum.
 - Supplier schedules and client schedules are distinct. Actual payments/receipts are child transactions so partial settlement remains auditable.
+- Payment installments use an explicit `SUPPLIER_PAYMENT` or `CLIENT_RECEIPT` direction and support arbitrary schedules; presets are creation conveniences only.
+- Each installment has one authoritative basis: percentage or fixed amount. Persist its calculated scheduled amount and never silently rewrite it when Order financials later change.
+- Supplier payable is supplier purchase HT plus VAT actually payable on the supplier invoice; exclude unrelated freight, customs, and miscellaneous costs. Client receivable is selling revenue including separately recharged freight once, plus output VAT.
+- Outstanding is scheduled amount minus recorded settlements. Prevent overpayment and derive payment status from cancellation, settlement totals, due date, and the business date rather than storing a stale status.
+- Expected installment FX and actual settlement FX are independent manual rates. Missing foreign-currency FX makes reporting aggregation explicitly incomplete.
+- Payment due dates and procurement timing are PostgreSQL `Date` values serialized as `YYYY-MM-DD`. Calendar events are derived from installment and Order source dates, never duplicated into a synchronized calendar table.
 - Payment state and future invoice state are different concepts.
 - Cash flow is derived from dated supplier outflows and client inflows; do not duplicate calendar/cash-flow events without a business reason.
 

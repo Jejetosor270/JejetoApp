@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import {
   createOrderAction,
@@ -16,6 +16,7 @@ import {
 import { initialOrderActionState } from "@/components/procurement/action-state";
 import { countries } from "@/config/countries";
 import { rateToPercentInput } from "@/domain/procurement/presentation";
+import { addWeeksToDateOnly } from "@/domain/payments/dates";
 
 interface BuildingOption {
   id: string;
@@ -32,6 +33,7 @@ interface ProjectOption {
 }
 interface SupplierOption {
   defaultCurrencyCode: string;
+  defaultLeadTimeWeeks: number | null;
   displayName: string;
   id: string;
 }
@@ -66,16 +68,21 @@ export interface OrderFormOptions {
   vatTreatments: string[];
 }
 export interface EditableOrder {
+  actualDeliveryDate: string | null;
   buildingIds: string[];
   category: string | null;
   costs: CostView;
   description: string | null;
+  expectedDeliveryDate: string | null;
+  expectedReadyDate: string | null;
   freightResaleAmount: string | null;
   freightTreatment: string;
   id: string;
+  leadTimeWeeks: number | null;
   notes: string | null;
   orderCurrencyCode: string;
   orderNumber: string;
+  orderDate: string | null;
   packageName: string;
   packageSellingPrice: string | null;
   pricingMode: string;
@@ -246,10 +253,7 @@ export function OrderForm({
   const [supplierId, setSupplierId] = useState(
     order?.supplier.id ?? options.suppliers[0]?.id ?? "",
   );
-  const project = useMemo(
-    () => options.projects.find((item) => item.id === projectId),
-    [options.projects, projectId],
-  );
+  const project = options.projects.find((item) => item.id === projectId);
   const supplier = options.suppliers.find((item) => item.id === supplierId);
   const [purchaseCurrency, setPurchaseCurrency] = useState(
     order?.orderCurrencyCode ??
@@ -269,10 +273,26 @@ export function OrderForm({
   const [freightTreatment, setFreightTreatment] = useState(
     order?.freightTreatment ?? "NOT_APPLICABLE",
   );
+  const [orderDate, setOrderDate] = useState(order?.orderDate ?? "");
+  const [leadTimeWeeks, setLeadTimeWeeks] = useState(
+    order?.leadTimeWeeks?.toString() ??
+      supplier?.defaultLeadTimeWeeks?.toString() ??
+      "",
+  );
+  const [expectedReadyDate, setExpectedReadyDate] = useState(
+    order?.expectedReadyDate ?? "",
+  );
+  function refreshExpectedReady(nextDate: string, nextWeeks: string) {
+    const weeks = Number(nextWeeks);
+    setExpectedReadyDate(
+      nextDate && Number.isInteger(weeks) && weeks >= 0
+        ? addWeeksToDateOnly(nextDate, weeks)
+        : "",
+    );
+  }
   useEffect(() => {
-    if (state.status === "success" && state.orderId) {
-      if (isEditing) router.refresh();
-      else router.push(`/orders/${state.orderId}`);
+    if (state.status === "success" && state.orderId && !isEditing) {
+      router.push(`/orders/${state.orderId}`);
     }
   }, [isEditing, router, state.orderId, state.status]);
   return (
@@ -371,6 +391,12 @@ export function OrderForm({
                 setSupplierId(event.target.value);
                 if (!isEditing && next)
                   setPurchaseCurrency(next.defaultCurrencyCode);
+                if (!isEditing && next) {
+                  const nextLeadTime =
+                    next.defaultLeadTimeWeeks?.toString() ?? "";
+                  setLeadTimeWeeks(nextLeadTime);
+                  refreshExpectedReady(orderDate, nextLeadTime);
+                }
               }}
               value={supplierId}
             >
@@ -469,6 +495,67 @@ export function OrderForm({
             ))}
           </div>
         </fieldset>
+        <section className="bg-muted/20 rounded-lg border p-4">
+          <h3 className="text-sm font-semibold">Procurement timing</h3>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Business dates remain date-only. Expected ready is calculated from
+            order date and lead time, and remains editable.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <Field label="Order date">
+              <input
+                className={inputClassName}
+                name="orderDate"
+                onChange={(event) => {
+                  setOrderDate(event.target.value);
+                  refreshExpectedReady(event.target.value, leadTimeWeeks);
+                }}
+                type="date"
+                value={orderDate}
+              />
+            </Field>
+            <Field label="Lead time (weeks)">
+              <input
+                className={inputClassName}
+                inputMode="numeric"
+                max="520"
+                min="0"
+                name="leadTimeWeeks"
+                onChange={(event) => {
+                  setLeadTimeWeeks(event.target.value);
+                  refreshExpectedReady(orderDate, event.target.value);
+                }}
+                type="number"
+                value={leadTimeWeeks}
+              />
+            </Field>
+            <Field label="Expected ready">
+              <input
+                className={inputClassName}
+                name="expectedReadyDate"
+                onChange={(event) => setExpectedReadyDate(event.target.value)}
+                type="date"
+                value={expectedReadyDate}
+              />
+            </Field>
+            <Field label="Expected delivery">
+              <input
+                className={inputClassName}
+                defaultValue={order?.expectedDeliveryDate ?? ""}
+                name="expectedDeliveryDate"
+                type="date"
+              />
+            </Field>
+            <Field label="Actual delivery">
+              <input
+                className={inputClassName}
+                defaultValue={order?.actualDeliveryDate ?? ""}
+                name="actualDeliveryDate"
+                type="date"
+              />
+            </Field>
+          </div>
+        </section>
         <section className="space-y-3">
           <div>
             <h3 className="text-sm font-semibold">Current procurement cost</h3>

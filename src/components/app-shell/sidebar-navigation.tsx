@@ -69,7 +69,7 @@ export function SidebarNavigation() {
           <div>
             <p className="text-xs font-medium">Internal workspace</p>
             <p className="text-muted-foreground text-[0.6875rem]">
-              Phase 1 foundation
+              Procurement operations
             </p>
           </div>
           <Badge

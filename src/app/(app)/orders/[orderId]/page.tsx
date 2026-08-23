@@ -2,9 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { OrderForm } from "@/components/procurement/order-form";
+import { PaymentSchedule } from "@/components/payments/payment-schedule";
+import { businessToday, formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { getOrder, listOrderOptions } from "@/lib/procurement/orders";
+import { getOrderPaymentSummary } from "@/lib/payments/payments";
 
 export const metadata: Metadata = { title: "Procurement order" };
 export default async function OrderPage({
@@ -19,6 +22,7 @@ export default async function OrderPage({
     getOrder(orderId),
   ]);
   if (!order) notFound();
+  const paymentSummary = await getOrderPaymentSummary(orderId);
   const cost = order.costs;
   return (
     <div className="space-y-6">
@@ -145,6 +149,57 @@ export default async function OrderPage({
           ) : null}
         </article>
       </section>
+      <section className="bg-card rounded-lg border p-4">
+        <h2 className="text-sm font-semibold">Procurement timing</h2>
+        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
+          <div>
+            <dt className="text-muted-foreground text-xs">Order date</dt>
+            <dd className="mt-1">{formatDateOnly(order.orderDate)}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground text-xs">Lead time</dt>
+            <dd className="mt-1">
+              {order.leadTimeWeeks === null
+                ? "—"
+                : `${order.leadTimeWeeks} weeks`}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground text-xs">Expected ready</dt>
+            <dd className="mt-1">{formatDateOnly(order.expectedReadyDate)}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground text-xs">Expected delivery</dt>
+            <dd className="mt-1">
+              {formatDateOnly(order.expectedDeliveryDate)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground text-xs">Actual delivery</dt>
+            <dd className="mt-1">{formatDateOnly(order.actualDeliveryDate)}</dd>
+          </div>
+        </dl>
+      </section>
+      <div className="space-y-4" id="payments">
+        <PaymentSchedule
+          canEdit={canEditMasterData(user.role)}
+          currencies={options.currencies}
+          direction="SUPPLIER_PAYMENT"
+          orderId={order.id}
+          reportingCurrencyCode={order.project.reportingCurrencyCode}
+          summary={paymentSummary.supplier}
+          today={businessToday()}
+        />
+        <PaymentSchedule
+          canEdit={canEditMasterData(user.role)}
+          currencies={options.currencies}
+          direction="CLIENT_RECEIPT"
+          orderId={order.id}
+          reportingCurrencyCode={order.project.reportingCurrencyCode}
+          summary={paymentSummary.client}
+          today={businessToday()}
+        />
+      </div>
       {canEditMasterData(user.role) ? (
         <details>
           <summary className="border-input inline-flex h-9 cursor-pointer list-none items-center rounded-lg border px-3 text-sm font-medium">

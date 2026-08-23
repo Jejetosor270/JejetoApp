@@ -44,13 +44,13 @@ export const navigationGroups: readonly NavigationGroup[] = [
       {
         href: "/payments",
         icon: WalletCards,
-        isAvailable: false,
+        isAvailable: true,
         label: "Payments",
       },
       {
         href: "/calendar",
         icon: CalendarDays,
-        isAvailable: false,
+        isAvailable: true,
         label: "Calendar",
       },
     ],

@@ -78,14 +78,14 @@ enum VatRecoverability {
   NON_RECOVERABLE
 }
 
-enum PaymentStatus {
-  UPCOMING
-  DUE_SOON
-  DUE
-  OVERDUE
-  PARTIALLY_PAID
-  PAID
-  CANCELLED
+enum PaymentDirection {
+  SUPPLIER_PAYMENT
+  CLIENT_RECEIPT
+}
+
+enum InstallmentBasis {
+  PERCENTAGE
+  FIXED_AMOUNT
 }
 
 model User {
@@ -111,29 +111,25 @@ model User {
 
   managedProjects Project[] @relation("ProjectManager")
 
-  createdClients              Client[]                     @relation("ClientCreatedBy")
-  updatedClients              Client[]                     @relation("ClientUpdatedBy")
-  createdSuppliers            Supplier[]                   @relation("SupplierCreatedBy")
-  updatedSuppliers            Supplier[]                   @relation("SupplierUpdatedBy")
-  createdProjects             Project[]                    @relation("ProjectCreatedBy")
-  updatedProjects             Project[]                    @relation("ProjectUpdatedBy")
-  createdBuildings            Building[]                   @relation("BuildingCreatedBy")
-  updatedBuildings            Building[]                   @relation("BuildingUpdatedBy")
-  createdOrders               ProcurementOrder[]           @relation("ProcurementOrderCreatedBy")
-  updatedOrders               ProcurementOrder[]           @relation("ProcurementOrderUpdatedBy")
-  linkedOrderBuildings        ProcurementOrderBuilding[]   @relation("OrderBuildingCreatedBy")
-  createdCostLines            ProcurementOrderCostLine[]   @relation("CostLineCreatedBy")
-  updatedCostLines            ProcurementOrderCostLine[]   @relation("CostLineUpdatedBy")
-  createdVatEntries           ProcurementOrderVatEntry[]   @relation("VatEntryCreatedBy")
-  updatedVatEntries           ProcurementOrderVatEntry[]   @relation("VatEntryUpdatedBy")
-  createdSupplierInstallments SupplierPaymentInstallment[] @relation("SupplierInstallmentCreatedBy")
-  updatedSupplierInstallments SupplierPaymentInstallment[] @relation("SupplierInstallmentUpdatedBy")
-  createdSupplierPayments     SupplierPayment[]            @relation("SupplierPaymentCreatedBy")
-  updatedSupplierPayments     SupplierPayment[]            @relation("SupplierPaymentUpdatedBy")
-  createdClientInstallments   ClientPaymentInstallment[]   @relation("ClientInstallmentCreatedBy")
-  updatedClientInstallments   ClientPaymentInstallment[]   @relation("ClientInstallmentUpdatedBy")
-  createdClientReceipts       ClientReceipt[]              @relation("ClientReceiptCreatedBy")
-  updatedClientReceipts       ClientReceipt[]              @relation("ClientReceiptUpdatedBy")
+  createdClients             Client[]                   @relation("ClientCreatedBy")
+  updatedClients             Client[]                   @relation("ClientUpdatedBy")
+  createdSuppliers           Supplier[]                 @relation("SupplierCreatedBy")
+  updatedSuppliers           Supplier[]                 @relation("SupplierUpdatedBy")
+  createdProjects            Project[]                  @relation("ProjectCreatedBy")
+  updatedProjects            Project[]                  @relation("ProjectUpdatedBy")
+  createdBuildings           Building[]                 @relation("BuildingCreatedBy")
+  updatedBuildings           Building[]                 @relation("BuildingUpdatedBy")
+  createdOrders              ProcurementOrder[]         @relation("ProcurementOrderCreatedBy")
+  updatedOrders              ProcurementOrder[]         @relation("ProcurementOrderUpdatedBy")
+  linkedOrderBuildings       ProcurementOrderBuilding[] @relation("OrderBuildingCreatedBy")
+  createdCostLines           ProcurementOrderCostLine[] @relation("CostLineCreatedBy")
+  updatedCostLines           ProcurementOrderCostLine[] @relation("CostLineUpdatedBy")
+  createdVatEntries          ProcurementOrderVatEntry[] @relation("VatEntryCreatedBy")
+  updatedVatEntries          ProcurementOrderVatEntry[] @relation("VatEntryUpdatedBy")
+  createdPaymentInstallments PaymentInstallment[]       @relation("PaymentInstallmentCreatedBy")
+  updatedPaymentInstallments PaymentInstallment[]       @relation("PaymentInstallmentUpdatedBy")
+  createdPaymentSettlements  PaymentSettlement[]        @relation("PaymentSettlementCreatedBy")
+  updatedPaymentSettlements  PaymentSettlement[]        @relation("PaymentSettlementUpdatedBy")
 
   @@index([isActive])
   @@map("users")
@@ -153,14 +149,7 @@ model Currency {
   orders        ProcurementOrder[] @relation("OrderCurrency")
   sellingOrders ProcurementOrder[] @relation("OrderSellingCurrency")
 
-  supplierInstallments       SupplierPaymentInstallment[] @relation("SupplierInstallmentCurrency")
-  supplierInstallmentReports SupplierPaymentInstallment[] @relation("SupplierInstallmentReportingCurrency")
-  supplierPayments           SupplierPayment[]            @relation("SupplierPaymentCurrency")
-  supplierPaymentReports     SupplierPayment[]            @relation("SupplierPaymentReportingCurrency")
-  clientInstallments         ClientPaymentInstallment[]   @relation("ClientInstallmentCurrency")
-  clientInstallmentReports   ClientPaymentInstallment[]   @relation("ClientInstallmentReportingCurrency")
-  clientReceipts             ClientReceipt[]              @relation("ClientReceiptCurrency")
-  clientReceiptReports       ClientReceipt[]              @relation("ClientReceiptReportingCurrency")
+  paymentInstallments PaymentInstallment[]
 
   @@index([isActive])
   @@map("currencies")
@@ -248,14 +237,13 @@ model Project {
   createdById            String?       @db.Uuid
   updatedById            String?       @db.Uuid
 
-  client             Client                     @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  reportingCurrency  Currency                   @relation("ProjectReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
-  projectManager     User?                      @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
-  createdBy          User?                      @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy          User?                      @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  buildings          Building[]
-  orders             ProcurementOrder[]
-  clientInstallments ClientPaymentInstallment[]
+  client            Client             @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  reportingCurrency Currency           @relation("ProjectReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
+  projectManager    User?              @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
+  createdBy         User?              @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy         User?              @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  buildings         Building[]
+  orders            ProcurementOrder[]
 
   @@index([clientId])
   @@index([projectManagerId])
@@ -309,12 +297,12 @@ model ProcurementOrder {
   orderDate                          DateTime?              @db.Date
   acknowledgementDate                DateTime?              @db.Date
   leadTimeWeeks                      Int?
-  estimatedProductionAt              DateTime?              @db.Date
+  expectedReadyDate                  DateTime?              @map("estimatedProductionAt") @db.Date
   actualProductionAt                 DateTime?              @db.Date
   estimatedDispatchAt                DateTime?              @db.Date
   actualDispatchAt                   DateTime?              @db.Date
-  estimatedDeliveryAt                DateTime?              @db.Date
-  actualDeliveryAt                   DateTime?              @db.Date
+  expectedDeliveryDate               DateTime?              @map("estimatedDeliveryAt") @db.Date
+  actualDeliveryDate                 DateTime?              @map("actualDeliveryAt") @db.Date
   notes                              String?                @db.Text
   createdAt                          DateTime               @default(now())
   updatedAt                          DateTime               @updatedAt
@@ -328,15 +316,15 @@ model ProcurementOrder {
   createdBy       User?    @relation("ProcurementOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy       User?    @relation("ProcurementOrderUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
-  buildings            ProcurementOrderBuilding[]
-  costLines            ProcurementOrderCostLine[]
-  vatEntries           ProcurementOrderVatEntry[]
-  supplierInstallments SupplierPaymentInstallment[]
+  buildings           ProcurementOrderBuilding[]
+  costLines           ProcurementOrderCostLine[]
+  vatEntries          ProcurementOrderVatEntry[]
+  paymentInstallments PaymentInstallment[]
 
   @@index([projectId])
   @@index([supplierId])
   @@index([status])
-  @@index([estimatedDeliveryAt])
+  @@index([expectedDeliveryDate], map: "procurement_orders_estimatedDeliveryAt_idx")
   @@map("procurement_orders")
 }
 
@@ -399,117 +387,54 @@ model ProcurementOrderVatEntry {
   @@map("procurement_order_vat_entries")
 }
 
-model SupplierPaymentInstallment {
-  id                      String        @id @default(uuid()) @db.Uuid
-  orderId                 String        @db.Uuid
-  sequence                Int
-  description             String        @db.VarChar(200)
-  percentageRate          Decimal?      @db.Decimal(9, 6)
-  expectedAmount          Decimal?      @db.Decimal(19, 4)
-  currencyCode            String        @db.Char(3)
-  expectedDueDate         DateTime?     @db.Date
-  expectedFxRate          Decimal?      @db.Decimal(20, 10)
-  expectedReportingAmount Decimal?      @db.Decimal(19, 4)
-  reportingCurrencyCode   String        @db.Char(3)
-  status                  PaymentStatus @default(UPCOMING)
-  notes                   String?       @db.Text
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
-  createdById             String?       @db.Uuid
-  updatedById             String?       @db.Uuid
+model PaymentInstallment {
+  id                        String           @id @default(uuid()) @db.Uuid
+  orderId                   String           @db.Uuid
+  direction                 PaymentDirection
+  sequence                  Int
+  label                     String           @db.VarChar(200)
+  basis                     InstallmentBasis
+  percentageRate            Decimal?         @db.Decimal(9, 6)
+  scheduledAmount           Decimal          @db.Decimal(19, 4)
+  currencyCode              String           @db.Char(3)
+  dueDate                   DateTime         @db.Date
+  expectedFxRateToReporting Decimal?         @db.Decimal(20, 10)
+  isCancelled               Boolean          @default(false)
+  notes                     String?          @db.Text
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+  createdById               String?          @db.Uuid
+  updatedById               String?          @db.Uuid
 
-  order             ProcurementOrder  @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  currency          Currency          @relation("SupplierInstallmentCurrency", fields: [currencyCode], references: [code], onDelete: Restrict)
-  reportingCurrency Currency          @relation("SupplierInstallmentReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
-  createdBy         User?             @relation("SupplierInstallmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy         User?             @relation("SupplierInstallmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  payments          SupplierPayment[]
+  order       ProcurementOrder    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  currency    Currency            @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
+  createdBy   User?               @relation("PaymentInstallmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   User?               @relation("PaymentInstallmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  settlements PaymentSettlement[]
 
-  @@unique([orderId, sequence])
-  @@index([status, expectedDueDate])
-  @@map("supplier_payment_installments")
+  @@unique([orderId, direction, sequence])
+  @@index([orderId, direction])
+  @@index([direction, dueDate])
+  @@map("payment_installments")
 }
 
-model SupplierPayment {
-  id                    String   @id @default(uuid()) @db.Uuid
-  installmentId         String   @db.Uuid
-  amount                Decimal  @db.Decimal(19, 4)
-  currencyCode          String   @db.Char(3)
-  paidAt                DateTime @db.Date
-  fxRateToReporting     Decimal? @db.Decimal(20, 10)
-  reportingAmount       Decimal? @db.Decimal(19, 4)
-  reportingCurrencyCode String   @db.Char(3)
-  paymentReference      String?  @db.VarChar(120)
-  notes                 String?  @db.Text
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  createdById           String?  @db.Uuid
-  updatedById           String?  @db.Uuid
+model PaymentSettlement {
+  id                String   @id @default(uuid()) @db.Uuid
+  installmentId     String   @db.Uuid
+  amount            Decimal  @db.Decimal(19, 4)
+  settledAt         DateTime @db.Date
+  fxRateToReporting Decimal? @db.Decimal(20, 10)
+  reference         String?  @db.VarChar(120)
+  notes             String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdById       String?  @db.Uuid
+  updatedById       String?  @db.Uuid
 
-  installment       SupplierPaymentInstallment @relation(fields: [installmentId], references: [id], onDelete: Restrict)
-  currency          Currency                   @relation("SupplierPaymentCurrency", fields: [currencyCode], references: [code], onDelete: Restrict)
-  reportingCurrency Currency                   @relation("SupplierPaymentReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
-  createdBy         User?                      @relation("SupplierPaymentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy         User?                      @relation("SupplierPaymentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  installment PaymentInstallment @relation(fields: [installmentId], references: [id], onDelete: Restrict)
+  createdBy   User?              @relation("PaymentSettlementCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   User?              @relation("PaymentSettlementUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
-  @@index([installmentId, paidAt])
-  @@map("supplier_payments")
-}
-
-model ClientPaymentInstallment {
-  id                      String        @id @default(uuid()) @db.Uuid
-  projectId               String        @db.Uuid
-  sequence                Int
-  description             String        @db.VarChar(200)
-  percentageRate          Decimal?      @db.Decimal(9, 6)
-  expectedAmount          Decimal?      @db.Decimal(19, 4)
-  currencyCode            String        @db.Char(3)
-  expectedDate            DateTime?     @db.Date
-  expectedFxRate          Decimal?      @db.Decimal(20, 10)
-  expectedReportingAmount Decimal?      @db.Decimal(19, 4)
-  reportingCurrencyCode   String        @db.Char(3)
-  status                  PaymentStatus @default(UPCOMING)
-  reference               String?       @db.VarChar(120)
-  notes                   String?       @db.Text
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
-  createdById             String?       @db.Uuid
-  updatedById             String?       @db.Uuid
-
-  project           Project         @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  currency          Currency        @relation("ClientInstallmentCurrency", fields: [currencyCode], references: [code], onDelete: Restrict)
-  reportingCurrency Currency        @relation("ClientInstallmentReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
-  createdBy         User?           @relation("ClientInstallmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy         User?           @relation("ClientInstallmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  receipts          ClientReceipt[]
-
-  @@unique([projectId, sequence])
-  @@index([status, expectedDate])
-  @@map("client_payment_installments")
-}
-
-model ClientReceipt {
-  id                    String   @id @default(uuid()) @db.Uuid
-  installmentId         String   @db.Uuid
-  amount                Decimal  @db.Decimal(19, 4)
-  currencyCode          String   @db.Char(3)
-  receivedAt            DateTime @db.Date
-  fxRateToReporting     Decimal? @db.Decimal(20, 10)
-  reportingAmount       Decimal? @db.Decimal(19, 4)
-  reportingCurrencyCode String   @db.Char(3)
-  receiptReference      String?  @db.VarChar(120)
-  notes                 String?  @db.Text
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  createdById           String?  @db.Uuid
-  updatedById           String?  @db.Uuid
-
-  installment       ClientPaymentInstallment @relation(fields: [installmentId], references: [id], onDelete: Restrict)
-  currency          Currency                 @relation("ClientReceiptCurrency", fields: [currencyCode], references: [code], onDelete: Restrict)
-  reportingCurrency Currency                 @relation("ClientReceiptReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
-  createdBy         User?                    @relation("ClientReceiptCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy         User?                    @relation("ClientReceiptUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-
-  @@index([installmentId, receivedAt])
-  @@map("client_receipts")
+  @@index([installmentId, settledAt])
+  @@map("payment_settlements")
 }
