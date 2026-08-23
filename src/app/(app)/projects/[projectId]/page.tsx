@@ -35,13 +35,10 @@ export default async function ProjectPage({
       currencies={options.currencies}
       managers={options.managers}
       orders={orders.map((order) => {
-        const committed = order.financialStates.find(
-          (state) => state.state === "COMMITTED",
-        );
         return {
-          committedLandedCost: committed?.reportingEconomicLandedCost ?? null,
-          conversionComplete: committed?.conversionComplete ?? true,
-          grossMarginRate: committed?.grossMarginRate ?? null,
+          economicLandedCost: order.costs.reportingEconomicLandedCost,
+          conversionComplete: order.costs.conversionComplete,
+          grossMarginRate: order.costs.grossMarginRate,
           id: order.id,
           orderCurrencyCode: order.orderCurrencyCode,
           orderNumber: order.orderNumber,
@@ -49,7 +46,7 @@ export default async function ProjectPage({
           sellingCurrencyCode: order.sellingCurrencyCode,
           status: order.status,
           supplierName: order.supplier.displayName,
-          totalSellingRevenue: committed?.reportingSellingRevenue ?? null,
+          totalSellingRevenue: order.costs.reportingSellingRevenue,
         };
       })}
       project={{

@@ -9,7 +9,6 @@ interface PricingInput {
 
 interface LandedCostInput {
   supplierPurchase: FinancialDecimal;
-  supplierDiscount?: FinancialDecimal;
   freight?: FinancialDecimal;
   customsDuties?: FinancialDecimal;
   miscellaneous?: FinancialDecimal;
@@ -106,27 +105,18 @@ export function sellingPriceFromTargetMargin(
 }
 
 /**
- * Supplier purchase minus discount, plus freight, duties, and miscellaneous costs.
- * All components are HT and discounts are supplied as positive amounts.
+ * Supplier purchase, plus freight, duties, and miscellaneous costs.
+ * All components are HT.
  */
 export function landedCost({
   supplierPurchase,
-  supplierDiscount = ZERO,
   freight = ZERO,
   customsDuties = ZERO,
   miscellaneous = ZERO,
 }: LandedCostInput): Decimal {
   const purchase = nonNegative(supplierPurchase, "Supplier purchase");
-  const discount = nonNegative(supplierDiscount, "Supplier discount");
-
-  if (discount.greaterThan(purchase)) {
-    throw new RangeError(
-      "Supplier discount cannot exceed the supplier purchase amount.",
-    );
-  }
 
   return purchase
-    .minus(discount)
     .plus(nonNegative(freight, "Freight"))
     .plus(nonNegative(customsDuties, "Customs duties"))
     .plus(nonNegative(miscellaneous, "Miscellaneous cost"));

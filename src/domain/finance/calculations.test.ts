@@ -87,12 +87,11 @@ describe("procurement finance calculations", () => {
     expect(
       landedCost({
         supplierPurchase: "0.20",
-        supplierDiscount: "0.05",
         freight: "0.10",
         customsDuties: "0.03",
         miscellaneous: "0.02",
       }).toFixed(2),
-    ).toBe("0.30");
+    ).toBe("0.35");
   });
 
   it("converts currency with an exact decimal rate", () => {
@@ -201,12 +200,6 @@ describe("procurement finance calculations", () => {
       RangeError,
     );
     expect(() => sellingPriceFromTargetMargin("100", "1")).toThrow(RangeError);
-  });
-
-  it("rejects a discount greater than the supplier purchase", () => {
-    expect(() =>
-      landedCost({ supplierPurchase: "100", supplierDiscount: "100.01" }),
-    ).toThrow(RangeError);
   });
 
   it("rejects negative cost components and non-positive FX rates", () => {

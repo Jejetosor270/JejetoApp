@@ -29,16 +29,16 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 - Markup rate = gross profit ÷ landed cost HT.
 - Selling price from target margin = landed cost ÷ (1 − target margin rate).
 - Margin and markup are not interchangeable. A €70,000 landed cost sold for €100,000 has 30% margin and approximately 42.8571% markup.
-- Landed cost HT = supplier purchase HT − positive supplier discount + freight + customs/duties + miscellaneous procurement costs.
+- Landed cost HT = supplier purchase HT + freight + customs/duties + miscellaneous procurement costs.
 - Freight remains an identifiable cost even when included commercially in the package price.
 - Keep formulas in `src/domain/finance`; UI components only display serialized results.
 
 ## Financial and payment architecture
 
 - A Procurement Order is a supplier-level project package, never a product, SKU, room, or inventory item; it may relate to several Buildings in its Project.
-- `ProcurementOrderFinancials` represents BUDGET, COMMITTED, or ACTUAL; the unique order/state pair is optional until known.
-- Cost components are normalized `ProcurementOrderCostLine` records. Do not add three copied sets of financial columns or persist derived landed-cost/margin totals that can become stale.
-- Commercial pricing is shared by the order. `SELLING_PRICE` stores the manually entered package price; `TARGET_MARGIN` stores the target rate and derives package price from the selected BUDGET, COMMITTED, or ACTUAL cost state.
+- Each Procurement Order has one current authoritative cost structure.
+- Cost components are normalized `ProcurementOrderCostLine` records. Do not add duplicate cost states or persist derived landed-cost/margin totals that can become stale.
+- Commercial pricing is shared by the order. `SELLING_PRICE` stores the manually entered package price; `TARGET_MARGIN` stores the target rate and derives package price from the current landed cost.
 - Separately recharged freight is added once to total selling revenue and backed out of the calculated package price in target-margin mode. Freight remains part of landed cost regardless of commercial treatment.
 - INPUT and OUTPUT VAT are independent entries. VAT is neither revenue nor cost by default, no VAT rate is hardcoded, and unusual treatments remain representable.
 - Preserve original amount/currency, manual FX rate, converted amount, and reporting currency. ISO currency codes are relational data, not a closed enum.
@@ -68,7 +68,7 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 
 - Supported country definitions and EU membership live in `src/config/countries`; country codes are ISO 3166-1 alpha-2. EU membership may provide hints but must never choose a VAT treatment automatically. GB and CH are non-EU.
 - Order purchase currency, order selling currency, and Project reporting currency are independent sources of truth. Changing a master-data default never rewrites an Order.
-- Preserve original contractual amounts. Manual FX uses `1 original-currency unit = X project-reporting-currency units`; each BUDGET, COMMITTED, and ACTUAL state may preserve different purchase and selling rates.
+- Preserve original contractual amounts. Manual FX uses `1 original-currency unit = X project-reporting-currency units`; each Order preserves one purchase rate and one selling rate.
 - Missing foreign-currency FX keeps reporting values and margin explicitly incomplete. Never subtract values in different currencies or fabricate a conversion.
 - INPUT (purchase) and OUTPUT (sales) VAT are independent, explicitly selected management classifications. VAT rates are fractional Decimal values and are not inferred as legal conclusions from country.
 - Recoverable input VAT is excluded from landed cost and profit. Non-recoverable input VAT is added to economic landed cost. Output VAT is excluded from revenue and profit; margin remains based on comparable reporting-currency HT/economic values.

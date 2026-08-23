@@ -38,12 +38,6 @@ enum ProcurementOrderStatus {
   CANCELLED
 }
 
-enum FinancialState {
-  BUDGET
-  COMMITTED
-  ACTUAL
-}
-
 enum PricingMode {
   SELLING_PRICE
   TARGET_MARGIN
@@ -51,7 +45,6 @@ enum PricingMode {
 
 enum ProcurementCostCategory {
   SUPPLIER_PURCHASE
-  SUPPLIER_DISCOUNT
   FREIGHT
   CUSTOMS_DUTIES
   MISCELLANEOUS
@@ -129,8 +122,6 @@ model User {
   createdOrders               ProcurementOrder[]           @relation("ProcurementOrderCreatedBy")
   updatedOrders               ProcurementOrder[]           @relation("ProcurementOrderUpdatedBy")
   linkedOrderBuildings        ProcurementOrderBuilding[]   @relation("OrderBuildingCreatedBy")
-  createdOrderFinancials      ProcurementOrderFinancials[] @relation("OrderFinancialsCreatedBy")
-  updatedOrderFinancials      ProcurementOrderFinancials[] @relation("OrderFinancialsUpdatedBy")
   createdCostLines            ProcurementOrderCostLine[]   @relation("CostLineCreatedBy")
   updatedCostLines            ProcurementOrderCostLine[]   @relation("CostLineUpdatedBy")
   createdVatEntries           ProcurementOrderVatEntry[]   @relation("VatEntryCreatedBy")
@@ -162,10 +153,6 @@ model Currency {
   orders        ProcurementOrder[] @relation("OrderCurrency")
   sellingOrders ProcurementOrder[] @relation("OrderSellingCurrency")
 
-  costLinesOriginal          ProcurementOrderCostLine[]   @relation("CostLineOriginalCurrency")
-  costLinesReporting         ProcurementOrderCostLine[]   @relation("CostLineReportingCurrency")
-  vatEntriesOriginal         ProcurementOrderVatEntry[]   @relation("VatEntryOriginalCurrency")
-  vatEntriesReporting        ProcurementOrderVatEntry[]   @relation("VatEntryReportingCurrency")
   supplierInstallments       SupplierPaymentInstallment[] @relation("SupplierInstallmentCurrency")
   supplierInstallmentReports SupplierPaymentInstallment[] @relation("SupplierInstallmentReportingCurrency")
   supplierPayments           SupplierPayment[]            @relation("SupplierPaymentCurrency")
@@ -312,7 +299,8 @@ model ProcurementOrder {
   status                             ProcurementOrderStatus @default(DRAFT)
   freightTreatment                   FreightTreatment       @default(NOT_APPLICABLE)
   pricingMode                        PricingMode            @default(SELLING_PRICE)
-  pricingSourceState                 FinancialState         @default(COMMITTED)
+  purchaseFxRateToReporting          Decimal?               @db.Decimal(20, 10)
+  sellingFxRateToReporting           Decimal?               @db.Decimal(20, 10)
   sellingPriceAmount                 Decimal?               @db.Decimal(19, 4)
   sellingCurrencyCode                String                 @db.Char(3)
   freightResaleAmount                Decimal?               @db.Decimal(19, 4)
@@ -341,7 +329,8 @@ model ProcurementOrder {
   updatedBy       User?    @relation("ProcurementOrderUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   buildings            ProcurementOrderBuilding[]
-  financials           ProcurementOrderFinancials[]
+  costLines            ProcurementOrderCostLine[]
+  vatEntries           ProcurementOrderVatEntry[]
   supplierInstallments SupplierPaymentInstallment[]
 
   @@index([projectId])
@@ -366,84 +355,47 @@ model ProcurementOrderBuilding {
   @@map("procurement_order_buildings")
 }
 
-/// One normalized record per order and financial state. Landed cost and gross profit
-/// are derived from its line items and pricing fields rather than stored as stale totals.
-model ProcurementOrderFinancials {
-  id                       String         @id @default(uuid()) @db.Uuid
-  orderId                  String         @db.Uuid
-  state                    FinancialState
-  sellingFxRateToReporting Decimal?       @db.Decimal(20, 10)
-  notes                    String?        @db.Text
-  createdAt                DateTime       @default(now())
-  updatedAt                DateTime       @updatedAt
-  createdById              String?        @db.Uuid
-  updatedById              String?        @db.Uuid
-
-  order      ProcurementOrder           @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  createdBy  User?                      @relation("OrderFinancialsCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy  User?                      @relation("OrderFinancialsUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  costLines  ProcurementOrderCostLine[]
-  vatEntries ProcurementOrderVatEntry[]
-
-  @@unique([orderId, state])
-  @@index([state])
-  @@map("procurement_order_financials")
-}
-
 model ProcurementOrderCostLine {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  financialsId          String                  @db.Uuid
-  category              ProcurementCostCategory
-  description           String?                 @db.VarChar(200)
-  originalAmount        Decimal                 @db.Decimal(19, 4)
-  originalCurrencyCode  String                  @db.Char(3)
-  fxRateToReporting     Decimal?                @db.Decimal(20, 10)
-  reportingAmount       Decimal?                @db.Decimal(19, 4)
-  reportingCurrencyCode String                  @db.Char(3)
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-  createdById           String?                 @db.Uuid
-  updatedById           String?                 @db.Uuid
+  id             String                  @id @default(uuid()) @db.Uuid
+  orderId        String                  @db.Uuid
+  category       ProcurementCostCategory
+  description    String?                 @db.VarChar(200)
+  originalAmount Decimal                 @db.Decimal(19, 4)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  createdById    String?                 @db.Uuid
+  updatedById    String?                 @db.Uuid
 
-  financials        ProcurementOrderFinancials @relation(fields: [financialsId], references: [id], onDelete: Restrict)
-  originalCurrency  Currency                   @relation("CostLineOriginalCurrency", fields: [originalCurrencyCode], references: [code], onDelete: Restrict)
-  reportingCurrency Currency                   @relation("CostLineReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
-  createdBy         User?                      @relation("CostLineCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy         User?                      @relation("CostLineUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  order     ProcurementOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  createdBy User?            @relation("CostLineCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?            @relation("CostLineUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
-  @@index([financialsId, category])
+  @@unique([orderId, category])
   @@map("procurement_order_cost_lines")
 }
 
 model ProcurementOrderVatEntry {
-  id                    String             @id @default(uuid()) @db.Uuid
-  financialsId          String             @db.Uuid
-  direction             VatDirection
-  treatment             VatTreatment
-  recoverability        VatRecoverability?
-  countryCode           String?            @db.Char(2)
-  customTreatmentNote   String?            @db.VarChar(240)
-  taxableBaseAmount     Decimal            @db.Decimal(19, 4)
-  vatRate               Decimal?           @db.Decimal(9, 6)
-  vatAmount             Decimal            @db.Decimal(19, 4)
-  isAmountOverride      Boolean            @default(false)
-  originalCurrencyCode  String             @db.Char(3)
-  fxRateToReporting     Decimal?           @db.Decimal(20, 10)
-  reportingTaxableBase  Decimal?           @db.Decimal(19, 4)
-  reportingVatAmount    Decimal?           @db.Decimal(19, 4)
-  reportingCurrencyCode String             @db.Char(3)
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
-  createdById           String?            @db.Uuid
-  updatedById           String?            @db.Uuid
+  id                  String             @id @default(uuid()) @db.Uuid
+  orderId             String             @db.Uuid
+  direction           VatDirection
+  treatment           VatTreatment
+  recoverability      VatRecoverability?
+  countryCode         String?            @db.Char(2)
+  customTreatmentNote String?            @db.VarChar(240)
+  taxableBaseAmount   Decimal            @db.Decimal(19, 4)
+  vatRate             Decimal?           @db.Decimal(9, 6)
+  vatAmount           Decimal            @db.Decimal(19, 4)
+  isAmountOverride    Boolean            @default(false)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  createdById         String?            @db.Uuid
+  updatedById         String?            @db.Uuid
 
-  financials        ProcurementOrderFinancials @relation(fields: [financialsId], references: [id], onDelete: Restrict)
-  originalCurrency  Currency                   @relation("VatEntryOriginalCurrency", fields: [originalCurrencyCode], references: [code], onDelete: Restrict)
-  reportingCurrency Currency                   @relation("VatEntryReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
-  createdBy         User?                      @relation("VatEntryCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy         User?                      @relation("VatEntryUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  order     ProcurementOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  createdBy User?            @relation("VatEntryCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?            @relation("VatEntryUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
-  @@index([financialsId, direction])
+  @@index([orderId, direction])
   @@map("procurement_order_vat_entries")
 }
 

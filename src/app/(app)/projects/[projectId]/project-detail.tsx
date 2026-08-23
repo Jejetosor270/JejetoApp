@@ -52,7 +52,7 @@ interface BuildingView {
   shortCode: string;
 }
 interface ProjectOrderView {
-  committedLandedCost: string | null;
+  economicLandedCost: string | null;
   conversionComplete: boolean;
   grossMarginRate: string | null;
   id: string;
@@ -67,9 +67,9 @@ interface ProjectOrderView {
 interface ProcurementSummaryView {
   convertedOrderCount: number;
   incompleteOrderCount: number;
-  totalCommittedEconomicCost: string;
-  totalCommittedGrossProfit: string;
-  totalCommittedSellingRevenue: string;
+  totalEconomicCost: string;
+  totalGrossProfit: string;
+  totalSellingRevenue: string;
 }
 const statusLabels: Record<string, string> = {
   ACTIVE: "Active",
@@ -430,34 +430,28 @@ export function ProjectDetail({
         </div>
         <div className="bg-muted/15 grid gap-3 border-b p-4 sm:grid-cols-3">
           <div>
-            <p className="text-muted-foreground text-xs">
-              Committed economic cost
-            </p>
+            <p className="text-muted-foreground text-xs">Economic cost</p>
             <p className="financial-figure mt-1 font-semibold">
               {formatMoney(
-                procurementSummary.totalCommittedEconomicCost,
+                procurementSummary.totalEconomicCost,
                 project.reportingCurrencyCode,
               )}
             </p>
           </div>
           <div>
-            <p className="text-muted-foreground text-xs">
-              Committed selling revenue HT
-            </p>
+            <p className="text-muted-foreground text-xs">Selling revenue HT</p>
             <p className="financial-figure mt-1 font-semibold">
               {formatMoney(
-                procurementSummary.totalCommittedSellingRevenue,
+                procurementSummary.totalSellingRevenue,
                 project.reportingCurrencyCode,
               )}
             </p>
           </div>
           <div>
-            <p className="text-muted-foreground text-xs">
-              Committed gross profit
-            </p>
+            <p className="text-muted-foreground text-xs">Gross profit</p>
             <p className="financial-figure mt-1 font-semibold">
               {formatMoney(
-                procurementSummary.totalCommittedGrossProfit,
+                procurementSummary.totalGrossProfit,
                 project.reportingCurrencyCode,
               )}
             </p>
@@ -477,7 +471,7 @@ export function ProjectDetail({
                 <th className="px-4 py-3">Package</th>
                 <th className="px-4 py-3">Supplier</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Committed landed</th>
+                <th className="px-4 py-3 text-right">Economic landed cost</th>
                 <th className="px-4 py-3 text-right">Selling revenue</th>
                 <th className="px-4 py-3 text-right">Margin</th>
               </tr>
@@ -502,7 +496,7 @@ export function ProjectDetail({
                   </td>
                   <td className="financial-figure px-4 py-3 text-right">
                     {formatMoney(
-                      order.committedLandedCost,
+                      order.economicLandedCost,
                       project.reportingCurrencyCode,
                     )}
                     {!order.conversionComplete ? (

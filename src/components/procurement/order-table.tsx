@@ -24,7 +24,7 @@ export function OrderTable({ orders }: { orders: OrderSummary[] }) {
               <th className="px-4 py-3">Supplier</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Buildings</th>
-              <th className="px-4 py-3 text-right">Committed landed</th>
+              <th className="px-4 py-3 text-right">Economic landed cost</th>
               <th className="px-4 py-3 text-right">Selling revenue</th>
               <th className="px-4 py-3 text-right">Margin</th>
               <th className="px-4 py-3">Updated</th>
@@ -32,9 +32,7 @@ export function OrderTable({ orders }: { orders: OrderSummary[] }) {
           </thead>
           <tbody className="divide-y">
             {orders.map((order) => {
-              const committed = order.financialStates.find(
-                (state) => state.state === "COMMITTED",
-              );
+              const cost = order.costs;
               return (
                 <tr className="hover:bg-muted/25" key={order.id}>
                   <td className="px-4 py-3 font-mono text-xs">
@@ -62,23 +60,23 @@ export function OrderTable({ orders }: { orders: OrderSummary[] }) {
                   </td>
                   <td className="financial-figure px-4 py-3 text-right">
                     {formatMoney(
-                      committed?.reportingEconomicLandedCost ?? null,
+                      cost.reportingEconomicLandedCost,
                       order.project.reportingCurrencyCode,
                     )}
                   </td>
                   <td className="financial-figure px-4 py-3 text-right">
                     {formatMoney(
-                      committed?.reportingSellingRevenue ?? null,
+                      cost.reportingSellingRevenue,
                       order.project.reportingCurrencyCode,
                     )}
-                    {committed?.outputVat ? (
+                    {cost.outputVat ? (
                       <span className="text-muted-foreground block text-xs">
-                        {committed.outputVat.treatment.replaceAll("_", " ")}
+                        {cost.outputVat.treatment.replaceAll("_", " ")}
                       </span>
                     ) : null}
                   </td>
                   <td className="financial-figure px-4 py-3 text-right font-medium">
-                    {formatRate(committed?.grossMarginRate ?? null)}
+                    {formatRate(cost.grossMarginRate)}
                   </td>
                   <td className="text-muted-foreground px-4 py-3 text-xs">
                     {dateLabel(order.updatedAt)}

@@ -2,7 +2,6 @@ import Decimal from "decimal.js";
 import { z } from "zod";
 
 import {
-  FinancialState,
   FreightTreatment,
   PricingMode,
   ProcurementOrderStatus,
@@ -17,8 +16,6 @@ const optionalText = (maximum: number) =>
       typeof value === "string" && value.trim() === "" ? undefined : value,
     z.string().trim().max(maximum).optional(),
   );
-
-const moneyPattern = /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/;
 const optionalMoney = (label: string) =>
   z.preprocess(
     (value) =>
@@ -27,23 +24,19 @@ const optionalMoney = (label: string) =>
       .string()
       .trim()
       .regex(
-        moneyPattern,
+        /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/,
         `${label} must be a non-negative amount with up to 4 decimals.`,
       )
       .transform((value) => new Decimal(value).toFixed(4))
       .optional(),
   );
-
 const optionalFxRate = z.preprocess(
   (value) =>
     typeof value === "string" && value.trim() === "" ? undefined : value,
   z
     .string()
     .trim()
-    .regex(
-      /^(?:0|[1-9]\d*)(?:\.\d{1,10})?$/,
-      "FX rate must be a positive value with up to 10 decimals.",
-    )
+    .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,10})?$/)
     .refine(
       (value) => new Decimal(value).greaterThan(0),
       "FX rate must be greater than zero.",
@@ -51,141 +44,39 @@ const optionalFxRate = z.preprocess(
     .transform((value) => new Decimal(value).toFixed(10))
     .optional(),
 );
-
 const optionalVatRate = z.preprocess(
   (value) =>
     typeof value === "string" && value.trim() === "" ? undefined : value,
   z
     .string()
     .trim()
-    .regex(
-      /^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/,
-      "VAT rate must be between 0 and 100%.",
-    )
-    .refine(
-      (value) => new Decimal(value).lessThanOrEqualTo(100),
-      "VAT rate must not exceed 100%.",
-    )
+    .regex(/^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/)
+    .refine((value) => new Decimal(value).lessThanOrEqualTo(100))
     .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
     .optional(),
 );
-
 const optionalEnum = <T extends Record<string, string>>(values: T) =>
   z.preprocess(
     (value) =>
       typeof value === "string" && value.trim() === "" ? undefined : value,
     z.enum(values).optional(),
   );
-
 const optionalCountryCode = z.preprocess(
   (value) =>
     typeof value === "string" && value.trim() === "" ? undefined : value,
-  z
-    .string()
-    .trim()
-    .toUpperCase()
-    .refine(isSupportedCountryCode, "Choose a supported country.")
-    .optional(),
+  z.string().trim().toUpperCase().refine(isSupportedCountryCode).optional(),
 );
-
 const optionalTargetMargin = z.preprocess(
   (value) =>
     typeof value === "string" && value.trim() === "" ? undefined : value,
   z
     .string()
     .trim()
-    .regex(
-      /^(?:0|[1-9]\d?)(?:\.\d{1,4})?$/,
-      "Target margin must be between 0 and 99.9999%.",
-    )
-    .refine(
-      (value) => new Decimal(value).lessThan(100),
-      "Target margin must be less than 100%.",
-    )
+    .regex(/^(?:0|[1-9]\d?)(?:\.\d{1,4})?$/)
+    .refine((value) => new Decimal(value).lessThan(100))
     .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
     .optional(),
 );
-
-export const financialStateInputSchema = z
-  .object({
-    customsDuties: optionalMoney("Customs and duties"),
-    freight: optionalMoney("Freight"),
-    inputVatAmount: optionalMoney("Input VAT amount"),
-    inputVatCountryCode: optionalCountryCode,
-    inputVatCustomTreatmentNote: optionalText(240),
-    inputVatRate: optionalVatRate,
-    inputVatRecoverability: optionalEnum(VatRecoverability),
-    inputVatTaxableBase: optionalMoney("Input VAT taxable base"),
-    inputVatTreatment: optionalEnum(VatTreatment),
-    miscellaneous: optionalMoney("Miscellaneous cost"),
-    outputVatAmount: optionalMoney("Output VAT amount"),
-    outputVatCountryCode: optionalCountryCode,
-    outputVatCustomTreatmentNote: optionalText(240),
-    outputVatRate: optionalVatRate,
-    outputVatTaxableBase: optionalMoney("Output VAT taxable base"),
-    outputVatTreatment: optionalEnum(VatTreatment),
-    purchaseFxRate: optionalFxRate,
-    sellingFxRate: optionalFxRate,
-    state: z.enum(FinancialState),
-    supplierDiscount: optionalMoney("Supplier discount"),
-    supplierPurchase: optionalMoney("Supplier purchase"),
-  })
-  .refine(
-    ({ supplierDiscount, supplierPurchase }) =>
-      !supplierDiscount ||
-      !supplierPurchase ||
-      new Decimal(supplierDiscount).lessThanOrEqualTo(supplierPurchase),
-    {
-      error: "Supplier discount cannot exceed supplier purchase.",
-      path: ["supplierDiscount"],
-    },
-  )
-  .superRefine((value, context) => {
-    for (const direction of ["input", "output"] as const) {
-      const treatment = value[`${direction}VatTreatment`];
-      const taxableBase = value[`${direction}VatTaxableBase`];
-      const rate = value[`${direction}VatRate`];
-      const customNote = value[`${direction}VatCustomTreatmentNote`];
-      if (!treatment) {
-        if (taxableBase || rate || value[`${direction}VatAmount`]) {
-          context.addIssue({
-            code: "custom",
-            message: `Choose a ${direction} VAT treatment before entering VAT values.`,
-            path: [`${direction}VatTreatment`],
-          });
-        }
-        continue;
-      }
-      if (!taxableBase) {
-        context.addIssue({
-          code: "custom",
-          message: `${direction === "input" ? "Purchase" : "Sales"} VAT taxable base is required.`,
-          path: [`${direction}VatTaxableBase`],
-        });
-      }
-      if (!rate && !value[`${direction}VatAmount`]) {
-        context.addIssue({
-          code: "custom",
-          message: `${direction === "input" ? "Input" : "Output"} VAT rate or amount is required.`,
-          path: [`${direction}VatRate`],
-        });
-      }
-      if (treatment === VatTreatment.CUSTOM && !customNote) {
-        context.addIssue({
-          code: "custom",
-          message: "Custom VAT treatment requires a short note.",
-          path: [`${direction}VatCustomTreatmentNote`],
-        });
-      }
-    }
-    if (value.inputVatTreatment && !value.inputVatRecoverability) {
-      context.addIssue({
-        code: "custom",
-        message: "Choose whether input VAT is recoverable.",
-        path: ["inputVatRecoverability"],
-      });
-    }
-  });
 
 const orderFields = {
   buildingIds: z
@@ -195,41 +86,44 @@ const orderFields = {
       "A building can only be selected once.",
     ),
   category: optionalText(80),
+  customsDuties: optionalMoney("Customs and duties"),
   description: optionalText(4000),
-  financialStates: z
-    .array(financialStateInputSchema)
-    .length(3)
-    .refine(
-      (states) => new Set(states.map(({ state }) => state)).size === 3,
-      "Budget, Committed, and Actual must each appear exactly once.",
-    ),
+  freight: optionalMoney("Freight"),
   freightResaleAmount: optionalMoney("Freight resale"),
   freightTreatment: z.enum(FreightTreatment),
+  inputVatAmount: optionalMoney("Input VAT amount"),
+  inputVatCountryCode: optionalCountryCode,
+  inputVatCustomTreatmentNote: optionalText(240),
+  inputVatRate: optionalVatRate,
+  inputVatRecoverability: optionalEnum(VatRecoverability),
+  inputVatTaxableBase: optionalMoney("Input VAT taxable base"),
+  inputVatTreatment: optionalEnum(VatTreatment),
+  miscellaneous: optionalMoney("Miscellaneous cost"),
   notes: optionalText(4000),
   orderCurrencyCode: z
     .string()
     .trim()
     .toUpperCase()
-    .regex(/^[A-Z]{3}$/, "Choose a valid currency."),
-  orderNumber: z
-    .string()
-    .trim()
-    .min(2, "Internal reference must be at least 2 characters.")
-    .max(50),
-  packageName: z
-    .string()
-    .trim()
-    .min(2, "Package title must be at least 2 characters.")
-    .max(200),
+    .regex(/^[A-Z]{3}$/),
+  orderNumber: z.string().trim().min(2).max(50),
+  outputVatAmount: optionalMoney("Output VAT amount"),
+  outputVatCountryCode: optionalCountryCode,
+  outputVatCustomTreatmentNote: optionalText(240),
+  outputVatRate: optionalVatRate,
+  outputVatTaxableBase: optionalMoney("Output VAT taxable base"),
+  outputVatTreatment: optionalEnum(VatTreatment),
+  packageName: z.string().trim().min(2).max(200),
   pricingMode: z.enum(PricingMode),
-  pricingSourceState: z.enum(FinancialState),
   projectId: z.uuid("Choose a valid project."),
-  sellingPriceAmount: optionalMoney("Selling price"),
+  purchaseFxRate: optionalFxRate,
+  purchaseCost: optionalMoney("Purchase cost"),
   sellingCurrencyCode: z
     .string()
     .trim()
     .toUpperCase()
-    .regex(/^[A-Z]{3}$/, "Choose a valid selling currency."),
+    .regex(/^[A-Z]{3}$/),
+  sellingFxRate: optionalFxRate,
+  sellingPriceAmount: optionalMoney("Selling price"),
   status: z.enum(ProcurementOrderStatus),
   supplierId: z.uuid("Choose a valid supplier."),
   supplierOrderConfirmationReference: optionalText(120),
@@ -237,40 +131,113 @@ const orderFields = {
   targetMarginRate: optionalTargetMargin,
 };
 
-function validPricingInput(value: {
-  freightResaleAmount?: string | undefined;
-  freightTreatment: FreightTreatment;
-  pricingMode: PricingMode;
-  sellingPriceAmount?: string | undefined;
-  targetMarginRate?: string | undefined;
-}): boolean {
+const baseOrderSchema = z.object(orderFields);
+type VatValidationInput = Pick<
+  z.infer<typeof baseOrderSchema>,
+  | "inputVatAmount"
+  | "inputVatCountryCode"
+  | "inputVatCustomTreatmentNote"
+  | "inputVatRecoverability"
+  | "inputVatRate"
+  | "inputVatTaxableBase"
+  | "inputVatTreatment"
+  | "outputVatAmount"
+  | "outputVatCountryCode"
+  | "outputVatCustomTreatmentNote"
+  | "outputVatRate"
+  | "outputVatTaxableBase"
+  | "outputVatTreatment"
+>;
+function validVat(
+  value: VatValidationInput,
+  direction: "input" | "output",
+  context: z.RefinementCtx,
+) {
+  const treatment = value[`${direction}VatTreatment`];
+  const hasVatValues = [
+    value[`${direction}VatAmount`],
+    value[`${direction}VatCountryCode`],
+    value[`${direction}VatCustomTreatmentNote`],
+    value[`${direction}VatRate`],
+    value[`${direction}VatTaxableBase`],
+    direction === "input" ? value.inputVatRecoverability : undefined,
+  ].some(Boolean);
+  if (!treatment) {
+    if (hasVatValues) {
+      context.addIssue({
+        code: "custom",
+        path: [`${direction}VatTreatment`],
+        message: "Choose a VAT treatment for the VAT values entered.",
+      });
+    }
+    return;
+  }
+  if (!value[`${direction}VatTaxableBase`]) {
+    context.addIssue({
+      code: "custom",
+      path: [`${direction}VatTaxableBase`],
+      message: "VAT taxable base is required.",
+    });
+  }
+  if (!value[`${direction}VatRate`] && !value[`${direction}VatAmount`]) {
+    context.addIssue({
+      code: "custom",
+      path: [`${direction}VatRate`],
+      message: "VAT rate or amount is required.",
+    });
+  }
+  if (
+    treatment === VatTreatment.CUSTOM &&
+    !value[`${direction}VatCustomTreatmentNote`]
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: [`${direction}VatCustomTreatmentNote`],
+      message: "Custom VAT treatment requires a short note.",
+    });
+  }
+}
+
+function validOrder(
+  value: z.infer<typeof baseOrderSchema>,
+  context: z.RefinementCtx,
+): void {
   if (
     value.freightTreatment !== FreightTreatment.RECHARGED_SEPARATELY &&
     value.freightResaleAmount &&
     !new Decimal(value.freightResaleAmount).isZero()
   ) {
-    return false;
+    context.addIssue({
+      code: "custom",
+      path: ["freightResaleAmount"],
+      message: "Freight resale requires separately recharged freight.",
+    });
   }
-  return value.pricingMode === PricingMode.TARGET_MARGIN
-    ? Boolean(value.targetMarginRate) && !value.sellingPriceAmount
-    : !value.targetMarginRate;
+  if (
+    value.pricingMode === PricingMode.TARGET_MARGIN
+      ? !value.targetMarginRate || Boolean(value.sellingPriceAmount)
+      : Boolean(value.targetMarginRate)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["pricingMode"],
+      message: "Check the pricing method and price or target margin.",
+    });
+  }
+  validVat(value, "input", context);
+  validVat(value, "output", context);
+  if (value.inputVatTreatment && !value.inputVatRecoverability) {
+    context.addIssue({
+      code: "custom",
+      path: ["inputVatRecoverability"],
+      message: "Choose whether input VAT is recoverable.",
+    });
+  }
 }
 
-export const createOrderInputSchema = z
-  .object(orderFields)
-  .refine(validPricingInput, {
-    error:
-      "Check the pricing mode, margin, selling price, and freight resale values.",
-    path: ["pricingMode"],
-  });
+export const createOrderInputSchema = baseOrderSchema.superRefine(validOrder);
 export const updateOrderInputSchema = z
   .object({ id: z.uuid("Invalid order."), ...orderFields })
-  .refine(validPricingInput, {
-    error:
-      "Check the pricing mode, margin, selling price, and freight resale values.",
-    path: ["pricingMode"],
-  });
-
-export type FinancialStateInput = z.infer<typeof financialStateInputSchema>;
+  .superRefine(validOrder);
 export type CreateOrderInput = z.infer<typeof createOrderInputSchema>;
 export type UpdateOrderInput = z.infer<typeof updateOrderInputSchema>;
