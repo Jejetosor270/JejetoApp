@@ -51,6 +51,10 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 - Payment due dates and procurement timing are PostgreSQL `Date` values serialized as `YYYY-MM-DD`. Calendar events are derived from installment and Order source dates, never duplicated into a synchronized calendar table.
 - Payment state and future invoice state are different concepts.
 - Cash flow is derived from dated supplier outflows and client inflows; do not duplicate calendar/cash-flow events without a business reason.
+- Project reporting aggregates only comparable Project-reporting-currency values. Aggregate money before deriving Project or portfolio margin and never average Order or Project margin percentages.
+- Commercial profitability uses HT revenue and economic cost; cash flow uses TTC payable/receivable balances. Keep margin and cash timing separate.
+- Project cash position is Client cash received minus Supplier cash paid. Expected cash uses outstanding installment balances by due date; actual cash uses recorded settlements by settlement date.
+- Reporting is derived from authoritative Orders, installments, and settlements. Missing required FX makes totals explicitly incomplete; never substitute zero, silently omit the amount, or fabricate a rate.
 
 ## Architecture and repository
 

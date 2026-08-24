@@ -6,6 +6,7 @@ import {
   InstallmentBasis,
   PaymentDirection,
   Prisma,
+  type ProjectStatus,
 } from "@/generated/prisma/client";
 import {
   aggregateReportingCash,
@@ -637,6 +638,7 @@ export async function listPaymentInstallments(filters: {
   dueFrom?: string | undefined;
   dueTo?: string | undefined;
   projectId?: string | undefined;
+  projectStatus?: ProjectStatus | undefined;
   status?: DerivedPaymentStatus | undefined;
   supplierId?: string | undefined;
 }): Promise<PaymentInstallmentView[]> {
@@ -657,8 +659,15 @@ export async function listPaymentInstallments(filters: {
       order: {
         ...(filters.projectId ? { projectId: filters.projectId } : {}),
         ...(filters.supplierId ? { supplierId: filters.supplierId } : {}),
-        ...(filters.clientId
-          ? { project: { clientId: filters.clientId } }
+        ...(filters.clientId || filters.projectStatus
+          ? {
+              project: {
+                ...(filters.clientId ? { clientId: filters.clientId } : {}),
+                ...(filters.projectStatus
+                  ? { status: filters.projectStatus }
+                  : {}),
+              },
+            }
           : {}),
       },
     },

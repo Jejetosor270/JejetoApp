@@ -1,8 +1,7 @@
 "use client";
 
 import { Pencil, Plus } from "lucide-react";
-import Link from "next/link";
-import { useActionState, useState } from "react";
+import { type ReactNode, useActionState, useState } from "react";
 
 import {
   createBuildingAction,
@@ -19,7 +18,6 @@ import {
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
 import { countries } from "@/config/countries";
-import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 
 interface Option {
   id: string;
@@ -50,41 +48,6 @@ interface BuildingView {
   isActive: boolean;
   name: string;
   shortCode: string;
-}
-interface ProjectOrderView {
-  economicLandedCost: string | null;
-  conversionComplete: boolean;
-  grossMarginRate: string | null;
-  id: string;
-  orderCurrencyCode: string;
-  orderNumber: string;
-  packageName: string;
-  sellingCurrencyCode: string;
-  status: string;
-  supplierName: string;
-  totalSellingRevenue: string | null;
-}
-interface ProcurementSummaryView {
-  convertedOrderCount: number;
-  incompleteOrderCount: number;
-  totalEconomicCost: string;
-  totalGrossProfit: string;
-  totalSellingRevenue: string;
-}
-interface ProjectPaymentSummaryView {
-  cashIn: {
-    incompleteAmountCount: number;
-    outstanding: string;
-    paid: string;
-    scheduled: string;
-  };
-  cashOut: {
-    incompleteAmountCount: number;
-    outstanding: string;
-    paid: string;
-    scheduled: string;
-  };
-  reportingCurrencyCode: string;
 }
 const statusLabels: Record<string, string> = {
   ACTIVE: "Active",
@@ -362,22 +325,18 @@ export function ProjectDetail({
   canEdit,
   clients,
   currencies,
+  financialDashboard,
   managers,
-  orders,
-  paymentSummary,
   project,
-  procurementSummary,
   statuses,
 }: {
   buildings: BuildingView[];
   canEdit: boolean;
   clients: { id: string; displayName: string }[];
   currencies: CurrencyOption[];
+  financialDashboard: ReactNode;
   managers: Option[];
-  orders: ProjectOrderView[];
-  paymentSummary: ProjectPaymentSummaryView;
   project: ProjectView;
-  procurementSummary: ProcurementSummaryView;
   statuses: string[];
 }) {
   const [editingProject, setEditingProject] = useState(false);
@@ -428,194 +387,7 @@ export function ProjectDetail({
           </p>
         ) : null}
       </section>
-      <section className="bg-card rounded-lg border p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">Payment overview</h2>
-            <p className="text-muted-foreground mt-0.5 text-xs">
-              Expected and actual cash converted to{" "}
-              {paymentSummary.reportingCurrencyCode} where FX is available.
-            </p>
-          </div>
-          <Link
-            className="border-input inline-flex h-8 items-center rounded-lg border px-3 text-sm font-medium"
-            href={`/payments?projectId=${project.id}`}
-          >
-            View payments
-          </Link>
-        </div>
-        <div className="mt-4 grid gap-4 xl:grid-cols-2">
-          {[
-            ["Cash out · Supplier Payments", paymentSummary.cashOut, "Paid"],
-            ["Cash in · Client Receipts", paymentSummary.cashIn, "Received"],
-          ].map(([title, flow, paidLabel]) => {
-            const values = flow as ProjectPaymentSummaryView["cashIn"];
-            return (
-              <article
-                className="bg-muted/20 rounded-lg border p-3"
-                key={title as string}
-              >
-                <h3 className="text-xs font-semibold tracking-wide uppercase">
-                  {title as string}
-                </h3>
-                <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
-                  <div>
-                    <dt className="text-muted-foreground text-xs">Scheduled</dt>
-                    <dd className="financial-figure mt-1 font-semibold">
-                      {formatMoney(
-                        values.scheduled,
-                        paymentSummary.reportingCurrencyCode,
-                      )}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground text-xs">
-                      {paidLabel as string}
-                    </dt>
-                    <dd className="financial-figure mt-1 font-semibold">
-                      {formatMoney(
-                        values.paid,
-                        paymentSummary.reportingCurrencyCode,
-                      )}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground text-xs">
-                      Outstanding
-                    </dt>
-                    <dd className="financial-figure mt-1 font-semibold">
-                      {formatMoney(
-                        values.outstanding,
-                        paymentSummary.reportingCurrencyCode,
-                      )}
-                    </dd>
-                  </div>
-                </dl>
-                {values.incompleteAmountCount > 0 ? (
-                  <p className="text-destructive mt-2 text-xs">
-                    {values.incompleteAmountCount} amount(s) are excluded
-                    because installment FX is missing.
-                  </p>
-                ) : null}
-              </article>
-            );
-          })}
-        </div>
-      </section>
-      <section className="bg-card overflow-hidden rounded-lg border">
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <div>
-            <h2 className="text-sm font-semibold">Procurement orders</h2>
-            <p className="text-muted-foreground mt-0.5 text-xs">
-              Supplier packages assigned to this project.
-            </p>
-          </div>
-          {canEdit ? (
-            <Link
-              className="border-input inline-flex h-8 items-center rounded-lg border px-3 text-sm font-medium"
-              href="/orders"
-            >
-              Manage orders
-            </Link>
-          ) : null}
-        </div>
-        <div className="bg-muted/15 grid gap-3 border-b p-4 sm:grid-cols-3">
-          <div>
-            <p className="text-muted-foreground text-xs">Economic cost</p>
-            <p className="financial-figure mt-1 font-semibold">
-              {formatMoney(
-                procurementSummary.totalEconomicCost,
-                project.reportingCurrencyCode,
-              )}
-            </p>
-          </div>
-          <div>
-            <p className="text-muted-foreground text-xs">Selling revenue HT</p>
-            <p className="financial-figure mt-1 font-semibold">
-              {formatMoney(
-                procurementSummary.totalSellingRevenue,
-                project.reportingCurrencyCode,
-              )}
-            </p>
-          </div>
-          <div>
-            <p className="text-muted-foreground text-xs">Gross profit</p>
-            <p className="financial-figure mt-1 font-semibold">
-              {formatMoney(
-                procurementSummary.totalGrossProfit,
-                project.reportingCurrencyCode,
-              )}
-            </p>
-          </div>
-          {procurementSummary.incompleteOrderCount ? (
-            <p className="text-destructive text-xs sm:col-span-3">
-              Partial summary: {procurementSummary.incompleteOrderCount}{" "}
-              order(s) need FX before they can be included.{" "}
-              {procurementSummary.convertedOrderCount} order(s) are included.
-            </p>
-          ) : null}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[50rem] text-left text-sm">
-            <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
-              <tr>
-                <th className="px-4 py-3">Package</th>
-                <th className="px-4 py-3">Supplier</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Economic landed cost</th>
-                <th className="px-4 py-3 text-right">Selling revenue</th>
-                <th className="px-4 py-3 text-right">Margin</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {orders.map((order) => (
-                <tr key={order.id}>
-                  <td className="px-4 py-3">
-                    <Link
-                      className="font-medium hover:underline"
-                      href={`/orders/${order.id}`}
-                    >
-                      {order.packageName}
-                    </Link>
-                    <span className="text-muted-foreground ml-2 font-mono text-xs">
-                      {order.orderNumber}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">{order.supplierName}</td>
-                  <td className="px-4 py-3">
-                    {order.status.replaceAll("_", " ")}
-                  </td>
-                  <td className="financial-figure px-4 py-3 text-right">
-                    {formatMoney(
-                      order.economicLandedCost,
-                      project.reportingCurrencyCode,
-                    )}
-                    {!order.conversionComplete ? (
-                      <span className="text-destructive block text-xs">
-                        FX incomplete
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="financial-figure px-4 py-3 text-right">
-                    {formatMoney(
-                      order.totalSellingRevenue,
-                      project.reportingCurrencyCode,
-                    )}
-                  </td>
-                  <td className="financial-figure px-4 py-3 text-right">
-                    {formatRate(order.grossMarginRate)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {orders.length === 0 ? (
-          <p className="text-muted-foreground px-4 py-8 text-sm">
-            No procurement orders have been added to this project.
-          </p>
-        ) : null}
-      </section>
+      {financialDashboard}
       {canEdit && addingBuilding ? (
         <BuildingForm
           onClose={() => setAddingBuilding(false)}

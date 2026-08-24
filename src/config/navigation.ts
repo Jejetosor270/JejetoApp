@@ -53,6 +53,12 @@ export const navigationGroups: readonly NavigationGroup[] = [
         isAvailable: true,
         label: "Calendar",
       },
+      {
+        href: "/reports",
+        icon: BarChart3,
+        isAvailable: true,
+        label: "Reports",
+      },
     ],
   },
   {
@@ -80,12 +86,6 @@ export const navigationGroups: readonly NavigationGroup[] = [
         icon: FileText,
         isAvailable: false,
         label: "Documents",
-      },
-      {
-        href: "/reports",
-        icon: BarChart3,
-        isAvailable: false,
-        label: "Reports",
       },
       {
         href: "/settings",
