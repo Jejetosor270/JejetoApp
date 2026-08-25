@@ -14,6 +14,15 @@ export class InvalidMasterDataRelationError extends Error {
   }
 }
 
+export class ProjectReportingCurrencyLockedError extends Error {
+  constructor() {
+    super(
+      "Reporting currency cannot be changed after a Project has Procurement Orders because historical FX rates and reporting values depend on it.",
+    );
+    this.name = "ProjectReportingCurrencyLockedError";
+  }
+}
+
 export function isDuplicateMasterDataError(error: unknown): boolean {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -23,9 +32,13 @@ export function isDuplicateMasterDataError(error: unknown): boolean {
 
 export function isExpectedMasterDataError(
   error: unknown,
-): error is MasterDataNotFoundError | InvalidMasterDataRelationError {
+): error is
+  | MasterDataNotFoundError
+  | InvalidMasterDataRelationError
+  | ProjectReportingCurrencyLockedError {
   return (
     error instanceof MasterDataNotFoundError ||
-    error instanceof InvalidMasterDataRelationError
+    error instanceof InvalidMasterDataRelationError ||
+    error instanceof ProjectReportingCurrencyLockedError
   );
 }

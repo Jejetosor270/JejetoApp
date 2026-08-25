@@ -15,7 +15,7 @@ export function TopBar({ user }: { user: AccountControlUser }) {
           <span aria-hidden="true" className="text-muted-foreground">
             /
           </span>
-          <span className="text-muted-foreground">Foundation</span>
+          <span className="text-muted-foreground">Procurement finance</span>
         </div>
       </div>
 
@@ -24,7 +24,7 @@ export function TopBar({ user }: { user: AccountControlUser }) {
           variant="outline"
           className="border-positive/25 bg-positive-muted text-positive hidden sm:inline-flex"
         >
-          Foundation ready
+          Operational
         </Badge>
         <div
           className="bg-border hidden h-5 w-px sm:block"

@@ -107,7 +107,7 @@ export default async function OrderPage({
             <dt>Selling TTC</dt>
             <dd className="financial-figure text-right">
               {formatMoney(
-                cost.outputVat?.totalIncludingVat ?? null,
+                order.totalSellingAmountIncludingVat,
                 order.sellingCurrencyCode,
               )}
             </dd>

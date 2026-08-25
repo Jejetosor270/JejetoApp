@@ -153,6 +153,21 @@ describe("procurement finance calculations", () => {
     expect(metrics.grossProfit.toFixed(2)).toBe("25000.00");
   });
 
+  it("calculates Selling TTC from total selling revenue and VAT actually charged", () => {
+    const sellingRevenue = totalSellingRevenue(
+      "90000",
+      "RECHARGED_SEPARATELY",
+      "5000",
+    );
+    const outputVatActuallyCharged = vatAmount("90000", "0.20");
+
+    expect(sellingRevenue.toFixed(2)).toBe("95000.00");
+    expect(
+      amountIncludingVat(sellingRevenue, outputVatActuallyCharged).toFixed(2),
+    ).toBe("113000.00");
+    expect(amountIncludingVat(sellingRevenue, "0").toFixed(2)).toBe("95000.00");
+  });
+
   it("calculates USD purchase versus EUR sale margin in EUR", () => {
     const metrics = crossCurrencyFinancialMetrics({
       economicLandedCost: "50000",

@@ -12,6 +12,7 @@ import { getDatabase } from "@/lib/db";
 import {
   InvalidMasterDataRelationError,
   MasterDataNotFoundError,
+  ProjectReportingCurrencyLockedError,
 } from "./errors";
 
 const projectSelect = {
@@ -44,6 +45,9 @@ export type ManagedProject = Prisma.ProjectGetPayload<{
 export type ManagedBuilding = Prisma.BuildingGetPayload<{
   select: typeof buildingSelect;
 }>;
+export type ManagedProjectDetail = ManagedProject & {
+  reportingCurrencyLocked: boolean;
+};
 
 function dateOrNull(value: string | undefined): Date | null {
   return value ? new Date(`${value}T00:00:00.000Z`) : null;
@@ -139,20 +143,30 @@ export async function listProjects(filters: {
   });
 }
 
-export async function getProject(
-  projectId: string,
-): Promise<{ buildings: ManagedBuilding[]; project: ManagedProject } | null> {
+export async function getProject(projectId: string): Promise<{
+  buildings: ManagedBuilding[];
+  project: ManagedProjectDetail;
+} | null> {
   const project = await getDatabase().project.findUnique({
     where: { id: projectId },
     select: {
       ...projectSelect,
+      _count: { select: { orders: true } },
       buildings: {
         orderBy: [{ isActive: "desc" }, { name: "asc" }],
         select: buildingSelect,
       },
     },
   });
-  return project ? { buildings: project.buildings, project } : null;
+  if (!project) return null;
+  const { _count, buildings, ...projectFields } = project;
+  return {
+    buildings,
+    project: {
+      ...projectFields,
+      reportingCurrencyLocked: _count.orders > 0,
+    },
+  };
 }
 
 export async function createProject(
@@ -173,11 +187,32 @@ export async function updateProject(
   const { id, ...fields } = input;
   await assertProjectRelations(fields);
   try {
-    return await getDatabase().project.update({
-      where: { id },
-      data: { ...projectData(fields), updatedById: actorId },
-      select: projectSelect,
-    });
+    return await getDatabase().$transaction(
+      async (transaction) => {
+        const current = await transaction.project.findUnique({
+          where: { id },
+          select: {
+            _count: { select: { orders: true } },
+            reportingCurrencyCode: true,
+          },
+        });
+        if (!current) {
+          throw new MasterDataNotFoundError("This project no longer exists.");
+        }
+        if (
+          current.reportingCurrencyCode !== fields.reportingCurrencyCode &&
+          current._count.orders > 0
+        ) {
+          throw new ProjectReportingCurrencyLockedError();
+        }
+        return transaction.project.update({
+          where: { id },
+          data: { ...projectData(fields), updatedById: actorId },
+          select: projectSelect,
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&

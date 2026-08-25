@@ -39,6 +39,7 @@ interface ProjectView {
   projectManager: Option | null;
   projectManagerId: string | null;
   reportingCurrencyCode: string;
+  reportingCurrencyLocked: boolean;
   startDate: string | null;
   status: string;
 }
@@ -120,9 +121,17 @@ function ProjectFields({
         </select>
       </Field>
       <Field label="Reporting currency">
+        {project.reportingCurrencyLocked ? (
+          <input
+            name="reportingCurrencyCode"
+            type="hidden"
+            value={project.reportingCurrencyCode}
+          />
+        ) : null}
         <select
           className={inputClassName}
           defaultValue={project.reportingCurrencyCode}
+          disabled={project.reportingCurrencyLocked}
           name="reportingCurrencyCode"
         >
           {currencies.map((currency) => (
@@ -131,6 +140,12 @@ function ProjectFields({
             </option>
           ))}
         </select>
+        {project.reportingCurrencyLocked ? (
+          <span className="text-muted-foreground text-xs leading-5 font-normal">
+            Locked after the first Procurement Order because historical FX and
+            reporting values depend on this currency.
+          </span>
+        ) : null}
       </Field>
       <Field label="Project manager">
         <select

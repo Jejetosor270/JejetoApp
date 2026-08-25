@@ -66,7 +66,6 @@ export interface VatSummary {
   recoverability: VatRecoverability | null;
   reportingAmount: string | null;
   taxableBase: string;
-  totalIncludingVat: string;
   treatment: VatTreatment;
 }
 export interface OrderCostSummary {
@@ -121,6 +120,7 @@ export interface OrderSummary {
   supplierOrderConfirmationReference: string | null;
   supplierQuoteReference: string | null;
   targetMarginRate: string | null;
+  totalSellingAmountIncludingVat: string | null;
   totalSellingRevenue: string | null;
   updatedAt: string;
 }
@@ -174,10 +174,6 @@ function vatSummary(
     recoverability: entry.recoverability,
     reportingAmount: reporting?.toString() ?? null,
     taxableBase: entry.taxableBaseAmount.toString(),
-    totalIncludingVat: amountIncludingVat(
-      entry.taxableBaseAmount.toString(),
-      entry.vatAmount.toString(),
-    ).toString(),
     treatment: entry.treatment,
   };
 }
@@ -269,6 +265,9 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
         order.freightResaleAmount?.toString() ?? "0",
       )
     : null;
+  const totalSellingAmountIncludingVat = totalRevenue
+    ? amountIncludingVat(totalRevenue, output?.vatAmount.toString() ?? "0")
+    : null;
   const reportingRevenue = totalRevenue
     ? reportingAmount({
         fxRateToReporting: fxRate(
@@ -339,6 +338,8 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
       order.supplierOrderConfirmationReference,
     supplierQuoteReference: order.supplierQuoteReference,
     targetMarginRate: order.targetMarginRate?.toString() ?? null,
+    totalSellingAmountIncludingVat:
+      totalSellingAmountIncludingVat?.toString() ?? null,
     totalSellingRevenue: totalRevenue?.toString() ?? null,
     updatedAt: order.updatedAt.toISOString(),
     costs: {

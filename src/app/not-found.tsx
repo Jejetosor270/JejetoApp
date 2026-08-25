@@ -19,7 +19,7 @@ export default function NotFound() {
         <Button asChild variant="outline" className="mt-6">
           <Link href="/">
             <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-            Return to foundation
+            Return to dashboard
           </Link>
         </Button>
       </section>

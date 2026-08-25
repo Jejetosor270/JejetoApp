@@ -1,3 +1,4 @@
+/** Current MVP business setting for comparable company and portfolio totals. */
 export const COMPANY_REPORTING_CURRENCY_CODE = "EUR";
 
 export const cashFlowHorizons = [

@@ -76,7 +76,7 @@ export function SidebarNavigation() {
             variant="outline"
             className="h-5 px-1.5 font-mono text-[0.625rem]"
           >
-            DEV
+            ERP
           </Badge>
         </div>
       </div>

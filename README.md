@@ -1,17 +1,15 @@
-# Procurement ERP
+# Procurement Finance ERP
 
-An internal procurement and financial management platform designed to track supplier orders, purchase costs, freight, VAT, margins, payment schedules, cash flow, and delivery timelines across multiple projects.
+A web application for managing project procurement packages, financial performance, payment schedules, cash flow, and delivery timelines.
 
 ## Capabilities
 
-- Secure employee authentication with ADMIN, MANAGER, and USER roles
-- ADMIN-managed employee accounts, including activation and password changes
-- Client, supplier, project, and building master-data management
-- Supplier-package procurement orders with Budget, Committed, and Actual cost states
-- Decimal-safe landed-cost, selling-price, gross-margin, and markup calculations
-- A normalized foundation for later procurement packages and payment schedules
-- Exact-decimal financial calculation utilities
-- Responsive internal workspace shell
+- Employee authentication and role-based access
+- Client, supplier, Project, and Building master data
+- Supplier-package Procurement Orders with one authoritative cost structure
+- Decimal-safe landed cost, VAT, FX, margin, and markup calculations
+- Supplier payment and Client receipt schedules with partial settlements
+- Derived procurement calendar, Project reporting, and cash-flow forecasting
 
 ## Technical stack
 
@@ -22,34 +20,29 @@ An internal procurement and financial management platform designed to track supp
 
 ## Local development
 
-1. Install dependencies with `npm ci`.
-2. Copy `.env.example` to `.env` and provide the required environment variables.
-3. Generate the Prisma client with `npm run db:generate`.
-4. Apply migrations with `npm run db:deploy`.
-5. Start the app with `npm run dev`.
+```text
+npm ci
+cp .env.example .env
+npm run db:generate
+npm run db:deploy
+npm run dev
+```
 
 ## Environment variables
 
-| Variable                   | Purpose                                                              |
-| -------------------------- | -------------------------------------------------------------------- |
-| `DATABASE_URL`             | Runtime PostgreSQL connection                                        |
-| `DIRECT_URL`               | Direct PostgreSQL connection for migrations and bootstrap operations |
-| `AUTH_SECRET`              | Auth.js session encryption secret                                    |
-| `BOOTSTRAP_ADMIN_NAME`     | One-time initial administrator setup                                 |
-| `BOOTSTRAP_ADMIN_EMAIL`    | One-time initial administrator setup                                 |
-| `BOOTSTRAP_ADMIN_PASSWORD` | One-time initial administrator setup                                 |
+- `DATABASE_URL`
+- `AUTH_SECRET`
+- `DIRECT_URL` (recommended for migrations when the runtime URL is pooled)
 
-Keep environment values outside source control. The initial administrator can be created from a trusted environment with `npm run users:bootstrap-admin` after migrations are applied.
+Keep environment values outside source control. Optional one-time administrator bootstrap variables are documented in `.env.example`.
 
-## Database commands
+## Database
 
-| Command                         | Purpose                                  |
-| ------------------------------- | ---------------------------------------- |
-| `npm run db:validate`           | Validate the Prisma schema               |
-| `npm run db:migrate`            | Create and apply a development migration |
-| `npm run db:deploy`             | Apply committed migrations               |
-| `npm run db:seed`               | Load fictional development data          |
-| `npm run users:bootstrap-admin` | Create the first administrator           |
+Apply committed migrations separately from application builds:
+
+```text
+npm run db:deploy
+```
 
 ## Quality checks
 
@@ -64,8 +57,4 @@ npm run build
 
 ## Deployment
 
-The application is designed for Vercel with PostgreSQL. Configure the environment variables in the target environment, apply migrations as a separate controlled step, then deploy from the connected Git repository.
-
-## Status
-
-Phase 4 — Procurement orders and the margin engine is complete. The next planned phase adds VAT and multi-currency workflows.
+The application is designed for Vercel with PostgreSQL. Configure environment variables in Vercel, apply committed database migrations as a separate controlled step, and deploy from the connected Git repository.

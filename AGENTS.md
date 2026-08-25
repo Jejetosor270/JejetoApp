@@ -80,6 +80,7 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 - Order purchase currency, order selling currency, and Project reporting currency are independent sources of truth. Changing a master-data default never rewrites an Order.
 - Preserve original contractual amounts. Manual FX uses `1 original-currency unit = X project-reporting-currency units`; each Order preserves one purchase rate and one selling rate.
 - Missing foreign-currency FX keeps reporting values and margin explicitly incomplete. Never subtract values in different currencies or fabricate a conversion.
+- Individual Projects retain their own reporting currency. The current MVP company and portfolio reporting currency is the centralized EUR business setting in `src/config/reporting`; company totals include only values that are safely comparable in EUR and never fabricate a missing conversion.
 - INPUT (purchase) and OUTPUT (sales) VAT are independent, explicitly selected management classifications. VAT rates are fractional Decimal values and are not inferred as legal conclusions from country.
 - Recoverable input VAT is excluded from landed cost and profit. Non-recoverable input VAT is added to economic landed cost. Output VAT is excluded from revenue and profit; margin remains based on comparable reporting-currency HT/economic values.
 
