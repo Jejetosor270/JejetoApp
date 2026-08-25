@@ -3,11 +3,16 @@ import { notFound } from "next/navigation";
 
 import { OrderForm } from "@/components/procurement/order-form";
 import { PaymentSchedule } from "@/components/payments/payment-schedule";
-import { businessToday, formatDateOnly } from "@/domain/payments/dates";
+import {
+  BUSINESS_TIME_ZONE,
+  businessToday,
+  formatDateOnly,
+} from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { getOrder, listOrderOptions } from "@/lib/procurement/orders";
 import { getOrderPaymentSummary } from "@/lib/payments/payments";
+import { listOrderQuoteImports } from "@/lib/quote-intake/history";
 
 export const metadata: Metadata = { title: "Procurement order" };
 export default async function OrderPage({
@@ -22,7 +27,10 @@ export default async function OrderPage({
     getOrder(orderId),
   ]);
   if (!order) notFound();
-  const paymentSummary = await getOrderPaymentSummary(orderId);
+  const [paymentSummary, quoteImports] = await Promise.all([
+    getOrderPaymentSummary(orderId),
+    listOrderQuoteImports(orderId),
+  ]);
   const cost = order.costs;
   return (
     <div className="space-y-6">
@@ -151,7 +159,11 @@ export default async function OrderPage({
       </section>
       <section className="bg-card rounded-lg border p-4">
         <h2 className="text-sm font-semibold">Procurement timing</h2>
-        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
+        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-6">
+          <div>
+            <dt className="text-muted-foreground text-xs">Quote date</dt>
+            <dd className="mt-1">{formatDateOnly(order.quoteDate)}</dd>
+          </div>
           <div>
             <dt className="text-muted-foreground text-xs">Order date</dt>
             <dd className="mt-1">{formatDateOnly(order.orderDate)}</dd>
@@ -180,6 +192,50 @@ export default async function OrderPage({
           </div>
         </dl>
       </section>
+      {quoteImports.length > 0 ? (
+        <section className="bg-card rounded-lg border p-4">
+          <h2 className="text-sm font-semibold">Supplier quote history</h2>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="text-muted-foreground text-xs">
+                <tr className="border-b">
+                  <th className="px-2 py-2 font-medium">Processed</th>
+                  <th className="px-2 py-2 font-medium">Action</th>
+                  <th className="px-2 py-2 font-medium">File</th>
+                  <th className="px-2 py-2 font-medium">Quote</th>
+                  <th className="px-2 py-2 font-medium">Provider</th>
+                  <th className="px-2 py-2 font-medium">Employee</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quoteImports.map((item) => (
+                  <tr className="border-b last:border-0" key={item.id}>
+                    <td className="px-2 py-2">
+                      {new Date(item.processedAt).toLocaleString("en-GB", {
+                        timeZone: BUSINESS_TIME_ZONE,
+                      })}
+                    </td>
+                    <td className="px-2 py-2">
+                      {item.action.replaceAll("_", " ").toLowerCase()}
+                    </td>
+                    <td className="px-2 py-2">{item.originalFilename}</td>
+                    <td className="px-2 py-2">
+                      {item.supplierQuoteReference ?? "—"} ·{" "}
+                      {formatDateOnly(item.quoteDate)}
+                    </td>
+                    <td className="px-2 py-2 text-xs">
+                      {item.extractionProvider} · {item.extractionModel}
+                    </td>
+                    <td className="px-2 py-2">
+                      {item.processedByName ?? "Historical user"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
       <div className="space-y-4" id="payments">
         <PaymentSchedule
           canEdit={canEditMasterData(user.role)}

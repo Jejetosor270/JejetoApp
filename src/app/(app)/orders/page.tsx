@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { OrderForm } from "@/components/procurement/order-form";
 import { OrderTable } from "@/components/procurement/order-table";
@@ -108,14 +109,22 @@ export default async function OrdersPage({
         </button>
       </form>
       {canEditMasterData(user.role) ? (
-        <details className="group">
-          <summary className="bg-primary text-primary-foreground inline-flex h-9 cursor-pointer list-none items-center rounded-lg px-3 text-sm font-medium">
-            Create order
-          </summary>
-          <div className="mt-4">
-            <OrderForm options={options} />
-          </div>
-        </details>
+        <div className="flex flex-wrap items-start gap-2">
+          <details className="group">
+            <summary className="bg-primary text-primary-foreground inline-flex h-9 cursor-pointer list-none items-center rounded-lg px-3 text-sm font-medium">
+              Create order
+            </summary>
+            <div className="mt-4">
+              <OrderForm options={options} />
+            </div>
+          </details>
+          <Link
+            className="border-input bg-background hover:bg-muted inline-flex h-9 items-center rounded-lg border px-3 text-sm font-medium"
+            href="/orders/import"
+          >
+            Import supplier quote
+          </Link>
+        </div>
       ) : null}
       <OrderTable orders={orders} />
     </div>

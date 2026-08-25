@@ -137,6 +137,7 @@ const orderFields = {
   projectId: z.uuid("Choose a valid project."),
   purchaseFxRate: optionalFxRate,
   purchaseCost: optionalMoney("Purchase cost"),
+  quoteDate: optionalDateOnly,
   sellingCurrencyCode: z
     .string()
     .trim()

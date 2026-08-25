@@ -10,6 +10,7 @@ A web application for managing project procurement packages, financial performan
 - Decimal-safe landed cost, VAT, FX, margin, and markup calculations
 - Supplier payment and Client receipt schedules with partial settlements
 - Derived procurement calendar, Project reporting, and cash-flow forecasting
+- Review-first AI-assisted supplier quote intake for PDF and image quotes
 
 ## Technical stack
 
@@ -32,6 +33,7 @@ npm run dev
 
 - `DATABASE_URL`
 - `AUTH_SECRET`
+- `OPENAI_API_KEY` (required for supplier quote extraction; server-side only)
 - `DIRECT_URL` (recommended for migrations when the runtime URL is pooled)
 
 Keep environment values outside source control. Optional one-time administrator bootstrap variables are documented in `.env.example`.

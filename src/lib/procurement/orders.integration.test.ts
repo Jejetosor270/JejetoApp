@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import Decimal from "decimal.js";
 
 import { createOrderInputSchema } from "@/domain/procurement/validation";
@@ -106,6 +106,10 @@ function sellingOrder(
 }
 
 describe("single order cost write", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("writes one normalized order cost and VAT set", async () => {
     database.project.findUnique.mockResolvedValue({
       reportingCurrencyCode: "EUR",
@@ -181,5 +185,31 @@ describe("single order cost write", () => {
 
     expect(summary.totalSellingRevenue).toBe("95000");
     expect(summary.totalSellingAmountIncludingVat).toBe("95000");
+  });
+
+  it("rejects a reviewed Building that is not part of the selected Project", async () => {
+    database.project.findUnique.mockResolvedValue({
+      reportingCurrencyCode: "EUR",
+    });
+    database.supplier.findUnique.mockResolvedValue({ id: "supplier" });
+    database.currency.findFirst.mockResolvedValue({ code: "EUR" });
+    database.building.findMany.mockResolvedValue([]);
+    const input = createOrderInputSchema.parse({
+      buildingIds: ["d12b6b9b-10e9-4e42-b93f-38796de4f65a"],
+      freightTreatment: "NOT_APPLICABLE",
+      orderCurrencyCode: "EUR",
+      orderNumber: "PO-BUILDING-CHECK",
+      packageName: "Building validation",
+      pricingMode: "SELLING_PRICE",
+      projectId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      sellingCurrencyCode: "EUR",
+      status: "DRAFT",
+      supplierId: "b12b6b9b-10e9-4e42-b93f-38796de4f65a",
+    });
+
+    await expect(createOrder("actor-1", input)).rejects.toThrow(
+      "Every selected building",
+    );
+    expect(transaction.procurementOrder.create).not.toHaveBeenCalled();
   });
 });

@@ -47,6 +47,7 @@ export function orderFormValues(formData: FormData) {
     projectId: stringValue(formData, "projectId"),
     purchaseCost: stringValue(formData, "purchaseCost"),
     purchaseFxRate: stringValue(formData, "purchaseFxRate"),
+    quoteDate: stringValue(formData, "quoteDate"),
     sellingCurrencyCode: stringValue(formData, "sellingCurrencyCode"),
     sellingFxRate: stringValue(formData, "sellingFxRate"),
     sellingPriceAmount: stringValue(formData, "sellingPriceAmount"),

@@ -87,6 +87,7 @@ export interface EditableOrder {
   packageSellingPrice: string | null;
   pricingMode: string;
   project: { id: string; name: string };
+  quoteDate: string | null;
   sellingCurrencyCode: string;
   status: string;
   supplier: SupplierOption;
@@ -341,6 +342,14 @@ export function OrderForm({
               className={inputClassName}
               defaultValue={order?.category ?? ""}
               name="category"
+            />
+          </Field>
+          <Field label="Supplier quote date">
+            <input
+              className={inputClassName}
+              defaultValue={order?.quoteDate ?? ""}
+              name="quoteDate"
+              type="date"
             />
           </Field>
           <Field label="Status">

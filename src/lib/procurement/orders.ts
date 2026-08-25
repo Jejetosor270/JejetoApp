@@ -56,6 +56,10 @@ const orderInclude = {
 type OrderRecord = Prisma.ProcurementOrderGetPayload<{
   include: typeof orderInclude;
 }>;
+type OrderRelationClient = Pick<
+  Prisma.TransactionClient,
+  "building" | "currency" | "project" | "supplier"
+>;
 
 export interface VatSummary {
   amount: string;
@@ -109,6 +113,7 @@ export interface OrderSummary {
   packageSellingPrice: string | null;
   pricingMode: PricingMode;
   project: { id: string; name: string; reportingCurrencyCode: string };
+  quoteDate: string | null;
   sellingCurrencyCode: string;
   status: ProcurementOrderStatus;
   supplier: {
@@ -331,6 +336,7 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
     packageSellingPrice: packagePrice?.toString() ?? null,
     pricingMode: order.pricingMode,
     project: order.project,
+    quoteDate: order.quoteDate ? dateToDateOnly(order.quoteDate) : null,
     sellingCurrencyCode: order.sellingCurrencyCode,
     status: order.status,
     supplier: order.supplier,
@@ -454,8 +460,10 @@ function inputEconomicCost(
   }
   return reporting;
 }
-async function assertRelations(input: CreateOrderInput): Promise<string> {
-  const database = getDatabase();
+async function assertRelations(
+  input: CreateOrderInput,
+  database: OrderRelationClient = getDatabase(),
+): Promise<string> {
   const [project, supplier, purchaseCurrency, sellingCurrency, buildings] =
     await Promise.all([
       database.project.findUnique({
@@ -555,6 +563,7 @@ function orderData(input: CreateOrderInput, reportingCurrencyCode: string) {
       input.orderCurrencyCode === reportingCurrencyCode
         ? null
         : (input.purchaseFxRate ?? null),
+    quoteDate: input.quoteDate ? dateOnlyToDate(input.quoteDate) : null,
     sellingCurrencyCode: input.sellingCurrencyCode,
     sellingFxRateToReporting:
       input.sellingCurrencyCode === reportingCurrencyCode
@@ -763,53 +772,53 @@ export async function createOrder(
   input: CreateOrderInput,
 ): Promise<string> {
   const reportingCurrencyCode = await assertRelations(input);
-  return getDatabase().$transaction(async (transaction) => {
-    const order = await transaction.procurementOrder.create({
-      data: {
-        ...orderData(input, reportingCurrencyCode),
-        buildings: {
-          create: input.buildingIds.map((buildingId) => ({
-            buildingId,
-            createdById: actorId,
-          })),
-        },
-        createdById: actorId,
-        updatedById: actorId,
-      },
-      select: { id: true },
-    });
-    await replaceOrderFinancialData(transaction, order.id, actorId, input);
-    return order.id;
-  });
+  return getDatabase().$transaction((transaction) =>
+    createOrderRecord(transaction, actorId, input, reportingCurrencyCode),
+  );
 }
+
+async function createOrderRecord(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  input: CreateOrderInput,
+  reportingCurrencyCode: string,
+): Promise<string> {
+  const order = await transaction.procurementOrder.create({
+    data: {
+      ...orderData(input, reportingCurrencyCode),
+      buildings: {
+        create: input.buildingIds.map((buildingId) => ({
+          buildingId,
+          createdById: actorId,
+        })),
+      },
+      createdById: actorId,
+      updatedById: actorId,
+    },
+    select: { id: true },
+  });
+  await replaceOrderFinancialData(transaction, order.id, actorId, input);
+  return order.id;
+}
+
+export async function createOrderInTransaction(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  input: CreateOrderInput,
+): Promise<string> {
+  const reportingCurrencyCode = await assertRelations(input, transaction);
+  return createOrderRecord(transaction, actorId, input, reportingCurrencyCode);
+}
+
 export async function updateOrder(
   actorId: string,
   input: UpdateOrderInput,
 ): Promise<void> {
   const reportingCurrencyCode = await assertRelations(input);
-  const { id, ...fields } = input;
   try {
-    await getDatabase().$transaction(async (transaction) => {
-      await transaction.procurementOrder.update({
-        where: { id },
-        data: {
-          ...orderData(fields, reportingCurrencyCode),
-          updatedById: actorId,
-        },
-      });
-      await transaction.procurementOrderBuilding.deleteMany({
-        where: { orderId: id },
-      });
-      if (input.buildingIds.length)
-        await transaction.procurementOrderBuilding.createMany({
-          data: input.buildingIds.map((buildingId) => ({
-            buildingId,
-            createdById: actorId,
-            orderId: id,
-          })),
-        });
-      await replaceOrderFinancialData(transaction, id, actorId, fields);
-    });
+    await getDatabase().$transaction((transaction) =>
+      updateOrderRecord(transaction, actorId, input, reportingCurrencyCode),
+    );
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -818,4 +827,63 @@ export async function updateOrder(
       throw new ProcurementNotFoundError();
     throw error;
   }
+}
+
+async function updateOrderRecord(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  input: UpdateOrderInput,
+  reportingCurrencyCode: string,
+): Promise<void> {
+  const { id, ...fields } = input;
+  await transaction.procurementOrder.update({
+    where: { id },
+    data: {
+      ...orderData(fields, reportingCurrencyCode),
+      updatedById: actorId,
+    },
+  });
+  await transaction.procurementOrderBuilding.deleteMany({
+    where: { orderId: id },
+  });
+  if (input.buildingIds.length) {
+    await transaction.procurementOrderBuilding.createMany({
+      data: input.buildingIds.map((buildingId) => ({
+        buildingId,
+        createdById: actorId,
+        orderId: id,
+      })),
+    });
+  }
+  await replaceOrderFinancialData(transaction, id, actorId, fields);
+}
+
+export async function updateOrderInTransaction(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  input: UpdateOrderInput,
+): Promise<void> {
+  const reportingCurrencyCode = await assertRelations(input, transaction);
+  try {
+    await updateOrderRecord(transaction, actorId, input, reportingCurrencyCode);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      throw new ProcurementNotFoundError();
+    }
+    throw error;
+  }
+}
+
+export async function getOrderInTransaction(
+  transaction: Prisma.TransactionClient,
+  orderId: string,
+): Promise<OrderSummary | null> {
+  const order = await transaction.procurementOrder.findUnique({
+    where: { id: orderId },
+    include: orderInclude,
+  });
+  return order ? summarizeOrder(order) : null;
 }

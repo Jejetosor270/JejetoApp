@@ -88,6 +88,11 @@ enum InstallmentBasis {
   FIXED_AMOUNT
 }
 
+enum SupplierQuoteImportAction {
+  CREATED_ORDER
+  UPDATED_ORDER
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   name         String   @db.VarChar(160)
@@ -130,6 +135,7 @@ model User {
   updatedPaymentInstallments PaymentInstallment[]       @relation("PaymentInstallmentUpdatedBy")
   createdPaymentSettlements  PaymentSettlement[]        @relation("PaymentSettlementCreatedBy")
   updatedPaymentSettlements  PaymentSettlement[]        @relation("PaymentSettlementUpdatedBy")
+  processedSupplierQuotes    SupplierQuoteImport[]       @relation("SupplierQuoteImportProcessedBy")
 
   @@index([isActive])
   @@map("users")
@@ -214,6 +220,7 @@ model Supplier {
   createdBy       User?              @relation("SupplierCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy       User?              @relation("SupplierUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   orders          ProcurementOrder[]
+  quoteImports    SupplierQuoteImport[]
 
   @@index([displayName])
   @@index([isActive])
@@ -244,6 +251,7 @@ model Project {
   updatedBy         User?              @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   buildings         Building[]
   orders            ProcurementOrder[]
+  quoteImports      SupplierQuoteImport[]
 
   @@index([clientId])
   @@index([projectManagerId])
@@ -320,6 +328,7 @@ model ProcurementOrder {
   costLines           ProcurementOrderCostLine[]
   vatEntries          ProcurementOrderVatEntry[]
   paymentInstallments PaymentInstallment[]
+  quoteImports        SupplierQuoteImport[]
 
   @@index([projectId])
   @@index([supplierId])
@@ -437,4 +446,31 @@ model PaymentSettlement {
 
   @@index([installmentId, settledAt])
   @@map("payment_settlements")
+}
+
+model SupplierQuoteImport {
+  id                     String                    @id @default(uuid()) @db.Uuid
+  orderId                String                    @db.Uuid
+  projectId              String                    @db.Uuid
+  supplierId             String                    @db.Uuid
+  originalFilename       String                    @db.VarChar(255)
+  supplierQuoteReference String?                   @db.VarChar(120)
+  quoteDate              DateTime?                 @db.Date
+  leadTimeRaw            String?                   @db.VarChar(500)
+  paymentTermsRaw        String?                   @db.Text
+  extractionProvider     String                    @db.VarChar(50)
+  extractionModel        String                    @db.VarChar(120)
+  action                 SupplierQuoteImportAction
+  processedAt            DateTime                  @default(now())
+  processedById          String?                   @db.Uuid
+
+  order       ProcurementOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  supplier    Supplier         @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  processedBy User?            @relation("SupplierQuoteImportProcessedBy", fields: [processedById], references: [id], onDelete: SetNull)
+
+  @@index([orderId, processedAt])
+  @@index([projectId])
+  @@index([supplierId])
+  @@map("supplier_quote_imports")
 }

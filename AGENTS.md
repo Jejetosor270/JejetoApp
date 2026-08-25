@@ -84,6 +84,18 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 - INPUT (purchase) and OUTPUT (sales) VAT are independent, explicitly selected management classifications. VAT rates are fractional Decimal values and are not inferred as legal conclusions from country.
 - Recoverable input VAT is excluded from landed cost and profit. Non-recoverable input VAT is added to economic landed cost. Output VAT is excluded from revenue and profit; margin remains based on comparable reporting-currency HT/economic values.
 
+## Phase 8 supplier quote intake
+
+- Supplier quote uploads are temporary processing inputs only. Never persist source binaries, base64 data, page images, or extracted product lines, and never depend on persistent runtime storage.
+- The employee-selected Project is authoritative. AI must not infer or change it, and any reviewed Buildings must belong to that Project.
+- AI output is untrusted evidence. Validate it through the strict structured extraction schema and require an ADMIN or MANAGER review/confirmation before creating or updating an Order.
+- Supplier suggestions match active existing Suppliers in priority order: normalized VAT number, normalized legal name, then normalized display name. Never create a Supplier automatically.
+- Keep provider access behind the small `QuoteExtractionProvider` abstraction and keep provider credentials server-only. One upload normally makes one extraction request; manual review edits do not call AI again.
+- Preserve one authoritative Order cost structure. Quote imports may update only explicitly reviewed fields and must never replace existing values with missing or ambiguous extraction output.
+- VAT treatment, VAT recoverability, manual FX, and deterministic Decimal calculations remain application-authoritative. Do not ask AI to decide them.
+- Extracted payment terms are proposals only. Persist Supplier Payment installments only after explicit employee approval, using the existing Phase 6 model and calculations.
+- Multiple quote imports may be recorded as lightweight structured history, but import history is not a second financial source of truth and must not become a document-management subsystem.
+
 ## Database conventions
 
 - UUID primary keys; UTC timestamps; `@db.Date` for business dates without time-of-day meaning.
