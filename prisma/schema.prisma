@@ -136,6 +136,9 @@ model User {
   createdPaymentSettlements  PaymentSettlement[]        @relation("PaymentSettlementCreatedBy")
   updatedPaymentSettlements  PaymentSettlement[]        @relation("PaymentSettlementUpdatedBy")
   processedSupplierQuotes    SupplierQuoteImport[]       @relation("SupplierQuoteImportProcessedBy")
+  auditEvents                AuditEvent[]                 @relation("AuditEventActor")
+  createdApplicationSettings ApplicationSetting[]        @relation("ApplicationSettingCreatedBy")
+  updatedApplicationSettings ApplicationSetting[]        @relation("ApplicationSettingUpdatedBy")
 
   @@index([isActive])
   @@map("users")
@@ -156,6 +159,7 @@ model Currency {
   sellingOrders ProcurementOrder[] @relation("OrderSellingCurrency")
 
   paymentInstallments PaymentInstallment[]
+  applicationSettings ApplicationSetting[]
 
   @@index([isActive])
   @@map("currencies")
@@ -189,6 +193,9 @@ model Client {
 
   @@index([displayName])
   @@index([isActive])
+  @@index([isActive, displayName])
+  @@index([countryCode])
+  @@index([defaultCurrencyCode])
   @@map("clients")
 }
 
@@ -224,6 +231,9 @@ model Supplier {
 
   @@index([displayName])
   @@index([isActive])
+  @@index([isActive, displayName])
+  @@index([countryCode])
+  @@index([defaultCurrencyCode])
   @@map("suppliers")
 }
 
@@ -256,6 +266,8 @@ model Project {
   @@index([clientId])
   @@index([projectManagerId])
   @@index([status])
+  @@index([status, name])
+  @@index([clientId, status])
   @@map("projects")
 }
 
@@ -333,6 +345,10 @@ model ProcurementOrder {
   @@index([projectId])
   @@index([supplierId])
   @@index([status])
+  @@index([projectId, status])
+  @@index([supplierId, status])
+  @@index([orderCurrencyCode])
+  @@index([updatedAt])
   @@index([expectedDeliveryDate], map: "procurement_orders_estimatedDeliveryAt_idx")
   @@map("procurement_orders")
 }
@@ -424,6 +440,8 @@ model PaymentInstallment {
   @@unique([orderId, direction, sequence])
   @@index([orderId, direction])
   @@index([direction, dueDate])
+  @@index([currencyCode, dueDate])
+  @@index([orderId, dueDate])
   @@map("payment_installments")
 }
 
@@ -473,4 +491,42 @@ model SupplierQuoteImport {
   @@index([projectId])
   @@index([supplierId])
   @@map("supplier_quote_imports")
+}
+
+model AuditEvent {
+  id              String   @id @default(uuid()) @db.Uuid
+  occurredAt      DateTime @default(now())
+  actorId         String?  @db.Uuid
+  actorName       String   @db.VarChar(160)
+  actorEmail      String   @db.VarChar(320)
+  action          String   @db.VarChar(40)
+  entityType      String   @db.VarChar(40)
+  entityId        String?  @db.VarChar(80)
+  entityReference String   @db.VarChar(200)
+  summary         String   @db.VarChar(500)
+  metadata        Json?
+
+  actor User? @relation("AuditEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([occurredAt])
+  @@index([actorId, occurredAt])
+  @@index([action, occurredAt])
+  @@index([entityType, occurredAt])
+  @@map("audit_events")
+}
+
+model ApplicationSetting {
+  id                           String   @id @default("company") @db.VarChar(40)
+  companyName                  String   @db.VarChar(160)
+  companyReportingCurrencyCode String   @default("EUR") @db.Char(3)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+  createdById                  String?  @db.Uuid
+  updatedById                  String?  @db.Uuid
+
+  companyReportingCurrency Currency @relation(fields: [companyReportingCurrencyCode], references: [code], onDelete: Restrict)
+  createdBy                User?    @relation("ApplicationSettingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy                User?    @relation("ApplicationSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("application_settings")
 }

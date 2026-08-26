@@ -6,6 +6,8 @@ import type {
   UpdateClientInput,
 } from "@/domain/master-data/validation";
 import { getDatabase } from "@/lib/db";
+import { writeAuditEvent } from "@/lib/audit/events";
+import { paginationSkip, type PageInput } from "@/domain/listing/validation";
 
 import {
   InvalidMasterDataRelationError,
@@ -18,6 +20,7 @@ const clientSelect = {
   billingAddressLine2: true,
   billingCity: true,
   billingPostalCode: true,
+  createdAt: true,
   contactName: true,
   countryCode: true,
   defaultCurrencyCode: true,
@@ -29,6 +32,7 @@ const clientSelect = {
   notes: true,
   phone: true,
   vatNumber: true,
+  updatedAt: true,
 } satisfies Prisma.ClientSelect;
 
 export type ManagedClient = Prisma.ClientGetPayload<{
@@ -65,32 +69,62 @@ async function assertActiveCurrency(currencyCode: string): Promise<void> {
   }
 }
 
-export async function listClients(
-  query: string,
-  active: "active" | "inactive" | "all",
-) {
-  const normalizedQuery = query.trim();
-  return getDatabase().client.findMany({
-    where: {
-      ...(active === "all" ? {} : { isActive: active === "active" }),
-      ...(normalizedQuery
-        ? {
-            OR: [
-              {
-                displayName: { contains: normalizedQuery, mode: "insensitive" },
-              },
-              { legalName: { contains: normalizedQuery, mode: "insensitive" } },
-              {
-                contactName: { contains: normalizedQuery, mode: "insensitive" },
-              },
-              { vatNumber: { contains: normalizedQuery, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ isActive: "desc" }, { displayName: "asc" }],
-    select: clientSelect,
-  });
+export interface ClientListFilters extends PageInput {
+  active: "active" | "inactive" | "all";
+  countryCode?: string | undefined;
+  currencyCode?: string | undefined;
+  direction: "asc" | "desc";
+  query: string;
+  sort: "created" | "name" | "updated";
+}
+
+function clientWhere(filters: ClientListFilters): Prisma.ClientWhereInput {
+  const normalizedQuery = filters.query.trim();
+  return {
+    ...(filters.active === "all"
+      ? {}
+      : { isActive: filters.active === "active" }),
+    ...(filters.countryCode ? { countryCode: filters.countryCode } : {}),
+    ...(filters.currencyCode
+      ? { defaultCurrencyCode: filters.currencyCode }
+      : {}),
+    ...(normalizedQuery
+      ? {
+          OR: [
+            {
+              displayName: { contains: normalizedQuery, mode: "insensitive" },
+            },
+            { legalName: { contains: normalizedQuery, mode: "insensitive" } },
+            {
+              contactName: { contains: normalizedQuery, mode: "insensitive" },
+            },
+            { vatNumber: { contains: normalizedQuery, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+}
+
+export async function listClients(filters: ClientListFilters) {
+  const where = clientWhere(filters);
+  const orderBy: Prisma.ClientOrderByWithRelationInput[] =
+    filters.sort === "created"
+      ? [{ createdAt: filters.direction }, { id: "asc" }]
+      : filters.sort === "updated"
+        ? [{ updatedAt: filters.direction }, { id: "asc" }]
+        : [{ displayName: filters.direction }, { id: "asc" }];
+  const database = getDatabase();
+  const [items, total] = await Promise.all([
+    database.client.findMany({
+      orderBy,
+      select: clientSelect,
+      skip: paginationSkip(filters),
+      take: filters.pageSize,
+      where,
+    }),
+    database.client.count({ where }),
+  ]);
+  return { items, total };
 }
 
 export async function createClient(
@@ -98,9 +132,23 @@ export async function createClient(
   input: CreateClientInput,
 ): Promise<ManagedClient> {
   await assertActiveCurrency(input.defaultCurrencyCode);
-  return getDatabase().client.create({
-    data: { ...clientData(input), createdById: actorId, updatedById: actorId },
-    select: clientSelect,
+  return getDatabase().$transaction(async (transaction) => {
+    const client = await transaction.client.create({
+      data: {
+        ...clientData(input),
+        createdById: actorId,
+        updatedById: actorId,
+      },
+      select: clientSelect,
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "CREATED",
+      entityId: client.id,
+      entityReference: client.displayName,
+      entityType: "CLIENT",
+      summary: "Created the Client.",
+    });
+    return client;
   });
 }
 
@@ -111,10 +159,21 @@ export async function updateClient(
   const { id, isActive, ...fields } = input;
   await assertActiveCurrency(fields.defaultCurrencyCode);
   try {
-    return await getDatabase().client.update({
-      where: { id },
-      data: { ...clientData(fields), isActive, updatedById: actorId },
-      select: clientSelect,
+    return await getDatabase().$transaction(async (transaction) => {
+      const client = await transaction.client.update({
+        where: { id },
+        data: { ...clientData(fields), isActive, updatedById: actorId },
+        select: clientSelect,
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: client.id,
+        entityReference: client.displayName,
+        entityType: "CLIENT",
+        metadata: { active: client.isActive },
+        summary: "Updated the Client.",
+      });
+      return client;
     });
   } catch (error) {
     if (

@@ -28,6 +28,7 @@ const orderMocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
+vi.mock("@/lib/audit/events", () => ({ writeAuditEvent: vi.fn() }));
 vi.mock("@/lib/procurement/orders", async (importOriginal) => {
   const original =
     await importOriginal<typeof import("@/lib/procurement/orders")>();

@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const transaction = vi.hoisted(() => ({
   paymentInstallment: {
     create: vi.fn(),
+    deleteMany: vi.fn(),
     findFirst: vi.fn(),
     findUnique: vi.fn(),
+    update: vi.fn(),
   },
   paymentSettlement: { create: vi.fn() },
 }));
@@ -25,6 +27,7 @@ const getOrder = vi.hoisted(() => vi.fn());
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
 vi.mock("@/lib/procurement/orders", () => ({ getOrder }));
+vi.mock("@/lib/audit/events", () => ({ writeAuditEvent: vi.fn() }));
 
 import {
   cancelInstallment,
@@ -54,6 +57,16 @@ describe("payment persistence", () => {
     getOrder.mockResolvedValue(order);
     database.currency.findFirst.mockResolvedValue({ code: "USD" });
     transaction.paymentInstallment.findFirst.mockResolvedValue(null);
+    transaction.paymentInstallment.create.mockResolvedValue({
+      id: "installment-1",
+    });
+    transaction.paymentInstallment.update.mockResolvedValue({
+      id: "installment-1",
+      label: "Deposit",
+    });
+    transaction.paymentSettlement.create.mockResolvedValue({
+      id: "settlement-1",
+    });
   });
 
   it("derives and preserves a percentage installment amount server-side", async () => {
@@ -94,7 +107,7 @@ describe("payment persistence", () => {
       label: "Moved deposit",
       orderId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
     });
-    expect(database.paymentInstallment.update).toHaveBeenCalledWith({
+    expect(transaction.paymentInstallment.update).toHaveBeenCalledWith({
       data: expect.objectContaining({
         dueDate: new Date("2026-09-20T00:00:00.000Z"),
         updatedById: "actor-1",
@@ -105,14 +118,22 @@ describe("payment persistence", () => {
 
   it("cancels installments and hard-deletes only those without settlements", async () => {
     await cancelInstallment("actor-1", "a12b6b9b-10e9-4e42-b93f-38796de4f65a");
-    expect(database.paymentInstallment.update).toHaveBeenCalledWith({
+    expect(transaction.paymentInstallment.update).toHaveBeenCalledWith({
       data: { isCancelled: true, updatedById: "actor-1" },
+      select: { id: true, label: true },
       where: { id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a" },
     });
 
-    database.paymentInstallment.deleteMany.mockResolvedValue({ count: 1 });
-    await removeUnpaidInstallment("a12b6b9b-10e9-4e42-b93f-38796de4f65a");
-    expect(database.paymentInstallment.deleteMany).toHaveBeenCalledWith({
+    transaction.paymentInstallment.findUnique.mockResolvedValue({
+      id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      label: "Deposit",
+    });
+    transaction.paymentInstallment.deleteMany.mockResolvedValue({ count: 1 });
+    await removeUnpaidInstallment(
+      "actor-1",
+      "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+    );
+    expect(transaction.paymentInstallment.deleteMany).toHaveBeenCalledWith({
       where: {
         id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
         settlements: { none: {} },

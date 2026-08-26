@@ -65,7 +65,7 @@ export async function updateClientAction(
 export async function deleteSelectedClientsAction(
   formData: FormData,
 ): Promise<BulkActionState> {
-  await requireMasterDataEditor();
+  const actor = await requireMasterDataEditor();
   const input = selectedIdsSchema.safeParse(selectedIds(formData));
   if (!input.success) {
     return {
@@ -74,7 +74,7 @@ export async function deleteSelectedClientsAction(
     };
   }
   try {
-    await deleteClients(input.data);
+    await deleteClients(actor.id, input.data);
   } catch (error) {
     if (error instanceof BulkDeletionError) {
       return { message: error.message, status: "error" };

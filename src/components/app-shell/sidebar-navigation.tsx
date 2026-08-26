@@ -7,20 +7,26 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { navigationGroups } from "@/config/navigation";
+import { navigationForRole } from "@/config/navigation";
 
-export function SidebarNavigation() {
+export function SidebarNavigation({
+  companyName,
+  role,
+}: {
+  companyName: string;
+  role: "ADMIN" | "MANAGER" | "USER";
+}) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center px-4">
-        <AppBrand />
+        <AppBrand companyName={companyName} />
       </div>
 
       <nav
         aria-label="Primary navigation"
         className="flex-1 space-y-5 px-3 py-3"
       >
-        {navigationGroups.map((group) => (
+        {navigationForRole(role).map((group) => (
           <div key={group.label}>
             <p className="text-muted-foreground mb-1.5 px-2 text-[0.6875rem] font-medium tracking-[0.08em] uppercase">
               {group.label}

@@ -173,10 +173,12 @@ export function SelectionHeader({
 
 export function SelectionCell({
   checked,
+  disabled = false,
   label,
   onChange,
 }: {
   checked: boolean;
+  disabled?: boolean;
   label: string;
   onChange: () => void;
 }) {
@@ -186,6 +188,7 @@ export function SelectionCell({
         aria-label={`Select ${label}`}
         checked={checked}
         className="accent-primary size-4"
+        disabled={disabled}
         onChange={onChange}
         type="checkbox"
       />

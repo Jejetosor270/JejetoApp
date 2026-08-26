@@ -11,6 +11,9 @@ A web application for managing project procurement packages, financial performan
 - Supplier payment and Client receipt schedules with partial settlements
 - Derived procurement calendar, Project reporting, and cash-flow forecasting
 - Review-first AI-assisted supplier quote intake for PDF and image quotes
+- URL-based operational filtering, sorting, server pagination, and global search
+- Secure filtered CSV exports and ADMIN/MANAGER activity history
+- Safe company settings and protected employee-account administration
 
 ## Technical stack
 

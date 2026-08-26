@@ -1,12 +1,22 @@
 import type { Metadata } from "next";
 
 import { PaymentInstallmentTable } from "@/components/payments/payment-installment-table";
+import { PageSizeField, Pagination } from "@/components/listing/pagination";
+import { ExportLink } from "@/components/export/export-link";
 import { PaymentDirection } from "@/generated/prisma/client";
 import type { DerivedPaymentStatus } from "@/domain/payments/calculations";
 import { isDateOnly } from "@/domain/payments/dates";
+import {
+  firstQueryValue,
+  optionalUuid,
+  parsePageInput,
+  parseSort,
+  parseSortDirection,
+  queryStringFromParams,
+} from "@/domain/listing/validation";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import {
-  listPaymentInstallments,
+  listPaymentInstallmentsPage,
   listPaymentOptions,
 } from "@/lib/payments/payments";
 
@@ -34,36 +44,54 @@ export default async function PaymentsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const text = (name: string) =>
-    typeof params[name] === "string" ? params[name] : undefined;
+  const text = (name: string) => firstQueryValue(params, name);
   const dueFrom = text("dueFrom");
   const dueTo = text("dueTo");
-  const [user, options, installments] = await Promise.all([
+  const pageInput = parsePageInput(params);
+  const sort = parseSort(
+    ["dueDate", "amount"] as const,
+    text("sort"),
+    "dueDate",
+  );
+  const sortDirection = parseSortDirection(text("sortDirection"));
+  const [user, options, result] = await Promise.all([
     requireUser(),
     listPaymentOptions(),
-    listPaymentInstallments({
-      clientId: text("clientId"),
+    listPaymentInstallmentsPage({
+      clientId: optionalUuid(text("clientId")),
       currencyCode: text("currencyCode"),
       direction: selected(Object.values(PaymentDirection), text("direction")),
       dueFrom: dueFrom && isDateOnly(dueFrom) ? dueFrom : undefined,
       dueTo: dueTo && isDateOnly(dueTo) ? dueTo : undefined,
-      projectId: text("projectId"),
+      orderId: optionalUuid(text("orderId")),
+      projectId: optionalUuid(text("projectId")),
+      sort,
+      sortDirection,
       status: selected(statuses, text("status")),
-      supplierId: text("supplierId"),
+      supplierId: optionalUuid(text("supplierId")),
+      ...pageInput,
     }),
   ]);
   return (
     <div className="space-y-6">
-      <header>
-        <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-          Operations
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Payments</h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Supplier cash out and client cash in, ordered by due date.
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
+            Operations
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+            Payments
+          </h1>
+          <p className="text-muted-foreground mt-2 text-sm">
+            Supplier cash out and client cash in, ordered by due date.
+          </p>
+        </div>
+        <ExportLink
+          entity="payments"
+          queryString={queryStringFromParams(params)}
+        />
       </header>
-      <form className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <form className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         <select
           className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
           defaultValue={text("direction") ?? ""}
@@ -72,6 +100,18 @@ export default async function PaymentsPage({
           <option value="">Both directions</option>
           <option value="SUPPLIER_PAYMENT">Supplier payments — cash out</option>
           <option value="CLIENT_RECEIPT">Client receipts — cash in</option>
+        </select>
+        <select
+          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
+          defaultValue={text("orderId") ?? ""}
+          name="orderId"
+        >
+          <option value="">All Orders</option>
+          {options.orders.map((order) => (
+            <option key={order.id} value={order.id}>
+              {order.orderNumber}
+            </option>
+          ))}
         </select>
         <select
           className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
@@ -85,6 +125,23 @@ export default async function PaymentsPage({
             </option>
           ))}
         </select>
+        <select
+          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
+          defaultValue={sort}
+          name="sort"
+        >
+          <option value="dueDate">Due date</option>
+          <option value="amount">Scheduled amount</option>
+        </select>
+        <select
+          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
+          defaultValue={sortDirection}
+          name="sortDirection"
+        >
+          <option value="asc">Ascending</option>
+          <option value="desc">Descending</option>
+        </select>
+        <PageSizeField value={pageInput.pageSize} />
         <select
           className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
           defaultValue={text("projectId") ?? ""}
@@ -158,7 +215,7 @@ export default async function PaymentsPage({
       </form>
       <PaymentInstallmentTable
         canEdit={canEditMasterData(user.role)}
-        installments={installments.map((item) => ({
+        installments={result.items.map((item) => ({
           clientName: item.clientName,
           currencyCode: item.currencyCode,
           direction: item.direction,
@@ -175,6 +232,13 @@ export default async function PaymentsPage({
           status: item.status,
           supplierName: item.supplierName,
         }))}
+      />
+      <Pagination
+        page={pageInput.page}
+        pageSize={pageInput.pageSize}
+        pathname="/payments"
+        queryString={queryStringFromParams(params)}
+        total={result.total}
       />
     </div>
   );

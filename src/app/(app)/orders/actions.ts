@@ -97,7 +97,7 @@ export async function updateOrderAction(
 export async function deleteSelectedOrdersAction(
   formData: FormData,
 ): Promise<BulkActionState> {
-  await requireMasterDataEditor();
+  const actor = await requireMasterDataEditor();
   const input = selectedIdsSchema.safeParse(selectedIds(formData));
   if (!input.success) {
     return {
@@ -106,7 +106,7 @@ export async function deleteSelectedOrdersAction(
     };
   }
   try {
-    await deleteOrders(input.data);
+    await deleteOrders(actor.id, input.data);
     revalidatePath("/orders");
     revalidatePath("/calendar");
     revalidatePath("/projects");

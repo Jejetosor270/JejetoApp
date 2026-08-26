@@ -18,6 +18,7 @@ import {
 
 import {
   createEmployeeAction,
+  deleteSelectedEmployeesAction,
   resetEmployeePasswordAction,
   updateEmployeeAction,
 } from "@/app/(app)/admin/users/actions";
@@ -25,6 +26,12 @@ import {
   initialUserActionState,
   type UpdatedEmployeeActionData,
 } from "@/app/(app)/admin/users/action-state";
+import {
+  BulkActionBar,
+  SelectionCell,
+  SelectionHeader,
+  useBulkSelection,
+} from "@/components/bulk-actions/bulk-selection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { minimumPasswordLength } from "@/domain/users/password-policy";
@@ -361,11 +368,35 @@ function PasswordResetForm({ employeeId }: { employeeId: string }) {
   );
 }
 
-export function UserManagement({ employees }: { employees: EmployeeView[] }) {
+export function UserManagement({
+  currentAdministratorId,
+  employees,
+}: {
+  currentAdministratorId: string;
+  employees: EmployeeView[];
+}) {
   const [displayedEmployees, setDisplayedEmployees] = useState(employees);
   const [editingEmployee, setEditingEmployee] = useState<EmployeeView | null>(
     null,
   );
+  const selection = useBulkSelection(
+    displayedEmployees
+      .filter((employee) => employee.id !== currentAdministratorId)
+      .map((employee) => employee.id),
+  );
+  const selectedEmployees = displayedEmployees.filter((employee) =>
+    selection.selectedIds.includes(employee.id),
+  );
+  const clearDeletedEmployees = () => {
+    const deletedIds = new Set(selection.selectedIds);
+    setDisplayedEmployees((current) =>
+      current.filter((employee) => !deletedIds.has(employee.id)),
+    );
+    setEditingEmployee((current) =>
+      current && deletedIds.has(current.id) ? null : current,
+    );
+    selection.clear();
+  };
 
   const handleEmployeeUpdated = useCallback(
     (updatedEmployee: UpdatedEmployeeActionData) => {
@@ -430,10 +461,23 @@ export function UserManagement({ employees }: { employees: EmployeeView[] }) {
             cannot sign in.
           </p>
         </div>
+        <BulkActionBar
+          action={deleteSelectedEmployeesAction}
+          clearSelection={clearDeletedEmployees}
+          entityName="employee"
+          impactSummary={`Selected: ${selectedEmployees.map((employee) => employee.name).join(", ")}`}
+          scope="The selected employees will immediately lose application access. Historical operational and audit records will be preserved."
+          selectedIds={selection.selectedIds}
+        />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[43rem] text-left text-sm">
             <thead className="bg-muted/40 text-muted-foreground border-b text-xs font-medium">
               <tr>
+                <SelectionHeader
+                  checked={selection.allSelected}
+                  disabled={displayedEmployees.length === 0}
+                  onChange={selection.toggleAll}
+                />
                 <th className="px-4 py-3 font-medium sm:px-5">Name</th>
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Role</th>
@@ -445,6 +489,12 @@ export function UserManagement({ employees }: { employees: EmployeeView[] }) {
             <tbody className="divide-y">
               {displayedEmployees.map((employee) => (
                 <tr key={employee.id} className="hover:bg-muted/25">
+                  <SelectionCell
+                    checked={selection.isSelected(employee.id)}
+                    disabled={employee.id === currentAdministratorId}
+                    label={`employee ${employee.name}${employee.id === currentAdministratorId ? " (current account)" : ""}`}
+                    onChange={() => selection.toggle(employee.id)}
+                  />
                   <td className="px-4 py-3 font-medium sm:px-5">
                     {employee.name}
                   </td>

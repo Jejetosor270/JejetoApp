@@ -27,6 +27,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({
   getDatabase: () => databaseMocks.database,
 }));
+vi.mock("@/lib/audit/events", () => ({ writeAuditEvent: vi.fn() }));
 
 import {
   resetEmployeePassword,

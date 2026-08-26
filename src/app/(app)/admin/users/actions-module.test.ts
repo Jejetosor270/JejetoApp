@@ -21,13 +21,16 @@ describe("employee server action module", () => {
     const exports = actionModule.match(/^export\s+.*$/gm) ?? [];
 
     expect(actionModule).toContain(`"${serverDirective}"`);
-    expect(exports).toHaveLength(3);
+    expect(exports).toHaveLength(4);
     expect(exports).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/^export async function createEmployeeAction/),
         expect.stringMatching(/^export async function updateEmployeeAction/),
         expect.stringMatching(
           /^export async function resetEmployeePasswordAction/,
+        ),
+        expect.stringMatching(
+          /^export async function deleteSelectedEmployeesAction/,
         ),
       ]),
     );

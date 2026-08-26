@@ -11,42 +11,59 @@ export function CompanyFinancialSummary({
 }) {
   const currency = report.companyCurrencyCode;
   const kpis = [
-    ["Active Projects", report.activeProjectCount.toString(), false],
+    [
+      "Active Projects",
+      report.activeProjectCount.toString(),
+      false,
+      "/projects?status=ACTIVE",
+    ],
     [
       "Sales HT",
       formatMoney(report.financial.totals.salesRevenue.value, currency),
       !report.financial.totals.salesRevenue.complete,
+      "/orders",
     ],
     [
       "Economic landed cost",
       formatMoney(report.financial.totals.economicLandedCost.value, currency),
       !report.financial.totals.economicLandedCost.complete,
+      "/orders",
     ],
     [
       "Gross profit",
       formatMoney(report.financial.grossProfit, currency),
       !report.financial.complete,
+      "/orders",
     ],
-    ["Gross margin", formatRate(report.financial.grossMarginRate), false],
+    [
+      "Gross margin",
+      formatRate(report.financial.grossMarginRate),
+      false,
+      "/orders",
+    ],
     [
       "Supplier outstanding",
       formatMoney(report.payments.supplier.totalRemaining, currency),
       report.payments.supplier.totalRemaining === null,
+      "/payments?direction=SUPPLIER_PAYMENT",
     ],
     [
       "Client outstanding",
       formatMoney(report.payments.client.totalRemaining, currency),
       report.payments.client.totalRemaining === null,
+      "/payments?direction=CLIENT_RECEIPT",
     ],
     [
       "Supplier overdue",
       formatMoney(report.payments.supplier.overdue.value, currency),
       !report.payments.supplier.overdue.complete,
+      "/payments?direction=SUPPLIER_PAYMENT&status=OVERDUE",
     ],
     [
       "Client overdue",
       formatMoney(report.payments.client.overdue.value, currency),
       !report.payments.client.overdue.complete,
+      "/payments?direction=CLIENT_RECEIPT&status=OVERDUE",
     ],
   ] as const;
 
@@ -64,11 +81,17 @@ export function CompanyFinancialSummary({
         </Badge>
       </div>
       <dl className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9">
-        {kpis.map(([label, value, incomplete]) => (
+        {kpis.map(([label, value, incomplete, href]) => (
           <div className="bg-muted/25 rounded-md border p-3" key={label}>
-            <dt className="text-muted-foreground text-xs">{label}</dt>
+            <dt className="text-muted-foreground text-xs">
+              <Link className="hover:underline" href={href}>
+                {label}
+              </Link>
+            </dt>
             <dd className="financial-figure mt-1 text-sm font-semibold">
-              {value}
+              <Link className="hover:underline" href={href}>
+                {value}
+              </Link>
             </dd>
             {incomplete ? (
               <span className="text-destructive mt-0.5 block text-[0.6875rem]">

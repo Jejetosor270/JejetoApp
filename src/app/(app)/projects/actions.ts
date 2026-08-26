@@ -44,7 +44,7 @@ export async function createProjectAction(
 export async function deleteSelectedProjectsAction(
   formData: FormData,
 ): Promise<BulkActionState> {
-  await requireMasterDataEditor();
+  const actor = await requireMasterDataEditor();
   const input = selectedIdsSchema.safeParse(selectedIds(formData));
   if (!input.success) {
     return {
@@ -53,7 +53,7 @@ export async function deleteSelectedProjectsAction(
     };
   }
   try {
-    await deleteProjects(input.data);
+    await deleteProjects(actor.id, input.data);
   } catch (error) {
     if (error instanceof BulkDeletionError) {
       return { message: error.message, status: "error" };

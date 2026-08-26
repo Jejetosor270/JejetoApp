@@ -29,18 +29,24 @@ import {
   QuoteProcessingError,
 } from "@/lib/quote-intake/process";
 import { findQuoteSupplierDuplicates } from "@/lib/quote-intake/supplier-creation";
+import {
+  QuoteExtractionBusyError,
+  withQuoteExtractionGuard,
+} from "@/lib/quote-intake/operational-guard";
 
 export async function processSupplierQuoteAction(
   _: QuoteProcessingActionState,
   formData: FormData,
 ): Promise<QuoteProcessingActionState> {
-  await requireMasterDataEditor();
+  const actor = await requireMasterDataEditor();
   const projectId = formData.get("projectId");
   try {
-    const review = await processSupplierQuote(
-      typeof projectId === "string" ? projectId : "",
-      formData.get("quoteFile"),
-      getQuoteExtractionProvider(),
+    const review = await withQuoteExtractionGuard(actor.id, () =>
+      processSupplierQuote(
+        typeof projectId === "string" ? projectId : "",
+        formData.get("quoteFile"),
+        getQuoteExtractionProvider(),
+      ),
     );
     return {
       message:
@@ -52,7 +58,8 @@ export async function processSupplierQuoteAction(
     if (
       error instanceof QuoteFileValidationError ||
       error instanceof QuoteProcessingError ||
-      error instanceof QuoteExtractionProviderError
+      error instanceof QuoteExtractionProviderError ||
+      error instanceof QuoteExtractionBusyError
     ) {
       return { message: error.message, status: "error" };
     }

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/app-shell/app-shell";
 import { requireUser } from "@/lib/auth/current-user";
+import { getApplicationSettings } from "@/lib/settings/application-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,14 @@ async function ProtectedApplicationLayout({
 }: {
   children: ReactNode;
 }) {
-  const user = await requireUser();
+  const [user, settings] = await Promise.all([
+    requireUser(),
+    getApplicationSettings(),
+  ]);
 
-  return <AppShell user={user}>{children}</AppShell>;
+  return (
+    <AppShell companyName={settings.companyName} user={user}>
+      {children}
+    </AppShell>
+  );
 }

@@ -27,6 +27,7 @@ const database = vi.hoisted(() => ({
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
+vi.mock("@/lib/audit/events", () => ({ writeAuditEvent: vi.fn() }));
 import { createOrder, summarizeOrder } from "@/lib/procurement/orders";
 
 const timestamp = new Date("2026-08-25T12:00:00.000Z");

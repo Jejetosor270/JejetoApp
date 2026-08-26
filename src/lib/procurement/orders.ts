@@ -32,6 +32,8 @@ import {
   dateToDateOnly,
 } from "@/domain/payments/dates";
 import { getDatabase } from "@/lib/db";
+import { writeAuditEvent } from "@/lib/audit/events";
+import { paginationSkip, type PageInput } from "@/domain/listing/validation";
 
 import { ProcurementNotFoundError, ProcurementRelationError } from "./errors";
 
@@ -717,43 +719,104 @@ export async function listOrderOptions() {
     vatTreatments: Object.values(VatTreatment),
   };
 }
-export async function listOrders(filters: {
+export interface OrderFilters {
+  buildingId?: string | undefined;
+  currencyCode?: string | undefined;
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
   projectId?: string | undefined;
   query: string;
   status?: ProcurementOrderStatus | undefined;
   supplierId?: string | undefined;
-}): Promise<OrderSummary[]> {
+  vatTreatment?: VatTreatment | undefined;
+}
+
+export interface OrderListFilters extends OrderFilters, PageInput {
+  direction: "asc" | "desc";
+  sort: "orderDate" | "reference" | "status" | "updated";
+}
+
+function orderWhere(filters: OrderFilters): Prisma.ProcurementOrderWhereInput {
   const query = filters.query.trim();
+  return {
+    ...(filters.buildingId
+      ? { buildings: { some: { buildingId: filters.buildingId } } }
+      : {}),
+    ...(filters.currencyCode
+      ? { orderCurrencyCode: filters.currencyCode }
+      : {}),
+    ...(filters.dateFrom || filters.dateTo
+      ? {
+          orderDate: {
+            ...(filters.dateFrom
+              ? { gte: dateOnlyToDate(filters.dateFrom) }
+              : {}),
+            ...(filters.dateTo ? { lte: dateOnlyToDate(filters.dateTo) } : {}),
+          },
+        }
+      : {}),
+    ...(filters.projectId ? { projectId: filters.projectId } : {}),
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.supplierId ? { supplierId: filters.supplierId } : {}),
+    ...(filters.vatTreatment
+      ? { vatEntries: { some: { treatment: filters.vatTreatment } } }
+      : {}),
+    ...(query
+      ? {
+          OR: [
+            { orderNumber: { contains: query, mode: "insensitive" } },
+            { packageName: { contains: query, mode: "insensitive" } },
+            {
+              supplierQuoteReference: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+            { project: { name: { contains: query, mode: "insensitive" } } },
+            {
+              supplier: {
+                displayName: { contains: query, mode: "insensitive" },
+              },
+            },
+          ],
+        }
+      : {}),
+  };
+}
+
+export async function listOrders(
+  filters: OrderFilters,
+): Promise<OrderSummary[]> {
   const orders = await getDatabase().procurementOrder.findMany({
-    where: {
-      ...(filters.projectId ? { projectId: filters.projectId } : {}),
-      ...(filters.status ? { status: filters.status } : {}),
-      ...(filters.supplierId ? { supplierId: filters.supplierId } : {}),
-      ...(query
-        ? {
-            OR: [
-              { orderNumber: { contains: query, mode: "insensitive" } },
-              { packageName: { contains: query, mode: "insensitive" } },
-              {
-                supplierQuoteReference: {
-                  contains: query,
-                  mode: "insensitive",
-                },
-              },
-              { project: { name: { contains: query, mode: "insensitive" } } },
-              {
-                supplier: {
-                  displayName: { contains: query, mode: "insensitive" },
-                },
-              },
-            ],
-          }
-        : {}),
-    },
     include: orderInclude,
-    orderBy: { updatedAt: "desc" },
+    orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+    where: orderWhere(filters),
   });
   return orders.map(summarizeOrder);
+}
+
+export async function listOrdersPage(filters: OrderListFilters) {
+  const where = orderWhere(filters);
+  const orderBy: Prisma.ProcurementOrderOrderByWithRelationInput[] =
+    filters.sort === "reference"
+      ? [{ orderNumber: filters.direction }, { id: "asc" }]
+      : filters.sort === "orderDate"
+        ? [{ orderDate: filters.direction }, { id: "asc" }]
+        : filters.sort === "status"
+          ? [{ status: filters.direction }, { orderNumber: "asc" }]
+          : [{ updatedAt: filters.direction }, { id: "asc" }];
+  const database = getDatabase();
+  const [records, total] = await Promise.all([
+    database.procurementOrder.findMany({
+      include: orderInclude,
+      orderBy,
+      skip: paginationSkip(filters),
+      take: filters.pageSize,
+      where,
+    }),
+    database.procurementOrder.count({ where }),
+  ]);
+  return { items: records.map(summarizeOrder), total };
 }
 export async function getOrder(orderId: string): Promise<OrderSummary | null> {
   const order = await getDatabase().procurementOrder.findUnique({
@@ -798,6 +861,13 @@ async function createOrderRecord(
     select: { id: true },
   });
   await replaceOrderFinancialData(transaction, order.id, actorId, input);
+  await writeAuditEvent(transaction, actorId, {
+    action: "CREATED",
+    entityId: order.id,
+    entityReference: input.orderNumber,
+    entityType: "ORDER",
+    summary: "Created the Procurement Order.",
+  });
   return order.id;
 }
 
@@ -856,6 +926,14 @@ async function updateOrderRecord(
     });
   }
   await replaceOrderFinancialData(transaction, id, actorId, fields);
+  await writeAuditEvent(transaction, actorId, {
+    action: "UPDATED",
+    entityId: id,
+    entityReference: input.orderNumber,
+    entityType: "ORDER",
+    summary:
+      "Updated the Procurement Order and authoritative financial structure.",
+  });
 }
 
 export async function updateOrderInTransaction(

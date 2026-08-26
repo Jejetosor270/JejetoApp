@@ -65,7 +65,7 @@ export async function updateSupplierAction(
 export async function deleteSelectedSuppliersAction(
   formData: FormData,
 ): Promise<BulkActionState> {
-  await requireMasterDataEditor();
+  const actor = await requireMasterDataEditor();
   const input = selectedIdsSchema.safeParse(selectedIds(formData));
   if (!input.success) {
     return {
@@ -75,7 +75,7 @@ export async function deleteSelectedSuppliersAction(
     };
   }
   try {
-    await deleteSuppliers(input.data);
+    await deleteSuppliers(actor.id, input.data);
   } catch (error) {
     if (error instanceof BulkDeletionError) {
       return { message: error.message, status: "error" };

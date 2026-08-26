@@ -8,6 +8,8 @@ import type {
   UpdateProjectInput,
 } from "@/domain/master-data/validation";
 import { getDatabase } from "@/lib/db";
+import { writeAuditEvent } from "@/lib/audit/events";
+import { paginationSkip, type PageInput } from "@/domain/listing/validation";
 
 import {
   InvalidMasterDataRelationError,
@@ -21,6 +23,7 @@ const projectSelect = {
   clientId: true,
   code: true,
   countryCode: true,
+  createdAt: true,
   expectedCompletionDate: true,
   id: true,
   name: true,
@@ -30,6 +33,7 @@ const projectSelect = {
   reportingCurrencyCode: true,
   startDate: true,
   status: true,
+  updatedAt: true,
 } satisfies Prisma.ProjectSelect;
 
 const buildingSelect = {
@@ -110,38 +114,66 @@ async function assertProjectRelations(
     );
 }
 
-export async function listProjects(filters: {
+export interface ProjectListFilters extends PageInput {
   clientId?: string | undefined;
+  countryCode?: string | undefined;
+  currencyCode?: string | undefined;
+  direction: "asc" | "desc";
   managerId?: string | undefined;
   query: string;
+  sort: "code" | "created" | "name" | "status" | "updated";
   status?: ProjectStatus | undefined;
-}) {
+}
+
+export async function listProjects(filters: ProjectListFilters) {
   const normalizedQuery = filters.query.trim();
-  return getDatabase().project.findMany({
-    where: {
-      ...(filters.clientId ? { clientId: filters.clientId } : {}),
-      ...(filters.managerId ? { projectManagerId: filters.managerId } : {}),
-      ...(filters.status ? { status: filters.status } : {}),
-      ...(normalizedQuery
-        ? {
-            OR: [
-              { name: { contains: normalizedQuery, mode: "insensitive" } },
-              { code: { contains: normalizedQuery, mode: "insensitive" } },
-              {
-                client: {
-                  displayName: {
-                    contains: normalizedQuery,
-                    mode: "insensitive",
-                  },
+  const where: Prisma.ProjectWhereInput = {
+    ...(filters.clientId ? { clientId: filters.clientId } : {}),
+    ...(filters.managerId ? { projectManagerId: filters.managerId } : {}),
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.countryCode ? { countryCode: filters.countryCode } : {}),
+    ...(filters.currencyCode
+      ? { reportingCurrencyCode: filters.currencyCode }
+      : {}),
+    ...(normalizedQuery
+      ? {
+          OR: [
+            { name: { contains: normalizedQuery, mode: "insensitive" } },
+            { code: { contains: normalizedQuery, mode: "insensitive" } },
+            {
+              client: {
+                displayName: {
+                  contains: normalizedQuery,
+                  mode: "insensitive",
                 },
               },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ status: "asc" }, { name: "asc" }],
-    select: projectSelect,
-  });
+            },
+          ],
+        }
+      : {}),
+  };
+  const orderBy: Prisma.ProjectOrderByWithRelationInput[] =
+    filters.sort === "code"
+      ? [{ code: filters.direction }, { id: "asc" }]
+      : filters.sort === "created"
+        ? [{ createdAt: filters.direction }, { id: "asc" }]
+        : filters.sort === "status"
+          ? [{ status: filters.direction }, { name: "asc" }, { id: "asc" }]
+          : filters.sort === "updated"
+            ? [{ updatedAt: filters.direction }, { id: "asc" }]
+            : [{ name: filters.direction }, { id: "asc" }];
+  const database = getDatabase();
+  const [items, total] = await Promise.all([
+    database.project.findMany({
+      orderBy,
+      select: projectSelect,
+      skip: paginationSkip(filters),
+      take: filters.pageSize,
+      where,
+    }),
+    database.project.count({ where }),
+  ]);
+  return { items, total };
 }
 
 export async function getProject(projectId: string): Promise<{
@@ -174,9 +206,23 @@ export async function createProject(
   input: CreateProjectInput,
 ): Promise<ManagedProject> {
   await assertProjectRelations(input);
-  return getDatabase().project.create({
-    data: { ...projectData(input), createdById: actorId, updatedById: actorId },
-    select: projectSelect,
+  return getDatabase().$transaction(async (transaction) => {
+    const project = await transaction.project.create({
+      data: {
+        ...projectData(input),
+        createdById: actorId,
+        updatedById: actorId,
+      },
+      select: projectSelect,
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "CREATED",
+      entityId: project.id,
+      entityReference: project.code,
+      entityType: "PROJECT",
+      summary: "Created the Project.",
+    });
+    return project;
   });
 }
 
@@ -205,11 +251,19 @@ export async function updateProject(
         ) {
           throw new ProjectReportingCurrencyLockedError();
         }
-        return transaction.project.update({
+        const project = await transaction.project.update({
           where: { id },
           data: { ...projectData(fields), updatedById: actorId },
           select: projectSelect,
         });
+        await writeAuditEvent(transaction, actorId, {
+          action: "UPDATED",
+          entityId: project.id,
+          entityReference: project.code,
+          entityType: "PROJECT",
+          summary: "Updated the Project.",
+        });
+        return project;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -234,14 +288,24 @@ export async function createBuilding(
   });
   if (!project)
     throw new InvalidMasterDataRelationError("Choose a valid project.");
-  return getDatabase().building.create({
-    data: {
-      ...buildingData(input),
-      projectId: input.projectId,
-      createdById: actorId,
-      updatedById: actorId,
-    },
-    select: buildingSelect,
+  return getDatabase().$transaction(async (transaction) => {
+    const building = await transaction.building.create({
+      data: {
+        ...buildingData(input),
+        projectId: input.projectId,
+        createdById: actorId,
+        updatedById: actorId,
+      },
+      select: buildingSelect,
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "CREATED",
+      entityId: building.id,
+      entityReference: building.shortCode,
+      entityType: "BUILDING",
+      summary: "Created the Building.",
+    });
+    return building;
   });
 }
 
@@ -251,10 +315,21 @@ export async function updateBuilding(
 ): Promise<ManagedBuilding> {
   const { id, isActive, ...fields } = input;
   try {
-    return await getDatabase().building.update({
-      where: { id },
-      data: { ...buildingData(fields), isActive, updatedById: actorId },
-      select: buildingSelect,
+    return await getDatabase().$transaction(async (transaction) => {
+      const building = await transaction.building.update({
+        where: { id },
+        data: { ...buildingData(fields), isActive, updatedById: actorId },
+        select: buildingSelect,
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: building.id,
+        entityReference: building.shortCode,
+        entityType: "BUILDING",
+        metadata: { active: building.isActive },
+        summary: "Updated the Building.",
+      });
+      return building;
     });
   } catch (error) {
     if (

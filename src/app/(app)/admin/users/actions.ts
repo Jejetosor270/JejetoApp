@@ -7,6 +7,8 @@ import type {
   UpdatedEmployeeActionData,
   UserActionState,
 } from "@/app/(app)/admin/users/action-state";
+import type { BulkActionState } from "@/domain/deletion/action-state";
+import { selectedIds, selectedIdsSchema } from "@/domain/deletion/validation";
 import {
   createEmployeeInputSchema,
   resetEmployeePasswordInputSchema,
@@ -15,6 +17,7 @@ import {
 import { requireAdmin } from "@/lib/auth/current-user";
 import {
   createEmployee,
+  deleteEmployees,
   isDuplicateEmailError,
   isExpectedEmployeeUpdateError,
   resetEmployeePassword,
@@ -50,6 +53,44 @@ function toUpdatedEmployeeActionData(employee: {
   role: "ADMIN" | "MANAGER" | "USER";
 }): UpdatedEmployeeActionData {
   return employee;
+}
+
+export async function deleteSelectedEmployeesAction(
+  formData: FormData,
+): Promise<BulkActionState> {
+  const administrator = await requireAdmin();
+  const input = selectedIdsSchema.safeParse(selectedIds(formData));
+  if (!input.success) {
+    return {
+      message:
+        input.error.issues[0]?.message ?? "Check the selected employees.",
+      status: "error",
+    };
+  }
+  try {
+    await deleteEmployees(administrator.id, input.data);
+    revalidatePath("/admin/users");
+    revalidatePath("/admin/activity");
+    return {
+      message: `${input.data.length} employee account${input.data.length === 1 ? "" : "s"} permanently deleted.`,
+      status: "success",
+    };
+  } catch (error) {
+    if (isExpectedEmployeeUpdateError(error)) {
+      return {
+        message:
+          error instanceof Error
+            ? error.message
+            : "The selected employees could not be deleted.",
+        status: "error",
+      };
+    }
+    console.error("Unable to permanently delete employees.", error);
+    return {
+      message: "The selected employees could not be deleted.",
+      status: "error",
+    };
+  }
 }
 
 export async function createEmployeeAction(

@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const databaseMocks = vi.hoisted(() => {
   const transaction = {
-    project: { findUnique: vi.fn(), update: vi.fn() },
+    building: { create: vi.fn(), update: vi.fn() },
+    project: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
   };
   return {
     database: {
@@ -22,6 +23,7 @@ const databaseMocks = vi.hoisted(() => {
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => databaseMocks.database }));
+vi.mock("@/lib/audit/events", () => ({ writeAuditEvent: vi.fn() }));
 
 import {
   createBuilding,
@@ -46,7 +48,10 @@ describe("project and building writes", () => {
       code: "EUR",
     });
     databaseMocks.database.user.findFirst.mockResolvedValue({ id: managerId });
-    databaseMocks.database.project.create.mockResolvedValue({ id: projectId });
+    databaseMocks.transaction.project.create.mockResolvedValue({
+      code: "PRJ-001",
+      id: projectId,
+    });
 
     await createProject(actorId, {
       clientId,
@@ -63,7 +68,7 @@ describe("project and building writes", () => {
     expect(databaseMocks.database.user.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: managerId, isActive: true } }),
     );
-    expect(databaseMocks.database.project.create).toHaveBeenCalledWith(
+    expect(databaseMocks.transaction.project.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           createdById: actorId,
@@ -78,8 +83,9 @@ describe("project and building writes", () => {
     databaseMocks.database.project.findUnique.mockResolvedValue({
       id: projectId,
     });
-    databaseMocks.database.building.create.mockResolvedValue({
+    databaseMocks.transaction.building.create.mockResolvedValue({
       id: "c12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      name: "Building A",
     });
 
     await createBuilding(actorId, {
@@ -88,7 +94,7 @@ describe("project and building writes", () => {
       shortCode: "A",
     });
 
-    expect(databaseMocks.database.building.create).toHaveBeenCalledWith(
+    expect(databaseMocks.transaction.building.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           createdById: actorId,

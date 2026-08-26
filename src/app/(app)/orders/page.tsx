@@ -3,9 +3,24 @@ import Link from "next/link";
 
 import { OrderForm } from "@/components/procurement/order-form";
 import { OrderTable } from "@/components/procurement/order-table";
-import { ProcurementOrderStatus } from "@/generated/prisma/client";
+import { PageSizeField, Pagination } from "@/components/listing/pagination";
+import { ExportLink } from "@/components/export/export-link";
+import {
+  firstQueryValue,
+  optionalUuid,
+  parsePageInput,
+  parseSort,
+  parseSortDirection,
+  queryStringFromParams,
+  selectedValue,
+} from "@/domain/listing/validation";
+import { isDateOnly } from "@/domain/payments/dates";
+import {
+  ProcurementOrderStatus,
+  VatTreatment,
+} from "@/generated/prisma/client";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
-import { listOrderOptions, listOrders } from "@/lib/procurement/orders";
+import { listOrderOptions, listOrdersPage } from "@/lib/procurement/orders";
 
 export const metadata: Metadata = { title: "Procurement orders" };
 
@@ -20,45 +35,63 @@ function statusValue(
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    projectId?: string;
-    query?: string;
-    status?: string;
-    supplierId?: string;
-  }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const query = typeof params.query === "string" ? params.query : "";
-  const projectId =
-    typeof params.projectId === "string" && params.projectId
-      ? params.projectId
-      : undefined;
-  const supplierId =
-    typeof params.supplierId === "string" && params.supplierId
-      ? params.supplierId
-      : undefined;
-  const status = statusValue(
-    typeof params.status === "string" ? params.status : undefined,
+  const query = firstQueryValue(params, "query") ?? "";
+  const projectId = optionalUuid(firstQueryValue(params, "projectId"));
+  const supplierId = optionalUuid(firstQueryValue(params, "supplierId"));
+  const buildingId = optionalUuid(firstQueryValue(params, "buildingId"));
+  const status = statusValue(firstQueryValue(params, "status"));
+  const vatTreatment = selectedValue(
+    Object.values(VatTreatment),
+    firstQueryValue(params, "vatTreatment"),
   );
-  const [user, options, orders] = await Promise.all([
-    requireUser(),
-    listOrderOptions(),
-    listOrders({ projectId, query, status, supplierId }),
-  ]);
+  const pageInput = parsePageInput(params);
+  const sort = parseSort(
+    ["updated", "reference", "orderDate", "status"] as const,
+    firstQueryValue(params, "sort"),
+    "updated",
+  );
+  const direction = parseSortDirection(firstQueryValue(params, "direction"));
+  const dateFrom = firstQueryValue(params, "dateFrom");
+  const dateTo = firstQueryValue(params, "dateTo");
+  const optionsPromise = listOrderOptions();
+  const [user, options] = await Promise.all([requireUser(), optionsPromise]);
+  const result = await listOrdersPage({
+    buildingId,
+    currencyCode: firstQueryValue(params, "currencyCode"),
+    dateFrom: dateFrom && isDateOnly(dateFrom) ? dateFrom : undefined,
+    dateTo: dateTo && isDateOnly(dateTo) ? dateTo : undefined,
+    direction,
+    projectId,
+    query,
+    sort,
+    status,
+    supplierId,
+    vatTreatment,
+    ...pageInput,
+  });
   return (
     <div className="space-y-6">
-      <header>
-        <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-          Procurement
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          Procurement orders
-        </h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Supplier-level packages, cost progression, and commercial margin.
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
+            Procurement
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+            Procurement orders
+          </h1>
+          <p className="text-muted-foreground mt-2 text-sm">
+            Supplier-level packages, cost progression, and commercial margin.
+          </p>
+        </div>
+        <ExportLink
+          entity="orders"
+          queryString={queryStringFromParams(params)}
+        />
       </header>
-      <form className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+      <form className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
         <input
           className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
           defaultValue={query}
@@ -79,6 +112,20 @@ export default async function OrdersPage({
         </select>
         <select
           className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
+          defaultValue={buildingId ?? ""}
+          name="buildingId"
+        >
+          <option value="">All Buildings</option>
+          {options.projects.flatMap((project) =>
+            project.buildings.map((building) => (
+              <option key={building.id} value={building.id}>
+                {project.name} · {building.shortCode}
+              </option>
+            )),
+          )}
+        </select>
+        <select
+          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
           defaultValue={supplierId ?? ""}
           name="supplierId"
         >
@@ -89,6 +136,63 @@ export default async function OrdersPage({
             </option>
           ))}
         </select>
+        <select
+          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
+          defaultValue={firstQueryValue(params, "currencyCode") ?? ""}
+          name="currencyCode"
+        >
+          <option value="">All purchase currencies</option>
+          {options.currencies.map((currency) => (
+            <option key={currency.code} value={currency.code}>
+              {currency.code}
+            </option>
+          ))}
+        </select>
+        <select
+          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
+          defaultValue={vatTreatment ?? ""}
+          name="vatTreatment"
+        >
+          <option value="">All VAT treatments</option>
+          {options.vatTreatments.map((treatment) => (
+            <option key={treatment} value={treatment}>
+              {treatment.replaceAll("_", " ")}
+            </option>
+          ))}
+        </select>
+        <input
+          aria-label="Order date from"
+          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
+          defaultValue={dateFrom ?? ""}
+          name="dateFrom"
+          type="date"
+        />
+        <input
+          aria-label="Order date to"
+          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
+          defaultValue={dateTo ?? ""}
+          name="dateTo"
+          type="date"
+        />
+        <select
+          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
+          defaultValue={sort}
+          name="sort"
+        >
+          <option value="updated">Updated date</option>
+          <option value="reference">Reference</option>
+          <option value="orderDate">Order date</option>
+          <option value="status">Status</option>
+        </select>
+        <select
+          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
+          defaultValue={direction}
+          name="direction"
+        >
+          <option value="desc">Descending</option>
+          <option value="asc">Ascending</option>
+        </select>
+        <PageSizeField value={pageInput.pageSize} />
         <select
           className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
           defaultValue={status ?? ""}
@@ -126,7 +230,17 @@ export default async function OrdersPage({
           </Link>
         </div>
       ) : null}
-      <OrderTable canEdit={canEditMasterData(user.role)} orders={orders} />
+      <OrderTable
+        canEdit={canEditMasterData(user.role)}
+        orders={result.items}
+      />
+      <Pagination
+        page={pageInput.page}
+        pageSize={pageInput.pageSize}
+        pathname="/orders"
+        queryString={queryStringFromParams(params)}
+        total={result.total}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Prisma } from "@/generated/prisma/client";
+import { writeAuditEvent } from "@/lib/audit/events";
 import { getDatabase } from "@/lib/db";
 
 export class BulkDeletionError extends Error {}
@@ -54,24 +55,52 @@ async function destructiveTransaction(
   }
 }
 
-export async function deleteOrders(ids: string[]): Promise<void> {
+export async function deleteOrders(
+  actorId: string,
+  ids: string[],
+): Promise<void> {
   await destructiveTransaction(async (transaction) => {
     const records = await transaction.procurementOrder.findMany({
       where: { id: { in: ids } },
-      select: { id: true },
+      select: { id: true, orderNumber: true },
     });
     missingSelection(ids.length, records.length);
+    for (const record of records) {
+      await writeAuditEvent(transaction, actorId, {
+        action: "DELETED",
+        entityId: record.id,
+        entityReference: record.orderNumber,
+        entityType: "ORDER",
+        summary: "Permanently deleted the Order and its dependent records.",
+      });
+    }
     await deleteOrderHierarchy(transaction, ids);
   });
 }
 
-export async function deleteInstallments(ids: string[]): Promise<void> {
+export async function deleteInstallments(
+  actorId: string,
+  ids: string[],
+): Promise<void> {
   await destructiveTransaction(async (transaction) => {
     const records = await transaction.paymentInstallment.findMany({
       where: { id: { in: ids } },
-      select: { id: true },
+      select: {
+        id: true,
+        label: true,
+        order: { select: { orderNumber: true } },
+      },
     });
     missingSelection(ids.length, records.length);
+    for (const record of records) {
+      await writeAuditEvent(transaction, actorId, {
+        action: "DELETED",
+        entityId: record.id,
+        entityReference: `${record.order.orderNumber} · ${record.label}`,
+        entityType: "INSTALLMENT",
+        summary: "Permanently deleted the installment and its settlements.",
+      });
+    }
     await transaction.paymentSettlement.deleteMany({
       where: { installmentId: { in: ids } },
     });
@@ -82,17 +111,30 @@ export async function deleteInstallments(ids: string[]): Promise<void> {
   });
 }
 
-export async function deleteSuppliers(ids: string[]): Promise<void> {
+export async function deleteSuppliers(
+  actorId: string,
+  ids: string[],
+): Promise<void> {
   await destructiveTransaction(async (transaction) => {
     const records = await transaction.supplier.findMany({
       where: { id: { in: ids } },
-      select: { id: true },
+      select: { displayName: true, id: true },
     });
     missingSelection(ids.length, records.length);
     const orders = await transaction.procurementOrder.findMany({
       where: { supplierId: { in: ids } },
       select: { id: true },
     });
+    for (const record of records) {
+      await writeAuditEvent(transaction, actorId, {
+        action: "DELETED",
+        entityId: record.id,
+        entityReference: record.displayName,
+        entityType: "SUPPLIER",
+        metadata: { deletedOrderCount: orders.length },
+        summary: "Permanently deleted the Supplier and its Order hierarchy.",
+      });
+    }
     await transaction.supplierQuoteImport.deleteMany({
       where: { supplierId: { in: ids } },
     });
@@ -107,17 +149,29 @@ export async function deleteSuppliers(ids: string[]): Promise<void> {
   });
 }
 
-export async function deleteProjects(ids: string[]): Promise<void> {
+export async function deleteProjects(
+  actorId: string,
+  ids: string[],
+): Promise<void> {
   await destructiveTransaction(async (transaction) => {
     const records = await transaction.project.findMany({
       where: { id: { in: ids } },
-      select: { id: true },
+      select: { code: true, id: true },
     });
     missingSelection(ids.length, records.length);
     const orders = await transaction.procurementOrder.findMany({
       where: { projectId: { in: ids } },
       select: { id: true },
     });
+    for (const record of records) {
+      await writeAuditEvent(transaction, actorId, {
+        action: "DELETED",
+        entityId: record.id,
+        entityReference: record.code,
+        entityType: "PROJECT",
+        summary: "Permanently deleted the Project and its complete hierarchy.",
+      });
+    }
     await transaction.supplierQuoteImport.deleteMany({
       where: { projectId: { in: ids } },
     });
@@ -135,11 +189,14 @@ export async function deleteProjects(ids: string[]): Promise<void> {
   });
 }
 
-export async function deleteClients(ids: string[]): Promise<void> {
+export async function deleteClients(
+  actorId: string,
+  ids: string[],
+): Promise<void> {
   await destructiveTransaction(async (transaction) => {
     const records = await transaction.client.findMany({
       where: { id: { in: ids } },
-      select: { id: true },
+      select: { displayName: true, id: true },
     });
     missingSelection(ids.length, records.length);
     const projects = await transaction.project.findMany({
@@ -151,6 +208,16 @@ export async function deleteClients(ids: string[]): Promise<void> {
       where: { projectId: { in: projectIds } },
       select: { id: true },
     });
+    for (const record of records) {
+      await writeAuditEvent(transaction, actorId, {
+        action: "DELETED",
+        entityId: record.id,
+        entityReference: record.displayName,
+        entityType: "CLIENT",
+        summary:
+          "Permanently deleted the Client and its complete Project hierarchy.",
+      });
+    }
     await transaction.supplierQuoteImport.deleteMany({
       where: { projectId: { in: projectIds } },
     });

@@ -156,14 +156,14 @@ export async function removeInstallmentAction(
   _: PaymentActionState,
   formData: FormData,
 ): Promise<PaymentActionState> {
-  await requireMasterDataEditor();
+  const actor = await requireMasterDataEditor();
   const input = installmentIdSchema.safeParse(
     idFormValue(formData, "installmentId"),
   );
   if (!input.success)
     return { message: "Invalid installment.", status: "error" };
   try {
-    await removeUnpaidInstallment(input.data.installmentId);
+    await removeUnpaidInstallment(actor.id, input.data.installmentId);
     refreshPaymentViews();
     return { message: "Unpaid installment removed.", status: "success" };
   } catch (error) {
@@ -175,14 +175,14 @@ export async function removeSettlementAction(
   _: PaymentActionState,
   formData: FormData,
 ): Promise<PaymentActionState> {
-  await requireMasterDataEditor();
+  const actor = await requireMasterDataEditor();
   const input = settlementIdSchema.safeParse(
     idFormValue(formData, "settlementId"),
   );
   if (!input.success)
     return { message: "Invalid settlement.", status: "error" };
   try {
-    await removeSettlement(input.data.settlementId);
+    await removeSettlement(actor.id, input.data.settlementId);
     refreshPaymentViews();
     return { message: "Settlement correction removed.", status: "success" };
   } catch (error) {
@@ -218,7 +218,7 @@ export async function applyPaymentPresetAction(
 export async function deleteSelectedInstallmentsAction(
   formData: FormData,
 ): Promise<BulkActionState> {
-  await requireMasterDataEditor();
+  const actor = await requireMasterDataEditor();
   const input = selectedIdsSchema.safeParse(selectedIds(formData));
   if (!input.success) {
     return {
@@ -228,7 +228,7 @@ export async function deleteSelectedInstallmentsAction(
     };
   }
   try {
-    await deleteInstallments(input.data);
+    await deleteInstallments(actor.id, input.data);
     refreshPaymentViews();
     revalidatePath("/reports");
     return {

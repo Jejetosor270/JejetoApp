@@ -6,6 +6,8 @@ import type {
   UpdateSupplierInput,
 } from "@/domain/master-data/validation";
 import { getDatabase } from "@/lib/db";
+import { writeAuditEvent } from "@/lib/audit/events";
+import { paginationSkip, type PageInput } from "@/domain/listing/validation";
 
 import {
   InvalidMasterDataRelationError,
@@ -19,6 +21,7 @@ const supplierSelect = {
   city: true,
   contactName: true,
   countryCode: true,
+  createdAt: true,
   defaultCurrencyCode: true,
   defaultLeadTimeWeeks: true,
   defaultPaymentTermsDays: true,
@@ -32,6 +35,7 @@ const supplierSelect = {
   phone: true,
   postalCode: true,
   vatNumber: true,
+  updatedAt: true,
 } satisfies Prisma.SupplierSelect;
 
 export type ManagedSupplier = Prisma.SupplierGetPayload<{
@@ -71,32 +75,64 @@ async function assertActiveCurrency(currencyCode: string): Promise<void> {
   }
 }
 
-export async function listSuppliers(
-  query: string,
-  active: "active" | "inactive" | "all",
-) {
-  const normalizedQuery = query.trim();
-  return getDatabase().supplier.findMany({
-    where: {
-      ...(active === "all" ? {} : { isActive: active === "active" }),
-      ...(normalizedQuery
-        ? {
-            OR: [
-              {
-                displayName: { contains: normalizedQuery, mode: "insensitive" },
-              },
-              { legalName: { contains: normalizedQuery, mode: "insensitive" } },
-              {
-                contactName: { contains: normalizedQuery, mode: "insensitive" },
-              },
-              { vatNumber: { contains: normalizedQuery, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ isActive: "desc" }, { displayName: "asc" }],
-    select: supplierSelect,
-  });
+export interface SupplierListFilters extends PageInput {
+  active: "active" | "inactive" | "all";
+  countryCode?: string | undefined;
+  currencyCode?: string | undefined;
+  direction: "asc" | "desc";
+  query: string;
+  sort: "created" | "name" | "updated";
+}
+
+function supplierWhere(
+  filters: SupplierListFilters,
+): Prisma.SupplierWhereInput {
+  const normalizedQuery = filters.query.trim();
+  return {
+    ...(filters.active === "all"
+      ? {}
+      : { isActive: filters.active === "active" }),
+    ...(filters.countryCode ? { countryCode: filters.countryCode } : {}),
+    ...(filters.currencyCode
+      ? { defaultCurrencyCode: filters.currencyCode }
+      : {}),
+    ...(normalizedQuery
+      ? {
+          OR: [
+            {
+              displayName: { contains: normalizedQuery, mode: "insensitive" },
+            },
+            { legalName: { contains: normalizedQuery, mode: "insensitive" } },
+            {
+              contactName: { contains: normalizedQuery, mode: "insensitive" },
+            },
+            { vatNumber: { contains: normalizedQuery, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+}
+
+export async function listSuppliers(filters: SupplierListFilters) {
+  const where = supplierWhere(filters);
+  const orderBy: Prisma.SupplierOrderByWithRelationInput[] =
+    filters.sort === "created"
+      ? [{ createdAt: filters.direction }, { id: "asc" }]
+      : filters.sort === "updated"
+        ? [{ updatedAt: filters.direction }, { id: "asc" }]
+        : [{ displayName: filters.direction }, { id: "asc" }];
+  const database = getDatabase();
+  const [items, total] = await Promise.all([
+    database.supplier.findMany({
+      orderBy,
+      select: supplierSelect,
+      skip: paginationSkip(filters),
+      take: filters.pageSize,
+      where,
+    }),
+    database.supplier.count({ where }),
+  ]);
+  return { items, total };
 }
 
 export async function createSupplier(
@@ -104,13 +140,23 @@ export async function createSupplier(
   input: CreateSupplierInput,
 ): Promise<ManagedSupplier> {
   await assertActiveCurrency(input.defaultCurrencyCode);
-  return getDatabase().supplier.create({
-    data: {
-      ...supplierData(input),
-      createdById: actorId,
-      updatedById: actorId,
-    },
-    select: supplierSelect,
+  return getDatabase().$transaction(async (transaction) => {
+    const supplier = await transaction.supplier.create({
+      data: {
+        ...supplierData(input),
+        createdById: actorId,
+        updatedById: actorId,
+      },
+      select: supplierSelect,
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "CREATED",
+      entityId: supplier.id,
+      entityReference: supplier.displayName,
+      entityType: "SUPPLIER",
+      summary: "Created the Supplier.",
+    });
+    return supplier;
   });
 }
 
@@ -121,10 +167,21 @@ export async function updateSupplier(
   const { id, isActive, ...fields } = input;
   await assertActiveCurrency(fields.defaultCurrencyCode);
   try {
-    return await getDatabase().supplier.update({
-      where: { id },
-      data: { ...supplierData(fields), isActive, updatedById: actorId },
-      select: supplierSelect,
+    return await getDatabase().$transaction(async (transaction) => {
+      const supplier = await transaction.supplier.update({
+        where: { id },
+        data: { ...supplierData(fields), isActive, updatedById: actorId },
+        select: supplierSelect,
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: supplier.id,
+        entityReference: supplier.displayName,
+        entityType: "SUPPLIER",
+        metadata: { active: supplier.isActive },
+        summary: "Updated the Supplier.",
+      });
+      return supplier;
     });
   } catch (error) {
     if (

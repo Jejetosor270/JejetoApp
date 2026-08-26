@@ -22,6 +22,7 @@ const database = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
+vi.mock("@/lib/audit/events", () => ({ writeAuditEvent: vi.fn() }));
 
 import {
   deleteClients,
@@ -70,9 +71,11 @@ describe("transactional populated-hierarchy deletion", () => {
   });
 
   it("deletes a populated Order and all Order-owned records", async () => {
-    transaction.procurementOrder.findMany.mockResolvedValue([{ id: firstId }]);
+    transaction.procurementOrder.findMany.mockResolvedValue([
+      { id: firstId, orderNumber: "PO-1" },
+    ]);
 
-    await deleteOrders([firstId]);
+    await deleteOrders("actor-1", [firstId]);
 
     expectOrderHierarchyDeleted([firstId]);
     expect(transaction.supplier.deleteMany).not.toHaveBeenCalled();
@@ -83,12 +86,12 @@ describe("transactional populated-hierarchy deletion", () => {
 
   it("deletes settlements before deleting selected installments", async () => {
     transaction.paymentInstallment.findMany.mockResolvedValue([
-      { id: firstId },
-      { id: secondId },
+      { id: firstId, label: "Deposit", order: { orderNumber: "PO-1" } },
+      { id: secondId, label: "Balance", order: { orderNumber: "PO-1" } },
     ]);
     transaction.paymentInstallment.deleteMany.mockResolvedValue({ count: 2 });
 
-    await deleteInstallments([firstId, secondId]);
+    await deleteInstallments("actor-1", [firstId, secondId]);
 
     expect(transaction.paymentSettlement.deleteMany).toHaveBeenCalledWith({
       where: { installmentId: { in: [firstId, secondId] } },
@@ -99,14 +102,16 @@ describe("transactional populated-hierarchy deletion", () => {
   });
 
   it("deletes a Supplier's multiple Orders and preserves Projects and Clients", async () => {
-    transaction.supplier.findMany.mockResolvedValue([{ id: firstId }]);
+    transaction.supplier.findMany.mockResolvedValue([
+      { displayName: "Supplier", id: firstId },
+    ]);
     transaction.procurementOrder.findMany.mockResolvedValue([
       { id: orderId },
       { id: secondOrderId },
     ]);
     transaction.procurementOrder.deleteMany.mockResolvedValue({ count: 2 });
 
-    await deleteSuppliers([firstId]);
+    await deleteSuppliers("actor-1", [firstId]);
 
     expect(transaction.supplierQuoteImport.deleteMany).toHaveBeenCalledWith({
       where: { supplierId: { in: [firstId] } },
@@ -121,10 +126,12 @@ describe("transactional populated-hierarchy deletion", () => {
   });
 
   it("deletes a Project's Buildings and Order hierarchy but preserves Client and Suppliers", async () => {
-    transaction.project.findMany.mockResolvedValue([{ id: firstId }]);
+    transaction.project.findMany.mockResolvedValue([
+      { code: "PRJ", id: firstId },
+    ]);
     transaction.procurementOrder.findMany.mockResolvedValue([{ id: orderId }]);
 
-    await deleteProjects([firstId]);
+    await deleteProjects("actor-1", [firstId]);
 
     expect(transaction.supplierQuoteImport.deleteMany).toHaveBeenCalledWith({
       where: { projectId: { in: [firstId] } },
@@ -141,7 +148,9 @@ describe("transactional populated-hierarchy deletion", () => {
   });
 
   it("deletes a Client's complete Project hierarchy but preserves Suppliers", async () => {
-    transaction.client.findMany.mockResolvedValue([{ id: firstId }]);
+    transaction.client.findMany.mockResolvedValue([
+      { displayName: "Client", id: firstId },
+    ]);
     transaction.project.findMany.mockResolvedValue([
       { id: firstId },
       { id: secondId },
@@ -149,7 +158,7 @@ describe("transactional populated-hierarchy deletion", () => {
     transaction.procurementOrder.findMany.mockResolvedValue([{ id: orderId }]);
     transaction.project.deleteMany.mockResolvedValue({ count: 2 });
 
-    await deleteClients([firstId]);
+    await deleteClients("actor-1", [firstId]);
 
     expect(transaction.supplierQuoteImport.deleteMany).toHaveBeenCalledWith({
       where: { projectId: { in: [firstId, secondId] } },
@@ -169,12 +178,12 @@ describe("transactional populated-hierarchy deletion", () => {
 
   it("runs bulk deletion in one serializable transaction", async () => {
     transaction.procurementOrder.findMany.mockResolvedValue([
-      { id: firstId },
-      { id: secondId },
+      { id: firstId, orderNumber: "PO-1" },
+      { id: secondId, orderNumber: "PO-2" },
     ]);
     transaction.procurementOrder.deleteMany.mockResolvedValue({ count: 2 });
 
-    await deleteOrders([firstId, secondId]);
+    await deleteOrders("actor-1", [firstId, secondId]);
 
     expect(database.$transaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: "Serializable",
@@ -183,20 +192,26 @@ describe("transactional populated-hierarchy deletion", () => {
   });
 
   it("stops before parent deletion when a child deletion fails so the transaction can roll back", async () => {
-    transaction.procurementOrder.findMany.mockResolvedValue([{ id: firstId }]);
+    transaction.procurementOrder.findMany.mockResolvedValue([
+      { id: firstId, orderNumber: "PO-1" },
+    ]);
     transaction.paymentSettlement.deleteMany.mockRejectedValue(
       new Error("database failure"),
     );
 
-    await expect(deleteOrders([firstId])).rejects.toThrow("database failure");
+    await expect(deleteOrders("actor-1", [firstId])).rejects.toThrow(
+      "database failure",
+    );
     expect(transaction.paymentInstallment.deleteMany).not.toHaveBeenCalled();
     expect(transaction.procurementOrder.deleteMany).not.toHaveBeenCalled();
   });
 
   it("fails safely when any selected record no longer exists", async () => {
-    transaction.client.findMany.mockResolvedValue([{ id: firstId }]);
+    transaction.client.findMany.mockResolvedValue([
+      { displayName: "Client", id: firstId },
+    ]);
 
-    await expect(deleteClients([firstId, secondId])).rejects.toThrow(
+    await expect(deleteClients("actor-1", [firstId, secondId])).rejects.toThrow(
       "no longer exist",
     );
     expect(transaction.project.findMany).not.toHaveBeenCalled();

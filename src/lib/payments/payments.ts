@@ -36,6 +36,8 @@ import type {
   UpdateInstallmentInput,
 } from "@/domain/payments/validation";
 import { getDatabase } from "@/lib/db";
+import { writeAuditEvent } from "@/lib/audit/events";
+import { paginationSkip, type PageInput } from "@/domain/listing/validation";
 import { getOrder, type OrderSummary } from "@/lib/procurement/orders";
 
 import { PaymentNotFoundError, PaymentValidationError } from "./errors";
@@ -337,7 +339,7 @@ export async function createInstallment(
         orderBy: { sequence: "desc" },
         select: { sequence: true },
       });
-      await transaction.paymentInstallment.create({
+      const installment = await transaction.paymentInstallment.create({
         data: {
           basis: input.basis,
           createdById: actorId,
@@ -359,6 +361,13 @@ export async function createInstallment(
           sequence: (latest?.sequence ?? 0) + 1,
           updatedById: actorId,
         },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "CREATED",
+        entityId: installment.id,
+        entityReference: `${order.orderNumber} · ${input.label}`,
+        entityType: "INSTALLMENT",
+        summary: "Created a payment or receipt installment.",
       });
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -404,25 +413,34 @@ export async function updateInstallment(
       "Scheduled amount cannot be reduced below the amount already paid or received.",
     );
   }
-  await getDatabase().paymentInstallment.update({
-    where: { id: input.id },
-    data: {
-      basis: input.basis,
-      currencyCode: input.currencyCode,
-      dueDate: dateOnlyToDate(input.dueDate),
-      expectedFxRateToReporting:
-        input.currencyCode === order.project.reportingCurrencyCode
-          ? null
-          : (input.expectedFxRate ?? null),
-      label: input.label,
-      notes: input.notes ?? null,
-      percentageRate:
-        input.basis === InstallmentBasis.PERCENTAGE
-          ? (input.percentageRate ?? null)
-          : null,
-      scheduledAmount: amount.toFixed(4),
-      updatedById: actorId,
-    },
+  await getDatabase().$transaction(async (transaction) => {
+    await transaction.paymentInstallment.update({
+      where: { id: input.id },
+      data: {
+        basis: input.basis,
+        currencyCode: input.currencyCode,
+        dueDate: dateOnlyToDate(input.dueDate),
+        expectedFxRateToReporting:
+          input.currencyCode === order.project.reportingCurrencyCode
+            ? null
+            : (input.expectedFxRate ?? null),
+        label: input.label,
+        notes: input.notes ?? null,
+        percentageRate:
+          input.basis === InstallmentBasis.PERCENTAGE
+            ? (input.percentageRate ?? null)
+            : null,
+        scheduledAmount: amount.toFixed(4),
+        updatedById: actorId,
+      },
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "UPDATED",
+      entityId: input.id,
+      entityReference: `${order.orderNumber} · ${input.label}`,
+      entityType: "INSTALLMENT",
+      summary: "Updated a payment or receipt installment.",
+    });
   });
 }
 
@@ -457,7 +475,7 @@ export async function recordSettlement(
           "This entry would exceed the scheduled installment amount.",
         );
       }
-      await transaction.paymentSettlement.create({
+      const settlement = await transaction.paymentSettlement.create({
         data: {
           amount: input.amount,
           createdById: actorId,
@@ -472,6 +490,18 @@ export async function recordSettlement(
           settledAt: dateOnlyToDate(input.settledAt),
           updatedById: actorId,
         },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "CREATED",
+        entityId: settlement.id,
+        entityReference: installment.label,
+        entityType: "SETTLEMENT",
+        metadata: {
+          amount: input.amount,
+          currency: installment.currencyCode,
+          settledAt: input.settledAt,
+        },
+        summary: "Recorded a payment or receipt settlement.",
       });
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -500,10 +530,26 @@ export async function markInstallmentSettled(
   });
 }
 
-export async function removeSettlement(settlementId: string): Promise<void> {
+export async function removeSettlement(
+  actorId: string,
+  settlementId: string,
+): Promise<void> {
   try {
-    await getDatabase().paymentSettlement.delete({
-      where: { id: settlementId },
+    await getDatabase().$transaction(async (transaction) => {
+      const settlement = await transaction.paymentSettlement.delete({
+        where: { id: settlementId },
+        select: {
+          id: true,
+          installment: { select: { label: true } },
+        },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "DELETED",
+        entityId: settlement.id,
+        entityReference: settlement.installment.label,
+        entityType: "SETTLEMENT",
+        summary: "Deleted a settlement correction.",
+      });
     });
   } catch (error) {
     if (
@@ -521,9 +567,20 @@ export async function cancelInstallment(
   installmentId: string,
 ): Promise<void> {
   try {
-    await getDatabase().paymentInstallment.update({
-      where: { id: installmentId },
-      data: { isCancelled: true, updatedById: actorId },
+    await getDatabase().$transaction(async (transaction) => {
+      const installment = await transaction.paymentInstallment.update({
+        where: { id: installmentId },
+        data: { isCancelled: true, updatedById: actorId },
+        select: { id: true, label: true },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: installment.id,
+        entityReference: installment.label,
+        entityType: "INSTALLMENT",
+        metadata: { cancelled: true },
+        summary: "Cancelled the installment.",
+      });
     });
   } catch (error) {
     if (
@@ -537,16 +594,30 @@ export async function cancelInstallment(
 }
 
 export async function removeUnpaidInstallment(
+  actorId: string,
   installmentId: string,
 ): Promise<void> {
-  const result = await getDatabase().paymentInstallment.deleteMany({
-    where: { id: installmentId, settlements: { none: {} } },
+  await getDatabase().$transaction(async (transaction) => {
+    const installment = await transaction.paymentInstallment.findUnique({
+      where: { id: installmentId },
+      select: { id: true, label: true },
+    });
+    const result = await transaction.paymentInstallment.deleteMany({
+      where: { id: installmentId, settlements: { none: {} } },
+    });
+    if (result.count === 0 || !installment) {
+      throw new PaymentValidationError(
+        "Only installments without recorded payments or receipts can be removed.",
+      );
+    }
+    await writeAuditEvent(transaction, actorId, {
+      action: "DELETED",
+      entityId: installment.id,
+      entityReference: installment.label,
+      entityType: "INSTALLMENT",
+      summary: "Deleted an unpaid installment.",
+    });
   });
-  if (result.count === 0) {
-    throw new PaymentValidationError(
-      "Only installments without recorded payments or receipts can be removed.",
-    );
-  }
 }
 
 export async function applyPaymentPreset(
@@ -602,6 +673,14 @@ export async function applyPaymentPreset(
           updatedById: actorId,
         })),
       });
+      await writeAuditEvent(transaction, actorId, {
+        action: "CREATED",
+        entityId: input.orderId,
+        entityReference: "Payment schedule preset",
+        entityType: "INSTALLMENT",
+        metadata: { installmentCount: rates.length },
+        summary: "Created installments from a payment schedule preset.",
+      });
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
@@ -609,7 +688,7 @@ export async function applyPaymentPreset(
 
 export async function listPaymentOptions() {
   const database = getDatabase();
-  const [clients, currencies, projects, suppliers] = await Promise.all([
+  const [clients, currencies, orders, projects, suppliers] = await Promise.all([
     database.client.findMany({
       orderBy: { displayName: "asc" },
       select: { displayName: true, id: true },
@@ -618,6 +697,10 @@ export async function listPaymentOptions() {
       where: { isActive: true },
       orderBy: { code: "asc" },
       select: { code: true },
+    }),
+    database.procurementOrder.findMany({
+      orderBy: { orderNumber: "asc" },
+      select: { id: true, orderNumber: true },
     }),
     database.project.findMany({
       orderBy: { name: "asc" },
@@ -628,7 +711,7 @@ export async function listPaymentOptions() {
       select: { displayName: true, id: true },
     }),
   ]);
-  return { clients, currencies, projects, suppliers };
+  return { clients, currencies, orders, projects, suppliers };
 }
 
 export async function listPaymentInstallments(filters: {
@@ -678,6 +761,123 @@ export async function listPaymentInstallments(filters: {
   return records
     .map((record) => installmentView(record, null, today))
     .filter((item) => !filters.status || item.status === filters.status);
+}
+
+export interface PaymentListFilters extends PageInput {
+  clientId?: string | undefined;
+  currencyCode?: string | undefined;
+  direction?: PaymentDirection | undefined;
+  dueFrom?: string | undefined;
+  dueTo?: string | undefined;
+  orderId?: string | undefined;
+  projectId?: string | undefined;
+  sort: "amount" | "dueDate";
+  sortDirection: "asc" | "desc";
+  status?: DerivedPaymentStatus | undefined;
+  supplierId?: string | undefined;
+}
+
+function paymentListWhere(
+  filters: PaymentListFilters,
+): Prisma.PaymentInstallmentWhereInput {
+  return {
+    ...(filters.currencyCode ? { currencyCode: filters.currencyCode } : {}),
+    ...(filters.direction ? { direction: filters.direction } : {}),
+    ...(filters.dueFrom || filters.dueTo
+      ? {
+          dueDate: {
+            ...(filters.dueFrom
+              ? { gte: dateOnlyToDate(filters.dueFrom) }
+              : {}),
+            ...(filters.dueTo ? { lte: dateOnlyToDate(filters.dueTo) } : {}),
+          },
+        }
+      : {}),
+    ...(filters.orderId ? { orderId: filters.orderId } : {}),
+    order: {
+      ...(filters.projectId ? { projectId: filters.projectId } : {}),
+      ...(filters.supplierId ? { supplierId: filters.supplierId } : {}),
+      ...(filters.clientId ? { project: { clientId: filters.clientId } } : {}),
+    },
+  };
+}
+
+export async function listPaymentInstallmentsPage(filters: PaymentListFilters) {
+  const database = getDatabase();
+  const where = paymentListWhere(filters);
+  const orderBy: Prisma.PaymentInstallmentOrderByWithRelationInput[] =
+    filters.sort === "amount"
+      ? [
+          { scheduledAmount: filters.sortDirection },
+          { dueDate: "asc" },
+          { id: "asc" },
+        ]
+      : [
+          { dueDate: filters.sortDirection },
+          { sequence: "asc" },
+          { id: "asc" },
+        ];
+  const today = businessToday();
+  if (filters.status) {
+    const candidates = await database.paymentInstallment.findMany({
+      orderBy,
+      select: {
+        dueDate: true,
+        id: true,
+        isCancelled: true,
+        scheduledAmount: true,
+        settlements: { select: { amount: true } },
+      },
+      where,
+    });
+    const matchingIds = candidates
+      .filter((record) => {
+        const paid = record.settlements.reduce(
+          (total, settlement) => total.plus(settlement.amount),
+          new Decimal(0),
+        );
+        return (
+          derivePaymentStatus({
+            dueDate: dateToDateOnly(record.dueDate),
+            isCancelled: record.isCancelled,
+            paidAmount: paid,
+            scheduledAmount: record.scheduledAmount,
+            today,
+          }) === filters.status
+        );
+      })
+      .map((record) => record.id);
+    const pageIds = matchingIds.slice(
+      paginationSkip(filters),
+      paginationSkip(filters) + filters.pageSize,
+    );
+    const records = await database.paymentInstallment.findMany({
+      include: installmentInclude,
+      where: { id: { in: pageIds } },
+    });
+    const byId = new Map(records.map((record) => [record.id, record]));
+    return {
+      items: pageIds.flatMap((id) => {
+        const record = byId.get(id);
+        return record ? [installmentView(record, null, today)] : [];
+      }),
+      total: matchingIds.length,
+    };
+  }
+  const [records, total] = await Promise.all([
+    database.paymentInstallment.findMany({
+      include: installmentInclude,
+      orderBy,
+      skip: paginationSkip(filters),
+      take: filters.pageSize,
+      where,
+    }),
+    database.paymentInstallment.count({ where }),
+  ]);
+  return {
+    items: records.map((record) => installmentView(record, null, today)),
+    total,
+  };
 }
 
 interface ReportingDirectionSummary {

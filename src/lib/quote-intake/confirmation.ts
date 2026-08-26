@@ -20,6 +20,7 @@ import type { CreateOrderInput } from "@/domain/procurement/validation";
 import { createOrderInputSchema } from "@/domain/procurement/validation";
 import { QUOTE_EXTRACTION_PROVIDER } from "@/config/quote-extraction";
 import { getDatabase } from "@/lib/db";
+import { writeAuditEvent } from "@/lib/audit/events";
 import { getQuoteExtractionModel } from "@/lib/env/quote-extraction";
 import {
   createOrderInTransaction,
@@ -382,6 +383,21 @@ export async function confirmSupplierQuote(
           supplierId: input.supplierId,
           supplierQuoteReference: values.supplierQuoteReference ?? null,
         },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "IMPORTED",
+        entityId: orderId,
+        entityReference: values.orderNumber,
+        entityType: "QUOTE_IMPORT",
+        metadata: {
+          action: input.action,
+          paymentScheduleApproved: input.approveSchedule,
+          provider: QUOTE_EXTRACTION_PROVIDER,
+        },
+        summary:
+          input.action === "CREATE"
+            ? "Created an Order from an employee-approved quote extraction."
+            : "Updated an Order from an employee-approved quote extraction.",
       });
       return orderId;
     },

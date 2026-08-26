@@ -70,7 +70,7 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 ## Phase 3 master data
 
 - The operational hierarchy is Client → Project → Building; suppliers are separate reusable master data.
-- Archive Clients, Suppliers, and Buildings with `isActive`; archive Projects with `ProjectStatus.ARCHIVED`. Do not expose destructive deletion.
+- Archive Clients, Suppliers, and Buildings with `isActive`; archive Projects with `ProjectStatus.ARCHIVED`. ADMIN and MANAGER may also use the explicit, confirmed permanent-deletion workflows introduced later; preserve their transactional hierarchy rules and audit snapshots.
 - Master-data writes require the authenticated ADMIN or MANAGER actor and always set `createdById`/`updatedById` server-side.
 - Store optional countries as ISO-style two-letter codes and render labels from `src/config/countries`; currencies remain relational `Currency` records.
 
@@ -96,11 +96,20 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 - Extracted payment terms are proposals only. Persist Supplier Payment installments only after explicit employee approval, using the existing Phase 6 model and calculations.
 - Multiple quote imports may be recorded as lightweight structured history, but import history is not a second financial source of truth and must not become a document-management subsystem.
 
+## Phase 9 operational layer
+
+- Primary operational lists use validated URL filters, deterministic server-side sorting, and server pagination. Visible-page selection must never imply selection of every database row.
+- CSV exports are authenticated, use the current validated filters, preserve Decimal strings and ISO dates, identify currencies, and protect user-controlled cells from spreadsheet formula execution.
+- Important authoritative mutations write lightweight `AuditEvent` snapshots inside the same transaction. Audit records retain immutable actor/entity references and must survive deletion of the related employee or operational entity.
+- Company reporting currency remains read-only at runtime. Project reporting currencies and historical FX assumptions must not be silently reinterpreted by a settings change.
+- Quote extraction retains temporary-file and server-side-secret protections. The UI prevents repeated submission and the server applies pragmatic per-instance, per-employee concurrency/burst protection without claiming globally distributed rate limiting.
+- ADMIN may permanently delete employee accounts except their own current account or a selection that would leave no active ADMIN. User audit attribution and all operational business records must survive employee deletion; every authenticated request continues to resolve an active database user.
+
 ## Database conventions
 
 - UUID primary keys; UTC timestamps; `@db.Date` for business dates without time-of-day meaning.
 - Amounts use `Decimal(19,4)`, rates `Decimal(9,6)`, and FX rates `Decimal(20,10)` unless a documented domain need changes precision.
-- Core historical relationships use `onDelete: Restrict`; archive/deactivate records instead of cascading deletion.
+- Core business relationships are restrictive unless an explicitly implemented permanent-deletion workflow removes the owned hierarchy transactionally. Employee audit/write-attribution relationships use `SetNull` so business and audit history survives employee deletion.
 - Important entities have `createdAt`, `updatedAt`, `createdById`, and `updatedById`. Audit user links may become null if a user is removed; business links remain restricted.
 - Index foreign keys and operational status/date filters. Use explicit join models when the relationship needs auditability or future metadata.
 - No core financial data in JSON blobs. Nullability must represent a real workflow state, not implementation convenience.
@@ -114,7 +123,7 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 - Authentication is Auth.js credentials-only with bcrypt password hashes and an encrypted HTTP-only session cookie. There is no public sign-up, invitation, social login, magic link, or password-reset email flow. ADMIN may set an employee password through the internal user-management UI; passwords use the centralized six-character minimum.
 - All ERP routes must resolve the current active database user through `requireUser()`; mutations must authorize server-side with `requireRole()` or `requireAdmin()`. Do not rely on session claims or hidden navigation for authorization.
 - Roles are `ADMIN`, `MANAGER`, and `USER`. Only ADMIN can manage employee accounts. Preserve the transactional rule that the final active ADMIN cannot be deactivated or demoted.
-- Inactive and credential-less historical users cannot authenticate. Do not delete employees referenced by historical records. Obtain the current database user ID from the server auth helper for future `createdBy` and `updatedBy` writes.
+- Inactive and credential-less historical users cannot authenticate. ADMIN-only permanent employee deletion must preserve operational records and immutable audit attribution, reject self-deletion, and retain at least one active ADMIN. Obtain the current database user ID from the server auth helper for future `createdBy` and `updatedBy` writes.
 - Prefer small cohesive modules, accessible semantic markup, early returns, and parallel independent I/O.
 
 ## UI conventions

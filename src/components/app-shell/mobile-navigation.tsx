@@ -14,9 +14,15 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { navigationGroups } from "@/config/navigation";
+import { navigationForRole } from "@/config/navigation";
 
-export function MobileNavigation() {
+export function MobileNavigation({
+  companyName,
+  role,
+}: {
+  companyName: string;
+  role: "ADMIN" | "MANAGER" | "USER";
+}) {
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -35,11 +41,11 @@ export function MobileNavigation() {
           <SheetDescription className="sr-only">
             Navigate the MB Procurement workspace.
           </SheetDescription>
-          <AppBrand />
+          <AppBrand companyName={companyName} />
         </SheetHeader>
 
         <nav aria-label="Mobile navigation" className="space-y-5 px-3 py-4">
-          {navigationGroups.map((group) => (
+          {navigationForRole(role).map((group) => (
             <div key={group.label}>
               <p className="text-muted-foreground mb-1.5 px-2 text-[0.6875rem] font-medium tracking-[0.08em] uppercase">
                 {group.label}

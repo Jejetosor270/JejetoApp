@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default async function UserManagementPage() {
-  await requireAdmin();
+  const administrator = await requireAdmin();
   const employees = await listManagedEmployees();
   const employeeListVersion = employees
     .map((employee) => `${employee.id}:${employee.updatedAt.toISOString()}`)
@@ -17,6 +17,7 @@ export default async function UserManagementPage() {
 
   return (
     <UserManagement
+      currentAdministratorId={administrator.id}
       key={employeeListVersion}
       employees={employees.map((employee) => ({
         ...employee,

@@ -5,6 +5,7 @@ import {
   CalendarDays,
   FileText,
   FolderKanban,
+  History,
   LayoutDashboard,
   Package,
   Settings,
@@ -17,6 +18,7 @@ export interface NavigationItem {
   icon: LucideIcon;
   isAvailable: boolean;
   label: string;
+  roles?: readonly ("ADMIN" | "MANAGER" | "USER")[];
 }
 
 export interface NavigationGroup {
@@ -59,6 +61,20 @@ export const navigationGroups: readonly NavigationGroup[] = [
         isAvailable: true,
         label: "Reports",
       },
+      {
+        href: "/admin/activity",
+        icon: History,
+        isAvailable: true,
+        label: "Activity",
+        roles: ["ADMIN", "MANAGER"],
+      },
+      {
+        href: "/settings",
+        icon: Settings,
+        isAvailable: true,
+        label: "Settings",
+        roles: ["ADMIN", "MANAGER"],
+      },
     ],
   },
   {
@@ -87,12 +103,19 @@ export const navigationGroups: readonly NavigationGroup[] = [
         isAvailable: false,
         label: "Documents",
       },
-      {
-        href: "/settings",
-        icon: Settings,
-        isAvailable: false,
-        label: "Settings",
-      },
     ],
   },
 ];
+
+export function navigationForRole(
+  role: "ADMIN" | "MANAGER" | "USER",
+): readonly NavigationGroup[] {
+  return navigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !item.roles || item.roles.includes(role),
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+}
