@@ -151,6 +151,52 @@ describe("supplier quote extraction", () => {
     });
   });
 
+  it("adds an editable balance to a single 30% deposit", () => {
+    const extraction = quoteExtractionFixture();
+    extraction.paymentTerms.installments = [
+      extraction.paymentTerms.installments[0]!,
+    ];
+
+    expect(
+      buildQuoteReviewProposal(extraction).payments.map((payment) => ({
+        label: payment.label,
+        rate: payment.percentageRate,
+      })),
+    ).toEqual([
+      { label: "Deposit", rate: "0.300000" },
+      { label: "Balance", rate: "0.700000" },
+    ]);
+  });
+
+  it("adds an editable balance to a single 50% deposit", () => {
+    const extraction = quoteExtractionFixture();
+    const deposit = extraction.paymentTerms.installments[0]!;
+    deposit.percentageRate.value = "0.50";
+    extraction.paymentTerms.installments = [deposit];
+
+    expect(
+      buildQuoteReviewProposal(extraction).payments.map(
+        (payment) => payment.percentageRate,
+      ),
+    ).toEqual(["0.500000", "0.500000"]);
+  });
+
+  it("defaults to one editable 100% installment without clear terms", () => {
+    const extraction = quoteExtractionFixture();
+    extraction.paymentTerms.installments = [];
+
+    expect(buildQuoteReviewProposal(extraction).payments).toEqual([
+      {
+        basis: "PERCENTAGE",
+        dueDate: null,
+        fixedAmount: null,
+        label: "Full payment",
+        percentageRate: "1.000000",
+        timingDescription: null,
+      },
+    ]);
+  });
+
   it("rejects unnormalized financial values and unknown output fields", () => {
     const extraction = quoteExtractionFixture();
     extraction.financials.totalHt.value = "105,000.00";

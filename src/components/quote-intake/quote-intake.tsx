@@ -2,7 +2,7 @@
 
 import Decimal from "decimal.js";
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useCallback, useState } from "react";
 
 import {
   confirmSupplierQuoteAction,
@@ -17,19 +17,20 @@ import {
   initialQuoteConfirmationState,
   initialQuoteProcessingState,
 } from "@/domain/quote-intake/action-state";
-import type {
-  ExtractionStatus,
-  QuotePaymentProposal,
-} from "@/domain/quote-intake/extraction";
+import type { ExtractionStatus } from "@/domain/quote-intake/extraction";
 import { formatMoney } from "@/domain/procurement/presentation";
+import { calculateQuoteSupplierPayable } from "@/domain/quote-intake/payment-schedule";
 import type { ProcessedQuoteReview } from "@/lib/quote-intake/process";
 import { Button } from "@/components/ui/button";
 import {
   Field,
   inputClassName,
+  MoneyInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import type { QuoteIntakeOptions } from "@/lib/quote-intake/options";
+import { PaymentScheduleEditor } from "@/components/quote-intake/payment-schedule-editor";
+import { QuoteSupplierCreationForm } from "@/components/quote-intake/supplier-creation-form";
 
 function statusLabel(status: ExtractionStatus): string {
   return status.toLowerCase().replace(/^./, (value) => value.toUpperCase());
@@ -80,91 +81,53 @@ function ExtractedFact({
 function ApplyField({
   checked,
   children,
+  error,
   label,
   name,
+  onCheckedChange,
+  required = false,
 }: {
   checked: boolean;
   children: React.ReactNode;
+  error?: string | undefined;
   label: string;
   name: string;
+  onCheckedChange?: ((checked: boolean) => void) | undefined;
+  required?: boolean | undefined;
 }) {
   return (
     <div className="bg-background rounded-md border p-3">
       <label className="mb-2 flex items-center gap-2 text-xs font-medium">
-        <input defaultChecked={checked} name={name} type="checkbox" />
+        <input
+          {...(onCheckedChange
+            ? {
+                checked,
+                onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
+                  onCheckedChange(event.target.checked),
+              }
+            : { defaultChecked: checked })}
+          name={name}
+          type="checkbox"
+        />
         Apply {label}
+        {required ? (
+          <span aria-hidden="true" className="text-destructive">
+            *
+          </span>
+        ) : null}
       </label>
       {children}
+      {error ? (
+        <p className="text-destructive mt-1 text-xs" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
 
 function percentValue(value: string | null): string {
   return value === null ? "" : new Decimal(value).times(100).toString();
-}
-
-function PaymentProposalFields({
-  index,
-  payment,
-}: {
-  index: number;
-  payment: QuotePaymentProposal;
-}) {
-  const basis =
-    payment.basis === "FIXED_AMOUNT" ? "FIXED_AMOUNT" : "PERCENTAGE";
-  return (
-    <div className="grid gap-3 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-5">
-      <Field label="Label">
-        <input
-          className={inputClassName}
-          defaultValue={payment.label}
-          name={`payment.${index}.label`}
-        />
-      </Field>
-      <Field label="Basis">
-        <select
-          className={inputClassName}
-          defaultValue={basis}
-          name={`payment.${index}.basis`}
-        >
-          <option value="PERCENTAGE">Percentage</option>
-          <option value="FIXED_AMOUNT">Fixed amount</option>
-        </select>
-      </Field>
-      <Field label="Percentage %">
-        <input
-          className={inputClassName}
-          defaultValue={percentValue(payment.percentageRate)}
-          inputMode="decimal"
-          name={`payment.${index}.percentageRate`}
-        />
-      </Field>
-      <Field label="Fixed amount">
-        <input
-          className={inputClassName}
-          defaultValue={payment.fixedAmount ?? ""}
-          inputMode="decimal"
-          name={`payment.${index}.fixedAmount`}
-        />
-      </Field>
-      <Field label="Due date">
-        <input
-          className={inputClassName}
-          defaultValue={payment.dueDate ?? ""}
-          name={`payment.${index}.dueDate`}
-          type="date"
-        />
-      </Field>
-      <label className="grid gap-1.5 text-sm font-medium md:col-span-2 xl:col-span-5">
-        Extracted timing wording
-        <input
-          className={inputClassName}
-          defaultValue={payment.timingDescription ?? ""}
-          name={`payment.${index}.timingDescription`}
-        />
-      </label>
-    </div>
-  );
 }
 
 function QuoteReview({
@@ -184,6 +147,71 @@ function QuoteReview({
   const suggestedSupplier = review.supplierMatch.suggestedSupplierId ?? "";
   const financial = review.proposal.financial;
   const extraction = review.extraction;
+  const [selectedSupplierId, setSelectedSupplierId] =
+    useState(suggestedSupplier);
+  const [createdSupplier, setCreatedSupplier] = useState<{
+    displayName: string;
+    id: string;
+  } | null>(null);
+  const [orderNumber, setOrderNumber] = useState("");
+  const [packageName, setPackageName] = useState(
+    extraction.supplier.displayName.value ??
+      extraction.supplier.legalName.value ??
+      "",
+  );
+  const [orderCurrencyCode, setOrderCurrencyCode] = useState(
+    financial.currencyCode ?? "",
+  );
+  const [applyCurrency, setApplyCurrency] = useState(true);
+  const [applyPurchaseCost, setApplyPurchaseCost] = useState(
+    financial.purchaseCost !== null,
+  );
+  const [applyInputVat, setApplyInputVat] = useState(
+    financial.inputVatAmount !== null || financial.inputVatRate !== null,
+  );
+  const [inputVatTreatment, setInputVatTreatment] = useState("");
+  const [inputVatRecoverability, setInputVatRecoverability] = useState("");
+  const [financialValues, setFinancialValues] = useState({
+    freight: financial.freight ?? "",
+    freightResaleAmount: "",
+    inputVatAmount: financial.inputVatAmount ?? "",
+    inputVatTaxableBase: financial.inputVatTaxableBase ?? "",
+    miscellaneous: financial.miscellaneous ?? "",
+    purchaseCost: financial.purchaseCost ?? "",
+  });
+  const [inputVatRate, setInputVatRate] = useState(
+    percentValue(financial.inputVatRate),
+  );
+  const fieldErrors = state.fieldErrors ?? {};
+  const inputWithError = (field: string, className = inputClassName) =>
+    `${className}${fieldErrors[field] ? " border-destructive focus-visible:border-destructive" : ""}`;
+  const selectSupplier = useCallback(
+    (supplier: { displayName: string; id: string }) => {
+      setCreatedSupplier(supplier);
+      setSelectedSupplierId(supplier.id);
+    },
+    [],
+  );
+  const selectableSuppliers = createdSupplier
+    ? [
+        ...options.suppliers.filter(
+          (supplier) => supplier.id !== createdSupplier.id,
+        ),
+        createdSupplier,
+      ].sort((first, second) =>
+        first.displayName.localeCompare(second.displayName),
+      )
+    : options.suppliers;
+  const supplierPayable = calculateQuoteSupplierPayable({
+    applyInputVat,
+    inputVatAmount: financialValues.inputVatAmount,
+    inputVatRatePercent: inputVatRate,
+    inputVatTaxableBase: financialValues.inputVatTaxableBase,
+    inputVatTreatment,
+    purchaseCost: applyPurchaseCost ? financialValues.purchaseCost : "",
+  }).toFixed(4);
+  const paymentCurrency =
+    orderCurrencyCode || project?.reportingCurrencyCode || "EUR";
   const extractedCurrency =
     extraction.quote.currencyCode.status === "EXTRACTED"
       ? (extraction.quote.currencyCode.value ?? "Currency unconfirmed")
@@ -359,6 +387,15 @@ function QuoteReview({
         ) : null}
       </section>
 
+      <QuoteSupplierCreationForm
+        currencies={options.currencies}
+        extraction={extraction}
+        fallbackCurrencyCode={
+          project?.reportingCurrencyCode ?? options.currencies[0]?.code ?? "EUR"
+        }
+        onSupplierSelected={selectSupplier}
+      />
+
       <form action={action} className="space-y-5">
         <input name="projectId" type="hidden" value={review.projectId} />
         <input
@@ -376,17 +413,15 @@ function QuoteReview({
           type="hidden"
           value={extraction.paymentTerms.raw.value ?? ""}
         />
-        <input
-          name="paymentCount"
-          type="hidden"
-          value={review.proposal.payments.length}
-        />
-
         <section className="bg-card rounded-lg border p-4 sm:p-5">
           <h2 className="text-sm font-semibold">Destination</h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            The Project is locked to {project?.name ?? "the selected Project"}.
-            Choose explicitly whether to create or update.
+            Project
+            <span aria-hidden="true" className="text-destructive ml-1">
+              *
+            </span>{" "}
+            is locked to {project?.name ?? "the selected Project"}. Choose
+            explicitly whether to create or update.
           </p>
           <div className="mt-4 flex flex-wrap gap-4 text-sm">
             <label className="flex items-center gap-2">
@@ -396,6 +431,7 @@ function QuoteReview({
                 onChange={() => {
                   setActionType("CREATE");
                   setApplyBuildings(true);
+                  setApplyCurrency(true);
                 }}
                 type="radio"
                 value="CREATE"
@@ -409,6 +445,7 @@ function QuoteReview({
                 onChange={() => {
                   setActionType("UPDATE");
                   setApplyBuildings(false);
+                  setApplyCurrency(financial.currencyCode !== null);
                 }}
                 type="radio"
                 value="UPDATE"
@@ -419,42 +456,69 @@ function QuoteReview({
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {actionType === "CREATE" ? (
               <>
-                <Field label="Internal Order reference">
-                  <input className={inputClassName} name="orderNumber" />
-                </Field>
-                <Field label="Package title">
+                <Field
+                  error={fieldErrors.orderNumber}
+                  label="Internal Order reference"
+                  required
+                >
                   <input
-                    className={inputClassName}
-                    defaultValue={
-                      extraction.supplier.displayName.value ??
-                      extraction.supplier.legalName.value ??
-                      ""
-                    }
+                    aria-invalid={Boolean(fieldErrors.orderNumber) || undefined}
+                    className={inputWithError("orderNumber")}
+                    name="orderNumber"
+                    onChange={(event) => setOrderNumber(event.target.value)}
+                    required
+                    value={orderNumber}
+                  />
+                </Field>
+                <Field
+                  error={fieldErrors.packageName}
+                  label="Package title"
+                  required
+                >
+                  <input
+                    aria-invalid={Boolean(fieldErrors.packageName) || undefined}
+                    className={inputWithError("packageName")}
                     name="packageName"
+                    onChange={(event) => setPackageName(event.target.value)}
+                    required
+                    value={packageName}
                   />
                 </Field>
               </>
             ) : (
-              <label className="grid gap-1.5 text-sm font-medium md:col-span-2">
-                Existing Order in this Project
-                <select className={inputClassName} name="orderId">
-                  <option value="">Choose Order</option>
-                  {review.orders.map((order) => (
-                    <option key={order.id} value={order.id}>
-                      {order.orderNumber} · {order.packageName}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="md:col-span-2">
+                <Field
+                  error={fieldErrors.orderId}
+                  label="Existing Order in this Project"
+                  required
+                >
+                  <select
+                    aria-invalid={Boolean(fieldErrors.orderId) || undefined}
+                    className={inputWithError("orderId")}
+                    name="orderId"
+                    required
+                  >
+                    <option value="">Choose Order</option>
+                    {review.orders.map((order) => (
+                      <option key={order.id} value={order.id}>
+                        {order.orderNumber} · {order.packageName}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
             )}
-            <Field label="Existing Supplier">
+            <Field error={fieldErrors.supplierId} label="Supplier" required>
               <select
-                className={inputClassName}
-                defaultValue={suggestedSupplier}
+                aria-invalid={Boolean(fieldErrors.supplierId) || undefined}
+                className={inputWithError("supplierId")}
                 name="supplierId"
+                onChange={(event) => setSelectedSupplierId(event.target.value)}
+                required
+                value={selectedSupplierId}
               >
                 <option value="">Choose Supplier</option>
-                {options.suppliers.map((supplier) => (
+                {selectableSuppliers.map((supplier) => (
                   <option key={supplier.id} value={supplier.id}>
                     {supplier.displayName}
                   </option>
@@ -511,36 +575,52 @@ function QuoteReview({
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <ApplyField
               checked={financial.supplierQuoteReference !== null}
+              error={fieldErrors.supplierQuoteReference}
               label="quote reference"
               name="applyQuoteReference"
             >
               <input
-                className={inputClassName}
+                aria-invalid={
+                  Boolean(fieldErrors.supplierQuoteReference) || undefined
+                }
+                className={inputWithError("supplierQuoteReference")}
                 defaultValue={financial.supplierQuoteReference ?? ""}
                 name="supplierQuoteReference"
               />
             </ApplyField>
             <ApplyField
               checked={financial.quoteDate !== null}
+              error={fieldErrors.quoteDate}
               label="quote date"
               name="applyQuoteDate"
             >
               <input
-                className={inputClassName}
+                aria-invalid={Boolean(fieldErrors.quoteDate) || undefined}
+                className={inputWithError("quoteDate")}
                 defaultValue={financial.quoteDate ?? ""}
                 name="quoteDate"
                 type="date"
               />
             </ApplyField>
             <ApplyField
-              checked={financial.currencyCode !== null}
+              checked={applyCurrency}
+              error={fieldErrors.orderCurrencyCode}
               label="purchase currency"
               name="applyCurrency"
+              onCheckedChange={(checked) =>
+                setApplyCurrency(actionType === "CREATE" ? true : checked)
+              }
+              required={actionType === "CREATE"}
             >
               <select
-                className={inputClassName}
-                defaultValue={financial.currencyCode ?? ""}
+                aria-invalid={
+                  Boolean(fieldErrors.orderCurrencyCode) || undefined
+                }
+                className={inputWithError("orderCurrencyCode")}
                 name="orderCurrencyCode"
+                onChange={(event) => setOrderCurrencyCode(event.target.value)}
+                required={actionType === "CREATE"}
+                value={orderCurrencyCode}
               >
                 <option value="">Choose currency</option>
                 {options.currencies.map((currency) => (
@@ -557,15 +637,22 @@ function QuoteReview({
               />
             </ApplyField>
             <ApplyField
-              checked={financial.purchaseCost !== null}
+              checked={applyPurchaseCost}
+              error={fieldErrors.purchaseCost}
               label="supplier purchase HT"
               name="applyPurchaseCost"
+              onCheckedChange={setApplyPurchaseCost}
             >
-              <input
-                className={inputClassName}
-                defaultValue={financial.purchaseCost ?? ""}
-                inputMode="decimal"
+              <MoneyInput
+                invalid={Boolean(fieldErrors.purchaseCost)}
                 name="purchaseCost"
+                onValueChange={(purchaseCost) =>
+                  setFinancialValues((current) => ({
+                    ...current,
+                    purchaseCost,
+                  }))
+                }
+                value={financialValues.purchaseCost}
               />
             </ApplyField>
             <ApplyField
@@ -573,11 +660,12 @@ function QuoteReview({
               label="freight HT"
               name="applyFreight"
             >
-              <input
-                className={inputClassName}
-                defaultValue={financial.freight ?? ""}
-                inputMode="decimal"
+              <MoneyInput
                 name="freight"
+                onValueChange={(freight) =>
+                  setFinancialValues((current) => ({ ...current, freight }))
+                }
+                value={financialValues.freight}
               />
               <select
                 className={`${inputClassName} mt-2`}
@@ -594,11 +682,17 @@ function QuoteReview({
                   </option>
                 ))}
               </select>
-              <input
+              <MoneyInput
                 className={`${inputClassName} mt-2`}
-                inputMode="decimal"
                 name="freightResaleAmount"
+                onValueChange={(freightResaleAmount) =>
+                  setFinancialValues((current) => ({
+                    ...current,
+                    freightResaleAmount,
+                  }))
+                }
                 placeholder="Separate freight resale, if applicable"
+                value={financialValues.freightResaleAmount}
               />
             </ApplyField>
             <ApplyField
@@ -606,11 +700,15 @@ function QuoteReview({
               label="other procurement costs HT"
               name="applyMiscellaneous"
             >
-              <input
-                className={inputClassName}
-                defaultValue={financial.miscellaneous ?? ""}
-                inputMode="decimal"
+              <MoneyInput
                 name="miscellaneous"
+                onValueChange={(miscellaneous) =>
+                  setFinancialValues((current) => ({
+                    ...current,
+                    miscellaneous,
+                  }))
+                }
+                value={financialValues.miscellaneous}
               />
             </ApplyField>
             <ApplyField
@@ -642,11 +740,9 @@ function QuoteReview({
           <div className="bg-background mt-4 rounded-md border p-3">
             <label className="flex items-center gap-2 text-xs font-medium">
               <input
-                defaultChecked={
-                  financial.inputVatAmount !== null ||
-                  financial.inputVatRate !== null
-                }
+                checked={applyInputVat}
                 name="applyInputVat"
+                onChange={(event) => setApplyInputVat(event.target.checked)}
                 type="checkbox"
               />
               Apply reviewed INPUT VAT
@@ -655,9 +751,30 @@ function QuoteReview({
               The AI does not select legal treatment or recoverability. Those
               management classifications require your decision.
             </p>
+            {applyInputVat ? (
+              <p className="text-muted-foreground mt-1 text-xs">
+                <span aria-hidden="true" className="text-destructive mr-1">
+                  *
+                </span>
+                Enter either a VAT rate or a VAT amount override.
+              </p>
+            ) : null}
             <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <Field label="Treatment">
-                <select className={inputClassName} name="inputVatTreatment">
+              <Field
+                error={fieldErrors.inputVatTreatment}
+                label="Treatment"
+                required={applyInputVat}
+              >
+                <select
+                  aria-invalid={
+                    Boolean(fieldErrors.inputVatTreatment) || undefined
+                  }
+                  className={inputWithError("inputVatTreatment")}
+                  name="inputVatTreatment"
+                  onChange={(event) => setInputVatTreatment(event.target.value)}
+                  required={applyInputVat}
+                  value={inputVatTreatment}
+                >
                   <option value="">Choose</option>
                   {options.vatTreatments.map((item) => (
                     <option key={item} value={item}>
@@ -666,10 +783,22 @@ function QuoteReview({
                   ))}
                 </select>
               </Field>
-              <Field label="Recoverability">
+              <Field
+                error={fieldErrors.inputVatRecoverability}
+                label="Recoverability"
+                required={applyInputVat}
+              >
                 <select
-                  className={inputClassName}
+                  aria-invalid={
+                    Boolean(fieldErrors.inputVatRecoverability) || undefined
+                  }
+                  className={inputWithError("inputVatRecoverability")}
                   name="inputVatRecoverability"
+                  onChange={(event) =>
+                    setInputVatRecoverability(event.target.value)
+                  }
+                  required={applyInputVat}
+                  value={inputVatRecoverability}
                 >
                   <option value="">Choose</option>
                   {options.vatRecoverabilities.map((item) => (
@@ -679,28 +808,47 @@ function QuoteReview({
                   ))}
                 </select>
               </Field>
-              <Field label="Taxable base HT">
-                <input
-                  className={inputClassName}
-                  defaultValue={financial.inputVatTaxableBase ?? ""}
-                  inputMode="decimal"
+              <Field
+                error={fieldErrors.inputVatTaxableBase}
+                label="Taxable base HT"
+                required={applyInputVat}
+              >
+                <MoneyInput
+                  invalid={Boolean(fieldErrors.inputVatTaxableBase)}
                   name="inputVatTaxableBase"
+                  onValueChange={(inputVatTaxableBase) =>
+                    setFinancialValues((current) => ({
+                      ...current,
+                      inputVatTaxableBase,
+                    }))
+                  }
+                  value={financialValues.inputVatTaxableBase}
                 />
               </Field>
-              <Field label="VAT rate %">
+              <Field error={fieldErrors.inputVatRate} label="VAT rate %">
                 <input
-                  className={inputClassName}
-                  defaultValue={percentValue(financial.inputVatRate)}
+                  aria-invalid={Boolean(fieldErrors.inputVatRate) || undefined}
+                  className={inputWithError("inputVatRate")}
                   inputMode="decimal"
                   name="inputVatRate"
+                  onChange={(event) => setInputVatRate(event.target.value)}
+                  value={inputVatRate}
                 />
               </Field>
-              <Field label="VAT amount override">
-                <input
-                  className={inputClassName}
-                  defaultValue={financial.inputVatAmount ?? ""}
-                  inputMode="decimal"
+              <Field
+                error={fieldErrors.inputVatAmount}
+                label="VAT amount override"
+              >
+                <MoneyInput
+                  invalid={Boolean(fieldErrors.inputVatAmount)}
                   name="inputVatAmount"
+                  onValueChange={(inputVatAmount) =>
+                    setFinancialValues((current) => ({
+                      ...current,
+                      inputVatAmount,
+                    }))
+                  }
+                  value={financialValues.inputVatAmount}
                 />
               </Field>
               <Field label="VAT country">
@@ -713,39 +861,35 @@ function QuoteReview({
                   ))}
                 </select>
               </Field>
+              {inputVatTreatment === "CUSTOM" ? (
+                <div className="md:col-span-2 xl:col-span-4">
+                  <Field
+                    error={fieldErrors.inputVatCustomTreatmentNote}
+                    label="Custom VAT treatment note"
+                    required
+                  >
+                    <input
+                      aria-invalid={
+                        Boolean(fieldErrors.inputVatCustomTreatmentNote) ||
+                        undefined
+                      }
+                      className={inputWithError("inputVatCustomTreatmentNote")}
+                      name="inputVatCustomTreatmentNote"
+                      required
+                    />
+                  </Field>
+                </div>
+              ) : null}
             </div>
           </div>
         </section>
 
-        <section className="bg-card rounded-lg border p-4 sm:p-5">
-          <h2 className="text-sm font-semibold">Supplier payment proposal</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Wording is preserved. Missing dates are never fabricated. Editing
-            these rows does not save them until you explicitly approve below.
-          </p>
-          <div className="mt-4 space-y-3">
-            {review.proposal.payments.length ? (
-              review.proposal.payments.map((payment, index) => (
-                <PaymentProposalFields
-                  index={index}
-                  key={`${payment.label}-${index}`}
-                  payment={payment}
-                />
-              ))
-            ) : (
-              <p className="text-muted-foreground text-sm">
-                No structured installment proposal was extracted.
-              </p>
-            )}
-          </div>
-          <label className="mt-4 flex items-start gap-2 text-sm font-medium">
-            <input className="mt-0.5" name="approveSchedule" type="checkbox" />
-            <span>
-              I approve creating these supplier-payment installments with the
-              reviewed amounts, percentages, and due dates.
-            </span>
-          </label>
-        </section>
+        <PaymentScheduleEditor
+          currencyCode={paymentCurrency}
+          fieldErrors={fieldErrors}
+          initialPayments={review.proposal.payments}
+          supplierPayable={supplierPayable}
+        />
 
         {state.message ? (
           <p
@@ -781,7 +925,7 @@ export function QuoteIntake({ options }: { options: QuoteIntakeOptions }) {
           action={action}
           className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end"
         >
-          <Field label="Project">
+          <Field label="Project" required>
             <select className={inputClassName} name="projectId" required>
               <option value="">Choose Project</option>
               {options.projects.map((project) => (
@@ -791,7 +935,7 @@ export function QuoteIntake({ options }: { options: QuoteIntakeOptions }) {
               ))}
             </select>
           </Field>
-          <Field label="Supplier quote file">
+          <Field label="Supplier quote file" required>
             <input
               accept={ACCEPTED_QUOTE_FILE_TYPES}
               className="border-input bg-background file:bg-muted file:text-foreground h-9 w-full rounded-lg border px-2 py-1 text-sm file:mr-3 file:rounded-md file:border-0 file:px-2 file:py-1"

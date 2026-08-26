@@ -209,6 +209,68 @@ export interface QuoteReviewProposal {
   warnings: string[];
 }
 
+function defaultPaymentProposal(
+  extraction: SupplierQuoteExtraction,
+  warnings: string[],
+): QuotePaymentProposal[] {
+  const extractedPayments = extraction.paymentTerms.installments.map(
+    (installment) => ({
+      basis: installment.basis,
+      dueDate: extracted(installment.objectiveDueDate),
+      fixedAmount: money(installment.fixedAmount),
+      label: extracted(installment.label) ?? "Supplier installment",
+      percentageRate: rate(installment.percentageRate),
+      timingDescription: extracted(installment.timingDescription),
+    }),
+  );
+  const hasUsablePayment = extractedPayments.some(
+    (payment) =>
+      (payment.basis === "PERCENTAGE" && payment.percentageRate !== null) ||
+      (payment.basis === "FIXED_AMOUNT" && payment.fixedAmount !== null),
+  );
+  if (!hasUsablePayment) {
+    warnings.push(
+      "No complete payment schedule was extracted. A fully editable 100% full-payment installment was proposed.",
+    );
+    return [
+      {
+        basis: "PERCENTAGE",
+        dueDate: null,
+        fixedAmount: null,
+        label: "Full payment",
+        percentageRate: "1.000000",
+        timingDescription: null,
+      },
+    ];
+  }
+  if (extractedPayments.length === 1) {
+    const [payment] = extractedPayments;
+    if (
+      payment?.basis === "PERCENTAGE" &&
+      payment.percentageRate !== null &&
+      new Decimal(payment.percentageRate).greaterThan(0) &&
+      new Decimal(payment.percentageRate).lessThan(1)
+    ) {
+      const balance = new Decimal(1).minus(payment.percentageRate);
+      warnings.push(
+        "A remaining-balance installment was added as an editable convenience default.",
+      );
+      return [
+        payment,
+        {
+          basis: "PERCENTAGE",
+          dueDate: null,
+          fixedAmount: null,
+          label: "Balance",
+          percentageRate: balance.toFixed(6),
+          timingDescription: null,
+        },
+      ];
+    }
+  }
+  return extractedPayments;
+}
+
 function uniqueWarnings(values: string[]): string[] {
   return [...new Set(values)];
 }
@@ -350,14 +412,7 @@ export function buildQuoteReviewProposal(
     );
   }
 
-  const payments = extraction.paymentTerms.installments.map((installment) => ({
-    basis: installment.basis,
-    dueDate: extracted(installment.objectiveDueDate),
-    fixedAmount: money(installment.fixedAmount),
-    label: extracted(installment.label) ?? "Supplier installment",
-    percentageRate: rate(installment.percentageRate),
-    timingDescription: extracted(installment.timingDescription),
-  }));
+  const payments = defaultPaymentProposal(extraction, warnings);
   const percentageTotal = payments.reduce(
     (total, installment) =>
       installment.basis === "PERCENTAGE" && installment.percentageRate

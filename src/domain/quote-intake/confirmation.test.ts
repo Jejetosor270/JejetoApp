@@ -20,6 +20,34 @@ function baseForm(): FormData {
 }
 
 describe("quote confirmation validation", () => {
+  it("requires only the visible core fields needed for a new Order", () => {
+    const missing = baseForm();
+    missing.delete("orderNumber");
+    missing.delete("packageName");
+    const invalid = parseQuoteConfirmation(missing);
+    expect(invalid.success).toBe(false);
+    if (invalid.success) return;
+    expect(invalid.error.issues.map((issue) => issue.path.join("."))).toEqual(
+      expect.arrayContaining([
+        "orderNumber",
+        "packageName",
+        "orderCurrencyCode",
+      ]),
+    );
+
+    const missingSupplier = baseForm();
+    missingSupplier.set("applyCurrency", "on");
+    missingSupplier.delete("supplierId");
+    const invalidSupplier = parseQuoteConfirmation(missingSupplier);
+    expect(invalidSupplier.success).toBe(false);
+    if (invalidSupplier.success) return;
+    expect(invalidSupplier.error.issues[0]?.path).toEqual(["supplierId"]);
+
+    const valid = baseForm();
+    valid.set("applyCurrency", "on");
+    expect(parseQuoteConfirmation(valid).success).toBe(true);
+  });
+
   it("normalizes money, FX, VAT, and installment percentages exactly", () => {
     const form = baseForm();
     form.set("applyCurrency", "on");
@@ -57,5 +85,43 @@ describe("quote confirmation validation", () => {
     expect(result.error.issues.map((item) => item.message)).toContain(
       "Every approved installment needs an objective due date.",
     );
+  });
+
+  it("ignores an unfinished payment draft until the employee approves it", () => {
+    const form = baseForm();
+    form.set("applyCurrency", "on");
+    form.set("paymentCount", "1");
+    form.set("payment.0.basis", "PERCENTAGE");
+    form.set("payment.0.label", "");
+    form.set("payment.0.percentageRate", "");
+
+    const unapproved = parseQuoteConfirmation(form);
+    expect(unapproved.success).toBe(true);
+    if (!unapproved.success) return;
+    expect(unapproved.data.payments).toEqual([]);
+
+    form.set("approveSchedule", "on");
+    const approved = parseQuoteConfirmation(form);
+    expect(approved.success).toBe(false);
+  });
+
+  it("requires the note displayed for a custom INPUT VAT treatment", () => {
+    const form = baseForm();
+    form.set("applyCurrency", "on");
+    form.set("applyInputVat", "on");
+    form.set("inputVatAmount", "20");
+    form.set("inputVatRecoverability", "RECOVERABLE");
+    form.set("inputVatTaxableBase", "100");
+    form.set("inputVatTreatment", "CUSTOM");
+
+    const missingNote = parseQuoteConfirmation(form);
+    expect(missingNote.success).toBe(false);
+    if (missingNote.success) return;
+    expect(
+      missingNote.error.issues.map((issue) => issue.path.join(".")),
+    ).toContain("inputVatCustomTreatmentNote");
+
+    form.set("inputVatCustomTreatmentNote", "Reviewed management treatment");
+    expect(parseQuoteConfirmation(form).success).toBe(true);
   });
 });

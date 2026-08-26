@@ -11,6 +11,7 @@ import {
 } from "@/lib/quote-intake/openai-provider";
 
 const originalApiKey = process.env.OPENAI_API_KEY;
+const originalModel = process.env.QUOTE_EXTRACTION_MODEL;
 const temporaryFile = {
   bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]),
   filename: "quote.pdf",
@@ -68,6 +69,7 @@ async function expectProviderFailure(
 
 beforeEach(() => {
   process.env.OPENAI_API_KEY = "test-only-key";
+  delete process.env.QUOTE_EXTRACTION_MODEL;
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
@@ -76,6 +78,8 @@ afterEach(() => {
   vi.restoreAllMocks();
   if (originalApiKey === undefined) delete process.env.OPENAI_API_KEY;
   else process.env.OPENAI_API_KEY = originalApiKey;
+  if (originalModel === undefined) delete process.env.QUOTE_EXTRACTION_MODEL;
+  else process.env.QUOTE_EXTRACTION_MODEL = originalModel;
 });
 
 describe("OpenAI quote extraction provider", () => {
@@ -96,7 +100,7 @@ describe("OpenAI quote extraction provider", () => {
       store: boolean;
       text: { format: { strict: boolean; type: string } };
     };
-    expect(body.model).toBe("gpt-5.4");
+    expect(body.model).toBe("gpt-5.6-luna");
     expect(body.store).toBe(false);
     expect(body.text.format).toMatchObject({
       strict: true,
@@ -106,6 +110,21 @@ describe("OpenAI quote extraction provider", () => {
       filename: "quote.pdf",
       type: "input_file",
     });
+  });
+
+  it("uses the optional server-side model override", async () => {
+    process.env.QUOTE_EXTRACTION_MODEL = "gpt-5.6-terra";
+    const fetchMock = mockResponse(
+      completedResponse(JSON.stringify(quoteExtractionFixture())),
+    );
+
+    const result = await new OpenAIQuoteExtractionProvider().extract(
+      temporaryFile,
+    );
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    const body = JSON.parse(String(request?.body)) as { model: string };
+    expect(body.model).toBe("gpt-5.6-terra");
+    expect(result.model).toBe("gpt-5.6-terra");
   });
 
   it("also accepts the SDK-style output_text convenience field", async () => {

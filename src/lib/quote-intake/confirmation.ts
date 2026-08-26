@@ -18,11 +18,9 @@ import { dateOnlyToDate } from "@/domain/payments/dates";
 import type { QuoteConfirmationInput } from "@/domain/quote-intake/confirmation";
 import type { CreateOrderInput } from "@/domain/procurement/validation";
 import { createOrderInputSchema } from "@/domain/procurement/validation";
-import {
-  QUOTE_EXTRACTION_MODEL,
-  QUOTE_EXTRACTION_PROVIDER,
-} from "@/config/quote-extraction";
+import { QUOTE_EXTRACTION_PROVIDER } from "@/config/quote-extraction";
 import { getDatabase } from "@/lib/db";
+import { getQuoteExtractionModel } from "@/lib/env/quote-extraction";
 import {
   createOrderInTransaction,
   getOrderInTransaction,
@@ -157,7 +155,7 @@ function reviewedOrderValues(
       ? input.inputVatCountryCode
       : current?.inputVatCountryCode,
     inputVatCustomTreatmentNote: input.applyInputVat
-      ? undefined
+      ? input.inputVatCustomTreatmentNote
       : current?.inputVatCustomTreatmentNote,
     inputVatRate: input.applyInputVat
       ? input.inputVatRate
@@ -372,7 +370,7 @@ export async function confirmSupplierQuote(
             input.action === "CREATE"
               ? SupplierQuoteImportAction.CREATED_ORDER
               : SupplierQuoteImportAction.UPDATED_ORDER,
-          extractionModel: QUOTE_EXTRACTION_MODEL,
+          extractionModel: getQuoteExtractionModel(),
           extractionProvider: QUOTE_EXTRACTION_PROVIDER,
           leadTimeRaw: input.leadTimeRaw ?? null,
           orderId,

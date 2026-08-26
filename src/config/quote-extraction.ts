@@ -1,4 +1,4 @@
-export const QUOTE_EXTRACTION_MODEL = "gpt-5.4";
+export const DEFAULT_QUOTE_EXTRACTION_MODEL = "gpt-5.6-luna";
 export const QUOTE_EXTRACTION_PROVIDER = "openai";
 
 export const MAX_QUOTE_FILE_BYTES = 4 * 1024 * 1024;

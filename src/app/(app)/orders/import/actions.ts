@@ -5,9 +5,17 @@ import { revalidatePath } from "next/cache";
 import type {
   QuoteConfirmationActionState,
   QuoteProcessingActionState,
+  QuoteSupplierCreationActionState,
 } from "@/domain/quote-intake/action-state";
+import { createSupplierInputSchema } from "@/domain/master-data/validation";
 import { parseQuoteConfirmation } from "@/domain/quote-intake/confirmation";
+import {
+  quoteSupplierDraftValues,
+  supplierCreationFieldErrors,
+} from "@/domain/quote-intake/supplier-creation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
+import { isExpectedMasterDataError } from "@/lib/master-data/errors";
+import { createSupplier } from "@/lib/master-data/suppliers";
 import { isDuplicateOrderReferenceError } from "@/lib/procurement/errors";
 import {
   confirmSupplierQuote,
@@ -20,6 +28,7 @@ import {
   processSupplierQuote,
   QuoteProcessingError,
 } from "@/lib/quote-intake/process";
+import { findQuoteSupplierDuplicates } from "@/lib/quote-intake/supplier-creation";
 
 export async function processSupplierQuoteAction(
   _: QuoteProcessingActionState,
@@ -56,6 +65,55 @@ export async function processSupplierQuoteAction(
   }
 }
 
+export async function createQuoteSupplierAction(
+  _: QuoteSupplierCreationActionState,
+  formData: FormData,
+): Promise<QuoteSupplierCreationActionState> {
+  const actor = await requireMasterDataEditor();
+  const values = quoteSupplierDraftValues(formData);
+  const input = createSupplierInputSchema.safeParse(values);
+  if (!input.success) {
+    return {
+      fieldErrors: supplierCreationFieldErrors(input.error),
+      message:
+        input.error.issues[0]?.message ??
+        "Review the new Supplier details before creating it.",
+      status: "error",
+      values,
+    };
+  }
+  try {
+    const duplicateCandidates = await findQuoteSupplierDuplicates(input.data);
+    if (duplicateCandidates.length) {
+      return {
+        duplicateCandidates,
+        message:
+          "A probable existing Supplier was found. Select it instead of creating a duplicate.",
+        status: "duplicate",
+        values,
+      };
+    }
+    const supplier = await createSupplier(actor.id, input.data);
+    revalidatePath("/suppliers");
+    return {
+      message: "Supplier created and selected for this quote.",
+      status: "success",
+      supplier: { displayName: supplier.displayName, id: supplier.id },
+      values,
+    };
+  } catch (error) {
+    if (isExpectedMasterDataError(error)) {
+      return { message: error.message, status: "error", values };
+    }
+    console.error("Unable to create Supplier from quote review.", error);
+    return {
+      message: "The Supplier could not be created. Please try again.",
+      status: "error",
+      values,
+    };
+  }
+}
+
 export async function confirmSupplierQuoteAction(
   _: QuoteConfirmationActionState,
   formData: FormData,
@@ -63,7 +121,14 @@ export async function confirmSupplierQuoteAction(
   const actor = await requireMasterDataEditor();
   const input = parseQuoteConfirmation(formData);
   if (!input.success) {
+    const fieldErrors = Object.fromEntries(
+      input.error.issues.map((issue) => [
+        issue.path.map(String).join("."),
+        issue.message,
+      ]),
+    );
     return {
+      fieldErrors,
       message:
         input.error.issues[0]?.message ??
         "Check the reviewed quote values before saving.",

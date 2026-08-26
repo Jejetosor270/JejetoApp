@@ -92,6 +92,7 @@ const confirmationSchema = z
         typeof value === "string" && value.trim() === "" ? undefined : value,
       z.string().trim().toUpperCase().refine(isSupportedCountryCode).optional(),
     ),
+    inputVatCustomTreatmentNote: optionalString(240),
     inputVatRate: optionalPercent,
     inputVatRecoverability: z.enum(VatRecoverability).optional(),
     inputVatTaxableBase: optionalMoney,
@@ -129,11 +130,11 @@ const confirmationSchema = z
     packageName: optionalString(200),
     paymentTermsRaw: optionalString(2000),
     payments: z.array(paymentSchema).max(12),
-    projectId: z.uuid(),
+    projectId: z.uuid("Choose a valid Project."),
     purchaseCost: optionalMoney,
     purchaseFxRate: optionalFx,
     quoteDate: optionalDate,
-    supplierId: z.uuid(),
+    supplierId: z.uuid("Choose an existing or newly created Supplier."),
     supplierQuoteReference: optionalString(120),
   })
   .strict()
@@ -151,6 +152,13 @@ const confirmationSchema = z
           code: "custom",
           message: "Enter a package title.",
           path: ["packageName"],
+        });
+      }
+      if (!value.applyCurrency || !value.orderCurrencyCode) {
+        context.addIssue({
+          code: "custom",
+          message: "Choose the purchase currency.",
+          path: ["orderCurrencyCode"],
         });
       }
     } else if (!value.orderId) {
@@ -226,6 +234,16 @@ const confirmationSchema = z
           path: ["inputVatRate"],
         });
       }
+      if (
+        value.inputVatTreatment === VatTreatment.CUSTOM &&
+        !value.inputVatCustomTreatmentNote
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Enter a note for the custom INPUT VAT treatment.",
+          path: ["inputVatCustomTreatmentNote"],
+        });
+      }
     }
     if (value.approveSchedule) {
       if (value.payments.length === 0) {
@@ -273,6 +291,7 @@ export function quoteConfirmationValues(formData: FormData): unknown {
   const count = Number.isInteger(countValue)
     ? Math.min(Math.max(countValue, 0), 12)
     : 0;
+  const approveSchedule = formData.get("approveSchedule") === "on";
   return {
     action: stringValue(formData, "action"),
     applyBuildings: formData.get("applyBuildings") === "on",
@@ -286,7 +305,7 @@ export function quoteConfirmationValues(formData: FormData): unknown {
     applyPurchaseCost: formData.get("applyPurchaseCost") === "on",
     applyQuoteDate: formData.get("applyQuoteDate") === "on",
     applyQuoteReference: formData.get("applyQuoteReference") === "on",
-    approveSchedule: formData.get("approveSchedule") === "on",
+    approveSchedule,
     buildingIds: formData
       .getAll("buildingIds")
       .filter((value): value is string => typeof value === "string"),
@@ -296,6 +315,10 @@ export function quoteConfirmationValues(formData: FormData): unknown {
     expectedDeliveryDate: stringValue(formData, "expectedDeliveryDate"),
     inputVatAmount: stringValue(formData, "inputVatAmount"),
     inputVatCountryCode: stringValue(formData, "inputVatCountryCode"),
+    inputVatCustomTreatmentNote: stringValue(
+      formData,
+      "inputVatCustomTreatmentNote",
+    ),
     inputVatRate: stringValue(formData, "inputVatRate"),
     inputVatRecoverability: stringValue(formData, "inputVatRecoverability"),
     inputVatTaxableBase: stringValue(formData, "inputVatTaxableBase"),
@@ -309,17 +332,22 @@ export function quoteConfirmationValues(formData: FormData): unknown {
     originalFilename: stringValue(formData, "originalFilename"),
     packageName: stringValue(formData, "packageName"),
     paymentTermsRaw: stringValue(formData, "paymentTermsRaw"),
-    payments: Array.from({ length: count }, (_, index) => ({
-      basis: stringValue(formData, `payment.${index}.basis`),
-      dueDate: stringValue(formData, `payment.${index}.dueDate`),
-      fixedAmount: stringValue(formData, `payment.${index}.fixedAmount`),
-      label: stringValue(formData, `payment.${index}.label`),
-      percentageRate: stringValue(formData, `payment.${index}.percentageRate`),
-      timingDescription: stringValue(
-        formData,
-        `payment.${index}.timingDescription`,
-      ),
-    })),
+    payments: approveSchedule
+      ? Array.from({ length: count }, (_, index) => ({
+          basis: stringValue(formData, `payment.${index}.basis`),
+          dueDate: stringValue(formData, `payment.${index}.dueDate`),
+          fixedAmount: stringValue(formData, `payment.${index}.fixedAmount`),
+          label: stringValue(formData, `payment.${index}.label`),
+          percentageRate: stringValue(
+            formData,
+            `payment.${index}.percentageRate`,
+          ),
+          timingDescription: stringValue(
+            formData,
+            `payment.${index}.timingDescription`,
+          ),
+        }))
+      : [],
     projectId: stringValue(formData, "projectId"),
     purchaseCost: stringValue(formData, "purchaseCost"),
     purchaseFxRate: stringValue(formData, "purchaseFxRate"),

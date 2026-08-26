@@ -15,6 +15,7 @@ import {
 import {
   Field,
   inputClassName,
+  MoneyInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
@@ -119,13 +120,11 @@ export function InstallmentForm({
         />
       </Field>
       <Field label="Fixed amount">
-        <input
-          className={inputClassName}
+        <MoneyInput
           defaultValue={
             basis === "FIXED_AMOUNT" ? installment?.scheduledAmount : ""
           }
           disabled={basis !== "FIXED_AMOUNT"}
-          inputMode="decimal"
           name="fixedAmount"
           placeholder="25000.00"
         />
@@ -245,10 +244,8 @@ export function SettlementForm({
     >
       <input name="installmentId" type="hidden" value={installment.id} />
       <Field label={`${wording === "payment" ? "Paid" : "Received"} amount`}>
-        <input
-          className={inputClassName}
+        <MoneyInput
           defaultValue={installment.outstandingAmount}
-          inputMode="decimal"
           name="amount"
           required
         />

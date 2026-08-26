@@ -1,26 +1,100 @@
 "use client";
 
 import { LoaderCircle } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { MasterDataActionState } from "@/components/master-data/action-state";
 import { Button } from "@/components/ui/button";
+import {
+  finalizeMoneyInput,
+  formatMoneyInput,
+  normalizeMoneyInput,
+} from "@/domain/procurement/presentation";
 
 export const inputClassName =
   "border-input bg-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-lg border px-3 text-sm outline-none focus-visible:ring-3";
 
 export function Field({
   children,
+  error,
   label,
+  required = false,
 }: {
   children: ReactNode;
+  error?: string | undefined;
   label: string;
+  required?: boolean | undefined;
 }) {
   return (
     <label className="grid gap-1.5 text-sm font-medium">
-      {label}
+      <span>
+        {label}
+        {required ? (
+          <span aria-hidden="true" className="text-destructive ml-1">
+            *
+          </span>
+        ) : null}
+      </span>
       {children}
+      {error ? (
+        <span className="text-destructive text-xs" role="alert">
+          {error}
+        </span>
+      ) : null}
     </label>
+  );
+}
+
+export function MoneyInput({
+  className = inputClassName,
+  defaultValue = "",
+  disabled = false,
+  invalid = false,
+  name,
+  onValueChange,
+  placeholder = "0.00",
+  required = false,
+  value,
+}: {
+  className?: string | undefined;
+  defaultValue?: string | null | undefined;
+  disabled?: boolean | undefined;
+  invalid?: boolean | undefined;
+  name: string;
+  onValueChange?: ((value: string) => void) | undefined;
+  placeholder?: string | undefined;
+  required?: boolean | undefined;
+  value?: string | undefined;
+}) {
+  const [internalValue, setInternalValue] = useState(defaultValue ?? "");
+  const [focused, setFocused] = useState(false);
+  const rawValue = value ?? internalValue;
+  const setValue = (nextValue: string) => {
+    if (value === undefined) setInternalValue(nextValue);
+    onValueChange?.(nextValue);
+  };
+  return (
+    <>
+      <input
+        aria-invalid={invalid || undefined}
+        className={`${className}${invalid ? "border-destructive focus-visible:border-destructive" : ""}`}
+        disabled={disabled}
+        inputMode="decimal"
+        onBlur={() => {
+          setValue(finalizeMoneyInput(rawValue));
+          setFocused(false);
+        }}
+        onChange={(event) => {
+          const normalized = normalizeMoneyInput(event.target.value);
+          if (normalized !== null) setValue(normalized);
+        }}
+        onFocus={() => setFocused(true)}
+        placeholder={placeholder}
+        required={required}
+        value={focused ? rawValue : formatMoneyInput(rawValue)}
+      />
+      <input disabled={disabled} name={name} type="hidden" value={rawValue} />
+    </>
   );
 }
 

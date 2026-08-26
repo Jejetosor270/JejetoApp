@@ -12,6 +12,7 @@ vi.mock("@/lib/quote-intake/confirmation", () => ({
 }));
 
 import { confirmSupplierQuoteAction } from "@/app/(app)/orders/import/actions";
+import { createQuoteSupplierAction } from "@/app/(app)/orders/import/actions";
 
 describe("supplier quote action authorization", () => {
   it("rejects an unauthorized update before validation or persistence", async () => {
@@ -23,5 +24,15 @@ describe("supplier quote action authorization", () => {
       confirmSupplierQuoteAction({}, new FormData()),
     ).rejects.toThrow("Unauthorized");
     expect(confirmation.confirmSupplierQuote).not.toHaveBeenCalled();
+  });
+
+  it("rejects unauthorized Supplier creation before validation or persistence", async () => {
+    auth.requireMasterDataEditor.mockRejectedValueOnce(
+      new Error("Unauthorized"),
+    );
+
+    await expect(createQuoteSupplierAction({}, new FormData())).rejects.toThrow(
+      "Unauthorized",
+    );
   });
 });

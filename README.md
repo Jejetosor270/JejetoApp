@@ -34,6 +34,7 @@ npm run dev
 - `DATABASE_URL`
 - `AUTH_SECRET`
 - `OPENAI_API_KEY` (required for supplier quote extraction; server-side only)
+- `QUOTE_EXTRACTION_MODEL` (optional server-side override; defaults to `gpt-5.6-luna`)
 - `DIRECT_URL` (recommended for migrations when the runtime URL is pooled)
 
 Keep environment values outside source control. Optional one-time administrator bootstrap variables are documented in `.env.example`.

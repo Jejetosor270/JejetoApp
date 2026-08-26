@@ -18,12 +18,13 @@ describe("supplier quote server action boundary", () => {
       "utf8",
     );
     expect(source.startsWith('"use server"')).toBe(true);
-    expect(source.match(/requireMasterDataEditor\(\)/g)).toHaveLength(2);
+    expect(source.match(/requireMasterDataEditor\(\)/g)).toHaveLength(3);
     const exports = source.match(/^export\s+.*$/gm) ?? [];
     expect(exports).toEqual([
       expect.stringMatching(
         /^export async function processSupplierQuoteAction/,
       ),
+      expect.stringMatching(/^export async function createQuoteSupplierAction/),
       expect.stringMatching(
         /^export async function confirmSupplierQuoteAction/,
       ),

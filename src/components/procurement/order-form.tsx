@@ -11,6 +11,7 @@ import {
   ActionFeedback,
   Field,
   inputClassName,
+  MoneyInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { initialOrderActionState } from "@/components/procurement/action-state";
@@ -131,10 +132,8 @@ function Money({
 }) {
   return (
     <Field label={fieldLabel}>
-      <input
-        className={inputClassName}
+      <MoneyInput
         defaultValue={defaultValue ?? ""}
-        inputMode="decimal"
         name={name}
         placeholder="0.00"
       />

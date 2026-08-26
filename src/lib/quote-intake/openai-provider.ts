@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import {
-  QUOTE_EXTRACTION_MODEL,
+  DEFAULT_QUOTE_EXTRACTION_MODEL,
   QUOTE_EXTRACTION_PROVIDER,
 } from "@/config/quote-extraction";
 import { supplierQuoteExtractionSchema } from "@/domain/quote-intake/extraction";
@@ -91,6 +91,7 @@ interface ExtractionFailureDiagnostics {
   contentTypes?: string[] | undefined;
   httpStatus?: number | undefined;
   incompleteReason?: string | undefined;
+  model?: string | undefined;
   openaiRequestId?: string | undefined;
   outputItemTypes?: string[] | undefined;
   outputTextEmpty?: boolean | undefined;
@@ -135,7 +136,7 @@ function logExtractionFailure(
 ) {
   console.error("Supplier quote extraction failed.", {
     category,
-    model: QUOTE_EXTRACTION_MODEL,
+    model: diagnostics.model ?? DEFAULT_QUOTE_EXTRACTION_MODEL,
     provider: QUOTE_EXTRACTION_PROVIDER,
     ...diagnostics,
   });
@@ -150,14 +151,22 @@ function failExtraction(
   throw new QuoteExtractionProviderError(message, category);
 }
 
-function requiredApiKey(): string {
+function requiredProviderConfiguration(): { apiKey: string; model: string } {
   try {
-    return getQuoteExtractionEnvironment().OPENAI_API_KEY;
+    const environment = getQuoteExtractionEnvironment();
+    return {
+      apiKey: environment.OPENAI_API_KEY,
+      model:
+        environment.QUOTE_EXTRACTION_MODEL ?? DEFAULT_QUOTE_EXTRACTION_MODEL,
+    };
   } catch (error) {
     return failExtraction(
       "configuration",
       "Quote extraction is not configured. Add OPENAI_API_KEY on the server.",
-      caughtErrorDiagnostics(error),
+      {
+        ...caughtErrorDiagnostics(error),
+        model: DEFAULT_QUOTE_EXTRACTION_MODEL,
+      },
     );
   }
 }
@@ -204,6 +213,7 @@ function refusal(payload: ProviderPayload): string | null {
 function responseDiagnostics(
   payload: ProviderPayload,
   response: Response,
+  model: string,
 ): ExtractionFailureDiagnostics {
   return {
     contentTypes: (payload.output ?? []).flatMap(
@@ -211,6 +221,7 @@ function responseDiagnostics(
     ),
     httpStatus: response.status,
     incompleteReason: payload.incomplete_details?.reason,
+    model,
     openaiRequestId: response.headers.get("x-request-id") ?? undefined,
     outputItemTypes: (payload.output ?? []).map((item) => item.type),
     outputTextEmpty: outputText(payload) === null,
@@ -278,7 +289,7 @@ Add concise warnings for discrepancies, multiple VAT rates, illegible content, o
 
 export class OpenAIQuoteExtractionProvider implements QuoteExtractionProvider {
   async extract(file: TemporaryQuoteFile): Promise<QuoteExtractionResult> {
-    const apiKey = requiredApiKey();
+    const { apiKey, model } = requiredProviderConfiguration();
     let response: Response;
     try {
       response = await fetch("https://api.openai.com/v1/responses", {
@@ -288,7 +299,7 @@ export class OpenAIQuoteExtractionProvider implements QuoteExtractionProvider {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: QUOTE_EXTRACTION_MODEL,
+          model,
           store: false,
           instructions,
           input: [
@@ -315,7 +326,7 @@ export class OpenAIQuoteExtractionProvider implements QuoteExtractionProvider {
         signal: AbortSignal.timeout(90_000),
       });
     } catch (error) {
-      const diagnostics = caughtErrorDiagnostics(error);
+      const diagnostics = { ...caughtErrorDiagnostics(error), model };
       if (
         error instanceof Error &&
         (error.name === "TimeoutError" || error.name === "AbortError")
@@ -342,6 +353,7 @@ export class OpenAIQuoteExtractionProvider implements QuoteExtractionProvider {
         {
           ...caughtErrorType(error),
           httpStatus: response.status,
+          model,
           openaiRequestId: response.headers.get("x-request-id") ?? undefined,
         },
       );
@@ -353,6 +365,7 @@ export class OpenAIQuoteExtractionProvider implements QuoteExtractionProvider {
         "The extraction provider returned an unexpected response. Please retry.",
         {
           httpStatus: response.status,
+          model,
           openaiRequestId: response.headers.get("x-request-id") ?? undefined,
           zodIssues: payload.error.issues.map((issue) => ({
             message: issue.message,
@@ -361,7 +374,7 @@ export class OpenAIQuoteExtractionProvider implements QuoteExtractionProvider {
         },
       );
     }
-    const diagnostics = responseDiagnostics(payload.data, response);
+    const diagnostics = responseDiagnostics(payload.data, response, model);
     if (
       !response.ok ||
       payload.data.status === "failed" ||
@@ -436,7 +449,7 @@ export class OpenAIQuoteExtractionProvider implements QuoteExtractionProvider {
     }
     return {
       extraction: extraction.data,
-      model: QUOTE_EXTRACTION_MODEL,
+      model,
       provider: QUOTE_EXTRACTION_PROVIDER,
     };
   }
