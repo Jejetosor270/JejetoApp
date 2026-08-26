@@ -126,7 +126,7 @@ export default async function OrdersPage({
           </Link>
         </div>
       ) : null}
-      <OrderTable orders={orders} />
+      <OrderTable canEdit={canEditMasterData(user.role)} orders={orders} />
     </div>
   );
 }

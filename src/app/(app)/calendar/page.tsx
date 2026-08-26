@@ -154,6 +154,11 @@ export default async function CalendarPage({
                       <span className="font-mono">{event.orderNumber}</span>
                     </div>
                     <p className="mt-1 truncate font-medium">{event.title}</p>
+                    {event.partyName ? (
+                      <p className="text-muted-foreground mt-0.5 truncate">
+                        {event.partyName} · {event.status?.replaceAll("_", " ")}
+                      </p>
+                    ) : null}
                     {event.amount && event.currencyCode ? (
                       <p className="financial-figure mt-1">
                         {formatMoney(event.amount, event.currencyCode)}
@@ -196,6 +201,12 @@ export default async function CalendarPage({
                       <span className="text-muted-foreground mt-0.5 block text-xs">
                         {event.projectName} · {event.orderNumber}
                       </span>
+                      {event.partyName ? (
+                        <span className="text-muted-foreground mt-0.5 block text-xs">
+                          {event.partyName} ·{" "}
+                          {event.status?.replaceAll("_", " ")}
+                        </span>
+                      ) : null}
                     </span>
                     <span className="text-right text-xs">
                       <span>{formatDateOnly(event.date)}</span>

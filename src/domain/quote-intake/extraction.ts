@@ -375,7 +375,22 @@ export function buildQuoteReviewProposal(
   const singleVat = vatLines.length === 1 ? vatLines[0] : undefined;
   const inputVatAmount = singleVat ? money(singleVat.amount) : null;
   const inputVatRate = singleVat ? rate(singleVat.rate) : null;
-  const inputVatTaxableBase = singleVat ? money(singleVat.taxableBase) : null;
+  const observedVatTaxableBase = singleVat
+    ? money(singleVat.taxableBase)
+    : null;
+  const inputVatTaxableBase = singleVat
+    ? (totalHt ?? observedVatTaxableBase)
+    : null;
+  if (
+    singleVat &&
+    totalHt &&
+    observedVatTaxableBase &&
+    !new Decimal(totalHt).equals(observedVatTaxableBase)
+  ) {
+    warnings.push(
+      "The single-rate VAT line base differs from Total HT. The reviewed taxable base uses Total HT; verify the observed VAT line before applying it.",
+    );
+  }
   if (inputVatTaxableBase && inputVatRate && inputVatAmount) {
     const expectedVat = calculateVatAmount(inputVatTaxableBase, inputVatRate);
     const variance = expectedVat.minus(inputVatAmount).abs();

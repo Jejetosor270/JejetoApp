@@ -809,6 +809,10 @@ export async function getProcurementCalendarEvents(
       label: item.label,
       orderId: item.orderId,
       orderNumber: item.orderNumber,
+      partyName:
+        item.direction === PaymentDirection.SUPPLIER_PAYMENT
+          ? item.supplierName
+          : item.clientName,
       paidAmount: item.paidAmount,
       projectName: item.projectName,
       scheduledAmount: item.scheduledAmount,

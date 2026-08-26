@@ -3,11 +3,14 @@
 import { revalidatePath } from "next/cache";
 
 import type { MasterDataActionState } from "@/components/master-data/action-state";
+import type { BulkActionState } from "@/domain/deletion/action-state";
+import { selectedIds, selectedIdsSchema } from "@/domain/deletion/validation";
 import {
   createSupplierInputSchema,
   updateSupplierInputSchema,
 } from "@/domain/master-data/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
+import { archiveSuppliers, BulkDeletionError } from "@/lib/deletion/bulk";
 import {
   unexpectedActionError,
   validationActionError,
@@ -57,4 +60,36 @@ export async function updateSupplierAction(
   }
   revalidatePath("/suppliers");
   return { message: "Supplier updated.", status: "success" };
+}
+
+export async function archiveSelectedSuppliersAction(
+  formData: FormData,
+): Promise<BulkActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = selectedIdsSchema.safeParse(selectedIds(formData));
+  if (!input.success) {
+    return {
+      message:
+        input.error.issues[0]?.message ?? "Check the selected Suppliers.",
+      status: "error",
+    };
+  }
+  try {
+    await archiveSuppliers(actor.id, input.data);
+  } catch (error) {
+    if (error instanceof BulkDeletionError) {
+      return { message: error.message, status: "error" };
+    }
+    console.error("Unable to archive selected Suppliers.", error);
+    return {
+      message: "The selected Suppliers could not be archived.",
+      status: "error",
+    };
+  }
+  revalidatePath("/suppliers");
+  revalidatePath("/orders");
+  return {
+    message: `${input.data.length} Supplier${input.data.length === 1 ? "" : "s"} archived.`,
+    status: "success",
+  };
 }

@@ -14,6 +14,7 @@ export interface ProcurementCalendarEvent {
   href: string;
   id: string;
   orderNumber: string;
+  partyName: string | null;
   projectName: string;
   status: string | null;
   title: string;
@@ -30,6 +31,7 @@ export function buildCalendarEvents(input: {
     label: string;
     orderId: string;
     orderNumber: string;
+    partyName: string;
     paidAmount: string;
     projectName: string;
     scheduledAmount: string;
@@ -51,6 +53,7 @@ export function buildCalendarEvents(input: {
     href: `/orders/${item.orderId}#payments`,
     id: `payment-${item.id}`,
     orderNumber: item.orderNumber,
+    partyName: item.partyName,
     projectName: item.projectName,
     status: derivePaymentStatus({
       dueDate: item.dueDate,
@@ -78,6 +81,7 @@ export function buildCalendarEvents(input: {
               href: `/orders/${order.id}`,
               id: `${type.toLowerCase()}-${order.id}`,
               orderNumber: order.orderNumber,
+              partyName: null,
               projectName: order.projectName,
               status: null,
               title,

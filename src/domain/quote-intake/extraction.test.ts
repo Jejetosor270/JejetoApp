@@ -91,6 +91,61 @@ describe("supplier quote extraction", () => {
     );
   });
 
+  it("uses Total HT as the ordinary single-rate VAT taxable base", () => {
+    const extraction = quoteExtractionFixture();
+    extraction.financials.goodsSubtotalHt.value = "100000";
+    extraction.financials.freightHt = {
+      diagnostic: null,
+      status: "MISSING",
+      value: null,
+    };
+    extraction.financials.totalHt.value = "100000";
+    extraction.financials.totalVat.value = "20000";
+    extraction.financials.totalTtc.value = "120000";
+    extraction.financials.vatLines[0]!.taxableBase.value = "90000";
+    extraction.financials.vatLines[0]!.amount.value = "20000";
+
+    const proposal = buildQuoteReviewProposal(extraction);
+    expect(proposal.financial).toMatchObject({
+      inputVatAmount: "20000.0000",
+      inputVatRate: "0.200000",
+      inputVatTaxableBase: "100000.0000",
+    });
+  });
+
+  it("does not add freight again when Total HT already includes it", () => {
+    const extraction = quoteExtractionFixture();
+    extraction.financials.goodsSubtotalHt.value = "90000";
+    extraction.financials.freightHt.value = "10000";
+    extraction.financials.freightRelationToTotal.value = "INCLUDED_IN_TOTAL";
+    extraction.financials.totalHt.value = "100000";
+    extraction.financials.totalVat.value = "20000";
+    extraction.financials.totalTtc.value = "120000";
+    extraction.financials.vatLines[0]!.taxableBase.value = "110000";
+    extraction.financials.vatLines[0]!.amount.value = "20000";
+
+    const proposal = buildQuoteReviewProposal(extraction);
+    expect(proposal.financial.inputVatTaxableBase).toBe("100000.0000");
+    expect(proposal.financial.freight).toBe("10000.0000");
+  });
+
+  it("preserves a zero-rate taxable base without inventing VAT", () => {
+    const extraction = quoteExtractionFixture();
+    extraction.financials.goodsSubtotalHt.value = "100000";
+    extraction.financials.totalHt.value = "100000";
+    extraction.financials.totalVat.value = "0";
+    extraction.financials.totalTtc.value = "100000";
+    extraction.financials.vatLines[0]!.taxableBase.value = "100000";
+    extraction.financials.vatLines[0]!.rate.value = "0";
+    extraction.financials.vatLines[0]!.amount.value = "0";
+
+    expect(buildQuoteReviewProposal(extraction).financial).toMatchObject({
+      inputVatAmount: "0.0000",
+      inputVatRate: "0.000000",
+      inputVatTaxableBase: "100000.0000",
+    });
+  });
+
   it("represents 50/50, 30/40/30, and fixed payment proposals exactly", () => {
     const fifty = quoteExtractionFixture();
     fifty.paymentTerms.installments[0]!.percentageRate.value = "0.50";

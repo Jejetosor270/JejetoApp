@@ -3,12 +3,15 @@
 import { revalidatePath } from "next/cache";
 
 import type { OrderActionState } from "@/components/procurement/action-state";
+import type { BulkActionState } from "@/domain/deletion/action-state";
+import { selectedIds, selectedIdsSchema } from "@/domain/deletion/validation";
 import { orderFormValues } from "@/domain/procurement/form-data";
 import {
   createOrderInputSchema,
   updateOrderInputSchema,
 } from "@/domain/procurement/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
+import { BulkDeletionError, deleteDraftOrders } from "@/lib/deletion/bulk";
 import {
   isDuplicateOrderReferenceError,
   isExpectedProcurementError,
@@ -46,6 +49,7 @@ export async function createOrderAction(
   try {
     const orderId = await createOrder(actor.id, input.data);
     revalidatePath("/orders");
+    revalidatePath("/calendar");
     revalidatePath(`/projects/${input.data.projectId}`);
     return {
       message: "Procurement order created.",
@@ -77,6 +81,7 @@ export async function updateOrderAction(
   try {
     await updateOrder(actor.id, input.data);
     revalidatePath("/orders");
+    revalidatePath("/calendar");
     revalidatePath(`/orders/${input.data.id}`);
     revalidatePath(`/projects/${input.data.projectId}`);
     return {
@@ -86,5 +91,38 @@ export async function updateOrderAction(
     };
   } catch (error) {
     return errorState(error);
+  }
+}
+
+export async function deleteSelectedOrdersAction(
+  formData: FormData,
+): Promise<BulkActionState> {
+  await requireMasterDataEditor();
+  const input = selectedIdsSchema.safeParse(selectedIds(formData));
+  if (!input.success) {
+    return {
+      message: input.error.issues[0]?.message ?? "Check the selected Orders.",
+      status: "error",
+    };
+  }
+  try {
+    await deleteDraftOrders(input.data);
+    revalidatePath("/orders");
+    revalidatePath("/calendar");
+    revalidatePath("/projects");
+    revalidatePath("/reports");
+    return {
+      message: `${input.data.length} Order${input.data.length === 1 ? "" : "s"} deleted.`,
+      status: "success",
+    };
+  } catch (error) {
+    if (error instanceof BulkDeletionError) {
+      return { message: error.message, status: "error" };
+    }
+    console.error("Unable to delete selected Orders.", error);
+    return {
+      message: "The selected Orders could not be deleted.",
+      status: "error",
+    };
   }
 }

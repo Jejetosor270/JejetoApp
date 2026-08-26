@@ -1,5 +1,14 @@
+"use client";
+
 import Link from "next/link";
 
+import { deleteSelectedOrdersAction } from "@/app/(app)/orders/actions";
+import {
+  BulkActionBar,
+  SelectionCell,
+  SelectionHeader,
+  useBulkSelection,
+} from "@/components/bulk-actions/bulk-selection";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import type { OrderSummary } from "@/lib/procurement/orders";
 
@@ -11,13 +20,36 @@ function dateLabel(value: string): string {
   }).format(new Date(value));
 }
 
-export function OrderTable({ orders }: { orders: OrderSummary[] }) {
+export function OrderTable({
+  canEdit,
+  orders,
+}: {
+  canEdit: boolean;
+  orders: OrderSummary[];
+}) {
+  const selection = useBulkSelection(orders.map((order) => order.id));
   return (
     <section className="bg-card overflow-hidden rounded-lg border">
+      {canEdit ? (
+        <BulkActionBar
+          action={deleteSelectedOrdersAction}
+          actionLabel="Delete selected"
+          clearSelection={selection.clear}
+          confirmationVerb="Permanently delete"
+          selectedIds={selection.selectedIds}
+        />
+      ) : null}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[68rem] text-left text-sm">
           <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
             <tr>
+              {canEdit ? (
+                <SelectionHeader
+                  checked={selection.allSelected}
+                  disabled={orders.length === 0}
+                  onChange={selection.toggleAll}
+                />
+              ) : null}
               <th className="px-4 py-3">Reference</th>
               <th className="px-4 py-3">Package</th>
               <th className="px-4 py-3">Project</th>
@@ -35,6 +67,13 @@ export function OrderTable({ orders }: { orders: OrderSummary[] }) {
               const cost = order.costs;
               return (
                 <tr className="hover:bg-muted/25" key={order.id}>
+                  {canEdit ? (
+                    <SelectionCell
+                      checked={selection.isSelected(order.id)}
+                      label={`Order ${order.orderNumber}`}
+                      onChange={() => selection.toggle(order.id)}
+                    />
+                  ) : null}
                   <td className="px-4 py-3 font-mono text-xs">
                     <Link
                       className="hover:text-primary underline-offset-4 hover:underline"

@@ -10,6 +10,11 @@ const transaction = vi.hoisted(() => ({
 }));
 const database = vi.hoisted(() => ({
   currency: { findFirst: vi.fn() },
+  paymentInstallment: {
+    deleteMany: vi.fn(),
+    findUnique: vi.fn(),
+    update: vi.fn(),
+  },
   $transaction: vi.fn(
     async (callback: (value: typeof transaction) => Promise<unknown>) =>
       callback(transaction),
@@ -21,7 +26,13 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
 vi.mock("@/lib/procurement/orders", () => ({ getOrder }));
 
-import { createInstallment, recordSettlement } from "@/lib/payments/payments";
+import {
+  cancelInstallment,
+  createInstallment,
+  recordSettlement,
+  removeUnpaidInstallment,
+  updateInstallment,
+} from "@/lib/payments/payments";
 
 const order = {
   costs: {
@@ -57,11 +68,55 @@ describe("payment persistence", () => {
     });
     expect(transaction.paymentInstallment.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        dueDate: new Date("2026-09-15T00:00:00.000Z"),
         expectedFxRateToReporting: null,
         percentageRate: "0.300000",
         scheduledAmount: "30000.0000",
         sequence: 1,
       }),
+    });
+  });
+
+  it("moves the authoritative due date when an installment is edited", async () => {
+    database.paymentInstallment.findUnique.mockResolvedValue({
+      currencyCode: "USD",
+      direction: "SUPPLIER_PAYMENT",
+      orderId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      settlements: [],
+    });
+    await updateInstallment("actor-1", {
+      basis: "FIXED_AMOUNT",
+      currencyCode: "USD",
+      direction: "SUPPLIER_PAYMENT",
+      dueDate: "2026-09-20",
+      fixedAmount: "30000",
+      id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      label: "Moved deposit",
+      orderId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+    });
+    expect(database.paymentInstallment.update).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        dueDate: new Date("2026-09-20T00:00:00.000Z"),
+        updatedById: "actor-1",
+      }),
+      where: { id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a" },
+    });
+  });
+
+  it("cancels installments and hard-deletes only those without settlements", async () => {
+    await cancelInstallment("actor-1", "a12b6b9b-10e9-4e42-b93f-38796de4f65a");
+    expect(database.paymentInstallment.update).toHaveBeenCalledWith({
+      data: { isCancelled: true, updatedById: "actor-1" },
+      where: { id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a" },
+    });
+
+    database.paymentInstallment.deleteMany.mockResolvedValue({ count: 1 });
+    await removeUnpaidInstallment("a12b6b9b-10e9-4e42-b93f-38796de4f65a");
+    expect(database.paymentInstallment.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+        settlements: { none: {} },
+      },
     });
   });
 

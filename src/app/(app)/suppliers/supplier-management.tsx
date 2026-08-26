@@ -4,9 +4,16 @@ import { Pencil, Plus } from "lucide-react";
 import { useActionState, useState } from "react";
 
 import {
+  archiveSelectedSuppliersAction,
   createSupplierAction,
   updateSupplierAction,
 } from "@/app/(app)/suppliers/actions";
+import {
+  BulkActionBar,
+  SelectionCell,
+  SelectionHeader,
+  useBulkSelection,
+} from "@/components/bulk-actions/bulk-selection";
 import { initialMasterDataActionState } from "@/components/master-data/action-state";
 import {
   ActionFeedback,
@@ -271,6 +278,7 @@ export function SupplierManagement({
   suppliers: SupplierView[];
 }) {
   const [editing, setEditing] = useState<SupplierView | null>(null);
+  const selection = useBulkSelection(suppliers.map((supplier) => supplier.id));
   return (
     <div className="space-y-5">
       {canEdit ? <CreateSupplierForm currencies={currencies} /> : null}
@@ -282,10 +290,26 @@ export function SupplierManagement({
         />
       ) : null}
       <section className="bg-card overflow-hidden rounded-lg border">
+        {canEdit ? (
+          <BulkActionBar
+            action={archiveSelectedSuppliersAction}
+            actionLabel="Archive selected"
+            clearSelection={selection.clear}
+            confirmationVerb="Archive"
+            selectedIds={selection.selectedIds}
+          />
+        ) : null}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[55rem] text-left text-sm">
             <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
               <tr>
+                {canEdit ? (
+                  <SelectionHeader
+                    checked={selection.allSelected}
+                    disabled={suppliers.length === 0}
+                    onChange={selection.toggleAll}
+                  />
+                ) : null}
                 <th className="px-4 py-3">Display name</th>
                 <th className="px-4 py-3">Legal name</th>
                 <th className="px-4 py-3">Country</th>
@@ -302,6 +326,13 @@ export function SupplierManagement({
             <tbody className="divide-y">
               {suppliers.map((supplier) => (
                 <tr className="hover:bg-muted/25" key={supplier.id}>
+                  {canEdit ? (
+                    <SelectionCell
+                      checked={selection.isSelected(supplier.id)}
+                      label={`Supplier ${supplier.displayName}`}
+                      onChange={() => selection.toggle(supplier.id)}
+                    />
+                  ) : null}
                   <td className="px-4 py-3 font-medium">
                     {supplier.displayName}
                   </td>

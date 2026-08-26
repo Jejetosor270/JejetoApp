@@ -4,7 +4,16 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useActionState } from "react";
 
-import { createProjectAction } from "@/app/(app)/projects/actions";
+import {
+  archiveSelectedProjectsAction,
+  createProjectAction,
+} from "@/app/(app)/projects/actions";
+import {
+  BulkActionBar,
+  SelectionCell,
+  SelectionHeader,
+  useBulkSelection,
+} from "@/components/bulk-actions/bulk-selection";
 import { initialMasterDataActionState } from "@/components/master-data/action-state";
 import {
   ActionFeedback,
@@ -181,6 +190,7 @@ export function ProjectManagement({
   projects: ProjectView[];
   statuses: string[];
 }) {
+  const selection = useBulkSelection(projects.map((project) => project.id));
   return (
     <div className="space-y-5">
       {canEdit ? (
@@ -192,10 +202,26 @@ export function ProjectManagement({
         />
       ) : null}
       <section className="bg-card overflow-hidden rounded-lg border">
+        {canEdit ? (
+          <BulkActionBar
+            action={archiveSelectedProjectsAction}
+            actionLabel="Archive selected"
+            clearSelection={selection.clear}
+            confirmationVerb="Archive"
+            selectedIds={selection.selectedIds}
+          />
+        ) : null}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[58rem] text-left text-sm">
             <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
               <tr>
+                {canEdit ? (
+                  <SelectionHeader
+                    checked={selection.allSelected}
+                    disabled={projects.length === 0}
+                    onChange={selection.toggleAll}
+                  />
+                ) : null}
                 <th className="px-4 py-3">Project</th>
                 <th className="px-4 py-3">Code</th>
                 <th className="px-4 py-3">Client</th>
@@ -209,6 +235,13 @@ export function ProjectManagement({
             <tbody className="divide-y">
               {projects.map((project) => (
                 <tr className="hover:bg-muted/25" key={project.id}>
+                  {canEdit ? (
+                    <SelectionCell
+                      checked={selection.isSelected(project.id)}
+                      label={`Project ${project.name}`}
+                      onChange={() => selection.toggle(project.id)}
+                    />
+                  ) : null}
                   <td className="px-4 py-3 font-medium">
                     <Link
                       className="hover:text-primary underline-offset-4 hover:underline"

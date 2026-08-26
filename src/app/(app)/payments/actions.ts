@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import type { PaymentActionState } from "@/domain/payments/action-state";
+import type { BulkActionState } from "@/domain/deletion/action-state";
+import { selectedIds, selectedIdsSchema } from "@/domain/deletion/validation";
 import {
   idFormValue,
   installmentFormValues,
@@ -17,6 +19,10 @@ import {
   updateInstallmentSchema,
 } from "@/domain/payments/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
+import {
+  BulkDeletionError,
+  deleteUnpaidInstallments,
+} from "@/lib/deletion/bulk";
 import { isExpectedPaymentError } from "@/lib/payments/errors";
 import {
   applyPaymentPreset,
@@ -209,5 +215,37 @@ export async function applyPaymentPresetAction(
     return { message: "Schedule preset added.", status: "success" };
   } catch (error) {
     return errorState(error);
+  }
+}
+
+export async function deleteSelectedInstallmentsAction(
+  formData: FormData,
+): Promise<BulkActionState> {
+  await requireMasterDataEditor();
+  const input = selectedIdsSchema.safeParse(selectedIds(formData));
+  if (!input.success) {
+    return {
+      message:
+        input.error.issues[0]?.message ?? "Check the selected installments.",
+      status: "error",
+    };
+  }
+  try {
+    await deleteUnpaidInstallments(input.data);
+    refreshPaymentViews();
+    revalidatePath("/reports");
+    return {
+      message: `${input.data.length} installment${input.data.length === 1 ? "" : "s"} deleted.`,
+      status: "success",
+    };
+  } catch (error) {
+    if (error instanceof BulkDeletionError) {
+      return { message: error.message, status: "error" };
+    }
+    console.error("Unable to delete selected installments.", error);
+    return {
+      message: "The selected installments could not be deleted.",
+      status: "error",
+    };
   }
 }

@@ -11,6 +11,7 @@ const installment = {
   label: "Deposit",
   orderId: "order-1",
   orderNumber: "PO-001",
+  partyName: "Example Supplier",
   paidAmount: "0",
   projectName: "Example Project",
   scheduledAmount: "30000",
@@ -40,6 +41,10 @@ describe("procurement calendar derivation", () => {
       "EXPECTED_READY",
       "EXPECTED_DELIVERY",
     ]);
+    expect(events[0]).toMatchObject({
+      partyName: "Example Supplier",
+      status: "UPCOMING",
+    });
   });
 
   it("reflects a changed source date without a stale duplicate", () => {
@@ -50,5 +55,44 @@ describe("procurement calendar derivation", () => {
     });
     expect(events).toHaveLength(1);
     expect(events[0]?.date).toBe("2026-09-20");
+  });
+
+  it("reflects cancellation, settlement, and deletion directly from sources", () => {
+    const cancelled = buildCalendarEvents({
+      installments: [{ ...installment, isCancelled: true }],
+      orders: [],
+      today: "2026-09-01",
+    });
+    expect(cancelled[0]?.status).toBe("CANCELLED");
+
+    const paid = buildCalendarEvents({
+      installments: [{ ...installment, paidAmount: "30000" }],
+      orders: [],
+      today: "2026-09-01",
+    });
+    expect(paid[0]?.status).toBe("PAID");
+
+    expect(
+      buildCalendarEvents({
+        installments: [],
+        orders: [],
+        today: "2026-09-01",
+      }),
+    ).toEqual([]);
+  });
+
+  it("derives an AI-approved installment through the same path without duplicates", () => {
+    const events = buildCalendarEvents({
+      installments: [{ ...installment, label: "AI-reviewed deposit" }],
+      orders: [],
+      today: "2026-09-01",
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      date: "2026-09-15",
+      id: "payment-installment-1",
+      title: "AI-reviewed deposit",
+      type: "SUPPLIER_PAYMENT",
+    });
   });
 });

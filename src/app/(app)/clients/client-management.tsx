@@ -4,9 +4,16 @@ import { Pencil, Plus } from "lucide-react";
 import { useActionState, useState } from "react";
 
 import {
+  archiveSelectedClientsAction,
   createClientAction,
   updateClientAction,
 } from "@/app/(app)/clients/actions";
+import {
+  BulkActionBar,
+  SelectionCell,
+  SelectionHeader,
+  useBulkSelection,
+} from "@/components/bulk-actions/bulk-selection";
 import { initialMasterDataActionState } from "@/components/master-data/action-state";
 import {
   ActionFeedback,
@@ -243,6 +250,7 @@ export function ClientManagement({
   currencies: CurrencyOption[];
 }) {
   const [editing, setEditing] = useState<ClientView | null>(null);
+  const selection = useBulkSelection(clients.map((client) => client.id));
   return (
     <div className="space-y-5">
       {canEdit ? <CreateClientForm currencies={currencies} /> : null}
@@ -254,10 +262,26 @@ export function ClientManagement({
         />
       ) : null}
       <section className="bg-card overflow-hidden rounded-lg border">
+        {canEdit ? (
+          <BulkActionBar
+            action={archiveSelectedClientsAction}
+            actionLabel="Archive selected"
+            clearSelection={selection.clear}
+            confirmationVerb="Archive"
+            selectedIds={selection.selectedIds}
+          />
+        ) : null}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[48rem] text-left text-sm">
             <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
               <tr>
+                {canEdit ? (
+                  <SelectionHeader
+                    checked={selection.allSelected}
+                    disabled={clients.length === 0}
+                    onChange={selection.toggleAll}
+                  />
+                ) : null}
                 <th className="px-4 py-3">Display name</th>
                 <th className="px-4 py-3">Legal name</th>
                 <th className="px-4 py-3">Country</th>
@@ -273,6 +297,13 @@ export function ClientManagement({
             <tbody className="divide-y">
               {clients.map((client) => (
                 <tr className="hover:bg-muted/25" key={client.id}>
+                  {canEdit ? (
+                    <SelectionCell
+                      checked={selection.isSelected(client.id)}
+                      label={`Client ${client.displayName}`}
+                      onChange={() => selection.toggle(client.id)}
+                    />
+                  ) : null}
                   <td className="px-4 py-3 font-medium">
                     {client.displayName}
                   </td>
