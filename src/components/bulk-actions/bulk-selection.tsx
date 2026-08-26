@@ -4,6 +4,17 @@ import { Trash2 } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import type { BulkActionState } from "@/domain/deletion/action-state";
 
 export type BulkServerAction = (formData: FormData) => Promise<BulkActionState>;
@@ -30,30 +41,26 @@ export function useBulkSelection(rowIds: string[]) {
 
 export function BulkActionBar({
   action,
-  actionLabel,
   clearSelection,
-  confirmationVerb,
+  entityName,
+  impactSummary,
+  scope,
   selectedIds,
 }: {
   action: BulkServerAction;
-  actionLabel: string;
   clearSelection: () => void;
-  confirmationVerb: string;
+  entityName: string;
+  impactSummary?: string;
+  scope: string;
   selectedIds: string[];
 }) {
   const [feedback, setFeedback] = useState<BulkActionState | null>(null);
   const [pending, startTransition] = useTransition();
   const count = selectedIds.length;
   const runAction = () => {
-    if (
-      !window.confirm(
-        `${confirmationVerb} ${count} selected record${count === 1 ? "" : "s"}?`,
-      )
-    ) {
-      return;
-    }
     const formData = new FormData();
     selectedIds.forEach((id) => formData.append("selectedIds", id));
+    setFeedback(null);
     startTransition(async () => {
       try {
         const result = await action(formData);
@@ -73,16 +80,56 @@ export function BulkActionBar({
       {count > 0 ? (
         <>
           <span className="text-sm font-medium">{count} selected</span>
-          <Button
-            disabled={pending}
-            onClick={runAction}
-            size="sm"
-            type="button"
-            variant="destructive"
-          >
-            <Trash2 data-icon="inline-start" />
-            {pending ? "Working…" : actionLabel}
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                disabled={pending}
+                size="sm"
+                type="button"
+                variant="destructive"
+              >
+                <Trash2 data-icon="inline-start" />
+                {pending ? "Deleting…" : "Delete selected"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Permanently delete {count === 1 ? "this" : count}{" "}
+                  {count === 1 ? entityName : `selected ${entityName}s`}?
+                </AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-3">
+                    <p>{scope}</p>
+                    {impactSummary ? (
+                      <p className="text-foreground font-medium">
+                        {impactSummary}
+                      </p>
+                    ) : null}
+                    <p className="text-destructive font-medium">
+                      This action cannot be undone.
+                    </p>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel asChild>
+                  <Button type="button" variant="outline">
+                    Cancel
+                  </Button>
+                </AlertDialogCancel>
+                <AlertDialogAction asChild>
+                  <Button
+                    onClick={runAction}
+                    type="button"
+                    variant="destructive"
+                  >
+                    Permanently delete
+                  </Button>
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </>
       ) : null}
       {feedback ? (

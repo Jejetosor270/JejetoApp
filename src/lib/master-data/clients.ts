@@ -13,6 +13,7 @@ import {
 } from "./errors";
 
 const clientSelect = {
+  _count: { select: { projects: true } },
   billingAddressLine1: true,
   billingAddressLine2: true,
   billingCity: true,

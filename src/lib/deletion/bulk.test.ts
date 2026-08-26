@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const transaction = vi.hoisted(() => ({
-  client: { findMany: vi.fn(), updateMany: vi.fn() },
+  building: { deleteMany: vi.fn() },
+  client: { deleteMany: vi.fn(), findMany: vi.fn() },
   paymentInstallment: { deleteMany: vi.fn(), findMany: vi.fn() },
+  paymentSettlement: { deleteMany: vi.fn() },
   procurementOrder: { deleteMany: vi.fn(), findMany: vi.fn() },
   procurementOrderBuilding: { deleteMany: vi.fn() },
   procurementOrderCostLine: { deleteMany: vi.fn() },
   procurementOrderVatEntry: { deleteMany: vi.fn() },
-  project: { findMany: vi.fn(), updateMany: vi.fn() },
-  supplier: { findMany: vi.fn(), updateMany: vi.fn() },
+  project: { deleteMany: vi.fn(), findMany: vi.fn() },
+  supplier: { deleteMany: vi.fn(), findMany: vi.fn() },
+  supplierQuoteImport: { deleteMany: vi.fn() },
 }));
 const database = vi.hoisted(() => ({
   $transaction: vi.fn(
@@ -21,109 +24,182 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
 
 import {
-  archiveClients,
-  archiveProjects,
-  archiveSuppliers,
-  deleteDraftOrders,
-  deleteUnpaidInstallments,
+  deleteClients,
+  deleteInstallments,
+  deleteOrders,
+  deleteProjects,
+  deleteSuppliers,
 } from "@/lib/deletion/bulk";
 
 const firstId = "a12b6b9b-10e9-4e42-b93f-38796de4f65a";
 const secondId = "b12b6b9b-10e9-4e42-b93f-38796de4f65a";
+const orderId = "c12b6b9b-10e9-4e42-b93f-38796de4f65a";
+const secondOrderId = "d12b6b9b-10e9-4e42-b93f-38796de4f65a";
 
-describe("transactional bulk deletion policies", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("archives Client, Supplier, and Project master data instead of deleting it", async () => {
-    transaction.client.findMany.mockResolvedValue([{ id: firstId }]);
-    transaction.supplier.findMany.mockResolvedValue([{ id: firstId }]);
-    transaction.project.findMany.mockResolvedValue([{ id: firstId }]);
-
-    await archiveClients("actor-1", [firstId]);
-    await archiveSuppliers("actor-1", [firstId]);
-    await archiveProjects("actor-1", [firstId]);
-
-    expect(transaction.client.updateMany).toHaveBeenCalledWith({
-      data: { isActive: false, updatedById: "actor-1" },
-      where: { id: { in: [firstId] } },
-    });
-    expect(transaction.supplier.updateMany).toHaveBeenCalledWith({
-      data: { isActive: false, updatedById: "actor-1" },
-      where: { id: { in: [firstId] } },
-    });
-    expect(transaction.project.updateMany).toHaveBeenCalledWith({
-      data: { status: "ARCHIVED", updatedById: "actor-1" },
-      where: { id: { in: [firstId] } },
-    });
+function expectOrderHierarchyDeleted(ids: string[]): void {
+  expect(transaction.supplierQuoteImport.deleteMany).toHaveBeenCalledWith({
+    where: { orderId: { in: ids } },
   });
-
-  it("deletes only pristine Draft Orders and their owned configuration", async () => {
-    transaction.procurementOrder.findMany.mockResolvedValue([
-      {
-        _count: { paymentInstallments: 0, quoteImports: 0 },
-        id: firstId,
-        orderNumber: "PO-DRAFT",
-        status: "DRAFT",
-      },
-    ]);
-
-    await deleteDraftOrders([firstId]);
-
-    expect(transaction.procurementOrderBuilding.deleteMany).toHaveBeenCalled();
-    expect(transaction.procurementOrderCostLine.deleteMany).toHaveBeenCalled();
-    expect(transaction.procurementOrderVatEntry.deleteMany).toHaveBeenCalled();
-    expect(transaction.procurementOrder.deleteMany).toHaveBeenCalledWith({
-      where: { id: { in: [firstId] }, status: "DRAFT" },
-    });
+  expect(transaction.paymentSettlement.deleteMany).toHaveBeenCalledWith({
+    where: { installment: { orderId: { in: ids } } },
   });
-
-  it("blocks the entire Order selection when any Order has protected history", async () => {
-    transaction.procurementOrder.findMany.mockResolvedValue([
-      {
-        _count: { paymentInstallments: 0, quoteImports: 0 },
-        id: firstId,
-        orderNumber: "PO-DRAFT",
-        status: "DRAFT",
-      },
-      {
-        _count: { paymentInstallments: 1, quoteImports: 0 },
-        id: secondId,
-        orderNumber: "PO-HISTORY",
-        status: "DRAFT",
-      },
-    ]);
-
-    await expect(deleteDraftOrders([firstId, secondId])).rejects.toThrow(
-      "PO-HISTORY",
-    );
-    expect(transaction.procurementOrder.deleteMany).not.toHaveBeenCalled();
+  expect(transaction.paymentInstallment.deleteMany).toHaveBeenCalledWith({
+    where: { orderId: { in: ids } },
   });
+  expect(transaction.procurementOrderBuilding.deleteMany).toHaveBeenCalledWith({
+    where: { orderId: { in: ids } },
+  });
+  expect(transaction.procurementOrderCostLine.deleteMany).toHaveBeenCalledWith({
+    where: { orderId: { in: ids } },
+  });
+  expect(transaction.procurementOrderVatEntry.deleteMany).toHaveBeenCalledWith({
+    where: { orderId: { in: ids } },
+  });
+  expect(transaction.procurementOrder.deleteMany).toHaveBeenCalledWith({
+    where: { id: { in: ids } },
+  });
+}
 
-  it("deletes unpaid installments and blocks any selection containing a settlement", async () => {
-    transaction.paymentInstallment.findMany.mockResolvedValue([
-      { _count: { settlements: 0 }, id: firstId, label: "Deposit" },
-    ]);
-    await deleteUnpaidInstallments([firstId]);
-    expect(transaction.paymentInstallment.deleteMany).toHaveBeenCalledWith({
-      where: { id: { in: [firstId] }, settlements: { none: {} } },
-    });
-
+describe("transactional populated-hierarchy deletion", () => {
+  beforeEach(() => {
     vi.clearAllMocks();
+    for (const model of Object.values(transaction)) {
+      if ("deleteMany" in model)
+        model.deleteMany.mockResolvedValue({ count: 1 });
+    }
+  });
+
+  it("deletes a populated Order and all Order-owned records", async () => {
+    transaction.procurementOrder.findMany.mockResolvedValue([{ id: firstId }]);
+
+    await deleteOrders([firstId]);
+
+    expectOrderHierarchyDeleted([firstId]);
+    expect(transaction.supplier.deleteMany).not.toHaveBeenCalled();
+    expect(transaction.project.deleteMany).not.toHaveBeenCalled();
+    expect(transaction.client.deleteMany).not.toHaveBeenCalled();
+    expect(transaction.building.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("deletes settlements before deleting selected installments", async () => {
     transaction.paymentInstallment.findMany.mockResolvedValue([
-      { _count: { settlements: 0 }, id: firstId, label: "Deposit" },
-      { _count: { settlements: 1 }, id: secondId, label: "Paid balance" },
+      { id: firstId },
+      { id: secondId },
     ]);
-    await expect(deleteUnpaidInstallments([firstId, secondId])).rejects.toThrow(
-      "Paid balance",
+    transaction.paymentInstallment.deleteMany.mockResolvedValue({ count: 2 });
+
+    await deleteInstallments([firstId, secondId]);
+
+    expect(transaction.paymentSettlement.deleteMany).toHaveBeenCalledWith({
+      where: { installmentId: { in: [firstId, secondId] } },
+    });
+    expect(transaction.paymentInstallment.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [firstId, secondId] } },
+    });
+  });
+
+  it("deletes a Supplier's multiple Orders and preserves Projects and Clients", async () => {
+    transaction.supplier.findMany.mockResolvedValue([{ id: firstId }]);
+    transaction.procurementOrder.findMany.mockResolvedValue([
+      { id: orderId },
+      { id: secondOrderId },
+    ]);
+    transaction.procurementOrder.deleteMany.mockResolvedValue({ count: 2 });
+
+    await deleteSuppliers([firstId]);
+
+    expect(transaction.supplierQuoteImport.deleteMany).toHaveBeenCalledWith({
+      where: { supplierId: { in: [firstId] } },
+    });
+    expectOrderHierarchyDeleted([orderId, secondOrderId]);
+    expect(transaction.supplier.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [firstId] } },
+    });
+    expect(transaction.project.deleteMany).not.toHaveBeenCalled();
+    expect(transaction.client.deleteMany).not.toHaveBeenCalled();
+    expect(transaction.building.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("deletes a Project's Buildings and Order hierarchy but preserves Client and Suppliers", async () => {
+    transaction.project.findMany.mockResolvedValue([{ id: firstId }]);
+    transaction.procurementOrder.findMany.mockResolvedValue([{ id: orderId }]);
+
+    await deleteProjects([firstId]);
+
+    expect(transaction.supplierQuoteImport.deleteMany).toHaveBeenCalledWith({
+      where: { projectId: { in: [firstId] } },
+    });
+    expectOrderHierarchyDeleted([orderId]);
+    expect(transaction.building.deleteMany).toHaveBeenCalledWith({
+      where: { projectId: { in: [firstId] } },
+    });
+    expect(transaction.project.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [firstId] } },
+    });
+    expect(transaction.client.deleteMany).not.toHaveBeenCalled();
+    expect(transaction.supplier.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("deletes a Client's complete Project hierarchy but preserves Suppliers", async () => {
+    transaction.client.findMany.mockResolvedValue([{ id: firstId }]);
+    transaction.project.findMany.mockResolvedValue([
+      { id: firstId },
+      { id: secondId },
+    ]);
+    transaction.procurementOrder.findMany.mockResolvedValue([{ id: orderId }]);
+    transaction.project.deleteMany.mockResolvedValue({ count: 2 });
+
+    await deleteClients([firstId]);
+
+    expect(transaction.supplierQuoteImport.deleteMany).toHaveBeenCalledWith({
+      where: { projectId: { in: [firstId, secondId] } },
+    });
+    expectOrderHierarchyDeleted([orderId]);
+    expect(transaction.building.deleteMany).toHaveBeenCalledWith({
+      where: { projectId: { in: [firstId, secondId] } },
+    });
+    expect(transaction.project.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [firstId, secondId] } },
+    });
+    expect(transaction.client.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [firstId] } },
+    });
+    expect(transaction.supplier.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("runs bulk deletion in one serializable transaction", async () => {
+    transaction.procurementOrder.findMany.mockResolvedValue([
+      { id: firstId },
+      { id: secondId },
+    ]);
+    transaction.procurementOrder.deleteMany.mockResolvedValue({ count: 2 });
+
+    await deleteOrders([firstId, secondId]);
+
+    expect(database.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "Serializable",
+    });
+    expectOrderHierarchyDeleted([firstId, secondId]);
+  });
+
+  it("stops before parent deletion when a child deletion fails so the transaction can roll back", async () => {
+    transaction.procurementOrder.findMany.mockResolvedValue([{ id: firstId }]);
+    transaction.paymentSettlement.deleteMany.mockRejectedValue(
+      new Error("database failure"),
     );
+
+    await expect(deleteOrders([firstId])).rejects.toThrow("database failure");
     expect(transaction.paymentInstallment.deleteMany).not.toHaveBeenCalled();
+    expect(transaction.procurementOrder.deleteMany).not.toHaveBeenCalled();
   });
 
   it("fails safely when any selected record no longer exists", async () => {
     transaction.client.findMany.mockResolvedValue([{ id: firstId }]);
-    await expect(
-      archiveClients("actor-1", [firstId, secondId]),
-    ).rejects.toThrow("no longer exist");
-    expect(transaction.client.updateMany).not.toHaveBeenCalled();
+
+    await expect(deleteClients([firstId, secondId])).rejects.toThrow(
+      "no longer exist",
+    );
+    expect(transaction.project.findMany).not.toHaveBeenCalled();
+    expect(transaction.client.deleteMany).not.toHaveBeenCalled();
   });
 });

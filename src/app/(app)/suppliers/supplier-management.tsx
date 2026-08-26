@@ -4,8 +4,8 @@ import { Pencil, Plus } from "lucide-react";
 import { useActionState, useState } from "react";
 
 import {
-  archiveSelectedSuppliersAction,
   createSupplierAction,
+  deleteSelectedSuppliersAction,
   updateSupplierAction,
 } from "@/app/(app)/suppliers/actions";
 import {
@@ -30,6 +30,7 @@ interface CurrencyOption {
   name: string;
 }
 interface SupplierView {
+  _count: { orders: number };
   addressLine1: string | null;
   addressLine2: string | null;
   city: string | null;
@@ -279,6 +280,9 @@ export function SupplierManagement({
 }) {
   const [editing, setEditing] = useState<SupplierView | null>(null);
   const selection = useBulkSelection(suppliers.map((supplier) => supplier.id));
+  const affectedOrderCount = suppliers
+    .filter((supplier) => selection.selectedIds.includes(supplier.id))
+    .reduce((total, supplier) => total + supplier._count.orders, 0);
   return (
     <div className="space-y-5">
       {canEdit ? <CreateSupplierForm currencies={currencies} /> : null}
@@ -292,10 +296,11 @@ export function SupplierManagement({
       <section className="bg-card overflow-hidden rounded-lg border">
         {canEdit ? (
           <BulkActionBar
-            action={archiveSelectedSuppliersAction}
-            actionLabel="Archive selected"
+            action={deleteSelectedSuppliersAction}
             clearSelection={selection.clear}
-            confirmationVerb="Archive"
+            entityName="Supplier"
+            impactSummary={`${affectedOrderCount} Procurement Order${affectedOrderCount === 1 ? "" : "s"} and all downstream records will also be deleted.`}
+            scope="Deleting the selected Suppliers will also permanently delete their Procurement Orders, payments, settlements, quote-import history, financial records, and Building links. Projects and Clients are preserved."
             selectedIds={selection.selectedIds}
           />
         ) : null}

@@ -14,7 +14,7 @@ import {
   updateClientInputSchema,
 } from "@/domain/master-data/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
-import { archiveClients, BulkDeletionError } from "@/lib/deletion/bulk";
+import { BulkDeletionError, deleteClients } from "@/lib/deletion/bulk";
 import { isExpectedMasterDataError } from "@/lib/master-data/errors";
 import { createClient, updateClient } from "@/lib/master-data/clients";
 
@@ -62,10 +62,10 @@ export async function updateClientAction(
   return { message: "Client updated.", status: "success" };
 }
 
-export async function archiveSelectedClientsAction(
+export async function deleteSelectedClientsAction(
   formData: FormData,
 ): Promise<BulkActionState> {
-  const actor = await requireMasterDataEditor();
+  await requireMasterDataEditor();
   const input = selectedIdsSchema.safeParse(selectedIds(formData));
   if (!input.success) {
     return {
@@ -74,21 +74,25 @@ export async function archiveSelectedClientsAction(
     };
   }
   try {
-    await archiveClients(actor.id, input.data);
+    await deleteClients(input.data);
   } catch (error) {
     if (error instanceof BulkDeletionError) {
       return { message: error.message, status: "error" };
     }
-    console.error("Unable to archive selected Clients.", error);
+    console.error("Unable to delete selected Clients.", error);
     return {
-      message: "The selected Clients could not be archived.",
+      message: "The selected Clients could not be deleted.",
       status: "error",
     };
   }
   revalidatePath("/clients");
   revalidatePath("/projects");
+  revalidatePath("/orders");
+  revalidatePath("/payments");
+  revalidatePath("/calendar");
+  revalidatePath("/reports");
   return {
-    message: `${input.data.length} Client${input.data.length === 1 ? "" : "s"} archived.`,
+    message: `${input.data.length} Client${input.data.length === 1 ? "" : "s"} deleted.`,
     status: "success",
   };
 }

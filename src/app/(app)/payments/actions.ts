@@ -19,10 +19,7 @@ import {
   updateInstallmentSchema,
 } from "@/domain/payments/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
-import {
-  BulkDeletionError,
-  deleteUnpaidInstallments,
-} from "@/lib/deletion/bulk";
+import { BulkDeletionError, deleteInstallments } from "@/lib/deletion/bulk";
 import { isExpectedPaymentError } from "@/lib/payments/errors";
 import {
   applyPaymentPreset,
@@ -231,7 +228,7 @@ export async function deleteSelectedInstallmentsAction(
     };
   }
   try {
-    await deleteUnpaidInstallments(input.data);
+    await deleteInstallments(input.data);
     refreshPaymentViews();
     revalidatePath("/reports");
     return {

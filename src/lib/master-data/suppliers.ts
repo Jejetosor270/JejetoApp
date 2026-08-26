@@ -13,6 +13,7 @@ import {
 } from "./errors";
 
 const supplierSelect = {
+  _count: { select: { orders: true } },
   addressLine1: true,
   addressLine2: true,
   city: true,

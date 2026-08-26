@@ -171,6 +171,7 @@ export default async function PaymentsPage({
           paidAmount: item.paidAmount,
           projectName: item.projectName,
           scheduledAmount: item.scheduledAmount,
+          settlementCount: item.settlements.length,
           status: item.status,
           supplierName: item.supplierName,
         }))}

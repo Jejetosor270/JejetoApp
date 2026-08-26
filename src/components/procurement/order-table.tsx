@@ -33,9 +33,9 @@ export function OrderTable({
       {canEdit ? (
         <BulkActionBar
           action={deleteSelectedOrdersAction}
-          actionLabel="Delete selected"
           clearSelection={selection.clear}
-          confirmationVerb="Permanently delete"
+          entityName="Order"
+          scope="Deleting the selected Orders will also permanently delete all related Supplier Payment and Client Receipt schedules, settlements, quote-import history, VAT and cost records, Building links, and other Order-owned data. Suppliers, Projects, and Clients are preserved."
           selectedIds={selection.selectedIds}
         />
       ) : null}

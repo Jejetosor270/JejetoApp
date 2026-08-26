@@ -4,8 +4,8 @@ import { Pencil, Plus } from "lucide-react";
 import { useActionState, useState } from "react";
 
 import {
-  archiveSelectedClientsAction,
   createClientAction,
+  deleteSelectedClientsAction,
   updateClientAction,
 } from "@/app/(app)/clients/actions";
 import {
@@ -30,6 +30,7 @@ interface CurrencyOption {
   name: string;
 }
 interface ClientView {
+  _count: { projects: number };
   billingAddressLine1: string | null;
   billingAddressLine2: string | null;
   billingCity: string | null;
@@ -251,6 +252,9 @@ export function ClientManagement({
 }) {
   const [editing, setEditing] = useState<ClientView | null>(null);
   const selection = useBulkSelection(clients.map((client) => client.id));
+  const affectedProjectCount = clients
+    .filter((client) => selection.selectedIds.includes(client.id))
+    .reduce((total, client) => total + client._count.projects, 0);
   return (
     <div className="space-y-5">
       {canEdit ? <CreateClientForm currencies={currencies} /> : null}
@@ -264,10 +268,11 @@ export function ClientManagement({
       <section className="bg-card overflow-hidden rounded-lg border">
         {canEdit ? (
           <BulkActionBar
-            action={archiveSelectedClientsAction}
-            actionLabel="Archive selected"
+            action={deleteSelectedClientsAction}
             clearSelection={selection.clear}
-            confirmationVerb="Archive"
+            entityName="Client"
+            impactSummary={`${affectedProjectCount} Project${affectedProjectCount === 1 ? "" : "s"} and the complete downstream hierarchy will also be deleted.`}
+            scope="Deleting the selected Clients will also permanently delete their Projects, Buildings, Procurement Orders, payments, settlements, quote-import history, and financial records. Suppliers are preserved."
             selectedIds={selection.selectedIds}
           />
         ) : null}

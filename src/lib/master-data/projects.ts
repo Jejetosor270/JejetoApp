@@ -16,6 +16,7 @@ import {
 } from "./errors";
 
 const projectSelect = {
+  _count: { select: { buildings: true, orders: true } },
   client: { select: { displayName: true, id: true } },
   clientId: true,
   code: true,
@@ -151,7 +152,6 @@ export async function getProject(projectId: string): Promise<{
     where: { id: projectId },
     select: {
       ...projectSelect,
-      _count: { select: { orders: true } },
       buildings: {
         orderBy: [{ isActive: "desc" }, { name: "asc" }],
         select: buildingSelect,
@@ -159,12 +159,12 @@ export async function getProject(projectId: string): Promise<{
     },
   });
   if (!project) return null;
-  const { _count, buildings, ...projectFields } = project;
+  const { buildings, ...projectFields } = project;
   return {
     buildings,
     project: {
       ...projectFields,
-      reportingCurrencyLocked: _count.orders > 0,
+      reportingCurrencyLocked: projectFields._count.orders > 0,
     },
   };
 }

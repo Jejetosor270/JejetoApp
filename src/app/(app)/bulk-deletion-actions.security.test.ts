@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const auth = vi.hoisted(() => ({ requireMasterDataEditor: vi.fn() }));
 const deletion = vi.hoisted(() => ({
-  archiveClients: vi.fn(),
-  archiveProjects: vi.fn(),
-  archiveSuppliers: vi.fn(),
-  deleteDraftOrders: vi.fn(),
-  deleteUnpaidInstallments: vi.fn(),
+  deleteClients: vi.fn(),
+  deleteInstallments: vi.fn(),
+  deleteOrders: vi.fn(),
+  deleteProjects: vi.fn(),
+  deleteSuppliers: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -17,11 +17,11 @@ vi.mock("@/lib/deletion/bulk", () => ({
   BulkDeletionError: class BulkDeletionError extends Error {},
 }));
 
-import { archiveSelectedClientsAction } from "@/app/(app)/clients/actions";
+import { deleteSelectedClientsAction } from "@/app/(app)/clients/actions";
 import { deleteSelectedOrdersAction } from "@/app/(app)/orders/actions";
 import { deleteSelectedInstallmentsAction } from "@/app/(app)/payments/actions";
-import { archiveSelectedProjectsAction } from "@/app/(app)/projects/actions";
-import { archiveSelectedSuppliersAction } from "@/app/(app)/suppliers/actions";
+import { deleteSelectedProjectsAction } from "@/app/(app)/projects/actions";
+import { deleteSelectedSuppliersAction } from "@/app/(app)/suppliers/actions";
 
 describe("bulk deletion action authorization", () => {
   beforeEach(() => {
@@ -30,9 +30,9 @@ describe("bulk deletion action authorization", () => {
   });
 
   it.each([
-    ["Clients", archiveSelectedClientsAction],
-    ["Suppliers", archiveSelectedSuppliersAction],
-    ["Projects", archiveSelectedProjectsAction],
+    ["Clients", deleteSelectedClientsAction],
+    ["Suppliers", deleteSelectedSuppliersAction],
+    ["Projects", deleteSelectedProjectsAction],
     ["Orders", deleteSelectedOrdersAction],
     ["installments", deleteSelectedInstallmentsAction],
   ])(

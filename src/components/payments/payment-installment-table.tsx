@@ -27,6 +27,7 @@ interface PaymentInstallmentRow {
   paidAmount: string;
   projectName: string;
   scheduledAmount: string;
+  settlementCount: number;
   status: DerivedPaymentStatus;
   supplierName: string;
 }
@@ -39,14 +40,18 @@ export function PaymentInstallmentTable({
   installments: PaymentInstallmentRow[];
 }) {
   const selection = useBulkSelection(installments.map((item) => item.id));
+  const affectedSettlementCount = installments
+    .filter((item) => selection.selectedIds.includes(item.id))
+    .reduce((total, item) => total + item.settlementCount, 0);
   return (
     <div className="overflow-hidden rounded-lg border">
       {canEdit ? (
         <BulkActionBar
           action={deleteSelectedInstallmentsAction}
-          actionLabel="Delete selected"
           clearSelection={selection.clear}
-          confirmationVerb="Permanently delete"
+          entityName="installment"
+          impactSummary={`${affectedSettlementCount} recorded settlement${affectedSettlementCount === 1 ? "" : "s"} will also be deleted.`}
+          scope="Deleting the selected payment or receipt installments will also permanently delete all associated settlement and payment-history records."
           selectedIds={selection.selectedIds}
         />
       ) : null}

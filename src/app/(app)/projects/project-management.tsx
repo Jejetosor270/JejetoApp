@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useActionState } from "react";
 
 import {
-  archiveSelectedProjectsAction,
   createProjectAction,
+  deleteSelectedProjectsAction,
 } from "@/app/(app)/projects/actions";
 import {
   BulkActionBar,
@@ -36,6 +36,7 @@ interface ManagerOption {
   name: string;
 }
 interface ProjectView {
+  _count: { buildings: number; orders: number };
   client: ClientOption;
   code: string;
   countryCode: string | null;
@@ -191,6 +192,17 @@ export function ProjectManagement({
   statuses: string[];
 }) {
   const selection = useBulkSelection(projects.map((project) => project.id));
+  const selectedProjects = projects.filter((project) =>
+    selection.selectedIds.includes(project.id),
+  );
+  const affectedBuildingCount = selectedProjects.reduce(
+    (total, project) => total + project._count.buildings,
+    0,
+  );
+  const affectedOrderCount = selectedProjects.reduce(
+    (total, project) => total + project._count.orders,
+    0,
+  );
   return (
     <div className="space-y-5">
       {canEdit ? (
@@ -204,10 +216,11 @@ export function ProjectManagement({
       <section className="bg-card overflow-hidden rounded-lg border">
         {canEdit ? (
           <BulkActionBar
-            action={archiveSelectedProjectsAction}
-            actionLabel="Archive selected"
+            action={deleteSelectedProjectsAction}
             clearSelection={selection.clear}
-            confirmationVerb="Archive"
+            entityName="Project"
+            impactSummary={`${affectedBuildingCount} Building${affectedBuildingCount === 1 ? "" : "s"} and ${affectedOrderCount} Procurement Order${affectedOrderCount === 1 ? "" : "s"} will also be deleted.`}
+            scope="Deleting the selected Projects will also permanently delete their Buildings, Procurement Orders, payments, settlements, quote-import history, and financial records. Clients and Suppliers are preserved."
             selectedIds={selection.selectedIds}
           />
         ) : null}

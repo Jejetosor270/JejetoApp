@@ -11,7 +11,7 @@ import {
   updateOrderInputSchema,
 } from "@/domain/procurement/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
-import { BulkDeletionError, deleteDraftOrders } from "@/lib/deletion/bulk";
+import { BulkDeletionError, deleteOrders } from "@/lib/deletion/bulk";
 import {
   isDuplicateOrderReferenceError,
   isExpectedProcurementError,
@@ -106,11 +106,12 @@ export async function deleteSelectedOrdersAction(
     };
   }
   try {
-    await deleteDraftOrders(input.data);
+    await deleteOrders(input.data);
     revalidatePath("/orders");
     revalidatePath("/calendar");
     revalidatePath("/projects");
     revalidatePath("/reports");
+    revalidatePath("/payments");
     return {
       message: `${input.data.length} Order${input.data.length === 1 ? "" : "s"} deleted.`,
       status: "success",

@@ -10,7 +10,7 @@ import {
   updateSupplierInputSchema,
 } from "@/domain/master-data/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
-import { archiveSuppliers, BulkDeletionError } from "@/lib/deletion/bulk";
+import { BulkDeletionError, deleteSuppliers } from "@/lib/deletion/bulk";
 import {
   unexpectedActionError,
   validationActionError,
@@ -62,10 +62,10 @@ export async function updateSupplierAction(
   return { message: "Supplier updated.", status: "success" };
 }
 
-export async function archiveSelectedSuppliersAction(
+export async function deleteSelectedSuppliersAction(
   formData: FormData,
 ): Promise<BulkActionState> {
-  const actor = await requireMasterDataEditor();
+  await requireMasterDataEditor();
   const input = selectedIdsSchema.safeParse(selectedIds(formData));
   if (!input.success) {
     return {
@@ -75,21 +75,25 @@ export async function archiveSelectedSuppliersAction(
     };
   }
   try {
-    await archiveSuppliers(actor.id, input.data);
+    await deleteSuppliers(input.data);
   } catch (error) {
     if (error instanceof BulkDeletionError) {
       return { message: error.message, status: "error" };
     }
-    console.error("Unable to archive selected Suppliers.", error);
+    console.error("Unable to delete selected Suppliers.", error);
     return {
-      message: "The selected Suppliers could not be archived.",
+      message: "The selected Suppliers could not be deleted.",
       status: "error",
     };
   }
   revalidatePath("/suppliers");
   revalidatePath("/orders");
+  revalidatePath("/payments");
+  revalidatePath("/calendar");
+  revalidatePath("/projects");
+  revalidatePath("/reports");
   return {
-    message: `${input.data.length} Supplier${input.data.length === 1 ? "" : "s"} archived.`,
+    message: `${input.data.length} Supplier${input.data.length === 1 ? "" : "s"} deleted.`,
     status: "success",
   };
 }

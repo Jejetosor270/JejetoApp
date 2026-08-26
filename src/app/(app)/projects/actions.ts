@@ -7,7 +7,7 @@ import type { BulkActionState } from "@/domain/deletion/action-state";
 import { selectedIds, selectedIdsSchema } from "@/domain/deletion/validation";
 import { createProjectInputSchema } from "@/domain/master-data/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
-import { archiveProjects, BulkDeletionError } from "@/lib/deletion/bulk";
+import { BulkDeletionError, deleteProjects } from "@/lib/deletion/bulk";
 import {
   unexpectedActionError,
   validationActionError,
@@ -41,10 +41,10 @@ export async function createProjectAction(
   return { message: "Project created.", status: "success" };
 }
 
-export async function archiveSelectedProjectsAction(
+export async function deleteSelectedProjectsAction(
   formData: FormData,
 ): Promise<BulkActionState> {
-  const actor = await requireMasterDataEditor();
+  await requireMasterDataEditor();
   const input = selectedIdsSchema.safeParse(selectedIds(formData));
   if (!input.success) {
     return {
@@ -53,22 +53,24 @@ export async function archiveSelectedProjectsAction(
     };
   }
   try {
-    await archiveProjects(actor.id, input.data);
+    await deleteProjects(input.data);
   } catch (error) {
     if (error instanceof BulkDeletionError) {
       return { message: error.message, status: "error" };
     }
-    console.error("Unable to archive selected Projects.", error);
+    console.error("Unable to delete selected Projects.", error);
     return {
-      message: "The selected Projects could not be archived.",
+      message: "The selected Projects could not be deleted.",
       status: "error",
     };
   }
   revalidatePath("/projects");
   revalidatePath("/orders");
+  revalidatePath("/payments");
+  revalidatePath("/calendar");
   revalidatePath("/reports");
   return {
-    message: `${input.data.length} Project${input.data.length === 1 ? "" : "s"} archived.`,
+    message: `${input.data.length} Project${input.data.length === 1 ? "" : "s"} deleted.`,
     status: "success",
   };
 }
