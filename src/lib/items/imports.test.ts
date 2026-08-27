@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const database = vi.hoisted(() => ({
   building: { findMany: vi.fn() },
@@ -9,8 +9,31 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
 
 import { prepareBudgetReview } from "@/lib/items/imports";
+import type { ParsedBudgetRow, ParsedBudgetWorkbook } from "@/lib/items/xlsx";
+
+function parsedWorkbook(
+  rows: ParsedBudgetRow[],
+  filename: string,
+): ParsedBudgetWorkbook {
+  return {
+    ambiguousHeaders: [],
+    conflicts: [],
+    detectedTotal: null,
+    filename,
+    headers: [],
+    ignoredHeaders: [],
+    mapping: {},
+    mappingLevels: {},
+    rows,
+    samples: [],
+    sheets: ["Budget"],
+    unmappedHeaders: [],
+  };
+}
 
 describe("budget duplicate and revised-Item matching", () => {
+  beforeEach(() => vi.clearAllMocks());
+
   it("proposes an explicit update with diffs and never mutates during review", async () => {
     database.supplier.findMany.mockResolvedValue([
       {
@@ -25,6 +48,7 @@ describe("budget duplicate and revised-Item matching", () => {
         name: "Villa 1",
         rooms: [
           {
+            code: "1201",
             id: "ce837518-89cb-4319-a408-cd4957263664",
             name: "Master Bedroom",
           },
@@ -46,17 +70,15 @@ describe("budget duplicate and revised-Item matching", () => {
         supplierId: "e78182e1-404b-409c-bf2c-5dde28436099",
         supplierSku: "CHAIR-1",
         totalPurchasePriceHt: { toString: () => "10000" },
+        totalSellingPriceHt: { toString: () => "11500" },
         unitPurchasePriceHt: { toString: () => "1250" },
+        unitSellingPriceHt: { toString: () => "1437.5" },
+        vatRate: { toString: () => "0.2" },
       },
     ]);
     const result = await prepareBudgetReview(
-      {
-        detectedTotal: null,
-        filename: "revision.xlsx",
-        headers: [],
-        mapping: {},
-        sheets: ["Budget"],
-        rows: [
+      parsedWorkbook(
+        [
           {
             fields: {
               area: "1201 - MASTER BEDROOM",
@@ -74,7 +96,8 @@ describe("budget duplicate and revised-Item matching", () => {
             sheet: "Budget",
           },
         ],
-      },
+        "revision.xlsx",
+      ),
       {
         buildingId: "8ecea4f0-637b-40cf-9c79-680697778bb6",
         currencyCode: "EUR",
@@ -117,10 +140,12 @@ describe("budget duplicate and revised-Item matching", () => {
         name: "Villa 1",
         rooms: [
           {
+            code: "400",
             id: "ce837518-89cb-4319-a408-cd4957263664",
             name: "Living Room",
           },
           {
+            code: "500",
             id: "1ec801bb-51a3-4900-8e71-fe9664bb0230",
             name: "Dining Room",
           },
@@ -139,17 +164,10 @@ describe("budget duplicate and revised-Item matching", () => {
       sheet: "Budget",
     });
     const separate = await prepareBudgetReview(
-      {
-        detectedTotal: null,
-        filename: "locations.xlsx",
-        headers: [],
-        mapping: {},
-        rows: [
-          makeRow("400 - LIVING ROOM", 2),
-          makeRow("500 - DINING ROOM", 3),
-        ],
-        sheets: ["Budget"],
-      },
+      parsedWorkbook(
+        [makeRow("400 - LIVING ROOM", 2), makeRow("500 - DINING ROOM", 3)],
+        "locations.xlsx",
+      ),
       {
         buildingId: "8ecea4f0-637b-40cf-9c79-680697778bb6",
         currencyCode: "EUR",
@@ -160,17 +178,10 @@ describe("budget duplicate and revised-Item matching", () => {
     expect(separate.rows.map((row) => row.matchStatus)).toEqual(["NEW", "NEW"]);
 
     const duplicate = await prepareBudgetReview(
-      {
-        detectedTotal: null,
-        filename: "duplicate.xlsx",
-        headers: [],
-        mapping: {},
-        rows: [
-          makeRow("400 - LIVING ROOM", 2),
-          makeRow("400 - LIVING ROOM", 3),
-        ],
-        sheets: ["Budget"],
-      },
+      parsedWorkbook(
+        [makeRow("400 - LIVING ROOM", 2), makeRow("400 - LIVING ROOM", 3)],
+        "duplicate.xlsx",
+      ),
       {
         buildingId: "8ecea4f0-637b-40cf-9c79-680697778bb6",
         currencyCode: "EUR",
@@ -182,5 +193,70 @@ describe("budget duplicate and revised-Item matching", () => {
       true,
     );
     expect(duplicate.rows.every((row) => !row.include)).toBe(true);
+  });
+
+  it("resolves a repeated Vendor once and applies the Supplier and Room match to every row", async () => {
+    database.supplier.findMany.mockResolvedValue([
+      {
+        displayName: "Restoration Hardware",
+        id: "e78182e1-404b-409c-bf2c-5dde28436099",
+        legalName: "Restoration Hardware Europe",
+      },
+    ]);
+    database.building.findMany.mockResolvedValue([
+      {
+        id: "8ecea4f0-637b-40cf-9c79-680697778bb6",
+        name: "Villa 1",
+        rooms: [
+          {
+            code: "1201",
+            id: "ce837518-89cb-4319-a408-cd4957263664",
+            name: "Master Bedroom",
+          },
+        ],
+        shortCode: "V1",
+      },
+    ]);
+    database.item.findMany.mockResolvedValue([]);
+
+    const result = await prepareBudgetReview(
+      parsedWorkbook(
+        [1, 2].map((rowNumber) => ({
+          fields: {
+            area: "1201 - MASTER BEDROOM",
+            description: `Lamp ${rowNumber}`,
+            itemReference: `I-${rowNumber}`,
+            markupRate: "15%",
+            quantity: "2",
+            unitPurchasePriceHt: "100",
+            vendor: "RESTORATION HARDWARE",
+          },
+          rowNumber,
+          sheet: "Budget",
+        })),
+        "vendor-group.xlsx",
+      ),
+      {
+        buildingId: "8ecea4f0-637b-40cf-9c79-680697778bb6",
+        currencyCode: "EUR",
+        projectId: "2606d557-26d0-42fa-a535-c72c743f30db",
+        supplierId: null,
+      },
+    );
+
+    expect(database.supplier.findMany).toHaveBeenCalledTimes(1);
+    expect(result.rows).toHaveLength(2);
+    expect(
+      result.rows.every(
+        (row) =>
+          row.supplierId === "e78182e1-404b-409c-bf2c-5dde28436099" &&
+          row.roomId === "ce837518-89cb-4319-a408-cd4957263664",
+      ),
+    ).toBe(true);
+    expect(result.rows[0]).toMatchObject({
+      totalPurchasePriceHt: "200.0000",
+      totalSellingPriceHt: "230.0000",
+      unitSellingPriceHt: "115.0000",
+    });
   });
 });

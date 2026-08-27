@@ -31,6 +31,40 @@ export const budgetFields = [
 ] as const;
 export type BudgetField = (typeof budgetFields)[number];
 
+export const budgetReviewColumnLabels = {
+  itemReference: "Item #",
+  description: "Description",
+  vendor: "Supplier",
+  area: "Room / Area",
+  quantity: "Qty",
+  unitOfMeasure: "Unit",
+  unitPurchasePriceHt: "Purchase Unit HT",
+  totalPurchasePriceHt: "Purchase Total HT",
+  unitSellingPriceHt: "Selling Unit HT",
+  totalSellingPriceHt: "Selling Total HT",
+  markupRate: "Markup %",
+  vatRate: "VAT %",
+} satisfies Partial<Record<BudgetField, string>>;
+
+export const budgetReviewVisibleColumns = [
+  "Include",
+  "Action / Match",
+  "Item #",
+  "Description",
+  "Supplier",
+  "Building",
+  "Room",
+  "Qty",
+  "Unit",
+  "Purchase Unit HT",
+  "Purchase Total HT",
+  "Selling Unit HT",
+  "Selling Total HT",
+  "Markup %",
+  "VAT %",
+  "Warnings",
+] as const;
+
 export const budgetColumnMappingSchema = z.record(
   z.string(),
   z.enum(budgetFields),
@@ -119,35 +153,55 @@ export function normalizeImportText(value: string | null): string | null {
 }
 
 export function proposedRoomName(area: string | null): string | null {
+  return parseBudgetArea(area)?.name ?? null;
+}
+
+export function proposedRoomCode(area: string | null): string | null {
+  return parseBudgetArea(area)?.code ?? null;
+}
+
+export function parseBudgetArea(
+  area: string | null,
+): { code: string | null; name: string } | null {
   if (!area) return null;
-  const name = area.replace(/^\s*[A-Za-z0-9.]+\s*[-–—:]\s*/, "").trim();
+  const trimmed = area.trim();
+  const parsed = trimmed.match(/^\s*(\d+(?:\.\d+)?)\s*[-–—:]\s*(.+)$/u);
+  const name = (parsed?.[2] ?? trimmed).trim();
   if (!name) return null;
-  return name
-    .toLocaleLowerCase("en")
-    .replace(/\b\p{Letter}/gu, (letter) => letter.toLocaleUpperCase("en"))
-    .slice(0, 160);
+  return {
+    code: parsed?.[1]?.slice(0, 40) ?? null,
+    name: name
+      .toLocaleLowerCase("en")
+      .replace(/\b\p{Letter}/gu, (letter) => letter.toLocaleUpperCase("en"))
+      .slice(0, 160),
+  };
 }
 
 export function rowWarnings(
   row: Pick<
     BudgetReviewRow,
-    | "buildingId"
+    | "markupRate"
+    | "purchaseCurrencyCode"
     | "quantity"
-    | "roomId"
     | "supplierId"
     | "supplierName"
     | "totalPurchasePriceHt"
+    | "totalSellingPriceHt"
     | "unitPurchasePriceHt"
-    | "vatRate"
+    | "unitSellingPriceHt"
   >,
 ): string[] {
   const warnings: string[] = [];
-  if (!row.buildingId) warnings.push("Building missing; allocate when known.");
   if (row.supplierName && !row.supplierId)
-    warnings.push("Supplier not matched.");
-  if (!row.roomId)
-    warnings.push("Room missing; choose or create one if applicable.");
-  if (!row.vatRate) warnings.push("VAT missing; review if applicable.");
+    warnings.push(`Supplier “${row.supplierName}” is unresolved.`);
+  if (
+    !row.purchaseCurrencyCode &&
+    (row.unitPurchasePriceHt ||
+      row.totalPurchasePriceHt ||
+      row.unitSellingPriceHt ||
+      row.totalSellingPriceHt)
+  )
+    warnings.push("Purchase currency is required for financial values.");
   if (
     row.quantity &&
     row.unitPurchasePriceHt &&
@@ -158,7 +212,29 @@ export function rowWarnings(
       row.totalPurchasePriceHt,
     )
   )
-    warnings.push("Quantity × unit price does not match total purchase HT.");
+    warnings.push("Purchase total does not match quantity × purchase unit HT.");
+  if (
+    row.quantity &&
+    row.unitSellingPriceHt &&
+    row.totalSellingPriceHt &&
+    !quantityTimesUnitMatchesTotal(
+      row.quantity,
+      row.unitSellingPriceHt,
+      row.totalSellingPriceHt,
+    )
+  )
+    warnings.push("Selling total does not match quantity × selling unit HT.");
+  if (
+    row.markupRate &&
+    row.totalPurchasePriceHt &&
+    row.totalSellingPriceHt &&
+    new Decimal(row.totalPurchasePriceHt)
+      .times(new Decimal(1).plus(row.markupRate))
+      .minus(row.totalSellingPriceHt)
+      .abs()
+      .greaterThan("0.02")
+  )
+    warnings.push("Markup does not reconcile purchase and selling totals.");
   return warnings;
 }
 

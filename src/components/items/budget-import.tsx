@@ -10,7 +10,12 @@ import type { BudgetImportActionState } from "@/domain/items/action-state";
 import { createRoomAction } from "@/app/(app)/items/actions";
 import { createQuoteSupplierAction } from "@/app/(app)/orders/import/actions";
 import { ACCEPTED_BUDGET_FILE_TYPES } from "@/config/item-extraction";
-import type { BudgetReviewRow } from "@/domain/items/import";
+import {
+  budgetReviewColumnLabels,
+  budgetReviewVisibleColumns,
+  normalizeImportText,
+  type BudgetReviewRow,
+} from "@/domain/items/import";
 import { initialQuoteSupplierCreationState } from "@/domain/quote-intake/action-state";
 
 type Options = Awaited<
@@ -157,6 +162,46 @@ function ReviewGrid({
     skipped: rows.filter((row) => !row.include || row.action === "SKIP").length,
     warnings: rows.reduce((sum, row) => sum + row.warnings.length, 0),
   };
+  const vendorGroupMap = new Map<
+    string,
+    { count: number; name: string; supplierIds: Set<string | null> }
+  >();
+  for (const row of rows) {
+    const name = row.supplierName;
+    const key = normalizeImportText(name);
+    if (!name || !key) continue;
+    const current = vendorGroupMap.get(key) ?? {
+      count: 0,
+      name,
+      supplierIds: new Set<string | null>(),
+    };
+    current.count += 1;
+    current.supplierIds.add(row.supplierId);
+    vendorGroupMap.set(key, current);
+  }
+  const vendorGroups = [...vendorGroupMap].map(([key, group]) => ({
+    count: group.count,
+    key,
+    name: group.name,
+    supplierId:
+      group.supplierIds.size === 1 ? ([...group.supplierIds][0] ?? null) : null,
+  }));
+  const resolveVendor = (key: string, supplierId: string) =>
+    setRows((current) =>
+      current.map((row) =>
+        normalizeImportText(row.supplierName) === key
+          ? {
+              ...row,
+              supplierId: supplierId || null,
+              warnings: supplierId
+                ? row.warnings.filter(
+                    (warning) => !warning.startsWith("Supplier “"),
+                  )
+                : row.warnings,
+            }
+          : row,
+      ),
+    );
   return (
     <div className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-4">
@@ -167,6 +212,38 @@ function ReviewGrid({
           </div>
         ))}
       </div>
+      {vendorGroups.length ? (
+        <div className="rounded-lg border p-3">
+          <p className="text-xs font-medium">Vendor resolution</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {vendorGroups.map((vendor) => (
+              <label
+                className="bg-muted/20 flex items-center gap-2 rounded-md border px-2 py-1 text-xs"
+                key={vendor.key}
+              >
+                <span>
+                  {vendor.name} · {vendor.count} row
+                  {vendor.count === 1 ? "" : "s"}
+                </span>
+                <select
+                  className="border-input bg-background h-7 rounded border px-2"
+                  onChange={(event) =>
+                    resolveVendor(vendor.key, event.target.value)
+                  }
+                  value={vendor.supplierId ?? ""}
+                >
+                  <option value="">Unresolved</option>
+                  {options.suppliers.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="bg-muted/20 flex flex-wrap gap-2 rounded-lg border p-3">
         <span className="self-center text-xs font-medium">
           Bulk edit selected:
@@ -225,49 +302,19 @@ function ReviewGrid({
         />
       </div>
       <div className="max-h-[65vh] overflow-auto rounded-lg border">
-        <table className="min-w-[110rem] text-left text-xs">
+        <table className="min-w-[96rem] text-left text-xs">
           <thead className="bg-muted sticky top-0 z-10">
             <tr>
-              <th className="p-2">Select</th>
-              <th className="p-2">Include</th>
-              <th className="p-2">Match / action</th>
-              <th className="p-2">Reference</th>
-              <th className="p-2">Description</th>
-              <th className="p-2">Brand</th>
-              <th className="p-2">Finish</th>
-              <th className="p-2">Supplier</th>
-              <th className="p-2">Building</th>
-              <th className="p-2">Room</th>
-              <th className="p-2">Category</th>
-              <th className="p-2">Qty</th>
-              <th className="p-2">U/M</th>
-              <th className="p-2">Unit purchase HT</th>
-              <th className="p-2">Total purchase HT</th>
-              <th className="p-2">Markup rate</th>
-              <th className="p-2">Selling HT</th>
-              <th className="p-2">VAT amount</th>
-              <th className="p-2">VAT rate</th>
-              <th className="p-2">Warnings / differences</th>
+              {budgetReviewVisibleColumns.map((column) => (
+                <th className="p-2" key={column}>
+                  {column}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y">
             {rows.map((row, index) => (
               <tr key={`${row.sourceSheet}-${row.sourceRowNumber}`}>
-                <td className="p-2">
-                  <input
-                    aria-label={`Select row ${row.sourceRowNumber}`}
-                    checked={selected.has(index)}
-                    onChange={() =>
-                      setSelected((current) => {
-                        const next = new Set(current);
-                        if (next.has(index)) next.delete(index);
-                        else next.add(index);
-                        return next;
-                      })
-                    }
-                    type="checkbox"
-                  />
-                </td>
                 <td className="p-2">
                   <input
                     checked={row.include}
@@ -285,9 +332,24 @@ function ReviewGrid({
                   />
                 </td>
                 <td className="p-2 font-medium">
-                  {row.matchStatus}
-                  <span className="text-muted-foreground block">
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      aria-label={`Select row ${row.sourceRowNumber} for bulk editing`}
+                      checked={selected.has(index)}
+                      onChange={() =>
+                        setSelected((current) => {
+                          const next = new Set(current);
+                          if (next.has(index)) next.delete(index);
+                          else next.add(index);
+                          return next;
+                        })
+                      }
+                      type="checkbox"
+                    />
                     {row.action}
+                  </label>
+                  <span className="text-muted-foreground mt-1 block">
+                    {row.matchStatus}
                   </span>
                 </td>
                 <td className="p-2">
@@ -308,17 +370,6 @@ function ReviewGrid({
                     }
                   />
                 </td>
-                {(["brand", "finishColor"] as const).map((field) => (
-                  <td className="p-2" key={field}>
-                    <input
-                      className={`${control} w-32`}
-                      defaultValue={row[field] ?? ""}
-                      onBlur={(e) =>
-                        update(index, { [field]: e.target.value || null })
-                      }
-                    />
-                  </td>
-                ))}
                 <td className="p-2">
                   <select
                     className={control}
@@ -384,15 +435,6 @@ function ReviewGrid({
                 </td>
                 <td className="p-2">
                   <input
-                    className={control}
-                    defaultValue={row.category ?? ""}
-                    onBlur={(e) =>
-                      update(index, { category: e.target.value || null })
-                    }
-                  />
-                </td>
-                <td className="p-2">
-                  <input
                     className={`${control} w-24`}
                     defaultValue={row.quantity ?? ""}
                     onBlur={(e) =>
@@ -413,9 +455,9 @@ function ReviewGrid({
                   [
                     "unitPurchasePriceHt",
                     "totalPurchasePriceHt",
-                    "markupRate",
+                    "unitSellingPriceHt",
                     "totalSellingPriceHt",
-                    "vatAmount",
+                    "markupRate",
                     "vatRate",
                   ] as const
                 ).map((field) => (
@@ -535,10 +577,9 @@ export function BudgetImport({ options }: { options: Options }) {
           className={control}
           name="purchaseCurrencyCode"
           onChange={(e) => setCurrency(e.target.value)}
-          required
           value={currency}
         >
-          <option value="">Purchase currency *</option>
+          <option value="">Purchase currency (required for prices)</option>
           {options.currencies.map((c) => (
             <option key={c.code} value={c.code}>
               {c.code}
@@ -552,10 +593,6 @@ export function BudgetImport({ options }: { options: Options }) {
           required
           type="file"
         />
-        <label className="flex items-center gap-2 text-xs">
-          <input name="useAiMapping" type="checkbox" />
-          AI-map ambiguous columns
-        </label>
         <button
           className="bg-primary text-primary-foreground h-9 rounded-lg px-4 text-sm font-medium disabled:opacity-50"
           disabled={pending}
@@ -586,16 +623,54 @@ export function BudgetImport({ options }: { options: Options }) {
           />
           <details className="rounded-lg border p-3 text-xs">
             <summary className="cursor-pointer font-medium">
-              Detected mapping · {state.review.sheets.join(", ")}
+              {
+                Object.values(state.review.mapping).filter(
+                  (field) => field in budgetReviewColumnLabels,
+                ).length
+              }{" "}
+              core columns mapped · {state.review.sheets.join(", ")}
             </summary>
             <dl className="mt-2 grid gap-1 sm:grid-cols-2 xl:grid-cols-4">
-              {Object.entries(state.review.mapping).map(([header, field]) => (
-                <div key={header}>
-                  <dt className="text-muted-foreground">{header}</dt>
-                  <dd>{field}</dd>
-                </div>
-              ))}
+              {Object.entries(state.review.mapping)
+                .filter(([, field]) => field in budgetReviewColumnLabels)
+                .map(([header, field]) => (
+                  <div key={header}>
+                    <dt className="text-muted-foreground">{header}</dt>
+                    <dd>
+                      {budgetReviewColumnLabels[
+                        field as keyof typeof budgetReviewColumnLabels
+                      ] ?? field}
+                      <span className="text-muted-foreground ml-1">
+                        · {state.review?.mappingLevels[header]?.toLowerCase()}
+                      </span>
+                    </dd>
+                  </div>
+                ))}
             </dl>
+            {state.review.ambiguousHeaders.length ? (
+              <p className="mt-2 text-amber-700">
+                Ambiguous: {state.review.ambiguousHeaders.join(", ")}
+              </p>
+            ) : null}
+            {state.review.conflicts.map((conflict) => (
+              <p className="mt-2 text-amber-700" key={conflict.field}>
+                Conflicting columns for{" "}
+                {budgetReviewColumnLabels[
+                  conflict.field as keyof typeof budgetReviewColumnLabels
+                ] ?? conflict.field}
+                : {conflict.headers.join(", ")}
+              </p>
+            ))}
+            {state.review.ignoredHeaderCount ||
+            state.review.unmappedHeaders.length ? (
+              <p className="text-muted-foreground mt-2">
+                {state.review.ignoredHeaderCount} ancillary columns ignored
+                {state.review.unmappedHeaders.length
+                  ? `; ${state.review.unmappedHeaders.length} optional columns left unmapped`
+                  : ""}
+                .
+              </p>
+            ) : null}
           </details>
           <ReviewGrid
             initialRows={state.review.rows}

@@ -10,6 +10,7 @@ import {
 } from "@/generated/prisma/client";
 import {
   normalizeImportText,
+  proposedRoomCode,
   proposedRoomName,
   rowWarnings,
   type BudgetReviewRow,
@@ -46,7 +47,7 @@ function decimalValue(value: string | undefined, rate = false): string | null {
 
 interface ImportDefaults {
   buildingId: string | null;
-  currencyCode: string;
+  currencyCode: string | null;
   projectId: string;
   supplierId: string | null;
 }
@@ -67,7 +68,10 @@ export async function prepareBudgetReview(
         id: true,
         name: true,
         shortCode: true,
-        rooms: { where: { isActive: true }, select: { id: true, name: true } },
+        rooms: {
+          where: { isActive: true },
+          select: { code: true, id: true, name: true },
+        },
       },
     }),
     database.item.findMany({
@@ -125,7 +129,10 @@ export async function prepareBudgetReview(
         supplierId: true,
         supplierSku: true,
         totalPurchasePriceHt: true,
+        totalSellingPriceHt: true,
         unitPurchasePriceHt: true,
+        unitSellingPriceHt: true,
+        vatRate: true,
       },
     }),
   ]);
@@ -149,6 +156,7 @@ export async function prepareBudgetReview(
         : null);
     const area = text(source.fields.area, 160);
     const roomName = proposedRoomName(area);
+    const roomCode = proposedRoomCode(area);
     let building = defaultBuilding;
     if (!building && area) {
       const key = normalizeImportText(area);
@@ -163,34 +171,62 @@ export async function prepareBudgetReview(
       roomName && building
         ? (building.rooms.find(
             (candidate) =>
+              (roomCode && candidate.code === roomCode) ||
               normalizeImportText(candidate.name) ===
-              normalizeImportText(roomName),
+                normalizeImportText(roomName),
           ) ?? null)
         : null;
     const description =
-      text(source.fields.description, 240) ??
-      text(source.fields.supplierSku, 240) ??
-      itemReference ??
-      `Imported Item ${source.rowNumber}`;
-    const quantity = decimalValue(source.fields.quantity) ?? "1.0000";
-    const unitPurchasePriceHt = decimalValue(source.fields.unitPurchasePriceHt);
-    const totalPurchasePriceHt = decimalValue(
-      source.fields.totalPurchasePriceHt,
-    );
+      text(source.fields.description, 240) ?? itemReference ?? "";
+    const quantity = decimalValue(source.fields.quantity);
+    let unitPurchasePriceHt = decimalValue(source.fields.unitPurchasePriceHt);
+    let totalPurchasePriceHt = decimalValue(source.fields.totalPurchasePriceHt);
     const markupRate = decimalValue(source.fields.markupRate, true);
     let unitSellingPriceHt = decimalValue(source.fields.unitSellingPriceHt);
     let totalSellingPriceHt = decimalValue(source.fields.totalSellingPriceHt);
+    const quantityDecimal = quantity ? new Decimal(quantity) : null;
+    if (quantityDecimal && !quantityDecimal.isZero()) {
+      if (unitPurchasePriceHt && !totalPurchasePriceHt)
+        totalPurchasePriceHt = quantityDecimal
+          .times(unitPurchasePriceHt)
+          .toDecimalPlaces(4)
+          .toFixed(4);
+      if (totalPurchasePriceHt && !unitPurchasePriceHt)
+        unitPurchasePriceHt = new Decimal(totalPurchasePriceHt)
+          .dividedBy(quantityDecimal)
+          .toDecimalPlaces(4)
+          .toFixed(4);
+    }
     if (markupRate && !unitSellingPriceHt && unitPurchasePriceHt)
       unitSellingPriceHt = new Decimal(unitPurchasePriceHt)
         .times(new Decimal(1).plus(markupRate))
         .toDecimalPlaces(4)
         .toFixed(4);
+    if (quantityDecimal && !quantityDecimal.isZero()) {
+      if (unitSellingPriceHt && !totalSellingPriceHt)
+        totalSellingPriceHt = quantityDecimal
+          .times(unitSellingPriceHt)
+          .toDecimalPlaces(4)
+          .toFixed(4);
+      if (totalSellingPriceHt && !unitSellingPriceHt)
+        unitSellingPriceHt = new Decimal(totalSellingPriceHt)
+          .dividedBy(quantityDecimal)
+          .toDecimalPlaces(4)
+          .toFixed(4);
+    }
     if (markupRate && !totalSellingPriceHt && totalPurchasePriceHt)
       totalSellingPriceHt = new Decimal(totalPurchasePriceHt)
         .times(new Decimal(1).plus(markupRate))
         .toDecimalPlaces(4)
         .toFixed(4);
     const vatRate = decimalValue(source.fields.vatRate, true);
+    const vatAmount =
+      vatRate && (totalSellingPriceHt ?? totalPurchasePriceHt)
+        ? new Decimal(totalSellingPriceHt ?? totalPurchasePriceHt ?? "0")
+            .times(vatRate)
+            .toDecimalPlaces(4)
+            .toFixed(4)
+        : null;
     const candidates = existing.filter((item) => {
       const sameLocation =
         item.buildingId === (building?.id ?? null) &&
@@ -235,7 +271,7 @@ export async function prepareBudgetReview(
         text(source.fields.unitOfMeasure, 24)?.toUpperCase() ?? "EA",
       unitPurchasePriceHt,
       unitSellingPriceHt,
-      vatAmount: decimalValue(source.fields.vatAmount),
+      vatAmount,
       vatRate,
       volumeEach: decimalValue(source.fields.volumeEach),
       weightEach: decimalValue(source.fields.weightEach),
@@ -254,6 +290,17 @@ export async function prepareBudgetReview(
               matched.totalPurchasePriceHt?.toString() ?? null,
               totalPurchasePriceHt,
             ],
+            [
+              "Unit selling HT",
+              matched.unitSellingPriceHt?.toString() ?? null,
+              unitSellingPriceHt,
+            ],
+            [
+              "Total selling HT",
+              matched.totalSellingPriceHt?.toString() ?? null,
+              totalSellingPriceHt,
+            ],
+            ["VAT rate", matched.vatRate?.toString() ?? null, vatRate],
             ["Finish", matched.finishColor, fields.finishColor],
             ["Supplier", matched.supplierId, supplierId],
             ["Building", matched.buildingId, fields.buildingId],
@@ -277,17 +324,24 @@ export async function prepareBudgetReview(
     };
     row.warnings = [
       ...rowWarnings(row),
+      ...(!description && !itemReference
+        ? ["Description or Item reference is required."]
+        : []),
       ...(roomName && !room
         ? [`Room “${roomName}” not matched; choose or create it.`]
         : []),
       ...(candidates.length > 1
         ? ["Multiple existing Items match this row; resolve before import."]
         : []),
-      ...(!decimalValue(source.fields.quantity) && source.fields.quantity
-        ? ["Unsupported quantity value; defaulted to 1."]
+      ...(!quantity
+        ? [
+            source.fields.quantity
+              ? "Quantity is invalid; enter a valid value."
+              : "Quantity is required.",
+          ]
         : []),
     ];
-    if (row.matchStatus === "CONFLICT") {
+    if (row.matchStatus === "CONFLICT" || !description || !quantity) {
       row.include = false;
       row.action = "SKIP";
     }

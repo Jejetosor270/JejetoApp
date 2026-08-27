@@ -13,6 +13,7 @@ import {
 } from "@/lib/items/extraction-provider";
 import {
   BudgetFileError,
+  needsBudgetMappingFallback,
   parseBudgetWorkbook,
   validateBudgetFile,
 } from "@/lib/items/xlsx";
@@ -27,9 +28,13 @@ const requestSchema = z.object({
     z.uuid().optional(),
   ),
   projectId: z.uuid("Choose a Project."),
-  purchaseCurrencyCode: z
-    .string()
-    .regex(/^[A-Z]{3}$/, "Choose a purchase currency."),
+  purchaseCurrencyCode: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z
+      .string()
+      .regex(/^[A-Z]{3}$/, "Choose a purchase currency.")
+      .optional(),
+  ),
 });
 
 export async function analyzeBudgetAction(
@@ -49,15 +54,20 @@ export async function analyzeBudgetAction(
     let workbook = await parseBudgetWorkbook(file.bytes, file.filename);
     let extractionModel: string | null = null;
     let extractionProvider: string | null = null;
-    if (formData.get("useAiMapping") === "on") {
-      const unmapped = workbook.headers.filter(
-        (header) => !workbook.mapping[header],
-      );
-      if (unmapped.length) {
+    if (needsBudgetMappingFallback(workbook)) {
+      const unresolved = [
+        ...new Set([...workbook.ambiguousHeaders, ...workbook.unmappedHeaders]),
+      ];
+      if (unresolved.length) {
+        const sampleIndexes = unresolved.map((header) =>
+          workbook.headers.indexOf(header),
+        );
         const result =
           await getItemExtractionProvider().suggestSpreadsheetMapping({
-            headers: unmapped,
-            samples: [],
+            headers: unresolved,
+            samples: workbook.samples.map((row) =>
+              sampleIndexes.map((index) => row[index] ?? ""),
+            ),
           });
         extractionModel = result.model;
         extractionProvider = result.provider;
@@ -75,9 +85,30 @@ export async function analyzeBudgetAction(
         );
       }
     }
+    const mappedFields = new Set(Object.values(workbook.mapping));
+    if (!mappedFields.has("description") && !mappedFields.has("itemReference"))
+      throw new BudgetFileError(
+        "The workbook needs a recognizable Description or Item reference column.",
+      );
+    if (!mappedFields.has("quantity"))
+      throw new BudgetFileError(
+        "The workbook needs a recognizable Quantity column.",
+      );
+    const hasFinancialValues = workbook.rows.some((row) =>
+      [
+        row.fields.unitPurchasePriceHt,
+        row.fields.totalPurchasePriceHt,
+        row.fields.unitSellingPriceHt,
+        row.fields.totalSellingPriceHt,
+      ].some(Boolean),
+    );
+    if (hasFinancialValues && !input.data.purchaseCurrencyCode)
+      throw new BudgetFileError(
+        "Choose a purchase currency because this workbook contains financial values.",
+      );
     const prepared = await prepareBudgetReview(workbook, {
       buildingId: input.data.defaultBuildingId ?? null,
-      currencyCode: input.data.purchaseCurrencyCode,
+      currencyCode: input.data.purchaseCurrencyCode ?? null,
       projectId: input.data.projectId,
       supplierId: input.data.defaultSupplierId ?? null,
     });
@@ -85,17 +116,22 @@ export async function analyzeBudgetAction(
       message:
         "Workbook parsed. Review and correct every included row before confirming.",
       review: {
+        ambiguousHeaders: workbook.ambiguousHeaders,
+        conflicts: workbook.conflicts,
         defaultBuildingId: input.data.defaultBuildingId ?? null,
         defaultSupplierId: input.data.defaultSupplierId ?? null,
         detectedTotal: workbook.detectedTotal,
         extractionModel,
         extractionProvider,
         filename: workbook.filename,
+        ignoredHeaderCount: workbook.ignoredHeaders.length,
         mapping: workbook.mapping,
+        mappingLevels: workbook.mappingLevels,
         projectId: input.data.projectId,
         rows: prepared.rows,
         sheets: workbook.sheets,
         summary: prepared.summary,
+        unmappedHeaders: workbook.unmappedHeaders,
       },
       status: "ready",
     };

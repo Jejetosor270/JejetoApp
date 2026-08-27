@@ -9,13 +9,17 @@ export interface ItemActionState {
 export interface BudgetImportActionState {
   message?: string;
   review?: {
+    ambiguousHeaders: string[];
+    conflicts: Array<{ field: BudgetField; headers: string[] }>;
     defaultBuildingId: string | null;
     defaultSupplierId: string | null;
     detectedTotal: string | null;
     extractionModel: string | null;
     extractionProvider: string | null;
     filename: string;
+    ignoredHeaderCount: number;
     mapping: Record<string, BudgetField>;
+    mappingLevels: Record<string, "EXACT" | "KNOWN" | "STRUCTURAL" | "AI">;
     projectId: string;
     rows: BudgetReviewRow[];
     sheets: string[];
@@ -26,6 +30,7 @@ export interface BudgetImportActionState {
       updates: number;
       warnings: number;
     };
+    unmappedHeaders: string[];
   };
   status?: "error" | "ready" | "success";
 }
