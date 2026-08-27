@@ -964,7 +964,7 @@ export async function getProcurementCalendarEvents(
   from: string,
   to: string,
 ): Promise<ProcurementCalendarEvent[]> {
-  const [installments, orders] = await Promise.all([
+  const [installments, orders, items] = await Promise.all([
     listPaymentInstallments({ dueFrom: from, dueTo: to }),
     getDatabase().procurementOrder.findMany({
       where: {
@@ -995,6 +995,46 @@ export async function getProcurementCalendarEvents(
         expectedReadyDate: true,
         id: true,
         orderNumber: true,
+        project: { select: { name: true } },
+      },
+    }),
+    getDatabase().item.findMany({
+      where: {
+        OR: [
+          {
+            estimatedWarehouseDate: {
+              gte: dateOnlyToDate(from),
+              lte: dateOnlyToDate(to),
+            },
+          },
+          {
+            estimatedFabricatorDate: {
+              gte: dateOnlyToDate(from),
+              lte: dateOnlyToDate(to),
+            },
+          },
+          {
+            estimatedResidenceDate: {
+              gte: dateOnlyToDate(from),
+              lte: dateOnlyToDate(to),
+            },
+          },
+          {
+            installedDate: {
+              gte: dateOnlyToDate(from),
+              lte: dateOnlyToDate(to),
+            },
+          },
+        ],
+      },
+      select: {
+        estimatedFabricatorDate: true,
+        estimatedResidenceDate: true,
+        estimatedWarehouseDate: true,
+        id: true,
+        installedDate: true,
+        itemReference: true,
+        name: true,
         project: { select: { name: true } },
       },
     }),
@@ -1030,6 +1070,24 @@ export async function getProcurementCalendarEvents(
       id: order.id,
       orderNumber: order.orderNumber,
       projectName: order.project.name,
+    })),
+    items: items.map((item) => ({
+      estimatedFabricatorDate: item.estimatedFabricatorDate
+        ? dateToDateOnly(item.estimatedFabricatorDate)
+        : null,
+      estimatedResidenceDate: item.estimatedResidenceDate
+        ? dateToDateOnly(item.estimatedResidenceDate)
+        : null,
+      estimatedWarehouseDate: item.estimatedWarehouseDate
+        ? dateToDateOnly(item.estimatedWarehouseDate)
+        : null,
+      id: item.id,
+      installedDate: item.installedDate
+        ? dateToDateOnly(item.installedDate)
+        : null,
+      itemReference: item.itemReference,
+      name: item.name,
+      projectName: item.project.name,
     })),
     today: businessToday(),
   });

@@ -5,6 +5,8 @@ import Decimal from "decimal.js";
 import { vatAmount as calculateVatAmount } from "@/domain/finance/calculations";
 import {
   FreightTreatment,
+  ItemCommercialStatus,
+  ItemSourceType,
   InstallmentBasis,
   PaymentDirection,
   PricingMode,
@@ -306,6 +308,150 @@ async function createApprovedSchedule(
   }
 }
 
+async function persistApprovedItems(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  orderId: string,
+  order: CreateOrderInput,
+  input: QuoteConfirmationInput,
+): Promise<void> {
+  if (!input.approveItems) return;
+  const rows = input.items.filter((item) => item.include);
+  const [buildings, rooms, existing] = await Promise.all([
+    transaction.building.findMany({
+      where: {
+        id: {
+          in: rows.flatMap((row) => (row.buildingId ? [row.buildingId] : [])),
+        },
+        projectId: input.projectId,
+      },
+      select: { id: true },
+    }),
+    transaction.room.findMany({
+      where: {
+        id: { in: rows.flatMap((row) => (row.roomId ? [row.roomId] : [])) },
+      },
+      select: { buildingId: true, id: true },
+    }),
+    transaction.item.findMany({
+      where: {
+        id: {
+          in: rows.flatMap((row) =>
+            row.existingItemId ? [row.existingItemId] : [],
+          ),
+        },
+        projectId: input.projectId,
+        supplierId: input.supplierId,
+      },
+      select: { id: true },
+    }),
+  ]);
+  const buildingIds = new Set(buildings.map((building) => building.id));
+  const existingIds = new Set(existing.map((item) => item.id));
+  for (const row of rows) {
+    if (row.buildingId && !buildingIds.has(row.buildingId))
+      throw new QuoteConfirmationError(
+        "Every reviewed Item Building must belong to the selected Project.",
+      );
+    if (
+      row.roomId &&
+      !rooms.some(
+        (room) => room.id === row.roomId && room.buildingId === row.buildingId,
+      )
+    )
+      throw new QuoteConfirmationError(
+        "Every reviewed Item Room must belong to its Building.",
+      );
+    if (
+      row.action === "UPDATE" &&
+      (!row.existingItemId || !existingIds.has(row.existingItemId))
+    )
+      throw new QuoteConfirmationError(
+        "A matched Item changed or belongs to another Supplier. Reprocess the quote.",
+      );
+  }
+  const importRecord = await transaction.itemImport.create({
+    data: {
+      createdCount: rows.filter((row) => row.action === "CREATE").length,
+      extractionModel: input.itemExtractionModel ?? null,
+      extractionProvider: input.itemExtractionProvider ?? null,
+      importedById: actorId,
+      originalFilename: input.originalFilename,
+      procurementOrderId: orderId,
+      projectId: input.projectId,
+      rowCount: input.items.length,
+      skippedCount: input.items.length - rows.length,
+      sourceType: ItemSourceType.SUPPLIER_QUOTE_PDF,
+      supplierId: input.supplierId,
+      updatedCount: rows.filter((row) => row.action === "UPDATE").length,
+      warningCount: rows.reduce((sum, row) => sum + row.warnings.length, 0),
+    },
+  });
+  for (const row of rows) {
+    const common = {
+      ...(row.brand !== null ? { brand: row.brand } : {}),
+      ...(row.buildingId !== null ? { buildingId: row.buildingId } : {}),
+      ...(row.description !== null ? { description: row.description } : {}),
+      ...(row.finishColor !== null ? { finishColor: row.finishColor } : {}),
+      ...(row.itemReference !== null
+        ? { itemReference: row.itemReference }
+        : {}),
+      ...(row.notes !== null ? { notes: row.notes } : {}),
+      ...(row.quantity !== null ? { quantity: row.quantity } : {}),
+      ...(row.roomId !== null ? { roomId: row.roomId } : {}),
+      ...(row.supplierSku !== null ? { supplierSku: row.supplierSku } : {}),
+      ...(row.totalPriceHt !== null
+        ? { totalPurchasePriceHt: row.totalPriceHt }
+        : {}),
+      ...(row.unitOfMeasure !== null
+        ? { unitOfMeasure: row.unitOfMeasure.toUpperCase() }
+        : {}),
+      ...(row.unitPriceHt !== null
+        ? { unitPurchasePriceHt: row.unitPriceHt }
+        : {}),
+      ...(row.vatRate !== null ? { vatRate: row.vatRate } : {}),
+      ...(row.volumeEach !== null ? { volumeEach: row.volumeEach } : {}),
+      ...(row.weightEach !== null ? { weightEach: row.weightEach } : {}),
+      commercialStatus: ItemCommercialStatus.QUOTED,
+      importId: importRecord.id,
+      name: row.name,
+      procurementOrderId: orderId,
+      projectId: input.projectId,
+      purchaseCurrencyCode: order.orderCurrencyCode,
+      sourceType: ItemSourceType.SUPPLIER_QUOTE_PDF,
+      supplierId: input.supplierId,
+      updatedById: actorId,
+    };
+    if (row.action === "UPDATE" && row.existingItemId)
+      await transaction.item.update({
+        where: { id: row.existingItemId },
+        data: common,
+      });
+    else
+      await transaction.item.create({
+        data: {
+          ...common,
+          createdById: actorId,
+          pricingMode: PricingMode.SELLING_PRICE,
+          quantity: row.quantity ?? "1.0000",
+          unitOfMeasure: row.unitOfMeasure?.toUpperCase() ?? "EA",
+        },
+      });
+  }
+  await writeAuditEvent(transaction, actorId, {
+    action: "IMPORTED",
+    entityId: importRecord.id,
+    entityReference: input.originalFilename,
+    entityType: "ITEM_IMPORT",
+    metadata: {
+      created: importRecord.createdCount,
+      orderId,
+      updated: importRecord.updatedCount,
+    },
+    summary: "Imported employee-approved supplier quote Item lines.",
+  });
+}
+
 export async function confirmSupplierQuote(
   actorId: string,
   input: QuoteConfirmationInput,
@@ -365,6 +511,7 @@ export async function confirmSupplierQuote(
         project.reportingCurrencyCode,
         input,
       );
+      await persistApprovedItems(transaction, actorId, orderId, values, input);
       await transaction.supplierQuoteImport.create({
         data: {
           action:

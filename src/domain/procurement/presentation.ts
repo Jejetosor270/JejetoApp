@@ -43,6 +43,10 @@ export function formatRate(rate: string | null): string {
   return `${new Decimal(rate).times(100).toDecimalPlaces(2).toFixed(2)}%`;
 }
 
+export function formatQuantity(value: string): string {
+  return new Decimal(value).toDecimalPlaces(4).toFixed().replace(/\.0+$/, "");
+}
+
 export function rateToPercentInput(rate: string | null): string {
   return rate === null ? "" : new Decimal(rate).times(100).toString();
 }

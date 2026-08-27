@@ -23,6 +23,10 @@ function eventLabel(event: ProcurementCalendarEvent) {
   if (event.type === "CLIENT_RECEIPT") return "Cash in";
   if (event.type === "EXPECTED_READY") return "Ready";
   if (event.type === "EXPECTED_DELIVERY") return "Delivery";
+  if (event.type === "ITEM_WAREHOUSE") return "Item warehouse";
+  if (event.type === "ITEM_FABRICATOR") return "Item fabricator";
+  if (event.type === "ITEM_RESIDENCE") return "Item residence";
+  if (event.type === "ITEM_INSTALLATION") return "Installation";
   return "Delivered";
 }
 

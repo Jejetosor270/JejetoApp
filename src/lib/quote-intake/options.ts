@@ -15,7 +15,17 @@ export async function listQuoteIntakeOptions() {
       select: {
         buildings: {
           orderBy: { name: "asc" },
-          select: { id: true, isActive: true, name: true, shortCode: true },
+          select: {
+            id: true,
+            isActive: true,
+            name: true,
+            rooms: {
+              orderBy: { name: "asc" },
+              select: { buildingId: true, id: true, name: true },
+              where: { isActive: true },
+            },
+            shortCode: true,
+          },
         },
         id: true,
         name: true,

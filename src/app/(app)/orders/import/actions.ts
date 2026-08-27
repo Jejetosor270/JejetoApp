@@ -16,6 +16,10 @@ import {
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import { isExpectedMasterDataError } from "@/lib/master-data/errors";
 import { createSupplier } from "@/lib/master-data/suppliers";
+import {
+  getItemExtractionProvider,
+  ItemExtractionProviderError,
+} from "@/lib/items/extraction-provider";
 import { isDuplicateOrderReferenceError } from "@/lib/procurement/errors";
 import {
   confirmSupplierQuote,
@@ -46,6 +50,7 @@ export async function processSupplierQuoteAction(
         typeof projectId === "string" ? projectId : "",
         formData.get("quoteFile"),
         getQuoteExtractionProvider(),
+        getItemExtractionProvider(),
       ),
     );
     return {
@@ -59,6 +64,7 @@ export async function processSupplierQuoteAction(
       error instanceof QuoteFileValidationError ||
       error instanceof QuoteProcessingError ||
       error instanceof QuoteExtractionProviderError ||
+      error instanceof ItemExtractionProviderError ||
       error instanceof QuoteExtractionBusyError
     ) {
       return { message: error.message, status: "error" };
@@ -102,6 +108,7 @@ export async function createQuoteSupplierAction(
     }
     const supplier = await createSupplier(actor.id, input.data);
     revalidatePath("/suppliers");
+    revalidatePath("/items/import");
     return {
       message: "Supplier created and selected for this quote.",
       status: "success",

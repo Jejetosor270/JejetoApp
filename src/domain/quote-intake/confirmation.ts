@@ -62,6 +62,59 @@ const paymentSchema = z
   })
   .strict();
 
+const quoteItemSchema = z
+  .object({
+    action: z.enum(["CREATE", "UPDATE"]),
+    brand: z.string().max(160).nullable(),
+    buildingId: z.uuid().nullable(),
+    description: z.string().max(4000).nullable(),
+    diffs: z
+      .array(
+        z.object({
+          after: z.string().nullable(),
+          before: z.string().nullable(),
+          field: z.string().max(100),
+        }),
+      )
+      .max(20)
+      .default([]),
+    existingItemId: z.uuid().nullable(),
+    finishColor: z.string().max(240).nullable(),
+    include: z.boolean(),
+    itemReference: z.string().max(120).nullable(),
+    name: z.string().min(1).max(240),
+    notes: z.string().max(1000).nullable(),
+    quantity: z
+      .string()
+      .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
+      .nullable(),
+    roomId: z.uuid().nullable(),
+    supplierSku: z.string().max(160).nullable(),
+    totalPriceHt: z
+      .string()
+      .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
+      .nullable(),
+    unitOfMeasure: z.string().max(24).nullable(),
+    unitPriceHt: z
+      .string()
+      .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
+      .nullable(),
+    vatRate: z
+      .string()
+      .regex(/^(?:0(?:\.\d{1,6})?|1(?:\.0{1,6})?)$/)
+      .nullable(),
+    volumeEach: z
+      .string()
+      .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
+      .nullable(),
+    weightEach: z
+      .string()
+      .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
+      .nullable(),
+    warnings: z.array(z.string().max(300)).max(20),
+  })
+  .strict();
+
 const confirmationSchema = z
   .object({
     action: z.enum(["CREATE", "UPDATE"]),
@@ -76,6 +129,7 @@ const confirmationSchema = z
     applyQuoteDate: z.boolean(),
     applyQuoteReference: z.boolean(),
     approveSchedule: z.boolean(),
+    approveItems: z.boolean(),
     buildingIds: z
       .array(z.uuid())
       .refine((ids) => new Set(ids).size === ids.length),
@@ -130,6 +184,9 @@ const confirmationSchema = z
     packageName: optionalString(200),
     paymentTermsRaw: optionalString(2000),
     payments: z.array(paymentSchema).max(12),
+    items: z.array(quoteItemSchema).max(500),
+    itemExtractionModel: optionalString(120),
+    itemExtractionProvider: optionalString(50),
     projectId: z.uuid("Choose a valid Project."),
     purchaseCost: optionalMoney,
     purchaseFxRate: optionalFx,
@@ -277,6 +334,16 @@ const confirmationSchema = z
         }
       });
     }
+    if (
+      value.approveItems &&
+      value.items.filter((item) => item.include).length === 0
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Select at least one extracted Item to import.",
+        path: ["items"],
+      });
+    }
   });
 
 export type QuoteConfirmationInput = z.infer<typeof confirmationSchema>;
@@ -292,6 +359,16 @@ export function quoteConfirmationValues(formData: FormData): unknown {
     ? Math.min(Math.max(countValue, 0), 12)
     : 0;
   const approveSchedule = formData.get("approveSchedule") === "on";
+  const approveItems = formData.get("approveItems") === "on";
+  const itemsValue = stringValue(formData, "quoteItems");
+  let items: unknown = [];
+  if (approveItems && itemsValue) {
+    try {
+      items = JSON.parse(itemsValue);
+    } catch {
+      items = itemsValue;
+    }
+  }
   return {
     action: stringValue(formData, "action"),
     applyBuildings: formData.get("applyBuildings") === "on",
@@ -306,6 +383,7 @@ export function quoteConfirmationValues(formData: FormData): unknown {
     applyQuoteDate: formData.get("applyQuoteDate") === "on",
     applyQuoteReference: formData.get("applyQuoteReference") === "on",
     approveSchedule,
+    approveItems,
     buildingIds: formData
       .getAll("buildingIds")
       .filter((value): value is string => typeof value === "string"),
@@ -348,6 +426,9 @@ export function quoteConfirmationValues(formData: FormData): unknown {
           ),
         }))
       : [],
+    items,
+    itemExtractionModel: stringValue(formData, "itemExtractionModel"),
+    itemExtractionProvider: stringValue(formData, "itemExtractionProvider"),
     projectId: stringValue(formData, "projectId"),
     purchaseCost: stringValue(formData, "purchaseCost"),
     purchaseFxRate: stringValue(formData, "purchaseFxRate"),

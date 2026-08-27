@@ -7,7 +7,7 @@ export interface GlobalSearchResult {
   href: string;
   id: string;
   label: string;
-  type: "Project" | "Building" | "Client" | "Supplier" | "Order";
+  type: "Project" | "Building" | "Client" | "Supplier" | "Order" | "Item";
 }
 
 export async function globalSearch(
@@ -15,72 +15,98 @@ export async function globalSearch(
 ): Promise<GlobalSearchResult[]> {
   const database = getDatabase();
   const contains = { contains: query, mode: "insensitive" as const };
-  const [projects, buildings, clients, suppliers, orders] = await Promise.all([
-    database.project.findMany({
-      where: { OR: [{ name: contains }, { code: contains }] },
-      orderBy: { name: "asc" },
-      select: {
-        client: { select: { displayName: true } },
-        code: true,
-        id: true,
-        name: true,
-      },
-      take: 8,
-    }),
-    database.building.findMany({
-      where: { OR: [{ name: contains }, { shortCode: contains }] },
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        project: { select: { id: true, name: true } },
-        shortCode: true,
-      },
-      take: 8,
-    }),
-    database.client.findMany({
-      where: {
-        OR: [
-          { displayName: contains },
-          { legalName: contains },
-          { vatNumber: contains },
-        ],
-      },
-      orderBy: { displayName: "asc" },
-      select: { displayName: true, id: true, legalName: true },
-      take: 8,
-    }),
-    database.supplier.findMany({
-      where: {
-        OR: [
-          { displayName: contains },
-          { legalName: contains },
-          { vatNumber: contains },
-        ],
-      },
-      orderBy: { displayName: "asc" },
-      select: { displayName: true, id: true, legalName: true },
-      take: 8,
-    }),
-    database.procurementOrder.findMany({
-      where: {
-        OR: [
-          { orderNumber: contains },
-          { packageName: contains },
-          { supplierQuoteReference: contains },
-        ],
-      },
-      orderBy: { updatedAt: "desc" },
-      select: {
-        id: true,
-        orderNumber: true,
-        packageName: true,
-        project: { select: { name: true } },
-        supplier: { select: { displayName: true } },
-      },
-      take: 8,
-    }),
-  ]);
+  const [projects, buildings, clients, suppliers, orders, items] =
+    await Promise.all([
+      database.project.findMany({
+        where: { OR: [{ name: contains }, { code: contains }] },
+        orderBy: { name: "asc" },
+        select: {
+          client: { select: { displayName: true } },
+          code: true,
+          id: true,
+          name: true,
+        },
+        take: 8,
+      }),
+      database.building.findMany({
+        where: { OR: [{ name: contains }, { shortCode: contains }] },
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          project: { select: { id: true, name: true } },
+          shortCode: true,
+        },
+        take: 8,
+      }),
+      database.client.findMany({
+        where: {
+          OR: [
+            { displayName: contains },
+            { legalName: contains },
+            { vatNumber: contains },
+          ],
+        },
+        orderBy: { displayName: "asc" },
+        select: { displayName: true, id: true, legalName: true },
+        take: 8,
+      }),
+      database.supplier.findMany({
+        where: {
+          OR: [
+            { displayName: contains },
+            { legalName: contains },
+            { vatNumber: contains },
+          ],
+        },
+        orderBy: { displayName: "asc" },
+        select: { displayName: true, id: true, legalName: true },
+        take: 8,
+      }),
+      database.procurementOrder.findMany({
+        where: {
+          OR: [
+            { orderNumber: contains },
+            { packageName: contains },
+            { supplierQuoteReference: contains },
+          ],
+        },
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true,
+          orderNumber: true,
+          packageName: true,
+          project: { select: { name: true } },
+          supplier: { select: { displayName: true } },
+        },
+        take: 8,
+      }),
+      database.item.findMany({
+        where: {
+          OR: [
+            { itemReference: contains },
+            { name: contains },
+            { description: contains },
+            { supplierSku: contains },
+            { supplier: { displayName: contains } },
+            { room: { name: contains } },
+            { building: { name: contains } },
+            { project: { name: contains } },
+          ],
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        select: {
+          building: { select: { name: true } },
+          id: true,
+          itemReference: true,
+          name: true,
+          project: { select: { name: true } },
+          room: { select: { name: true } },
+          supplier: { select: { displayName: true } },
+        },
+        take: 12,
+      }),
+    ]);
   return [
     ...projects.map((project) => ({
       context: `${project.code} · ${project.client.displayName}`,
@@ -116,6 +142,22 @@ export async function globalSearch(
       id: order.id,
       label: order.orderNumber,
       type: "Order" as const,
+    })),
+    ...items.map((item) => ({
+      context: [
+        item.project.name,
+        item.building?.name,
+        item.room?.name,
+        item.supplier?.displayName,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      href: `/items/${item.id}`,
+      id: item.id,
+      label: item.itemReference
+        ? `${item.itemReference} · ${item.name}`
+        : item.name,
+      type: "Item" as const,
     })),
   ];
 }

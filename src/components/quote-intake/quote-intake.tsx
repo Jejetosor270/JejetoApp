@@ -31,6 +31,7 @@ import {
 import type { QuoteIntakeOptions } from "@/lib/quote-intake/options";
 import { PaymentScheduleEditor } from "@/components/quote-intake/payment-schedule-editor";
 import { QuoteSupplierCreationForm } from "@/components/quote-intake/supplier-creation-form";
+import { QuoteItemReview } from "@/components/quote-intake/quote-item-review";
 
 function statusLabel(status: ExtractionStatus): string {
   return status.toLowerCase().replace(/^./, (value) => value.toUpperCase());
@@ -883,6 +884,10 @@ function QuoteReview({
             </div>
           </div>
         </section>
+
+        {review.itemReview ? (
+          <QuoteItemReview options={options} review={review.itemReview} />
+        ) : null}
 
         <PaymentScheduleEditor
           currencyCode={paymentCurrency}

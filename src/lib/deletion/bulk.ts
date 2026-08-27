@@ -179,6 +179,13 @@ export async function deleteProjects(
       transaction,
       orders.map((order) => order.id),
     );
+    await transaction.item.deleteMany({ where: { projectId: { in: ids } } });
+    await transaction.itemImport.deleteMany({
+      where: { projectId: { in: ids } },
+    });
+    await transaction.room.deleteMany({
+      where: { building: { projectId: { in: ids } } },
+    });
     await transaction.building.deleteMany({
       where: { projectId: { in: ids } },
     });
@@ -225,6 +232,15 @@ export async function deleteClients(
       transaction,
       orders.map((order) => order.id),
     );
+    await transaction.item.deleteMany({
+      where: { projectId: { in: projectIds } },
+    });
+    await transaction.itemImport.deleteMany({
+      where: { projectId: { in: projectIds } },
+    });
+    await transaction.room.deleteMany({
+      where: { building: { projectId: { in: projectIds } } },
+    });
     await transaction.building.deleteMany({
       where: { projectId: { in: projectIds } },
     });

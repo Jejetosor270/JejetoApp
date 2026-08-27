@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const transaction = vi.hoisted(() => ({
   building: { deleteMany: vi.fn() },
+  item: { deleteMany: vi.fn() },
+  itemImport: { deleteMany: vi.fn() },
+  room: { deleteMany: vi.fn() },
   client: { deleteMany: vi.fn(), findMany: vi.fn() },
   paymentInstallment: { deleteMany: vi.fn(), findMany: vi.fn() },
   paymentSettlement: { deleteMany: vi.fn() },

@@ -1,6 +1,9 @@
 import "server-only";
 
 import {
+  ItemCommercialStatus,
+  ItemLogisticsStatus,
+  ItemSourceType,
   PaymentDirection,
   Prisma,
   ProcurementOrderStatus,
@@ -29,6 +32,7 @@ export const exportEntities = [
   "suppliers",
   "clients",
   "projects",
+  "items",
 ] as const;
 export type ExportEntity = (typeof exportEntities)[number];
 
@@ -284,6 +288,141 @@ async function projectsCsv(params: Params): Promise<string> {
   );
 }
 
+async function itemsCsv(params: Params): Promise<string> {
+  const query = firstQueryValue(params, "query")?.trim() ?? "";
+  const projectId = optionalUuid(firstQueryValue(params, "projectId"));
+  const buildingId = optionalUuid(firstQueryValue(params, "buildingId"));
+  const roomId = optionalUuid(firstQueryValue(params, "roomId"));
+  const supplierId = optionalUuid(firstQueryValue(params, "supplierId"));
+  const orderId = optionalUuid(firstQueryValue(params, "orderId"));
+  const commercialStatus = selectedValue(
+    Object.values(ItemCommercialStatus),
+    firstQueryValue(params, "commercialStatus"),
+  );
+  const logisticsStatus = selectedValue(
+    Object.values(ItemLogisticsStatus),
+    firstQueryValue(params, "logisticsStatus"),
+  );
+  const sourceType = selectedValue(
+    Object.values(ItemSourceType),
+    firstQueryValue(params, "sourceType"),
+  );
+  const category = firstQueryValue(params, "category");
+  const itemCurrencyCode = firstQueryValue(params, "currencyCode");
+  const where: Prisma.ItemWhereInput = {
+    ...(projectId ? { projectId } : {}),
+    ...(buildingId ? { buildingId } : {}),
+    ...(roomId ? { roomId } : {}),
+    ...(supplierId ? { supplierId } : {}),
+    ...(orderId ? { procurementOrderId: orderId } : {}),
+    ...(commercialStatus ? { commercialStatus } : {}),
+    ...(logisticsStatus ? { logisticsStatus } : {}),
+    ...(sourceType ? { sourceType } : {}),
+    ...(category ? { category } : {}),
+    ...(itemCurrencyCode ? { purchaseCurrencyCode: itemCurrencyCode } : {}),
+    ...(query
+      ? {
+          OR: [
+            { itemReference: { contains: query, mode: "insensitive" } },
+            { name: { contains: query, mode: "insensitive" } },
+            { description: { contains: query, mode: "insensitive" } },
+            { supplierSku: { contains: query, mode: "insensitive" } },
+            {
+              supplier: {
+                displayName: { contains: query, mode: "insensitive" },
+              },
+            },
+            { project: { name: { contains: query, mode: "insensitive" } } },
+            { building: { name: { contains: query, mode: "insensitive" } } },
+            { room: { name: { contains: query, mode: "insensitive" } } },
+          ],
+        }
+      : {}),
+  };
+  const items = await getDatabase().item.findMany({
+    orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+    select: {
+      building: { select: { name: true } },
+      category: true,
+      commercialStatus: true,
+      estimatedWarehouseDate: true,
+      itemReference: true,
+      logisticsStatus: true,
+      name: true,
+      procurementOrder: { select: { orderNumber: true } },
+      project: { select: { name: true } },
+      purchaseCurrencyCode: true,
+      quantity: true,
+      room: { select: { name: true } },
+      sourceType: true,
+      supplier: { select: { displayName: true } },
+      supplierSku: true,
+      totalPurchasePriceHt: true,
+      totalSellingPriceHt: true,
+      unitOfMeasure: true,
+      unitPurchasePriceHt: true,
+      updatedAt: true,
+      vatAmount: true,
+      vatRate: true,
+    },
+    where,
+  });
+  return csvDocument(
+    [
+      "Item reference",
+      "Description",
+      "Project",
+      "Building",
+      "Room",
+      "Supplier",
+      "Supplier SKU",
+      "Order",
+      "Commercial status",
+      "Logistics status",
+      "Quantity",
+      "U/M",
+      "Unit purchase HT",
+      "Purchase total HT",
+      "Selling total HT",
+      "Currency",
+      "VAT rate",
+      "VAT amount",
+      "Estimated warehouse date",
+      "Source",
+      "Updated",
+    ],
+    items.map((item) => [
+      item.itemReference ?? "",
+      item.name,
+      item.project.name,
+      item.building?.name ?? "",
+      item.room?.name ?? "",
+      item.supplier?.displayName ?? "",
+      item.supplierSku ?? "",
+      item.procurementOrder?.orderNumber ?? "",
+      trustedCsvValue(item.commercialStatus),
+      trustedCsvValue(item.logisticsStatus),
+      trustedCsvValue(item.quantity.toString()),
+      item.unitOfMeasure,
+      money(item.unitPurchasePriceHt?.toString() ?? null),
+      money(item.totalPurchasePriceHt?.toString() ?? null),
+      money(item.totalSellingPriceHt?.toString() ?? null),
+      item.purchaseCurrencyCode
+        ? trustedCsvValue(item.purchaseCurrencyCode)
+        : "",
+      item.vatRate ? trustedCsvValue(item.vatRate.toString()) : "",
+      money(item.vatAmount?.toString() ?? null),
+      item.estimatedWarehouseDate
+        ? trustedCsvValue(
+            item.estimatedWarehouseDate.toISOString().slice(0, 10),
+          )
+        : "",
+      trustedCsvValue(item.sourceType),
+      trustedCsvValue(item.updatedAt.toISOString()),
+    ]),
+  );
+}
+
 export async function operationalCsv(
   entity: ExportEntity,
   params: Params,
@@ -291,5 +430,6 @@ export async function operationalCsv(
   if (entity === "orders") return ordersCsv(params);
   if (entity === "payments") return paymentsCsv(params);
   if (entity === "projects") return projectsCsv(params);
+  if (entity === "items") return itemsCsv(params);
   return directoryCsv(entity, params);
 }

@@ -26,6 +26,31 @@ const order = {
 };
 
 describe("procurement calendar derivation", () => {
+  it("derives Item logistics dates without a synchronized calendar record", () => {
+    const events = buildCalendarEvents({
+      installments: [],
+      orders: [],
+      today: "2026-08-26",
+      items: [
+        {
+          estimatedFabricatorDate: "2026-09-05",
+          estimatedResidenceDate: null,
+          estimatedWarehouseDate: "2026-09-01",
+          id: "item-1",
+          installedDate: "2026-09-10",
+          itemReference: "IT-1",
+          name: "Dining Chair",
+          projectName: "Villa Project",
+        },
+      ],
+    });
+    expect(events.map((event) => event.type)).toEqual([
+      "ITEM_WAREHOUSE",
+      "ITEM_FABRICATOR",
+      "ITEM_INSTALLATION",
+    ]);
+    expect(events[0]?.href).toBe("/items/item-1");
+  });
   it("derives payment and order timing events from source records", () => {
     const events = buildCalendarEvents({
       installments: [

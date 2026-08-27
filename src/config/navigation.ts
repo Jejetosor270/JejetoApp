@@ -7,6 +7,7 @@ import {
   FolderKanban,
   History,
   LayoutDashboard,
+  ListTree,
   Package,
   Settings,
   Truck,
@@ -43,6 +44,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
         label: "Projects",
       },
       { href: "/orders", icon: Package, isAvailable: true, label: "Orders" },
+      { href: "/items", icon: ListTree, isAvailable: true, label: "Items" },
       {
         href: "/payments",
         icon: WalletCards,

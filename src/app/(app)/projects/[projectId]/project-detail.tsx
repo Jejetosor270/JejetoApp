@@ -1,8 +1,10 @@
 "use client";
 
+import Decimal from "decimal.js";
 import { Pencil, Plus } from "lucide-react";
 import { type ReactNode, useActionState, useState } from "react";
 
+import { createRoomAction } from "@/app/(app)/items/actions";
 import {
   createBuildingAction,
   updateBuildingAction,
@@ -33,6 +35,8 @@ interface ProjectView {
   code: string;
   countryCode: string | null;
   expectedCompletionDate: string | null;
+  freightEstimateNotes: string | null;
+  freightEstimateRate: { toString(): string } | string | null;
   id: string;
   name: string;
   notes: string | null;
@@ -49,6 +53,13 @@ interface BuildingView {
   isActive: boolean;
   name: string;
   shortCode: string;
+  rooms: Array<{
+    code: string | null;
+    id: string;
+    isActive: boolean;
+    name: string;
+    notes: string | null;
+  }>;
 }
 const statusLabels: Record<string, string> = {
   ACTIVE: "Active",
@@ -175,6 +186,27 @@ function ProjectFields({
           defaultValue={inputDate(project.expectedCompletionDate)}
           name="expectedCompletionDate"
           type="date"
+        />
+      </Field>
+      <Field label="Estimated freight %">
+        <input
+          className={inputClassName}
+          defaultValue={
+            project.freightEstimateRate
+              ? new Decimal(project.freightEstimateRate.toString())
+                  .times(100)
+                  .toString()
+              : ""
+          }
+          inputMode="decimal"
+          name="freightEstimateRate"
+        />
+      </Field>
+      <Field label="Freight estimate notes">
+        <input
+          className={inputClassName}
+          defaultValue={project.freightEstimateNotes ?? ""}
+          name="freightEstimateNotes"
         />
       </Field>
       <Field label="Status">
@@ -335,6 +367,55 @@ function BuildingForm({
   );
 }
 
+function RoomForm({
+  buildingId,
+  onClose,
+}: {
+  buildingId: string;
+  onClose: () => void;
+}) {
+  const [state, action, pending] = useActionState(createRoomAction, {
+    message: "",
+    status: "idle" as const,
+  });
+  return (
+    <section className="bg-card rounded-lg border p-4">
+      <div className="mb-3 flex justify-between">
+        <h2 className="text-sm font-semibold">Add Room</h2>
+        <Button onClick={onClose} size="sm" type="button" variant="ghost">
+          Close
+        </Button>
+      </div>
+      <form action={action} className="grid gap-3 md:grid-cols-3">
+        <input name="buildingId" type="hidden" value={buildingId} />
+        <Field label="Room name">
+          <input className={inputClassName} name="name" required />
+        </Field>
+        <Field label="Code / reference">
+          <input className={inputClassName} name="code" />
+        </Field>
+        <Field label="Notes">
+          <input className={inputClassName} name="notes" />
+        </Field>
+        <div className="flex items-center gap-3 md:col-span-3">
+          <SubmitButton pending={pending}>Create Room</SubmitButton>
+          {state.message ? (
+            <p
+              className={
+                state.status === "error"
+                  ? "text-destructive text-sm"
+                  : "text-sm"
+              }
+            >
+              {state.message}
+            </p>
+          ) : null}
+        </div>
+      </form>
+    </section>
+  );
+}
+
 export function ProjectDetail({
   buildings,
   canEdit,
@@ -359,6 +440,7 @@ export function ProjectDetail({
     null,
   );
   const [addingBuilding, setAddingBuilding] = useState(false);
+  const [addingRoomTo, setAddingRoomTo] = useState<string | null>(null);
   return (
     <div className="space-y-5">
       {canEdit && editingProject ? (
@@ -416,6 +498,12 @@ export function ProjectDetail({
           projectId={project.id}
         />
       ) : null}
+      {canEdit && addingRoomTo ? (
+        <RoomForm
+          buildingId={addingRoomTo}
+          onClose={() => setAddingRoomTo(null)}
+        />
+      ) : null}
       <section className="bg-card overflow-hidden rounded-lg border">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div>
@@ -442,6 +530,7 @@ export function ProjectDetail({
                 <th className="px-4 py-3">Building</th>
                 <th className="px-4 py-3">Short code</th>
                 <th className="px-4 py-3">Description</th>
+                <th className="px-4 py-3">Rooms</th>
                 <th className="px-4 py-3">Status</th>
                 {canEdit ? (
                   <th className="px-4 py-3 text-right">Action</th>
@@ -458,6 +547,9 @@ export function ProjectDetail({
                   <td className="text-muted-foreground px-4 py-3">
                     {building.description ?? "—"}
                   </td>
+                  <td className="text-muted-foreground px-4 py-3">
+                    {building.rooms.map((room) => room.name).join(", ") || "—"}
+                  </td>
                   <td className="px-4 py-3">
                     <StatusBadge active={building.isActive} />
                   </td>
@@ -471,6 +563,16 @@ export function ProjectDetail({
                       >
                         <Pencil data-icon="inline-start" />
                         Edit
+                      </Button>
+                      <Button
+                        className="ml-2"
+                        onClick={() => setAddingRoomTo(building.id)}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        <Plus data-icon="inline-start" />
+                        Room
                       </Button>
                     </td>
                   ) : null}

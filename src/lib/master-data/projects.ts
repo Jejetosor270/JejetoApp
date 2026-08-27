@@ -25,6 +25,8 @@ const projectSelect = {
   countryCode: true,
   createdAt: true,
   expectedCompletionDate: true,
+  freightEstimateNotes: true,
+  freightEstimateRate: true,
   id: true,
   name: true,
   notes: true,
@@ -42,6 +44,10 @@ const buildingSelect = {
   isActive: true,
   name: true,
   shortCode: true,
+  rooms: {
+    orderBy: [{ isActive: "desc" }, { name: "asc" }],
+    select: { code: true, id: true, isActive: true, name: true, notes: true },
+  },
 } satisfies Prisma.BuildingSelect;
 
 export type ManagedProject = Prisma.ProjectGetPayload<{
@@ -64,6 +70,8 @@ function projectData(input: CreateProjectInput) {
     code: input.code,
     countryCode: input.countryCode ?? null,
     expectedCompletionDate: dateOrNull(input.expectedCompletionDate),
+    freightEstimateNotes: input.freightEstimateNotes ?? null,
+    freightEstimateRate: input.freightEstimateRate ?? null,
     name: input.name,
     notes: input.notes ?? null,
     projectManagerId: input.projectManagerId ?? null,

@@ -9,8 +9,12 @@ import { parseQuoteConfirmation } from "@/domain/quote-intake/confirmation";
 import type { OrderSummary } from "@/lib/procurement/orders";
 
 const transaction = vi.hoisted(() => ({
+  building: { findMany: vi.fn() },
+  item: { create: vi.fn(), findMany: vi.fn(), update: vi.fn() },
+  itemImport: { create: vi.fn() },
   paymentInstallment: { createMany: vi.fn(), findFirst: vi.fn() },
   project: { findUnique: vi.fn() },
+  room: { findMany: vi.fn() },
   supplier: { findFirst: vi.fn() },
   supplierQuoteImport: { create: vi.fn() },
 }));
@@ -130,6 +134,15 @@ describe("reviewed quote confirmation persistence", () => {
     });
     transaction.supplier.findFirst.mockResolvedValue({ id: supplierId });
     transaction.paymentInstallment.findFirst.mockResolvedValue(null);
+    transaction.building.findMany.mockResolvedValue([]);
+    transaction.room.findMany.mockResolvedValue([]);
+    transaction.item.findMany.mockResolvedValue([]);
+    transaction.itemImport.create.mockResolvedValue({
+      createdCount: 0,
+      id: "import-1",
+      skippedCount: 0,
+      updatedCount: 0,
+    });
   });
 
   it("preserves existing financial and Building values when AI fields are not applied", async () => {
@@ -288,5 +301,93 @@ describe("reviewed quote confirmation persistence", () => {
         }),
       ],
     });
+  });
+
+  it("creates and explicitly updates reviewed quote Items without deleting missing lines", async () => {
+    const form = commonForm("CREATE");
+    form.set("applyCurrency", "on");
+    form.set("orderCurrencyCode", "EUR");
+    form.set("orderNumber", "PO-ITEMS");
+    form.set("packageName", "Items package");
+    form.set("approveItems", "on");
+    form.set("itemExtractionModel", "mock-item-model");
+    form.set("itemExtractionProvider", "mock");
+    const existingItemId = "e12b6b9b-10e9-4e42-b93f-38796de4f65a";
+    form.set(
+      "quoteItems",
+      JSON.stringify([
+        {
+          action: "UPDATE",
+          brand: null,
+          buildingId: null,
+          description: null,
+          existingItemId,
+          finishColor: "Dark Oak",
+          include: true,
+          itemReference: "I-1",
+          name: "Chair",
+          notes: null,
+          quantity: "10",
+          roomId: null,
+          supplierSku: "SKU-1",
+          totalPriceHt: "13100",
+          unitOfMeasure: "EA",
+          unitPriceHt: "1310",
+          vatRate: "0.20",
+          volumeEach: null,
+          warnings: [],
+          weightEach: null,
+        },
+        {
+          action: "CREATE",
+          brand: null,
+          buildingId: null,
+          description: null,
+          existingItemId: null,
+          finishColor: null,
+          include: true,
+          itemReference: "I-2",
+          name: "Lamp",
+          notes: null,
+          quantity: "1",
+          roomId: null,
+          supplierSku: null,
+          totalPriceHt: "500",
+          unitOfMeasure: "EA",
+          unitPriceHt: "500",
+          vatRate: null,
+          volumeEach: null,
+          warnings: [],
+          weightEach: null,
+        },
+      ]),
+    );
+    orderMocks.createOrderInTransaction.mockResolvedValue(orderId);
+    transaction.item.findMany.mockResolvedValue([{ id: existingItemId }]);
+    transaction.itemImport.create.mockResolvedValue({
+      createdCount: 1,
+      id: "import-1",
+      skippedCount: 0,
+      updatedCount: 1,
+    });
+    await confirmSupplierQuote("actor-1", parsed(form));
+    expect(transaction.item.update).toHaveBeenCalledWith({
+      where: { id: existingItemId },
+      data: expect.objectContaining({
+        finishColor: "Dark Oak",
+        procurementOrderId: orderId,
+        quantity: "10",
+        totalPurchasePriceHt: "13100",
+      }),
+    });
+    expect(transaction.item.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        name: "Lamp",
+        procurementOrderId: orderId,
+        sourceType: "SUPPLIER_QUOTE_PDF",
+      }),
+    });
+    expect(transaction.itemImport.create).toHaveBeenCalledTimes(1);
+    expect("deleteMany" in transaction.item).toBe(false);
   });
 });

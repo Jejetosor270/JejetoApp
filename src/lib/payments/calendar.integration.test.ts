@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const database = vi.hoisted(() => ({
+  item: { findMany: vi.fn() },
   paymentInstallment: { findMany: vi.fn() },
   procurementOrder: { findMany: vi.fn() },
 }));
@@ -52,6 +53,7 @@ describe("calendar events from authoritative installments", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     database.procurementOrder.findMany.mockResolvedValue([]);
+    database.item.findMany.mockResolvedValue([]);
   });
 
   it("includes Supplier Payment and Client Receipt due dates with their parties", async () => {

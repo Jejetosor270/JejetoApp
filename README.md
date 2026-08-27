@@ -14,6 +14,8 @@ A web application for managing project procurement packages, financial performan
 - URL-based operational filtering, sorting, server pagination, and global search
 - Secure filtered CSV exports and ADMIN/MANAGER activity history
 - Safe company settings and protected employee-account administration
+- Project-specific Items, Rooms, logistics status/locations, claims, and Decimal-safe item pricing
+- Review-first XLSX Project-budget imports and supplier-quote line-item extraction
 
 ## Technical stack
 
@@ -38,6 +40,7 @@ npm run dev
 - `AUTH_SECRET`
 - `OPENAI_API_KEY` (required for supplier quote extraction; server-side only)
 - `QUOTE_EXTRACTION_MODEL` (optional server-side override; defaults to `gpt-5.6-luna`)
+- `ITEM_EXTRACTION_MODEL` (optional independent Item mapping/extraction override; defaults to `gpt-5.6-luna`)
 - `DIRECT_URL` (recommended for migrations when the runtime URL is pooled)
 
 Keep environment values outside source control. Optional one-time administrator bootstrap variables are documented in `.env.example`.

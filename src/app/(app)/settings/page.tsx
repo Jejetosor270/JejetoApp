@@ -1,21 +1,32 @@
 import type { Metadata } from "next";
 
 import { SettingsForm } from "@/app/(app)/settings/settings-form";
+import { LocationForm } from "@/components/items/location-form";
+import {
+  DEFAULT_ITEM_EXTRACTION_MODEL,
+  ITEM_EXTRACTION_PROVIDER,
+} from "@/config/item-extraction";
 import {
   DEFAULT_QUOTE_EXTRACTION_MODEL,
   QUOTE_EXTRACTION_PROVIDER,
 } from "@/config/quote-extraction";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
+import { listLogisticsLocations } from "@/lib/items/items";
 import { getApplicationSettings } from "@/lib/settings/application-settings";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   await requireMasterDataEditor();
-  const settings = await getApplicationSettings();
+  const [settings, locations] = await Promise.all([
+    getApplicationSettings(),
+    listLogisticsLocations(),
+  ]);
   const model = process.env.QUOTE_EXTRACTION_MODEL?.trim()
     ? process.env.QUOTE_EXTRACTION_MODEL
     : DEFAULT_QUOTE_EXTRACTION_MODEL;
+  const itemModel =
+    process.env.ITEM_EXTRACTION_MODEL?.trim() || DEFAULT_ITEM_EXTRACTION_MODEL;
   return (
     <div className="space-y-6">
       <header>
@@ -34,6 +45,53 @@ export default async function SettingsPage() {
         <div className="mt-4">
           <SettingsForm companyName={settings.companyName} />
         </div>
+      </section>
+      <section className="bg-card rounded-lg border p-5">
+        <h2 className="text-sm font-semibold">Item extraction</h2>
+        <dl className="mt-4 grid gap-1 text-sm">
+          <dt className="text-muted-foreground">Provider</dt>
+          <dd>{ITEM_EXTRACTION_PROVIDER}</dd>
+          <dt className="text-muted-foreground mt-2">Configured model</dt>
+          <dd className="font-mono">{itemModel}</dd>
+        </dl>
+        <p className="text-muted-foreground mt-3 text-xs">
+          The optional server-side ITEM_EXTRACTION_MODEL controls spreadsheet
+          semantic mapping and PDF line extraction independently of quote
+          totals.
+        </p>
+      </section>
+      <section className="bg-card rounded-lg border p-5">
+        <h2 className="text-sm font-semibold">Logistics Locations</h2>
+        <p className="text-muted-foreground mt-2 text-xs">
+          Reusable operational destinations only; this does not track inventory.
+        </p>
+        <div className="mt-4">
+          <LocationForm />
+        </div>
+        <ul className="mt-4 divide-y rounded-lg border text-sm">
+          {locations.map((location) => (
+            <li
+              className="flex items-center justify-between gap-3 px-3 py-2"
+              key={location.id}
+            >
+              <span>
+                <span className="font-medium">{location.name}</span>
+                <span className="text-muted-foreground ml-2 text-xs">
+                  {location.city ?? location.countryCode ?? "No address"}
+                </span>
+              </span>
+              <span className="text-muted-foreground text-xs">
+                {location.type.replaceAll("_", " ")} ·{" "}
+                {location.isActive ? "Active" : "Inactive"}
+              </span>
+            </li>
+          ))}
+          {locations.length === 0 ? (
+            <li className="text-muted-foreground px-3 py-4 text-xs">
+              No logistics Locations yet.
+            </li>
+          ) : null}
+        </ul>
       </section>
       <section className="bg-card rounded-lg border p-5">
         <h2 className="text-sm font-semibold">Financial reporting</h2>

@@ -93,6 +93,38 @@ enum SupplierQuoteImportAction {
   UPDATED_ORDER
 }
 
+enum ItemCommercialStatus {
+  BUDGET
+  QUOTED
+  SELECTED
+  ORDERED
+  CANCELLED
+}
+
+enum ItemLogisticsStatus {
+  PENDING
+  IN_PRODUCTION
+  IN_TRANSIT
+  RECEIVED_FABRICATOR
+  RECEIVED_WAREHOUSE
+  DELIVERED_RESIDENCE
+  INSTALLED
+  CLAIM
+}
+
+enum LogisticsLocationType {
+  WAREHOUSE
+  FABRICATOR
+  PROJECT_SITE
+  OTHER
+}
+
+enum ItemSourceType {
+  MANUAL
+  BUDGET_XLSX
+  SUPPLIER_QUOTE_PDF
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   name         String   @db.VarChar(160)
@@ -139,6 +171,13 @@ model User {
   auditEvents                AuditEvent[]                 @relation("AuditEventActor")
   createdApplicationSettings ApplicationSetting[]        @relation("ApplicationSettingCreatedBy")
   updatedApplicationSettings ApplicationSetting[]        @relation("ApplicationSettingUpdatedBy")
+  createdRooms               Room[]                       @relation("RoomCreatedBy")
+  updatedRooms               Room[]                       @relation("RoomUpdatedBy")
+  createdLogisticsLocations  LogisticsLocation[]          @relation("LogisticsLocationCreatedBy")
+  updatedLogisticsLocations  LogisticsLocation[]          @relation("LogisticsLocationUpdatedBy")
+  createdItems               Item[]                       @relation("ItemCreatedBy")
+  updatedItems               Item[]                       @relation("ItemUpdatedBy")
+  itemImports                ItemImport[]                 @relation("ItemImportImportedBy")
 
   @@index([isActive])
   @@map("users")
@@ -160,6 +199,7 @@ model Currency {
 
   paymentInstallments PaymentInstallment[]
   applicationSettings ApplicationSetting[]
+  items               Item[]
 
   @@index([isActive])
   @@map("currencies")
@@ -228,6 +268,8 @@ model Supplier {
   updatedBy       User?              @relation("SupplierUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   orders          ProcurementOrder[]
   quoteImports    SupplierQuoteImport[]
+  items           Item[]
+  itemImports     ItemImport[]
 
   @@index([displayName])
   @@index([isActive])
@@ -249,6 +291,8 @@ model Project {
   expectedCompletionDate DateTime?     @db.Date
   status                 ProjectStatus @default(PLANNING)
   notes                  String?       @db.Text
+  freightEstimateRate    Decimal?      @db.Decimal(9, 6)
+  freightEstimateNotes   String?       @db.VarChar(500)
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
   createdById            String?       @db.Uuid
@@ -262,6 +306,8 @@ model Project {
   buildings         Building[]
   orders            ProcurementOrder[]
   quoteImports      SupplierQuoteImport[]
+  items             Item[]
+  itemImports       ItemImport[]
 
   @@index([clientId])
   @@index([projectManagerId])
@@ -287,6 +333,8 @@ model Building {
   createdBy User?                      @relation("BuildingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy User?                      @relation("BuildingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   orders    ProcurementOrderBuilding[]
+  rooms     Room[]
+  items     Item[]
 
   @@unique([projectId, shortCode])
   @@index([projectId, isActive])
@@ -341,6 +389,8 @@ model ProcurementOrder {
   vatEntries          ProcurementOrderVatEntry[]
   paymentInstallments PaymentInstallment[]
   quoteImports        SupplierQuoteImport[]
+  items               Item[]
+  itemImports         ItemImport[]
 
   @@index([projectId])
   @@index([supplierId])
@@ -529,4 +579,177 @@ model ApplicationSetting {
   updatedBy                User?    @relation("ApplicationSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@map("application_settings")
+}
+
+model Room {
+  id          String   @id @default(uuid()) @db.Uuid
+  buildingId  String   @db.Uuid
+  name        String   @db.VarChar(160)
+  code        String?  @db.VarChar(40)
+  notes       String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?  @db.Uuid
+  updatedById String?  @db.Uuid
+
+  building  Building @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  createdBy User?    @relation("RoomCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?    @relation("RoomUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  items     Item[]
+
+  @@unique([buildingId, name])
+  @@unique([buildingId, code])
+  @@index([buildingId, isActive])
+  @@map("rooms")
+}
+
+model LogisticsLocation {
+  id           String                    @id @default(uuid()) @db.Uuid
+  name         String                    @db.VarChar(160)
+  type         LogisticsLocationType
+  addressLine1 String?                   @db.VarChar(200)
+  addressLine2 String?                   @db.VarChar(200)
+  city         String?                   @db.VarChar(120)
+  postalCode   String?                   @db.VarChar(32)
+  countryCode  String?                   @db.Char(2)
+  notes        String?                   @db.Text
+  isActive     Boolean                   @default(true)
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  createdById  String?                   @db.Uuid
+  updatedById  String?                   @db.Uuid
+
+  createdBy User? @relation("LogisticsLocationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("LogisticsLocationUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  expectedWarehouseItems Item[] @relation("ItemExpectedWarehouse")
+  receivedWarehouseItems Item[] @relation("ItemReceivedWarehouse")
+  fabricatorItems        Item[] @relation("ItemFabricator")
+  destinationItems       Item[] @relation("ItemDestinationLocation")
+
+  @@index([type, isActive])
+  @@index([name])
+  @@map("logistics_locations")
+}
+
+model ItemImport {
+  id               String         @id @default(uuid()) @db.Uuid
+  projectId        String         @db.Uuid
+  supplierId       String?        @db.Uuid
+  procurementOrderId String?      @db.Uuid
+  sourceType       ItemSourceType
+  originalFilename String         @db.VarChar(255)
+  importedAt       DateTime       @default(now())
+  importedById     String?        @db.Uuid
+  rowCount         Int
+  createdCount     Int
+  updatedCount     Int
+  skippedCount     Int
+  warningCount     Int
+  extractionProvider String?      @db.VarChar(50)
+  extractionModel  String?        @db.VarChar(120)
+  mappingMetadata  Json?
+
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  supplier         Supplier?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  procurementOrder ProcurementOrder? @relation(fields: [procurementOrderId], references: [id], onDelete: SetNull)
+  importedBy       User?             @relation("ItemImportImportedBy", fields: [importedById], references: [id], onDelete: SetNull)
+  items            Item[]
+
+  @@index([projectId, importedAt])
+  @@index([supplierId])
+  @@index([procurementOrderId])
+  @@index([sourceType])
+  @@map("item_imports")
+}
+
+model Item {
+  id                  String               @id @default(uuid()) @db.Uuid
+  projectId           String               @db.Uuid
+  buildingId          String?              @db.Uuid
+  roomId              String?              @db.Uuid
+  supplierId          String?              @db.Uuid
+  procurementOrderId  String?              @db.Uuid
+  importId            String?              @db.Uuid
+  sourceType          ItemSourceType       @default(MANUAL)
+  sourceSheet         String?              @db.VarChar(120)
+  sourceRowNumber     Int?
+  sourceReference     String?              @db.VarChar(120)
+  itemReference       String?              @db.VarChar(120)
+  supplierSku         String?              @db.VarChar(160)
+  name                String               @db.VarChar(240)
+  description         String?              @db.Text
+  category            String?              @db.VarChar(80)
+  brand               String?              @db.VarChar(160)
+  finishColor         String?              @db.VarChar(240)
+  notes               String?              @db.Text
+  quantity            Decimal              @default(1) @db.Decimal(19, 4)
+  unitOfMeasure       String               @default("EA") @db.VarChar(24)
+  weightEach          Decimal?             @db.Decimal(19, 4)
+  totalWeight         Decimal?             @db.Decimal(19, 4)
+  volumeEach          Decimal?             @db.Decimal(19, 4)
+  totalVolume         Decimal?             @db.Decimal(19, 4)
+  purchaseCurrencyCode String?             @db.Char(3)
+  unitPurchasePriceHt Decimal?              @db.Decimal(19, 4)
+  totalPurchasePriceHt Decimal?             @db.Decimal(19, 4)
+  pricingMode         PricingMode          @default(SELLING_PRICE)
+  targetMarginRate    Decimal?              @db.Decimal(9, 6)
+  unitSellingPriceHt  Decimal?              @db.Decimal(19, 4)
+  totalSellingPriceHt Decimal?              @db.Decimal(19, 4)
+  vatTreatment        VatTreatment?
+  vatRecoverability   VatRecoverability?
+  vatRate             Decimal?              @db.Decimal(9, 6)
+  vatAmount           Decimal?              @db.Decimal(19, 4)
+  commercialStatus    ItemCommercialStatus  @default(BUDGET)
+  logisticsStatus     ItemLogisticsStatus   @default(PENDING)
+  estimatedWarehouseDate DateTime?          @db.Date
+  estimatedFabricatorDate DateTime?         @db.Date
+  receivedFabricatorDate DateTime?          @db.Date
+  receivedWarehouseDate DateTime?           @db.Date
+  inTransitDate       DateTime?              @db.Date
+  estimatedResidenceDate DateTime?          @db.Date
+  deliveredResidenceDate DateTime?          @db.Date
+  installedDate       DateTime?              @db.Date
+  expectedWarehouseId String?                @db.Uuid
+  receivedWarehouseId String?                @db.Uuid
+  fabricatorId        String?                @db.Uuid
+  destinationLocationId String?              @db.Uuid
+  issueDescription    String?                @db.Text
+  claimStatus         String?                @db.VarChar(120)
+  claimOpenedDate     DateTime?              @db.Date
+  claimResolvedDate   DateTime?              @db.Date
+  claimNotes          String?                @db.Text
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  createdById         String?                @db.Uuid
+  updatedById         String?                @db.Uuid
+
+  project             Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  building            Building?           @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+  room                Room?               @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  supplier            Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  procurementOrder    ProcurementOrder?   @relation(fields: [procurementOrderId], references: [id], onDelete: SetNull)
+  itemImport          ItemImport?         @relation(fields: [importId], references: [id], onDelete: SetNull)
+  purchaseCurrency    Currency?           @relation(fields: [purchaseCurrencyCode], references: [code], onDelete: Restrict)
+  expectedWarehouse   LogisticsLocation?  @relation("ItemExpectedWarehouse", fields: [expectedWarehouseId], references: [id], onDelete: SetNull)
+  receivedWarehouse   LogisticsLocation?  @relation("ItemReceivedWarehouse", fields: [receivedWarehouseId], references: [id], onDelete: SetNull)
+  fabricator          LogisticsLocation?  @relation("ItemFabricator", fields: [fabricatorId], references: [id], onDelete: SetNull)
+  destinationLocation LogisticsLocation?  @relation("ItemDestinationLocation", fields: [destinationLocationId], references: [id], onDelete: SetNull)
+  createdBy           User?               @relation("ItemCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy           User?               @relation("ItemUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([buildingId])
+  @@index([roomId])
+  @@index([supplierId])
+  @@index([procurementOrderId])
+  @@index([commercialStatus])
+  @@index([logisticsStatus])
+  @@index([itemReference])
+  @@index([supplierSku])
+  @@index([importId])
+  @@index([projectId, commercialStatus])
+  @@index([projectId, updatedAt])
+  @@map("items")
 }

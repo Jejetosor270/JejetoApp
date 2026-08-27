@@ -1,4 +1,5 @@
 import { z } from "zod";
+import Decimal from "decimal.js";
 
 import { isSupportedCountryCode } from "@/config/countries";
 import { ProjectStatus } from "@/generated/prisma/client";
@@ -45,6 +46,21 @@ const optionalDate = z.preprocess(
   (value) =>
     typeof value === "string" && value.trim() === "" ? undefined : value,
   z.iso.date("Enter a valid date.").optional(),
+);
+
+const optionalPercentRate = z.preprocess(
+  (value) =>
+    typeof value === "string" && value.trim() === "" ? undefined : value,
+  z
+    .string()
+    .trim()
+    .regex(
+      /^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/,
+      "Enter a percentage from 0 to 100.",
+    )
+    .refine((value) => new Decimal(value).lessThanOrEqualTo(100))
+    .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
+    .optional(),
 );
 
 const optionalNonNegativeInteger = z.preprocess(
@@ -130,6 +146,8 @@ const projectFields = {
     .max(40),
   countryCode: optionalCountryCode,
   expectedCompletionDate: optionalDate,
+  freightEstimateNotes: optionalText(500),
+  freightEstimateRate: optionalPercentRate,
   name: z
     .string()
     .trim()

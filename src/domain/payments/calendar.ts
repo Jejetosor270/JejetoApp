@@ -5,7 +5,11 @@ export type CalendarEventType =
   | "CLIENT_RECEIPT"
   | "EXPECTED_READY"
   | "EXPECTED_DELIVERY"
-  | "ACTUAL_DELIVERY";
+  | "ACTUAL_DELIVERY"
+  | "ITEM_WAREHOUSE"
+  | "ITEM_FABRICATOR"
+  | "ITEM_RESIDENCE"
+  | "ITEM_INSTALLATION";
 
 export interface ProcurementCalendarEvent {
   amount: string | null;
@@ -42,6 +46,16 @@ export function buildCalendarEvents(input: {
     expectedReadyDate: string | null;
     id: string;
     orderNumber: string;
+    projectName: string;
+  }[];
+  items?: readonly {
+    estimatedFabricatorDate: string | null;
+    estimatedResidenceDate: string | null;
+    estimatedWarehouseDate: string | null;
+    id: string;
+    installedDate: string | null;
+    itemReference: string | null;
+    name: string;
     projectName: string;
   }[];
   today: string;
@@ -91,7 +105,46 @@ export function buildCalendarEvents(input: {
         : [],
     );
   });
-  return [...paymentEvents, ...orderEvents].sort(
+  const itemEvents = (input.items ?? []).flatMap((item) => {
+    const dates = [
+      [
+        "ITEM_WAREHOUSE",
+        item.estimatedWarehouseDate,
+        "Item expected at warehouse",
+      ],
+      [
+        "ITEM_FABRICATOR",
+        item.estimatedFabricatorDate,
+        "Item expected at fabricator",
+      ],
+      [
+        "ITEM_RESIDENCE",
+        item.estimatedResidenceDate,
+        "Item expected at residence",
+      ],
+      ["ITEM_INSTALLATION", item.installedDate, "Item installation"],
+    ] as const;
+    return dates.flatMap(([type, date, title]) =>
+      date
+        ? [
+            {
+              amount: null,
+              currencyCode: null,
+              date,
+              href: `/items/${item.id}`,
+              id: `${type.toLowerCase()}-${item.id}`,
+              orderNumber: item.itemReference ?? "ITEM",
+              partyName: null,
+              projectName: item.projectName,
+              status: null,
+              title: `${title} · ${item.name}`,
+              type,
+            },
+          ]
+        : [],
+    );
+  });
+  return [...paymentEvents, ...orderEvents, ...itemEvents].sort(
     (left, right) =>
       left.date.localeCompare(right.date) ||
       left.title.localeCompare(right.title),

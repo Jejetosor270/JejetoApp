@@ -16,9 +16,9 @@ Build MB Interiors' internal procurement-finance ERP incrementally. The business
 
 `Client → Project → House/Building → Supplier Procurement Package/Order → Payment Schedule`
 
-One package can apply to several buildings. The package/order, not a product, is the central procurement object.
+One package can apply to several buildings. The package/order remains the authoritative commercial procurement object; Phase 10 Items are Project/location-specific supporting detail.
 
-Do not introduce rooms, products/SKUs, inventory, warehouse management, or statutory-accounting behavior. Do not implement later roadmap phases unless the current task explicitly requests them.
+Do not introduce a reusable product/SKU catalog, inventory, warehouse management, or statutory-accounting behavior. Rooms and Project-specific Items follow the Phase 10 rules below. Do not implement later roadmap phases unless the current task explicitly requests them.
 
 ## Financial language is exact
 
@@ -86,7 +86,7 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 
 ## Phase 8 supplier quote intake
 
-- Supplier quote uploads are temporary processing inputs only. Never persist source binaries, base64 data, page images, or extracted product lines, and never depend on persistent runtime storage.
+- Supplier quote uploads are temporary processing inputs only. Never persist source binaries, base64 data, page images, or unreviewed extraction payloads, and never depend on persistent runtime storage. Phase 10 may persist employee-approved structured Item records.
 - The employee-selected Project is authoritative. AI must not infer or change it, and any reviewed Buildings must belong to that Project.
 - AI output is untrusted evidence. Validate it through the strict structured extraction schema and require an ADMIN or MANAGER review/confirmation before creating or updating an Order.
 - Supplier suggestions match active existing Suppliers in priority order: normalized VAT number, normalized legal name, then normalized display name. Never create a Supplier automatically.
@@ -104,6 +104,16 @@ Do not introduce rooms, products/SKUs, inventory, warehouse management, or statu
 - Company reporting currency remains read-only at runtime. Project reporting currencies and historical FX assumptions must not be silently reinterpreted by a settings change.
 - Quote extraction retains temporary-file and server-side-secret protections. The UI prevents repeated submission and the server applies pragmatic per-instance, per-employee concurrency/burst protection without claiming globally distributed rate limiting.
 - ADMIN may permanently delete employee accounts except their own current account or a selection that would leave no active ADMIN. User audit attribution and all operational business records must survive employee deletion; every authenticated request continues to resolve an active database user.
+
+## Phase 10 item management
+
+- An Item is Project-specific, not a reusable catalog product. The hierarchy is Project → Building → Room → Item; the same product in different Buildings or Rooms is represented by separate Items.
+- Supplier, Procurement Order, Building, and Room may be absent during early planning. A selected Room must belong to the Item Building, and the Building must belong to the Item Project.
+- Item quantity is Decimal and unit of measure is extensible. Item financial calculations use shared Decimal-safe rules; existing Order financials remain authoritative and are never silently replaced by Item sums.
+- Commercial Item status and logistics status are separate. Logistics Locations are operational references only; do not add inventory, stock, images, or warehouse-management behavior.
+- Revised imports propose explicit updates and never auto-delete missing Items. AI output remains untrusted and employee review is required before persistence.
+- XLSX parsing is deterministic first, with at most one optional semantic mapping call. Supplier quote line extraction uses the independently configurable `ITEM_EXTRACTION_MODEL`, defaulting to `gpt-5.6-luna`.
+- XLSX, PDF, and image sources are request-scoped, cleared after processing, and never stored. Persist only reviewed Items and lightweight import metadata.
 
 ## Database conventions
 
