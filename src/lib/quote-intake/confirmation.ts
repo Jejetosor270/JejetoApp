@@ -391,6 +391,7 @@ async function persistApprovedItems(
     const common = {
       ...(row.brand !== null ? { brand: row.brand } : {}),
       ...(row.buildingId !== null ? { buildingId: row.buildingId } : {}),
+      ...(row.category !== null ? { category: row.category } : {}),
       ...(row.description !== null ? { description: row.description } : {}),
       ...(row.finishColor !== null ? { finishColor: row.finishColor } : {}),
       ...(row.itemReference !== null
@@ -410,6 +411,13 @@ async function persistApprovedItems(
         ? { unitPurchasePriceHt: row.unitPriceHt }
         : {}),
       ...(row.vatRate !== null ? { vatRate: row.vatRate } : {}),
+      ...(row.totalPriceHt !== null && row.vatRate !== null
+        ? {
+            vatAmount: new Decimal(row.totalPriceHt)
+              .times(row.vatRate)
+              .toFixed(4),
+          }
+        : {}),
       ...(row.volumeEach !== null ? { volumeEach: row.volumeEach } : {}),
       ...(row.weightEach !== null ? { weightEach: row.weightEach } : {}),
       commercialStatus: ItemCommercialStatus.QUOTED,

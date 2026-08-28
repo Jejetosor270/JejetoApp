@@ -136,6 +136,7 @@ describe("supplier quote processing lifecycle", () => {
     expect(itemProvider.extractQuoteItems).toHaveBeenCalledTimes(1);
     expect(result.itemReview?.rows[0]).toMatchObject({
       action: "UPDATE",
+      category: null,
       existingItemId: "existing-item",
       quantity: "2.5",
     });

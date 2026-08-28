@@ -33,6 +33,86 @@ export interface ItemFinancialResult {
   warnings: string[];
 }
 
+const editableMoneyPattern = /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/;
+const editablePercentPattern = /^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/;
+
+export function quoteItemTotalFromUnit(
+  quantity: string | null,
+  unitPriceHt: string | null,
+): string | null {
+  if (
+    !quantity ||
+    !unitPriceHt ||
+    !editableMoneyPattern.test(quantity) ||
+    !editableMoneyPattern.test(unitPriceHt)
+  )
+    return null;
+  const quantityValue = new Decimal(quantity);
+  if (!quantityValue.greaterThan(0)) return null;
+  return quantityValue.times(unitPriceHt).toFixed(MONEY_SCALE);
+}
+
+export function quoteItemPercentInputToRate(value: string): string | null {
+  const normalized = value.trim();
+  if (
+    !editablePercentPattern.test(normalized) ||
+    new Decimal(normalized).greaterThan(100)
+  )
+    return null;
+  return new Decimal(normalized).dividedBy(100).toFixed(6);
+}
+
+export function quoteItemLineAmounts(input: {
+  totalPriceHt: string | null;
+  vatRate: string | null;
+}): { totalTtc: string | null; vatAmount: string | null } {
+  if (
+    !input.totalPriceHt ||
+    !input.vatRate ||
+    !editableMoneyPattern.test(input.totalPriceHt) ||
+    !/^(?:0(?:\.\d{1,6})?|1(?:\.0{1,6})?)$/.test(input.vatRate)
+  )
+    return { totalTtc: null, vatAmount: null };
+  const total = new Decimal(input.totalPriceHt);
+  const vat = total.times(input.vatRate);
+  return {
+    totalTtc: total.plus(vat).toFixed(MONEY_SCALE),
+    vatAmount: vat.toFixed(MONEY_SCALE),
+  };
+}
+
+export function quoteItemReviewTotal(
+  rows: ReadonlyArray<{ include: boolean; totalPriceHt: string | null }>,
+): { complete: boolean; totalHt: string } {
+  let complete = true;
+  const total = rows.reduce((sum, row) => {
+    if (!row.include) return sum;
+    if (!row.totalPriceHt || !editableMoneyPattern.test(row.totalPriceHt)) {
+      complete = false;
+      return sum;
+    }
+    return sum.plus(row.totalPriceHt);
+  }, new Decimal(0));
+  return { complete, totalHt: total.toFixed(MONEY_SCALE) };
+}
+
+export function quoteItemReviewReconciliation(
+  itemTotalHt: string,
+  orderSubtotalHt: string | null,
+): { difference: string; isReconciled: boolean } | null {
+  if (
+    !orderSubtotalHt ||
+    !editableMoneyPattern.test(itemTotalHt) ||
+    !editableMoneyPattern.test(orderSubtotalHt)
+  )
+    return null;
+  const difference = new Decimal(itemTotalHt).minus(orderSubtotalHt);
+  return {
+    difference: difference.toFixed(MONEY_SCALE),
+    isReconciled: difference.abs().lessThanOrEqualTo(ITEM_TOTAL_TOLERANCE),
+  };
+}
+
 function optionalDecimal(value: string | null | undefined): Decimal | null {
   return value === null || value === undefined || value === ""
     ? null

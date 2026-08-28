@@ -3,10 +3,37 @@ import { describe, expect, it } from "vitest";
 import {
   calculateItemFinancials,
   projectFreightEstimate,
+  quoteItemLineAmounts,
+  quoteItemPercentInputToRate,
+  quoteItemReviewReconciliation,
+  quoteItemReviewTotal,
+  quoteItemTotalFromUnit,
   quantityTimesUnitMatchesTotal,
 } from "@/domain/items/calculations";
 
 describe("Item Decimal-safe financials", () => {
+  it("recalculates quote-review totals and VAT with exact decimals", () => {
+    expect(quoteItemTotalFromUnit("3", "19.95")).toBe("59.8500");
+    expect(quoteItemPercentInputToRate("5.5")).toBe("0.055000");
+    expect(
+      quoteItemLineAmounts({
+        totalPriceHt: "59.8500",
+        vatRate: "0.055000",
+      }),
+    ).toEqual({ totalTtc: "63.1418", vatAmount: "3.2918" });
+    expect(
+      quoteItemReviewTotal([
+        { include: true, totalPriceHt: "59.8500" },
+        { include: false, totalPriceHt: "100.0000" },
+        { include: true, totalPriceHt: "40.1500" },
+      ]),
+    ).toEqual({ complete: true, totalHt: "100.0000" });
+    expect(quoteItemReviewReconciliation("100.0000", "100.0100")).toEqual({
+      difference: "-0.0100",
+      isReconciled: true,
+    });
+  });
+
   it("derives totals and metrics from Decimal quantities without floating-point truth", () => {
     const result = calculateItemFinancials({
       pricingMode: "SELLING_PRICE",

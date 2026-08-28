@@ -16,6 +16,7 @@ import {
 } from "@/domain/quote-intake/payment-schedule";
 import type { QuotePaymentProposal } from "@/domain/quote-intake/extraction";
 import { formatMoney } from "@/domain/procurement/presentation";
+import { dateOnlyToEuropeanInput } from "@/domain/payments/dates";
 
 interface EditablePayment extends QuoteScheduleDraftLine {
   dueDate: string;
@@ -30,7 +31,7 @@ function editablePayment(
 ): EditablePayment {
   return {
     basis: payment.basis === "FIXED_AMOUNT" ? "FIXED_AMOUNT" : "PERCENTAGE",
-    dueDate: payment.dueDate ?? "",
+    dueDate: dateOnlyToEuropeanInput(payment.dueDate),
     fixedAmount: payment.fixedAmount ?? "",
     id: `extracted-${index}`,
     label: payment.label,
@@ -254,12 +255,17 @@ export function PaymentScheduleEditor({
                 <input
                   aria-invalid={Boolean(dueDateError) || undefined}
                   className={errorClass(dueDateError)}
+                  inputMode="numeric"
+                  maxLength={10}
                   name={`payment.${index}.dueDate`}
                   onChange={(event) =>
                     updatePayment(index, { dueDate: event.target.value })
                   }
+                  pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
+                  placeholder="DD/MM/YYYY"
                   required={approveSchedule}
-                  type="date"
+                  title="Enter a date as DD/MM/YYYY"
+                  type="text"
                   value={payment.dueDate}
                 />
               </Field>

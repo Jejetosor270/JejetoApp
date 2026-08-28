@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import { z } from "zod";
 
 import { isSupportedCountryCode } from "@/config/countries";
-import { isDateOnly } from "@/domain/payments/dates";
+import { europeanInputToDateOnly, isDateOnly } from "@/domain/payments/dates";
 import { VatRecoverability, VatTreatment } from "@/generated/prisma/client";
 
 function optionalString(maximum: number) {
@@ -45,11 +45,11 @@ const optionalPercent = z.preprocess(
     .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
     .optional(),
 );
-const optionalDate = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
-  z.string().refine(isDateOnly).optional(),
-);
+const optionalDate = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  if (value.trim() === "") return undefined;
+  return europeanInputToDateOnly(value) ?? value;
+}, z.string().refine(isDateOnly, "Enter a valid date as DD/MM/YYYY.").optional());
 
 const paymentSchema = z
   .object({
@@ -67,6 +67,7 @@ const quoteItemSchema = z
     action: z.enum(["CREATE", "UPDATE"]),
     brand: z.string().max(160).nullable(),
     buildingId: z.uuid().nullable(),
+    category: z.string().max(80).nullable(),
     description: z.string().max(4000).nullable(),
     diffs: z
       .array(

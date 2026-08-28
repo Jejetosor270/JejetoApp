@@ -182,7 +182,7 @@ describe("reviewed quote confirmation persistence", () => {
     form.set("applyQuoteReference", "on");
     form.set("supplierQuoteReference", "REVISED-QUOTE");
     form.set("applyQuoteDate", "on");
-    form.set("quoteDate", "2026-08-20");
+    form.set("quoteDate", "20/08/2026");
     form.set("applyLeadTime", "on");
     form.set("leadTimeWeeks", "9");
     orderMocks.getOrderInTransaction.mockResolvedValue(existingOrder());
@@ -218,11 +218,11 @@ describe("reviewed quote confirmation persistence", () => {
     form.set("applyLeadTime", "on");
     form.set("leadTimeWeeks", "9");
     form.set("applyExpectedDeliveryDate", "on");
-    form.set("expectedDeliveryDate", "2026-12-15");
+    form.set("expectedDeliveryDate", "15/12/2026");
     form.set("applyQuoteReference", "on");
     form.set("supplierQuoteReference", "Q-NEW");
     form.set("applyQuoteDate", "on");
-    form.set("quoteDate", "2026-08-25");
+    form.set("quoteDate", "25/08/2026");
     form.set("applyInputVat", "on");
     form.set("inputVatAmount", "20000");
     form.set("inputVatRate", "20");
@@ -234,7 +234,7 @@ describe("reviewed quote confirmation persistence", () => {
     form.set("approveSchedule", "on");
     form.set("paymentCount", "1");
     form.set("payment.0.basis", "PERCENTAGE");
-    form.set("payment.0.dueDate", "2026-09-30");
+    form.set("payment.0.dueDate", "30/09/2026");
     form.set("payment.0.label", "Deposit");
     form.set("payment.0.percentageRate", "30");
     orderMocks.getOrderInTransaction.mockResolvedValue(null);
@@ -320,20 +320,21 @@ describe("reviewed quote confirmation persistence", () => {
           action: "UPDATE",
           brand: null,
           buildingId: null,
+          category: "Furniture",
           description: null,
           existingItemId,
           finishColor: "Dark Oak",
           include: true,
           itemReference: "I-1",
-          name: "Chair",
-          notes: null,
-          quantity: "10",
+          name: "Employee-edited Chair",
+          notes: "Corrected during onboarding",
+          quantity: "3",
           roomId: null,
           supplierSku: "SKU-1",
-          totalPriceHt: "13100",
+          totalPriceHt: "2430",
           unitOfMeasure: "EA",
-          unitPriceHt: "1310",
-          vatRate: "0.20",
+          unitPriceHt: "810",
+          vatRate: "0.055",
           volumeEach: null,
           warnings: [],
           weightEach: null,
@@ -342,6 +343,7 @@ describe("reviewed quote confirmation persistence", () => {
           action: "CREATE",
           brand: null,
           buildingId: null,
+          category: "Lighting",
           description: null,
           existingItemId: null,
           finishColor: null,
@@ -375,14 +377,21 @@ describe("reviewed quote confirmation persistence", () => {
       where: { id: existingItemId },
       data: expect.objectContaining({
         finishColor: "Dark Oak",
+        category: "Furniture",
+        name: "Employee-edited Chair",
+        notes: "Corrected during onboarding",
         procurementOrderId: orderId,
-        quantity: "10",
-        totalPurchasePriceHt: "13100",
+        quantity: "3",
+        totalPurchasePriceHt: "2430",
+        unitPurchasePriceHt: "810",
+        vatAmount: "133.6500",
+        vatRate: "0.055",
       }),
     });
     expect(transaction.item.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         name: "Lamp",
+        category: "Lighting",
         procurementOrderId: orderId,
         sourceType: "SUPPLIER_QUOTE_PDF",
       }),

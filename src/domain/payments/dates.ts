@@ -1,24 +1,14 @@
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-] as const;
+const EUROPEAN_DATE_PATTERN = /^(\d{2})\/(\d{2})\/(\d{4})$/;
 
 export const BUSINESS_TIME_ZONE = "Europe/Paris";
 
 export function isDateOnly(value: string): boolean {
   if (!DATE_ONLY_PATTERN.test(value)) return false;
-  return dateOnlyToDate(value).toISOString().slice(0, 10) === value;
+  const date = dateOnlyToDate(value);
+  return (
+    !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+  );
 }
 
 export function dateOnlyToDate(value: string): Date {
@@ -56,8 +46,21 @@ export function addMonthsToDateOnly(value: string, months: number): string {
 export function formatDateOnly(value: string | null): string {
   if (!value) return "—";
   const [year = "", month = "", day = ""] = value.split("-");
-  const label = MONTHS[Number(month) - 1];
-  return label ? `${Number(day)} ${label} ${year}` : value;
+  return isDateOnly(value) ? `${day}/${month}/${year}` : value;
+}
+
+export function dateOnlyToEuropeanInput(value: string | null): string {
+  return value ? formatDateOnly(value) : "";
+}
+
+export function europeanInputToDateOnly(value: string): string | null {
+  const normalized = value.trim();
+  if (isDateOnly(normalized)) return normalized;
+  const match = EUROPEAN_DATE_PATTERN.exec(normalized);
+  if (!match) return null;
+  const [, day = "", month = "", year = ""] = match;
+  const dateOnly = `${year}-${month}-${day}`;
+  return isDateOnly(dateOnly) ? dateOnly : null;
 }
 
 export function businessToday(now = new Date()): string {

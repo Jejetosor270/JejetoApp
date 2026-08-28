@@ -20,6 +20,10 @@ import {
 import type { ExtractionStatus } from "@/domain/quote-intake/extraction";
 import { formatMoney } from "@/domain/procurement/presentation";
 import { calculateQuoteSupplierPayable } from "@/domain/quote-intake/payment-schedule";
+import {
+  dateOnlyToEuropeanInput,
+  formatDateOnly,
+} from "@/domain/payments/dates";
 import type { ProcessedQuoteReview } from "@/lib/quote-intake/process";
 import { Button } from "@/components/ui/button";
 import {
@@ -281,10 +285,12 @@ function QuoteReview({
             observation={extraction.quote.reference}
           />
           <ExtractedFact
+            displayValue={formatDateOnly(extraction.quote.quoteDate.value)}
             label="Quote date"
             observation={extraction.quote.quoteDate}
           />
           <ExtractedFact
+            displayValue={formatDateOnly(extraction.quote.validityDate.value)}
             label="Validity date"
             observation={extraction.quote.validityDate}
           />
@@ -305,6 +311,9 @@ function QuoteReview({
             observation={extraction.leadTime.expectedDeliveryRaw}
           />
           <ExtractedFact
+            displayValue={formatDateOnly(
+              extraction.leadTime.expectedDeliveryDate.value,
+            )}
             label="Expected-delivery date"
             observation={extraction.leadTime.expectedDeliveryDate}
           />
@@ -598,9 +607,14 @@ function QuoteReview({
               <input
                 aria-invalid={Boolean(fieldErrors.quoteDate) || undefined}
                 className={inputWithError("quoteDate")}
-                defaultValue={financial.quoteDate ?? ""}
+                defaultValue={dateOnlyToEuropeanInput(financial.quoteDate)}
+                inputMode="numeric"
+                maxLength={10}
                 name="quoteDate"
-                type="date"
+                pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
+                placeholder="DD/MM/YYYY"
+                title="Enter a date as DD/MM/YYYY"
+                type="text"
               />
             </ApplyField>
             <ApplyField
@@ -731,9 +745,16 @@ function QuoteReview({
             >
               <input
                 className={inputClassName}
-                defaultValue={financial.expectedDeliveryDate ?? ""}
+                defaultValue={dateOnlyToEuropeanInput(
+                  financial.expectedDeliveryDate,
+                )}
+                inputMode="numeric"
+                maxLength={10}
                 name="expectedDeliveryDate"
-                type="date"
+                pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
+                placeholder="DD/MM/YYYY"
+                title="Enter a date as DD/MM/YYYY"
+                type="text"
               />
             </ApplyField>
           </div>

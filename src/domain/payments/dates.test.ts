@@ -5,7 +5,9 @@ import {
   addMonthsToDateOnly,
   businessToday,
   dateOnlyToDate,
+  dateOnlyToEuropeanInput,
   dateToDateOnly,
+  europeanInputToDateOnly,
   formatDateOnly,
   isDateOnly,
   monthBounds,
@@ -15,7 +17,16 @@ import {
 describe("date-only payment helpers", () => {
   it("round-trips business dates without timezone shifts", () => {
     expect(dateToDateOnly(dateOnlyToDate("2026-09-15"))).toBe("2026-09-15");
-    expect(formatDateOnly("2026-09-15")).toBe("15 Sep 2026");
+    expect(formatDateOnly("2026-09-15")).toBe("15/09/2026");
+    expect(dateOnlyToEuropeanInput("2026-08-29")).toBe("29/08/2026");
+  });
+
+  it("parses European input without reversing day and month", () => {
+    expect(europeanInputToDateOnly("05/09/2026")).toBe("2026-09-05");
+    expect(europeanInputToDateOnly("29/08/2026")).toBe("2026-08-29");
+    expect(europeanInputToDateOnly("08/29/2026")).toBeNull();
+    expect(europeanInputToDateOnly("31/02/2026")).toBeNull();
+    expect(europeanInputToDateOnly("2026-09-05")).toBe("2026-09-05");
   });
 
   it("adds lead-time weeks in UTC date space", () => {

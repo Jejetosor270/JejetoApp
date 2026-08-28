@@ -21,6 +21,7 @@ export interface QuoteItemReviewRow {
   action: "CREATE" | "UPDATE";
   brand: string | null;
   buildingId: string | null;
+  category: string | null;
   description: string | null;
   diffs: Array<{
     after: string | null;
@@ -211,6 +212,7 @@ export async function processSupplierQuote(
         ...line,
         action: match ? ("UPDATE" as const) : ("CREATE" as const),
         buildingId: null,
+        category: null,
         diffs,
         existingItemId: match?.id ?? null,
         include: matches.length <= 1 && !duplicateSku,

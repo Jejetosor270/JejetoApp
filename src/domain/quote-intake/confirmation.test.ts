@@ -57,7 +57,7 @@ describe("quote confirmation validation", () => {
     form.set("approveSchedule", "on");
     form.set("paymentCount", "1");
     form.set("payment.0.basis", "PERCENTAGE");
-    form.set("payment.0.dueDate", "2026-09-30");
+    form.set("payment.0.dueDate", "30/09/2026");
     form.set("payment.0.label", "Deposit");
     form.set("payment.0.percentageRate", "30");
 
@@ -67,6 +67,26 @@ describe("quote confirmation validation", () => {
     expect(result.data.purchaseCost).toBe("100000.1200");
     expect(result.data.purchaseFxRate).toBe("0.8575123456");
     expect(result.data.payments[0]?.percentageRate).toBe("0.300000");
+    expect(result.data.payments[0]?.dueDate).toBe("2026-09-30");
+  });
+
+  it("accepts strict European quote dates and rejects reversed input", () => {
+    const form = baseForm();
+    form.set("applyCurrency", "on");
+    form.set("applyQuoteDate", "on");
+    form.set("quoteDate", "05/09/2026");
+    const valid = parseQuoteConfirmation(form);
+    expect(valid.success).toBe(true);
+    if (!valid.success) return;
+    expect(valid.data.quoteDate).toBe("2026-09-05");
+
+    form.set("quoteDate", "09/29/2026");
+    const invalid = parseQuoteConfirmation(form);
+    expect(invalid.success).toBe(false);
+    if (invalid.success) return;
+    expect(invalid.error.issues[0]?.message).toBe(
+      "Enter a valid date as DD/MM/YYYY.",
+    );
   });
 
   it("refuses to approve relative payment wording without an objective date", () => {
