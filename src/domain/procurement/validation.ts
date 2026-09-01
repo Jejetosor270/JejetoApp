@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { z } from "zod";
+import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 
 import {
   FreightTreatment,
@@ -247,13 +248,25 @@ function validOrder(
   }
   validVat(value, "input", context);
   validVat(value, "output", context);
-  if (value.inputVatTreatment && !value.inputVatRecoverability) {
+  if (
+    inputVatRecoverabilityApplies(value.inputVatTreatment) &&
+    !value.inputVatRecoverability
+  ) {
     context.addIssue({
       code: "custom",
       path: ["inputVatRecoverability"],
       message: "Choose whether input VAT is recoverable.",
     });
   }
+  if (
+    value.inputVatRecoverability &&
+    !inputVatRecoverabilityApplies(value.inputVatTreatment)
+  )
+    context.addIssue({
+      code: "custom",
+      path: ["inputVatRecoverability"],
+      message: "Recoverability does not apply to this VAT treatment.",
+    });
 }
 
 export const createOrderInputSchema = baseOrderSchema.superRefine(validOrder);

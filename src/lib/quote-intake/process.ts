@@ -70,6 +70,23 @@ export interface ProcessedQuoteReview {
 
 export class QuoteProcessingError extends Error {}
 
+export function reviewedQuoteItemReference(line: {
+  description: string | null;
+  itemReference: string | null;
+  name: string;
+  supplierSku: string | null;
+}): string | null {
+  const reference = line.itemReference?.trim() || null;
+  if (
+    reference === line.name ||
+    reference === line.description ||
+    reference === line.supplierSku ||
+    (reference && /^\d+(?:[.\-/]\d+)*$/.test(reference))
+  )
+    return null;
+  return reference;
+}
+
 export async function processSupplierQuote(
   projectIdValue: string,
   fileValue: FormDataEntryValue | null,
@@ -141,10 +158,14 @@ export async function processSupplierQuote(
   let itemReview: ProcessedQuoteReview["itemReview"] = null;
   if (itemResult) {
     const suggestedSupplierId = supplierMatch.suggestedSupplierId;
-    const references = itemResult.extraction.items.flatMap((line) =>
+    const quoteLines = itemResult.extraction.items.map((line) => ({
+      ...line,
+      itemReference: reviewedQuoteItemReference(line),
+    }));
+    const references = quoteLines.flatMap((line) =>
       line.itemReference ? [line.itemReference] : [],
     );
-    const skus = itemResult.extraction.items.flatMap((line) =>
+    const skus = quoteLines.flatMap((line) =>
       line.supplierSku ? [line.supplierSku] : [],
     );
     const existing = suggestedSupplierId
@@ -171,14 +192,14 @@ export async function processSupplierQuote(
         })
       : [];
     const skuCounts = new Map<string, number>();
-    for (const line of itemResult.extraction.items) {
+    for (const line of quoteLines) {
       if (line.supplierSku)
         skuCounts.set(
           line.supplierSku,
           (skuCounts.get(line.supplierSku) ?? 0) + 1,
         );
     }
-    const rows = itemResult.extraction.items.map((line) => {
+    const rows = quoteLines.map((line) => {
       const matches = existing.filter(
         (item) =>
           (line.supplierSku && item.supplierSku === line.supplierSku) ||

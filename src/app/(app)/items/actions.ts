@@ -11,6 +11,9 @@ import {
   createItemInputSchema,
   createLocationInputSchema,
   createRoomInputSchema,
+  inlineItemFinancialInputSchema,
+  inlineItemStatusInputSchema,
+  inlineItemTrackingInputSchema,
   updateItemInputSchema,
 } from "@/domain/items/validation";
 import {
@@ -26,6 +29,9 @@ import {
   deleteItems,
   ItemValidationError,
   updateItem,
+  updateItemFinancialInline,
+  updateItemStatusInline,
+  updateItemTrackingInline,
 } from "@/lib/items/items";
 
 function formValues(formData: FormData) {
@@ -191,9 +197,14 @@ export async function createRoomAction(
       status: "error",
     };
   try {
-    await createRoom(actor.id, input.data);
+    const room = await createRoom(actor.id, input.data);
     refresh();
-    return { message: "Room created.", status: "success" };
+    revalidatePath("/items", "layout");
+    return {
+      message: "Room created and selected.",
+      room: { ...room, buildingId: input.data.buildingId },
+      status: "success",
+    };
   } catch (error) {
     return errorState(error);
   }
@@ -217,5 +228,64 @@ export async function createLocationAction(
     return { message: "Location created.", status: "success" };
   } catch (error) {
     return errorState(error);
+  }
+}
+
+export async function updateItemFinancialInlineAction(formData: FormData) {
+  const actor = await requireMasterDataEditor();
+  const input = inlineItemFinancialInputSchema.safeParse(formValues(formData));
+  if (!input.success)
+    return {
+      message: input.error.issues[0]?.message ?? "Check the financial values.",
+      status: "error" as const,
+    };
+  try {
+    const values = await updateItemFinancialInline(actor.id, input.data);
+    refresh();
+    revalidatePath(`/items/${input.data.id}`);
+    return {
+      message: "Financial values saved.",
+      status: "success" as const,
+      values,
+    };
+  } catch (error) {
+    const state = errorState(error);
+    return { ...state, status: "error" as const };
+  }
+}
+
+export async function updateItemStatusInlineAction(formData: FormData) {
+  const actor = await requireMasterDataEditor();
+  const input = inlineItemStatusInputSchema.safeParse(formValues(formData));
+  if (!input.success)
+    return {
+      message: input.error.issues[0]?.message ?? "Check the statuses.",
+      status: "error" as const,
+    };
+  try {
+    await updateItemStatusInline(actor.id, input.data);
+    refresh();
+    return { message: "Statuses saved.", status: "success" as const };
+  } catch (error) {
+    const state = errorState(error);
+    return { ...state, status: "error" as const };
+  }
+}
+
+export async function updateItemTrackingInlineAction(formData: FormData) {
+  const actor = await requireMasterDataEditor();
+  const input = inlineItemTrackingInputSchema.safeParse(formValues(formData));
+  if (!input.success)
+    return {
+      message: input.error.issues[0]?.message ?? "Check the tracking values.",
+      status: "error" as const,
+    };
+  try {
+    await updateItemTrackingInline(actor.id, input.data);
+    refresh();
+    return { message: "Tracking saved.", status: "success" as const };
+  } catch (error) {
+    const state = errorState(error);
+    return { ...state, status: "error" as const };
   }
 }

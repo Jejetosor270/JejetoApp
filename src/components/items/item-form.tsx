@@ -1,12 +1,17 @@
+"use client";
+
+import { useState, useTransition } from "react";
+
+import { createRoomAction } from "@/app/(app)/items/actions";
 import {
-  ItemCommercialStatus,
-  ItemLogisticsStatus,
-  PricingMode,
-  VatRecoverability,
-  VatTreatment,
-} from "@/generated/prisma/client";
-import { itemCategories, itemUnits } from "@/config/items";
+  itemCategories,
+  itemCommercialStatuses,
+  itemLogisticsStatuses,
+  itemUnits,
+} from "@/config/items";
+import { vatRecoverabilities, vatTreatments } from "@/config/vat";
 import { rateToPercentInput } from "@/domain/procurement/presentation";
+import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 import type { ManagedItem } from "@/lib/items/items";
 import { ItemActionForm } from "@/components/items/item-action-form";
 
@@ -48,6 +53,25 @@ export function ItemForm({
 }) {
   const value = (key: keyof ManagedItem) =>
     item?.[key] == null ? "" : String(item[key]);
+  const [projectId, setProjectId] = useState(value("projectId"));
+  const [buildingId, setBuildingId] = useState(value("buildingId"));
+  const [roomId, setRoomId] = useState(value("roomId"));
+  const [roomName, setRoomName] = useState("");
+  const [roomCode, setRoomCode] = useState("");
+  const [roomFeedback, setRoomFeedback] = useState("");
+  const [createdRooms, setCreatedRooms] = useState<
+    Array<{ buildingId: string; id: string; name: string }>
+  >([]);
+  const [roomPending, startRoomTransition] = useTransition();
+  const [vatTreatment, setVatTreatment] = useState(value("vatTreatment"));
+  const [vatRecoverability, setVatRecoverability] = useState(
+    value("vatRecoverability"),
+  );
+  const project = options.projects.find((entry) => entry.id === projectId);
+  const rooms = [
+    ...(project?.buildings.flatMap((building) => building.rooms) ?? []),
+    ...createdRooms,
+  ].filter((room) => room.buildingId === buildingId);
   return (
     <ItemActionForm action={action} className="space-y-5 rounded-lg border p-4">
       {item ? <input name="id" type="hidden" value={item.id} /> : null}
@@ -55,9 +79,14 @@ export function ItemForm({
         <Field label="Project *">
           <select
             className={input}
-            defaultValue={value("projectId")}
             name="projectId"
+            onChange={(event) => {
+              setProjectId(event.target.value);
+              setBuildingId("");
+              setRoomId("");
+            }}
             required
+            value={projectId}
           >
             <option value="">Choose Project</option>
             {options.projects.map((project) => (
@@ -70,36 +99,82 @@ export function ItemForm({
         <Field label="Building">
           <select
             className={input}
-            defaultValue={value("buildingId")}
             name="buildingId"
+            onChange={(event) => {
+              setBuildingId(event.target.value);
+              setRoomId("");
+            }}
+            value={buildingId}
           >
             <option value="">Unallocated</option>
-            {options.projects.flatMap((project) =>
-              project.buildings.map((building) => (
-                <option key={building.id} value={building.id}>
-                  {project.name} · {building.name}
-                </option>
-              )),
-            )}
+            {project?.buildings.map((building) => (
+              <option key={building.id} value={building.id}>
+                {building.name}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="Room">
           <select
             className={input}
-            defaultValue={value("roomId")}
             name="roomId"
+            onChange={(event) => setRoomId(event.target.value)}
+            value={roomId}
           >
             <option value="">No Room</option>
-            {options.projects.flatMap((project) =>
-              project.buildings.flatMap((building) =>
-                building.rooms.map((room) => (
-                  <option key={room.id} value={room.id}>
-                    {project.name} · {building.name} · {room.name}
-                  </option>
-                )),
-              ),
-            )}
+            {rooms.map((room) => (
+              <option key={room.id} value={room.id}>
+                {room.name}
+              </option>
+            ))}
           </select>
+          {buildingId ? (
+            <div className="mt-2 grid gap-2 rounded-md border p-2">
+              <span className="text-muted-foreground">
+                Create a Room in this Building
+              </span>
+              <input
+                className={input}
+                onChange={(event) => setRoomName(event.target.value)}
+                placeholder="Room name *"
+                value={roomName}
+              />
+              <input
+                className={input}
+                onChange={(event) => setRoomCode(event.target.value)}
+                placeholder="Code (optional)"
+                value={roomCode}
+              />
+              <button
+                className="border-input h-8 rounded border px-2 text-xs disabled:opacity-50"
+                disabled={roomPending || !roomName.trim()}
+                onClick={() => {
+                  const data = new FormData();
+                  data.set("buildingId", buildingId);
+                  data.set("name", roomName);
+                  data.set("code", roomCode);
+                  startRoomTransition(async () => {
+                    const result = await createRoomAction(
+                      { message: "", status: "idle" },
+                      data,
+                    );
+                    setRoomFeedback(result.message);
+                    const newRoom = result.room;
+                    if (newRoom) {
+                      setCreatedRooms((current) => [...current, newRoom]);
+                      setRoomId(newRoom.id);
+                      setRoomName("");
+                      setRoomCode("");
+                    }
+                  });
+                }}
+                type="button"
+              >
+                {roomPending ? "Creating…" : "Create and select Room"}
+              </button>
+              {roomFeedback ? <span>{roomFeedback}</span> : null}
+            </div>
+          ) : null}
         </Field>
         <Field label="Item reference">
           <input
@@ -229,28 +304,20 @@ export function ItemForm({
             name="totalPurchasePriceHt"
           />
         </Field>
-        <Field label="Pricing method">
-          <select
-            className={input}
-            defaultValue={value("pricingMode") || PricingMode.SELLING_PRICE}
-            name="pricingMode"
-          >
-            {Object.values(PricingMode).map((mode) => (
-              <option key={mode} value={mode}>
-                {mode.replaceAll("_", " ")}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Target margin %">
+        <input name="pricingMode" type="hidden" value="SELLING_PRICE" />
+        <input name="targetMarginRate" type="hidden" value="" />
+        <Field label="Markup %">
           <input
             className={input}
-            defaultValue={rateToPercentInput(item?.targetMarginRate ?? null)}
+            defaultValue={rateToPercentInput(
+              item?.financial.markupRate ?? null,
+            )}
             inputMode="decimal"
-            name="targetMarginRate"
+            name="markupRate"
+            placeholder="30.00"
           />
         </Field>
-        <Field label="Unit selling HT">
+        <Field label="Budget unit HT">
           <input
             className={input}
             defaultValue={value("unitSellingPriceHt")}
@@ -258,7 +325,7 @@ export function ItemForm({
             name="unitSellingPriceHt"
           />
         </Field>
-        <Field label="Total selling HT">
+        <Field label="Budget total HT">
           <input
             className={input}
             defaultValue={value("totalSellingPriceHt")}
@@ -266,34 +333,68 @@ export function ItemForm({
             name="totalSellingPriceHt"
           />
         </Field>
+        <Field label="Budget purchase baseline unit HT">
+          <input
+            className={input}
+            defaultValue={value("budgetPurchaseUnitPriceHt")}
+            inputMode="decimal"
+            name="budgetPurchaseUnitPriceHt"
+          />
+        </Field>
+        <Field label="Budget purchase baseline total HT">
+          <input
+            className={input}
+            defaultValue={value("budgetPurchaseTotalPriceHt")}
+            inputMode="decimal"
+            name="budgetPurchaseTotalPriceHt"
+          />
+        </Field>
+        <Field label="Variance comment / reason">
+          <input
+            className={input}
+            defaultValue={value("budgetVarianceComment")}
+            name="budgetVarianceComment"
+          />
+        </Field>
         <Field label="VAT treatment">
           <select
             className={input}
-            defaultValue={value("vatTreatment")}
             name="vatTreatment"
+            onChange={(event) => {
+              const treatment = event.target.value;
+              setVatTreatment(treatment);
+              if (!inputVatRecoverabilityApplies(treatment))
+                setVatRecoverability("");
+            }}
+            value={vatTreatment}
           >
             <option value="">Not set</option>
-            {Object.values(VatTreatment).map((entry) => (
+            {vatTreatments.map((entry) => (
               <option key={entry} value={entry}>
                 {entry.replaceAll("_", " ")}
               </option>
             ))}
           </select>
         </Field>
-        <Field label="VAT recoverability">
-          <select
-            className={input}
-            defaultValue={value("vatRecoverability")}
-            name="vatRecoverability"
-          >
-            <option value="">Not set</option>
-            {Object.values(VatRecoverability).map((entry) => (
-              <option key={entry} value={entry}>
-                {entry.replaceAll("_", " ")}
-              </option>
-            ))}
-          </select>
-        </Field>
+        {inputVatRecoverabilityApplies(vatTreatment) ? (
+          <Field label="VAT recoverability">
+            <select
+              className={input}
+              name="vatRecoverability"
+              onChange={(event) => setVatRecoverability(event.target.value)}
+              value={vatRecoverability}
+            >
+              <option value="">Choose</option>
+              {vatRecoverabilities.map((entry) => (
+                <option key={entry} value={entry}>
+                  {entry.replaceAll("_", " ")}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : (
+          <input name="vatRecoverability" type="hidden" value="" />
+        )}
         <Field label="VAT %">
           <input
             className={input}
@@ -313,12 +414,10 @@ export function ItemForm({
         <Field label="Commercial status">
           <select
             className={input}
-            defaultValue={
-              value("commercialStatus") || ItemCommercialStatus.BUDGET
-            }
+            defaultValue={value("commercialStatus") || "BUDGET"}
             name="commercialStatus"
           >
-            {Object.values(ItemCommercialStatus).map((entry) => (
+            {itemCommercialStatuses.map((entry) => (
               <option key={entry} value={entry}>
                 {entry.replaceAll("_", " ")}
               </option>
@@ -328,12 +427,10 @@ export function ItemForm({
         <Field label="Logistics status">
           <select
             className={input}
-            defaultValue={
-              value("logisticsStatus") || ItemLogisticsStatus.PENDING
-            }
+            defaultValue={value("logisticsStatus") || "PENDING"}
             name="logisticsStatus"
           >
-            {Object.values(ItemLogisticsStatus).map((entry) => (
+            {itemLogisticsStatuses.map((entry) => (
               <option key={entry} value={entry}>
                 {entry.replaceAll("_", " ")}
               </option>

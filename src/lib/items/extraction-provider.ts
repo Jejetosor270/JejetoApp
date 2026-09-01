@@ -276,7 +276,7 @@ export class OpenAIItemExtractionProvider implements ItemExtractionProvider {
             fileContent(file),
             {
               type: "input_text",
-              text: "Extract every meaningful supplier quote product/item line. Do not invent missing values. Rates are fractions: 0.20 means 20%. Exclude subtotal, freight, discount, VAT, and grand-total rows from items and report them only as warnings.",
+              text: "Extract every meaningful supplier quote product/item line. Do not invent missing values. Item Reference means an explicitly labelled customer/internal budget reference only; never copy the description, line number, or Supplier SKU into Item Reference. Put the Supplier's product code only in supplierSku and leave itemReference null when an internal reference is not explicit. Rates are fractions: 0.20 means 20%. Exclude subtotal, freight, discount, VAT, and grand-total rows from items and report them only as warnings.",
             },
           ],
         },

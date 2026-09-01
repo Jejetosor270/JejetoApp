@@ -41,9 +41,16 @@ export default async function ItemPage({
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           ["Purchase HT", formatMoney(item.totalPurchasePriceHt, currency)],
-          ["Selling HT", formatMoney(item.totalSellingPriceHt, currency)],
-          ["Gross profit", formatMoney(item.financial.grossProfit, currency)],
-          ["Margin", formatRate(item.financial.grossMarginRate)],
+          ["Budget HT", formatMoney(item.totalSellingPriceHt, currency)],
+          ["Markup", formatRate(item.financial.markupRate)],
+          [
+            "Purchase variance",
+            item.variance
+              ? `${formatMoney(item.variance.amount, currency)} ${item.variance.status
+                  .replace("_BUDGET", "")
+                  .toLowerCase()} budget`
+              : "No budget purchase baseline",
+          ],
         ].map(([label, value]) => (
           <div className="rounded-lg border p-3" key={label}>
             <p className="text-muted-foreground text-xs">{label}</p>

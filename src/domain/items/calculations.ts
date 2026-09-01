@@ -33,6 +33,14 @@ export interface ItemFinancialResult {
   warnings: string[];
 }
 
+export type ItemBudgetVarianceStatus =
+  "UNDER_BUDGET" | "ON_BUDGET" | "OVER_BUDGET";
+
+export interface ItemBudgetVariance {
+  amount: string;
+  status: ItemBudgetVarianceStatus;
+}
+
 const editableMoneyPattern = /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/;
 const editablePercentPattern = /^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/;
 
@@ -223,4 +231,93 @@ export function projectFreightEstimate(
     : new Decimal(eligibleBudgetPurchaseTotal)
         .times(freightEstimateRate)
         .toFixed(4);
+}
+
+export function budgetPriceFromMarkup(
+  purchasePrice: string,
+  markupRate: string,
+): string {
+  return new Decimal(purchasePrice)
+    .times(new Decimal(1).plus(markupRate))
+    .toFixed(MONEY_SCALE);
+}
+
+export function markupRateFromPrices(
+  purchasePrice: string | null,
+  budgetPrice: string | null,
+): string | null {
+  if (!purchasePrice || !budgetPrice) return null;
+  const purchase = new Decimal(purchasePrice);
+  if (purchase.isZero()) return null;
+  return new Decimal(budgetPrice)
+    .minus(purchase)
+    .dividedBy(purchase)
+    .toFixed(6);
+}
+
+export function itemBudgetVariance(
+  budgetPurchaseTotal: string | null,
+  actualPurchaseTotal: string | null,
+): ItemBudgetVariance | null {
+  if (!budgetPurchaseTotal || !actualPurchaseTotal) return null;
+  const difference = new Decimal(budgetPurchaseTotal).minus(
+    actualPurchaseTotal,
+  );
+  const status = difference.isZero()
+    ? "ON_BUDGET"
+    : difference.isPositive()
+      ? "UNDER_BUDGET"
+      : "OVER_BUDGET";
+  return { amount: difference.abs().toFixed(MONEY_SCALE), status };
+}
+
+export type ItemFinancialEditBasis =
+  | "QUANTITY"
+  | "UNIT_PURCHASE"
+  | "TOTAL_PURCHASE"
+  | "BUDGET_UNIT"
+  | "BUDGET_TOTAL"
+  | "MARKUP";
+
+export function reconcileItemFinancialDraft(input: {
+  basis: ItemFinancialEditBasis;
+  budgetTotal: string | null;
+  budgetUnit: string | null;
+  markupRate: string | null;
+  quantity: string;
+  totalPurchase: string | null;
+  unitPurchase: string | null;
+}) {
+  const quantity = new Decimal(input.quantity);
+  if (!quantity.greaterThan(0))
+    throw new RangeError("Quantity must be greater than zero.");
+  let unitPurchase = optionalDecimal(input.unitPurchase);
+  let totalPurchase = optionalDecimal(input.totalPurchase);
+  let budgetUnit = optionalDecimal(input.budgetUnit);
+  let budgetTotal = optionalDecimal(input.budgetTotal);
+  if (input.basis === "TOTAL_PURCHASE")
+    unitPurchase = totalPurchase?.dividedBy(quantity) ?? null;
+  else if (input.basis === "UNIT_PURCHASE" || input.basis === "QUANTITY")
+    totalPurchase = unitPurchase?.times(quantity) ?? null;
+
+  if (input.basis === "BUDGET_TOTAL")
+    budgetUnit = budgetTotal?.dividedBy(quantity) ?? null;
+  else if (input.basis === "BUDGET_UNIT" || input.basis === "QUANTITY")
+    budgetTotal = budgetUnit?.times(quantity) ?? null;
+  else if (input.basis === "MARKUP") {
+    const markup = optionalDecimal(input.markupRate);
+    budgetUnit =
+      unitPurchase && markup
+        ? unitPurchase.times(new Decimal(1).plus(markup))
+        : null;
+    budgetTotal = budgetUnit?.times(quantity) ?? null;
+  }
+  return {
+    budgetTotal: money(budgetTotal),
+    budgetUnit: money(budgetUnit),
+    markupRate: markupRateFromPrices(money(totalPurchase), money(budgetTotal)),
+    quantity: quantity.toFixed(MONEY_SCALE),
+    totalPurchase: money(totalPurchase),
+    unitPurchase: money(unitPurchase),
+  };
 }

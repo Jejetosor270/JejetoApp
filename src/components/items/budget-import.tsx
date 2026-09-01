@@ -355,19 +355,19 @@ function ReviewGrid({
                 <td className="p-2">
                   <input
                     className={control}
-                    defaultValue={row.itemReference ?? ""}
-                    onBlur={(e) =>
+                    onChange={(e) =>
                       update(index, { itemReference: e.target.value || null })
                     }
+                    value={row.itemReference ?? ""}
                   />
                 </td>
                 <td className="p-2">
                   <input
                     className={`${control} w-60`}
-                    defaultValue={row.description}
-                    onBlur={(e) =>
+                    onChange={(e) =>
                       update(index, { description: e.target.value })
                     }
+                    value={row.description}
                   />
                 </td>
                 <td className="p-2">
@@ -436,19 +436,19 @@ function ReviewGrid({
                 <td className="p-2">
                   <input
                     className={`${control} w-24`}
-                    defaultValue={row.quantity ?? ""}
-                    onBlur={(e) =>
+                    onChange={(e) =>
                       update(index, { quantity: e.target.value || null })
                     }
+                    value={row.quantity ?? ""}
                   />
                 </td>
                 <td className="p-2">
                   <input
                     className={`${control} w-20`}
-                    defaultValue={row.unitOfMeasure ?? ""}
-                    onBlur={(e) =>
+                    onChange={(e) =>
                       update(index, { unitOfMeasure: e.target.value || null })
                     }
+                    value={row.unitOfMeasure ?? ""}
                   />
                 </td>
                 {(
@@ -464,10 +464,10 @@ function ReviewGrid({
                   <td className="p-2" key={field}>
                     <input
                       className={`${control} w-28`}
-                      defaultValue={row[field] ?? ""}
-                      onBlur={(e) =>
+                      onChange={(e) =>
                         update(index, { [field]: e.target.value || null })
                       }
+                      value={row[field] ?? ""}
                     />
                   </td>
                 ))}

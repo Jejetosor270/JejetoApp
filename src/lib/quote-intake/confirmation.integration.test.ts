@@ -230,7 +230,6 @@ describe("reviewed quote confirmation persistence", () => {
     form.set("inputVatTaxableBase", "100000");
     form.set("inputVatTreatment", "DOMESTIC");
     form.set("orderNumber", "PO-QUOTE-NEW");
-    form.set("packageName", "New quote package");
     form.set("approveSchedule", "on");
     form.set("paymentCount", "1");
     form.set("payment.0.basis", "PERCENTAGE");
@@ -254,6 +253,7 @@ describe("reviewed quote confirmation persistence", () => {
         leadTimeWeeks: 9,
         miscellaneous: "250.0000",
         orderCurrencyCode: "EUR",
+        packageName: "PO-QUOTE-NEW",
         projectId,
         purchaseCost: "100000.0000",
         quoteDate: "2026-08-25",

@@ -27,6 +27,14 @@ type EditableQuoteItemReviewRow = QuoteItemReviewRow & {
   vatPercentInput: string;
 };
 
+function hasBlockingMatchIssue(row: QuoteItemReviewRow): boolean {
+  return row.warnings.some(
+    (warning) =>
+      warning.startsWith("Multiple existing Items") ||
+      warning.startsWith("Supplier SKU occurs more than once"),
+  );
+}
+
 export function QuoteItemReview({
   options,
   review,
@@ -41,7 +49,6 @@ export function QuoteItemReview({
     })),
   );
   const [approved, setApproved] = useState(review.rows.length > 0);
-  const [selected, setSelected] = useState(() => new Set<number>());
   const update = (
     index: number,
     changes: Partial<EditableQuoteItemReviewRow>,
@@ -69,8 +76,8 @@ export function QuoteItemReview({
     );
   const bulk = (field: "buildingId" | "roomId", value: string) =>
     setRows((current) =>
-      current.map((row, index) =>
-        selected.has(index)
+      current.map((row) =>
+        row.include
           ? {
               ...row,
               [field]: value || null,
@@ -151,9 +158,11 @@ export function QuoteItemReview({
       {approved ? (
         <>
           <div className="mt-3 flex flex-wrap gap-2">
-            <span className="self-center text-xs">Bulk selected:</span>
+            <span className="self-center text-xs">
+              Apply to included Items:
+            </span>
             <select
-              aria-label="Set Building for selected Item lines"
+              aria-label="Set Building for included Item lines"
               className={control}
               defaultValue=""
               onChange={(event) => bulk("buildingId", event.target.value)}
@@ -168,7 +177,7 @@ export function QuoteItemReview({
               )}
             </select>
             <select
-              aria-label="Set Room for selected Item lines"
+              aria-label="Set Room for included Item lines"
               className={control}
               defaultValue=""
               onChange={(event) => bulk("roomId", event.target.value)}
@@ -196,11 +205,33 @@ export function QuoteItemReview({
             ))}
           </datalist>
           <div className="mt-3 max-h-[60vh] overflow-auto rounded border">
-            <table className="min-w-[112rem] text-left text-xs">
+            <table className="min-w-[106rem] text-left text-xs">
               <thead className="bg-muted sticky top-0">
                 <tr>
-                  <th className="p-2">Select</th>
-                  <th className="p-2">Include</th>
+                  <th className="p-2">
+                    <label className="flex items-center gap-1.5">
+                      <input
+                        aria-label="Include all valid Item lines"
+                        checked={
+                          rows.some((row) => !hasBlockingMatchIssue(row)) &&
+                          rows
+                            .filter((row) => !hasBlockingMatchIssue(row))
+                            .every((row) => row.include)
+                        }
+                        onChange={(event) =>
+                          setRows((current) =>
+                            current.map((row) =>
+                              hasBlockingMatchIssue(row)
+                                ? row
+                                : { ...row, include: event.target.checked },
+                            ),
+                          )
+                        }
+                        type="checkbox"
+                      />
+                      Include all
+                    </label>
+                  </th>
                   <th className="p-2">Action</th>
                   <th className="p-2">Line / SKU</th>
                   <th className="p-2">Description</th>
@@ -222,23 +253,9 @@ export function QuoteItemReview({
                   >
                     <td className="p-2">
                       <input
-                        aria-label={`Select Item line ${index + 1} for bulk editing`}
-                        checked={selected.has(index)}
-                        onChange={() =>
-                          setSelected((current) => {
-                            const next = new Set(current);
-                            if (next.has(index)) next.delete(index);
-                            else next.add(index);
-                            return next;
-                          })
-                        }
-                        type="checkbox"
-                      />
-                    </td>
-                    <td className="p-2">
-                      <input
                         aria-label={`Include Item line ${index + 1}`}
                         checked={row.include}
+                        disabled={hasBlockingMatchIssue(row)}
                         onChange={(event) =>
                           update(index, { include: event.target.checked })
                         }

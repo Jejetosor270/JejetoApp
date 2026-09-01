@@ -107,11 +107,10 @@ function reviewedOrderValues(
   existing: OrderSummary | null,
 ): CreateOrderInput {
   const current = existing ? currentOrderValues(existing) : null;
-  if (input.action === "CREATE" && (!input.orderNumber || !input.packageName)) {
+  if (input.action === "CREATE" && !input.orderNumber)
     throw new QuoteConfirmationError(
-      "An internal reference and package title are required.",
+      "An internal Order reference is required.",
     );
-  }
   const orderCurrencyCode = input.applyCurrency
     ? input.orderCurrencyCode
     : current?.orderCurrencyCode;
@@ -194,7 +193,7 @@ function reviewedOrderValues(
       : undefined,
     outputVatTaxableBase: current?.outputVatTaxableBase,
     outputVatTreatment: current?.outputVatTreatment,
-    packageName: current?.packageName ?? input.packageName,
+    packageName: current?.packageName ?? input.packageName ?? input.orderNumber,
     pricingMode: current?.pricingMode ?? PricingMode.SELLING_PRICE,
     projectId: input.projectId,
     purchaseCost: input.applyPurchaseCost

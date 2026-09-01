@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { ExportLink } from "@/components/export/export-link";
-import { ItemTable } from "@/components/items/item-table";
+import { ItemTable, type ItemViewMode } from "@/components/items/item-table";
 import { PageSizeField, Pagination } from "@/components/listing/pagination";
 import {
   firstQueryValue,
@@ -30,6 +30,11 @@ export default async function ItemsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
+  const view =
+    selectedValue(
+      ["general", "financial", "status", "tracking"] as const,
+      firstQueryValue(params, "view"),
+    ) ?? "general";
   const pageInput = parsePageInput(params);
   const filters = {
     buildingId: optionalUuid(firstQueryValue(params, "buildingId")),
@@ -107,7 +112,31 @@ export default async function ItemsPage({
           ) : null}
         </div>
       </header>
+      <nav aria-label="Item view" className="flex flex-wrap gap-2">
+        {(
+          [
+            ["general", "General"],
+            ["financial", "Financial"],
+            ["status", "Status"],
+            ["tracking", "Tracking / warehouse"],
+          ] as Array<[ItemViewMode, string]>
+        ).map(([mode, label]) => (
+          <Link
+            aria-current={view === mode ? "page" : undefined}
+            className={
+              view === mode
+                ? "bg-primary text-primary-foreground rounded-lg px-3 py-2 text-sm font-medium"
+                : "border-input bg-background rounded-lg border px-3 py-2 text-sm font-medium"
+            }
+            href={`/items?${queryStringFromParams({ ...params, page: "1", view: mode })}`}
+            key={mode}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
       <form className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+        <input name="view" type="hidden" value={view} />
         <input
           className={control}
           defaultValue={filters.query}
@@ -259,7 +288,12 @@ export default async function ItemsPage({
           Filter
         </button>
       </form>
-      <ItemTable canEdit={canEdit} items={result.items} options={options} />
+      <ItemTable
+        canEdit={canEdit}
+        items={result.items}
+        options={options}
+        view={view}
+      />
       <Pagination
         page={pageInput.page}
         pageSize={pageInput.pageSize}

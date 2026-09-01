@@ -5,6 +5,7 @@ import {
   clientReceivableBase,
   convertPaymentAmount,
   derivePaymentStatus,
+  deriveVendorPaymentStatus,
   impliedPercentage,
   installmentOutstanding,
   reconcileSchedule,
@@ -59,6 +60,42 @@ describe("payment calculations", () => {
       { paidAmount: "0", scheduledAmount: "110000" },
     ]);
     expect(over.overallocated.toFixed(2)).toBe("10000.00");
+  });
+
+  it("derives Item vendor payment context from Order settlements", () => {
+    const installments = [
+      {
+        isCancelled: false,
+        scheduledAmount: "30",
+        sequence: 1,
+        settlements: [{ amount: "30" }],
+      },
+      {
+        isCancelled: false,
+        scheduledAmount: "70",
+        sequence: 2,
+        settlements: [],
+      },
+    ];
+    expect(deriveVendorPaymentStatus(installments)).toBe("DEPOSIT_PAID");
+    expect(
+      deriveVendorPaymentStatus([
+        ...installments.slice(0, 1),
+        { ...installments[1]!, settlements: [{ amount: "20" }] },
+      ]),
+    ).toBe("DEPOSIT_PAID");
+    expect(
+      deriveVendorPaymentStatus([
+        { ...installments[0]!, settlements: [{ amount: "10" }] },
+        installments[1]!,
+      ]),
+    ).toBe("PARTIALLY_PAID");
+    expect(
+      deriveVendorPaymentStatus([
+        installments[0]!,
+        { ...installments[1]!, settlements: [{ amount: "70" }] },
+      ]),
+    ).toBe("PAID_IN_FULL");
   });
 
   it("uses supplier invoice VAT but excludes unrelated landed costs", () => {

@@ -10,14 +10,23 @@ import {
   type VatRecoverability,
   type VatTreatment,
 } from "@/generated/prisma/client";
-import { calculateItemFinancials } from "@/domain/items/calculations";
+import {
+  budgetPriceFromMarkup,
+  calculateItemFinancials,
+  itemBudgetVariance,
+  reconcileItemFinancialDraft,
+} from "@/domain/items/calculations";
 import type {
   CreateItemInput,
   CreateLocationInput,
   CreateRoomInput,
+  InlineItemFinancialInput,
+  InlineItemStatusInput,
+  InlineItemTrackingInput,
   UpdateItemInput,
 } from "@/domain/items/validation";
 import { paginationSkip, type PageInput } from "@/domain/listing/validation";
+import { deriveVendorPaymentStatus } from "@/domain/payments/calculations";
 import { writeAuditEvent } from "@/lib/audit/events";
 import { getDatabase } from "@/lib/db";
 
@@ -45,8 +54,29 @@ const itemInclude = {
   itemImport: {
     select: { id: true, originalFilename: true, importedAt: true },
   },
-  procurementOrder: { select: { id: true, orderNumber: true } },
-  project: { select: { id: true, name: true, reportingCurrencyCode: true } },
+  procurementOrder: {
+    select: {
+      id: true,
+      orderNumber: true,
+      paymentInstallments: {
+        where: { direction: "SUPPLIER_PAYMENT" },
+        select: {
+          isCancelled: true,
+          scheduledAmount: true,
+          sequence: true,
+          settlements: { select: { amount: true } },
+        },
+      },
+    },
+  },
+  project: {
+    select: {
+      freightEstimateRate: true,
+      id: true,
+      name: true,
+      reportingCurrencyCode: true,
+    },
+  },
   purchaseCurrency: { select: { code: true } },
   room: { select: { id: true, name: true } },
   supplier: { select: { displayName: true, id: true } },
@@ -55,6 +85,7 @@ const itemInclude = {
 function serializeItem(
   item: Prisma.ItemGetPayload<{ include: typeof itemInclude }>,
 ) {
+  const { procurementOrder, project, ...baseItem } = item;
   const financial = calculateItemFinancials({
     pricingMode: item.pricingMode,
     quantity: item.quantity.toString(),
@@ -66,8 +97,15 @@ function serializeItem(
     vatAmount: item.vatAmount?.toString() ?? null,
     vatRate: item.vatRate?.toString() ?? null,
   });
+  const variance = itemBudgetVariance(
+    item.budgetPurchaseTotalPriceHt?.toString() ?? null,
+    item.totalPurchasePriceHt?.toString() ?? null,
+  );
+  const vendorPaymentStatus = procurementOrder
+    ? deriveVendorPaymentStatus(procurementOrder.paymentInstallments)
+    : "NOT_PAID";
   return {
-    ...item,
+    ...baseItem,
     claimOpenedDate: dateOnly(item.claimOpenedDate),
     claimResolvedDate: dateOnly(item.claimResolvedDate),
     deliveredResidenceDate: dateOnly(item.deliveredResidenceDate),
@@ -75,9 +113,22 @@ function serializeItem(
     estimatedResidenceDate: dateOnly(item.estimatedResidenceDate),
     estimatedWarehouseDate: dateOnly(item.estimatedWarehouseDate),
     financial,
+    project: {
+      ...project,
+      freightEstimateRate: project.freightEstimateRate?.toString() ?? null,
+    },
+    procurementOrder: procurementOrder
+      ? { id: procurementOrder.id, orderNumber: procurementOrder.orderNumber }
+      : null,
+    variance,
+    vendorPaymentStatus,
     inTransitDate: dateOnly(item.inTransitDate),
     installedDate: dateOnly(item.installedDate),
     quantity: item.quantity.toString(),
+    budgetPurchaseTotalPriceHt:
+      item.budgetPurchaseTotalPriceHt?.toString() ?? null,
+    budgetPurchaseUnitPriceHt:
+      item.budgetPurchaseUnitPriceHt?.toString() ?? null,
     receivedFabricatorDate: dateOnly(item.receivedFabricatorDate),
     receivedWarehouseDate: dateOnly(item.receivedWarehouseDate),
     targetMarginRate: item.targetMarginRate?.toString() ?? null,
@@ -369,19 +420,28 @@ async function assertRelations(
 }
 
 function itemData(input: CreateItemInput) {
+  const { markupRate, ...persistedInput } = input;
+  const markupUnitSelling =
+    markupRate && input.unitPurchasePriceHt
+      ? budgetPriceFromMarkup(input.unitPurchasePriceHt, markupRate)
+      : input.unitSellingPriceHt;
+  const markupTotalSelling =
+    markupRate && input.totalPurchasePriceHt
+      ? budgetPriceFromMarkup(input.totalPurchasePriceHt, markupRate)
+      : input.totalSellingPriceHt;
   const financial = calculateItemFinancials({
     pricingMode: input.pricingMode,
     quantity: input.quantity,
     targetMarginRate: input.targetMarginRate ?? null,
     totalPurchasePriceHt: input.totalPurchasePriceHt ?? null,
-    totalSellingPriceHt: input.totalSellingPriceHt ?? null,
+    totalSellingPriceHt: markupTotalSelling ?? null,
     unitPurchasePriceHt: input.unitPurchasePriceHt ?? null,
-    unitSellingPriceHt: input.unitSellingPriceHt ?? null,
+    unitSellingPriceHt: markupUnitSelling ?? null,
     vatAmount: input.vatAmount ?? null,
     vatRate: input.vatRate ?? null,
   });
   return {
-    ...input,
+    ...persistedInput,
     buildingId: input.buildingId ?? null,
     roomId: input.roomId ?? null,
     supplierId: input.supplierId ?? null,
@@ -404,6 +464,9 @@ function itemData(input: CreateItemInput) {
     vatRecoverability:
       input.vatRecoverability ?? (null as VatRecoverability | null),
     targetMarginRate: input.targetMarginRate ?? null,
+    budgetPurchaseUnitPriceHt: input.budgetPurchaseUnitPriceHt ?? null,
+    budgetPurchaseTotalPriceHt: input.budgetPurchaseTotalPriceHt ?? null,
+    budgetVarianceComment: input.budgetVarianceComment ?? null,
     weightEach: input.weightEach ?? null,
     totalWeight: input.totalWeight ?? null,
     volumeEach: input.volumeEach ?? null,
@@ -468,6 +531,123 @@ export async function updateItem(actorId: string, input: UpdateItemInput) {
       summary: "Updated the Item, including financial or operational fields.",
     });
     return item.id;
+  });
+}
+
+export async function updateItemFinancialInline(
+  actorId: string,
+  input: InlineItemFinancialInput,
+) {
+  return getDatabase().$transaction(async (transaction) => {
+    const current = await transaction.item.findUnique({
+      where: { id: input.id },
+      select: { itemReference: true, name: true },
+    });
+    if (!current) throw new ItemValidationError("This Item no longer exists.");
+    const draft = reconcileItemFinancialDraft(input);
+    await transaction.item.update({
+      where: { id: input.id },
+      data: {
+        budgetVarianceComment: input.budgetVarianceComment ?? null,
+        pricingMode: PricingMode.SELLING_PRICE,
+        quantity: draft.quantity,
+        targetMarginRate: null,
+        totalPurchasePriceHt: draft.totalPurchase,
+        totalSellingPriceHt: draft.budgetTotal,
+        unitPurchasePriceHt: draft.unitPurchase,
+        unitSellingPriceHt: draft.budgetUnit,
+        updatedById: actorId,
+      },
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "UPDATED",
+      entityId: input.id,
+      entityReference: current.itemReference ?? current.name,
+      entityType: "ITEM",
+      metadata: {
+        fields: ["quantity", "purchase", "budget", "varianceComment"],
+      },
+      summary: "Updated Item financial and budget-comparison values.",
+    });
+    return draft;
+  });
+}
+
+export async function updateItemStatusInline(
+  actorId: string,
+  input: InlineItemStatusInput,
+) {
+  return getDatabase().$transaction(async (transaction) => {
+    const current = await transaction.item.findUnique({
+      where: { id: input.id },
+      select: { itemReference: true, name: true },
+    });
+    if (!current) throw new ItemValidationError("This Item no longer exists.");
+    await transaction.item.update({
+      where: { id: input.id },
+      data: {
+        commercialStatus: input.commercialStatus,
+        logisticsStatus: input.logisticsStatus,
+        updatedById: actorId,
+      },
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "UPDATED",
+      entityId: input.id,
+      entityReference: current.itemReference ?? current.name,
+      entityType: "ITEM",
+      metadata: { fields: ["commercialStatus", "logisticsStatus"] },
+      summary: "Updated Item commercial and logistics status.",
+    });
+  });
+}
+
+export async function updateItemTrackingInline(
+  actorId: string,
+  input: InlineItemTrackingInput,
+) {
+  return getDatabase().$transaction(async (transaction) => {
+    const current = await transaction.item.findUnique({
+      where: { id: input.id },
+      select: { itemReference: true, name: true },
+    });
+    if (!current) throw new ItemValidationError("This Item no longer exists.");
+    const locationIds = [
+      input.expectedWarehouseId,
+      input.receivedWarehouseId,
+      input.fabricatorId,
+    ].filter((id): id is string => Boolean(id));
+    const activeLocationCount = await transaction.logisticsLocation.count({
+      where: { id: { in: [...new Set(locationIds)] }, isActive: true },
+    });
+    if (activeLocationCount !== new Set(locationIds).size)
+      throw new ItemValidationError("Choose active logistics Locations.");
+    await transaction.item.update({
+      where: { id: input.id },
+      data: {
+        deliveredResidenceDate: dateValue(input.deliveredResidenceDate),
+        estimatedFabricatorDate: dateValue(input.estimatedFabricatorDate),
+        estimatedResidenceDate: dateValue(input.estimatedResidenceDate),
+        estimatedWarehouseDate: dateValue(input.estimatedWarehouseDate),
+        expectedWarehouseId: input.expectedWarehouseId ?? null,
+        fabricatorId: input.fabricatorId ?? null,
+        inTransitDate: dateValue(input.inTransitDate),
+        installedDate: dateValue(input.installedDate),
+        logisticsStatus: input.logisticsStatus,
+        receivedFabricatorDate: dateValue(input.receivedFabricatorDate),
+        receivedWarehouseDate: dateValue(input.receivedWarehouseDate),
+        receivedWarehouseId: input.receivedWarehouseId ?? null,
+        updatedById: actorId,
+      },
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "UPDATED",
+      entityId: input.id,
+      entityReference: current.itemReference ?? current.name,
+      entityType: "ITEM",
+      metadata: { fields: ["logisticsStatus", "locations", "trackingDates"] },
+      summary: "Updated Item logistics tracking.",
+    });
   });
 }
 

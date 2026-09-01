@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  budgetPriceFromMarkup,
   calculateItemFinancials,
+  itemBudgetVariance,
+  markupRateFromPrices,
   projectFreightEstimate,
   quoteItemLineAmounts,
   quoteItemPercentInputToRate,
@@ -9,6 +12,7 @@ import {
   quoteItemReviewTotal,
   quoteItemTotalFromUnit,
   quantityTimesUnitMatchesTotal,
+  reconcileItemFinancialDraft,
 } from "@/domain/items/calculations";
 
 describe("Item Decimal-safe financials", () => {
@@ -71,5 +75,40 @@ describe("Item Decimal-safe financials", () => {
     });
     expect(result.totalSellingPriceHt).toBe("100.0000");
     expect(projectFreightEstimate("100000", "0.08")).toBe("8000.0000");
+  });
+
+  it("uses markup, not margin, to derive and explain Item budget values", () => {
+    expect(budgetPriceFromMarkup("100", "0.30")).toBe("130.0000");
+    expect(markupRateFromPrices("100", "130")).toBe("0.300000");
+    expect(
+      reconcileItemFinancialDraft({
+        basis: "MARKUP",
+        budgetTotal: null,
+        budgetUnit: null,
+        markupRate: "0.30",
+        quantity: "2",
+        totalPurchase: "200",
+        unitPurchase: "100",
+      }),
+    ).toMatchObject({
+      budgetTotal: "260.0000",
+      budgetUnit: "130.0000",
+      markupRate: "0.300000",
+    });
+  });
+
+  it("reports signed budget meaning without exposing floating-point truth", () => {
+    expect(itemBudgetVariance("10000", "9200")).toEqual({
+      amount: "800.0000",
+      status: "UNDER_BUDGET",
+    });
+    expect(itemBudgetVariance("10000", "10750")).toEqual({
+      amount: "750.0000",
+      status: "OVER_BUDGET",
+    });
+    expect(itemBudgetVariance("10000", "10000")).toEqual({
+      amount: "0.0000",
+      status: "ON_BUDGET",
+    });
   });
 });

@@ -490,6 +490,8 @@ export async function confirmBudgetImport(
       for (const row of selected) {
         const data = {
           brand: row.brand,
+          budgetPurchaseTotalPriceHt: row.totalPurchasePriceHt,
+          budgetPurchaseUnitPriceHt: row.unitPurchasePriceHt,
           buildingId: row.buildingId,
           category: row.category,
           commercialStatus: ItemCommercialStatus.BUDGET,

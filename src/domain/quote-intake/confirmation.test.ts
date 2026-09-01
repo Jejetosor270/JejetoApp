@@ -12,7 +12,6 @@ function baseForm(): FormData {
   form.set("orderCurrencyCode", "EUR");
   form.set("orderNumber", "PO-QUOTE-1");
   form.set("originalFilename", "quote.pdf");
-  form.set("packageName", "Reviewed quote");
   form.set("paymentCount", "0");
   form.set("projectId", projectId);
   form.set("supplierId", supplierId);
@@ -23,16 +22,11 @@ describe("quote confirmation validation", () => {
   it("requires only the visible core fields needed for a new Order", () => {
     const missing = baseForm();
     missing.delete("orderNumber");
-    missing.delete("packageName");
     const invalid = parseQuoteConfirmation(missing);
     expect(invalid.success).toBe(false);
     if (invalid.success) return;
     expect(invalid.error.issues.map((issue) => issue.path.join("."))).toEqual(
-      expect.arrayContaining([
-        "orderNumber",
-        "packageName",
-        "orderCurrencyCode",
-      ]),
+      expect.arrayContaining(["orderNumber", "orderCurrencyCode"]),
     );
 
     const missingSupplier = baseForm();

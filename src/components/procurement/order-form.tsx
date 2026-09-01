@@ -18,6 +18,7 @@ import { initialOrderActionState } from "@/components/procurement/action-state";
 import { countries } from "@/config/countries";
 import { rateToPercentInput } from "@/domain/procurement/presentation";
 import { addWeeksToDateOnly } from "@/domain/payments/dates";
+import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 
 interface BuildingOption {
   id: string;
@@ -152,6 +153,12 @@ function VatFields({
   value: VatView | null;
 }) {
   const prefix = direction === "input" ? "Purchase" : "Sales";
+  const [treatment, setTreatment] = useState(value?.treatment ?? "");
+  const [recoverability, setRecoverability] = useState(
+    value?.recoverability ?? "",
+  );
+  const showRecoverability =
+    direction === "input" && inputVatRecoverabilityApplies(treatment);
   return (
     <section className="bg-background/60 rounded-md border p-3">
       <h4 className="text-xs font-semibold">{prefix} VAT</h4>
@@ -159,8 +166,14 @@ function VatFields({
         <Field label="Treatment">
           <select
             className={inputClassName}
-            defaultValue={value?.treatment ?? ""}
             name={`${direction}VatTreatment`}
+            onChange={(event) => {
+              const nextTreatment = event.target.value;
+              setTreatment(nextTreatment);
+              if (!inputVatRecoverabilityApplies(nextTreatment))
+                setRecoverability("");
+            }}
+            value={treatment}
           >
             <option value="">Not recorded</option>
             {options.vatTreatments.map((item) => (
@@ -170,12 +183,13 @@ function VatFields({
             ))}
           </select>
         </Field>
-        {direction === "input" ? (
+        {showRecoverability ? (
           <Field label="Recoverability">
             <select
               className={inputClassName}
-              defaultValue={value?.recoverability ?? ""}
               name="inputVatRecoverability"
+              onChange={(event) => setRecoverability(event.target.value)}
+              value={recoverability}
             >
               <option value="">Choose</option>
               {options.vatRecoverabilities.map((item) => (
@@ -185,6 +199,8 @@ function VatFields({
               ))}
             </select>
           </Field>
+        ) : direction === "input" ? (
+          <input name="inputVatRecoverability" type="hidden" value="" />
         ) : null}
         <Money
           defaultValue={value?.taxableBase}

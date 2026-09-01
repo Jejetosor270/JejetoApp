@@ -58,4 +58,16 @@ describe("single procurement order cost validation", () => {
       }),
     ).toThrow("Choose a VAT treatment");
   });
+
+  it("rejects irrelevant input VAT recoverability combinations", () => {
+    expect(() =>
+      createOrderInputSchema.parse({
+        ...base,
+        inputVatRecoverability: "RECOVERABLE",
+        inputVatTreatment: "OUT_OF_SCOPE",
+        inputVatTaxableBase: "70000",
+        inputVatRate: "0",
+      }),
+    ).toThrow("Recoverability does not apply");
+  });
 });

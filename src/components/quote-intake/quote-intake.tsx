@@ -20,6 +20,7 @@ import {
 import type { ExtractionStatus } from "@/domain/quote-intake/extraction";
 import { formatMoney } from "@/domain/procurement/presentation";
 import { calculateQuoteSupplierPayable } from "@/domain/quote-intake/payment-schedule";
+import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 import {
   dateOnlyToEuropeanInput,
   formatDateOnly,
@@ -159,11 +160,6 @@ function QuoteReview({
     id: string;
   } | null>(null);
   const [orderNumber, setOrderNumber] = useState("");
-  const [packageName, setPackageName] = useState(
-    extraction.supplier.displayName.value ??
-      extraction.supplier.legalName.value ??
-      "",
-  );
   const [orderCurrencyCode, setOrderCurrencyCode] = useState(
     financial.currencyCode ?? "",
   );
@@ -176,9 +172,10 @@ function QuoteReview({
   );
   const [inputVatTreatment, setInputVatTreatment] = useState("");
   const [inputVatRecoverability, setInputVatRecoverability] = useState("");
+  const showInputVatRecoverability =
+    inputVatRecoverabilityApplies(inputVatTreatment);
   const [financialValues, setFinancialValues] = useState({
     freight: financial.freight ?? "",
-    freightResaleAmount: "",
     inputVatAmount: financial.inputVatAmount ?? "",
     inputVatTaxableBase: financial.inputVatTaxableBase ?? "",
     miscellaneous: financial.miscellaneous ?? "",
@@ -465,36 +462,20 @@ function QuoteReview({
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {actionType === "CREATE" ? (
-              <>
-                <Field
-                  error={fieldErrors.orderNumber}
-                  label="Internal Order reference"
+              <Field
+                error={fieldErrors.orderNumber}
+                label="Internal Order reference"
+                required
+              >
+                <input
+                  aria-invalid={Boolean(fieldErrors.orderNumber) || undefined}
+                  className={inputWithError("orderNumber")}
+                  name="orderNumber"
+                  onChange={(event) => setOrderNumber(event.target.value)}
                   required
-                >
-                  <input
-                    aria-invalid={Boolean(fieldErrors.orderNumber) || undefined}
-                    className={inputWithError("orderNumber")}
-                    name="orderNumber"
-                    onChange={(event) => setOrderNumber(event.target.value)}
-                    required
-                    value={orderNumber}
-                  />
-                </Field>
-                <Field
-                  error={fieldErrors.packageName}
-                  label="Package title"
-                  required
-                >
-                  <input
-                    aria-invalid={Boolean(fieldErrors.packageName) || undefined}
-                    className={inputWithError("packageName")}
-                    name="packageName"
-                    onChange={(event) => setPackageName(event.target.value)}
-                    required
-                    value={packageName}
-                  />
-                </Field>
-              </>
+                  value={orderNumber}
+                />
+              </Field>
             ) : (
               <div className="md:col-span-2">
                 <Field
@@ -682,33 +663,15 @@ function QuoteReview({
                 }
                 value={financialValues.freight}
               />
-              <select
-                className={`${inputClassName} mt-2`}
-                defaultValue={
-                  financial.freight
-                    ? "INCLUDED_IN_PACKAGE_PRICE"
-                    : "NOT_APPLICABLE"
-                }
+              <input
                 name="freightTreatment"
-              >
-                {options.freightTreatments.map((item) => (
-                  <option key={item} value={item}>
-                    {item.replaceAll("_", " ").toLowerCase()}
-                  </option>
-                ))}
-              </select>
-              <MoneyInput
-                className={`${inputClassName} mt-2`}
-                name="freightResaleAmount"
-                onValueChange={(freightResaleAmount) =>
-                  setFinancialValues((current) => ({
-                    ...current,
-                    freightResaleAmount,
-                  }))
-                }
-                placeholder="Separate freight resale, if applicable"
-                value={financialValues.freightResaleAmount}
+                type="hidden"
+                value="NOT_APPLICABLE"
               />
+              <input name="freightResaleAmount" type="hidden" value="" />
+              <p className="text-muted-foreground mt-2 text-xs">
+                Enter 0.00 when freight is included in the Supplier price.
+              </p>
             </ApplyField>
             <ApplyField
               checked={financial.miscellaneous !== null}
@@ -793,7 +756,12 @@ function QuoteReview({
                   }
                   className={inputWithError("inputVatTreatment")}
                   name="inputVatTreatment"
-                  onChange={(event) => setInputVatTreatment(event.target.value)}
+                  onChange={(event) => {
+                    const treatment = event.target.value;
+                    setInputVatTreatment(treatment);
+                    if (!inputVatRecoverabilityApplies(treatment))
+                      setInputVatRecoverability("");
+                  }}
                   required={applyInputVat}
                   value={inputVatTreatment}
                 >
@@ -805,31 +773,35 @@ function QuoteReview({
                   ))}
                 </select>
               </Field>
-              <Field
-                error={fieldErrors.inputVatRecoverability}
-                label="Recoverability"
-                required={applyInputVat}
-              >
-                <select
-                  aria-invalid={
-                    Boolean(fieldErrors.inputVatRecoverability) || undefined
-                  }
-                  className={inputWithError("inputVatRecoverability")}
-                  name="inputVatRecoverability"
-                  onChange={(event) =>
-                    setInputVatRecoverability(event.target.value)
-                  }
+              {showInputVatRecoverability ? (
+                <Field
+                  error={fieldErrors.inputVatRecoverability}
+                  label="Recoverability"
                   required={applyInputVat}
-                  value={inputVatRecoverability}
                 >
-                  <option value="">Choose</option>
-                  {options.vatRecoverabilities.map((item) => (
-                    <option key={item} value={item}>
-                      {item.replaceAll("_", " ").toLowerCase()}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+                  <select
+                    aria-invalid={
+                      Boolean(fieldErrors.inputVatRecoverability) || undefined
+                    }
+                    className={inputWithError("inputVatRecoverability")}
+                    name="inputVatRecoverability"
+                    onChange={(event) =>
+                      setInputVatRecoverability(event.target.value)
+                    }
+                    required={applyInputVat}
+                    value={inputVatRecoverability}
+                  >
+                    <option value="">Choose</option>
+                    {options.vatRecoverabilities.map((item) => (
+                      <option key={item} value={item}>
+                        {item.replaceAll("_", " ").toLowerCase()}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              ) : (
+                <input name="inputVatRecoverability" type="hidden" value="" />
+              )}
               <Field
                 error={fieldErrors.inputVatTaxableBase}
                 label="Taxable base HT"

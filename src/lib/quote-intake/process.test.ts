@@ -12,9 +12,30 @@ const database = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
 
-import { processSupplierQuote } from "@/lib/quote-intake/process";
+import {
+  processSupplierQuote,
+  reviewedQuoteItemReference,
+} from "@/lib/quote-intake/process";
 
 describe("supplier quote processing lifecycle", () => {
+  it("keeps internal Item reference blank for descriptions, SKUs, and line numbers", () => {
+    const base = {
+      description: "Dining Chair",
+      itemReference: "Dining Chair",
+      name: "Dining Chair",
+      supplierSku: "SKU-1",
+    };
+    expect(reviewedQuoteItemReference(base)).toBeNull();
+    expect(
+      reviewedQuoteItemReference({ ...base, itemReference: "SKU-1" }),
+    ).toBeNull();
+    expect(
+      reviewedQuoteItemReference({ ...base, itemReference: "12.1" }),
+    ).toBeNull();
+    expect(
+      reviewedQuoteItemReference({ ...base, itemReference: "INT-CHAIR-01" }),
+    ).toBe("INT-CHAIR-01");
+  });
   it("does no authoritative write and clears temporary bytes after one provider call", async () => {
     database.project.findUnique.mockResolvedValue({
       id: "project-1",
@@ -138,6 +159,7 @@ describe("supplier quote processing lifecycle", () => {
       action: "UPDATE",
       category: null,
       existingItemId: "existing-item",
+      itemReference: null,
       quantity: "2.5",
     });
     expect(result.itemReview?.rows[0]?.diffs).toEqual(

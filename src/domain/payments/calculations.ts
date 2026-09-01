@@ -8,6 +8,9 @@ const ONE = new Decimal(1);
 export type DerivedPaymentStatus =
   "UPCOMING" | "DUE" | "OVERDUE" | "PARTIALLY_PAID" | "PAID" | "CANCELLED";
 
+export type VendorPaymentStatus =
+  "NOT_PAID" | "DEPOSIT_PAID" | "PARTIALLY_PAID" | "PAID_IN_FULL";
+
 export interface ReconciliationSummary {
   overallocated: Decimal;
   paid: Decimal;
@@ -79,6 +82,44 @@ export function derivePaymentStatus(input: {
   if (input.dueDate < input.today) return "OVERDUE";
   if (paid.greaterThan(ZERO)) return "PARTIALLY_PAID";
   return input.dueDate === input.today ? "DUE" : "UPCOMING";
+}
+
+export function deriveVendorPaymentStatus(
+  installments: readonly {
+    isCancelled: boolean;
+    scheduledAmount: FinancialDecimal;
+    sequence: number;
+    settlements: readonly { amount: FinancialDecimal }[];
+  }[],
+): VendorPaymentStatus {
+  const active = installments
+    .filter((installment) => !installment.isCancelled)
+    .toSorted((first, second) => first.sequence - second.sequence);
+  const scheduled = active.reduce(
+    (sum, installment) =>
+      sum.plus(nonNegative(installment.scheduledAmount, "Scheduled amount")),
+    ZERO,
+  );
+  const paidByInstallment = active.map((installment) =>
+    installment.settlements.reduce(
+      (sum, settlement) =>
+        sum.plus(nonNegative(settlement.amount, "Settlement amount")),
+      ZERO,
+    ),
+  );
+  const paid = paidByInstallment.reduce(
+    (sum, amount) => sum.plus(amount),
+    ZERO,
+  );
+  if (paid.isZero() || scheduled.isZero()) return "NOT_PAID";
+  if (paid.greaterThanOrEqualTo(scheduled)) return "PAID_IN_FULL";
+  const first = active[0];
+  if (
+    first &&
+    paidByInstallment[0]?.greaterThanOrEqualTo(first.scheduledAmount)
+  )
+    return "DEPOSIT_PAID";
+  return "PARTIALLY_PAID";
 }
 
 export function reconcileSchedule(

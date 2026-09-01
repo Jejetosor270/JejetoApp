@@ -46,4 +46,21 @@ describe("Item, Room, and Location validation", () => {
       }).success,
     ).toBe(true);
   });
+
+  it("rejects recoverability for a treatment without input VAT", () => {
+    expect(
+      createItemInputSchema.safeParse({
+        ...base,
+        vatRecoverability: "RECOVERABLE",
+        vatTreatment: "OUT_OF_SCOPE",
+      }).success,
+    ).toBe(false);
+    expect(
+      createItemInputSchema.safeParse({
+        ...base,
+        vatRecoverability: "RECOVERABLE",
+        vatTreatment: "DOMESTIC",
+      }).success,
+    ).toBe(true);
+  });
 });

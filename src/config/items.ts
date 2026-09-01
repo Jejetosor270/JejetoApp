@@ -39,3 +39,10 @@ export const itemLogisticsStatusLabels = {
   INSTALLED: "Installed",
   CLAIM: "Claim / issue",
 } as const;
+
+export const itemCommercialStatuses = Object.keys(
+  itemCommercialStatusLabels,
+) as Array<keyof typeof itemCommercialStatusLabels>;
+export const itemLogisticsStatuses = Object.keys(
+  itemLogisticsStatusLabels,
+) as Array<keyof typeof itemLogisticsStatusLabels>;

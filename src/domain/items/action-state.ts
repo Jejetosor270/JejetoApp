@@ -3,6 +3,7 @@ import type { BudgetField, BudgetReviewRow } from "@/domain/items/import";
 export interface ItemActionState {
   itemId?: string;
   message: string;
+  room?: { buildingId: string; id: string; name: string };
   status: "idle" | "error" | "success";
 }
 

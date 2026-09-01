@@ -4,6 +4,7 @@ import { z } from "zod";
 import { isSupportedCountryCode } from "@/config/countries";
 import { europeanInputToDateOnly, isDateOnly } from "@/domain/payments/dates";
 import { VatRecoverability, VatTreatment } from "@/generated/prisma/client";
+import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 
 function optionalString(maximum: number) {
   return z.preprocess(
@@ -205,13 +206,6 @@ const confirmationSchema = z
           path: ["orderNumber"],
         });
       }
-      if (!value.packageName) {
-        context.addIssue({
-          code: "custom",
-          message: "Enter a package title.",
-          path: ["packageName"],
-        });
-      }
       if (!value.applyCurrency || !value.orderCurrencyCode) {
         context.addIssue({
           code: "custom",
@@ -270,7 +264,11 @@ const confirmationSchema = z
       }
     }
     if (value.applyInputVat) {
-      if (!value.inputVatTreatment || !value.inputVatRecoverability) {
+      if (
+        !value.inputVatTreatment ||
+        (inputVatRecoverabilityApplies(value.inputVatTreatment) &&
+          !value.inputVatRecoverability)
+      ) {
         context.addIssue({
           code: "custom",
           message:
@@ -278,6 +276,15 @@ const confirmationSchema = z
           path: ["inputVatTreatment"],
         });
       }
+      if (
+        value.inputVatRecoverability &&
+        !inputVatRecoverabilityApplies(value.inputVatTreatment)
+      )
+        context.addIssue({
+          code: "custom",
+          message: "Recoverability does not apply to this VAT treatment.",
+          path: ["inputVatRecoverability"],
+        });
       if (!value.inputVatTaxableBase) {
         context.addIssue({
           code: "custom",
