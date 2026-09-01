@@ -8,6 +8,7 @@ import { selectedIds, selectedIdsSchema } from "@/domain/deletion/validation";
 import { orderFormValues } from "@/domain/procurement/form-data";
 import {
   createOrderInputSchema,
+  inlineOrderInputSchema,
   updateOrderInputSchema,
 } from "@/domain/procurement/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
@@ -16,7 +17,11 @@ import {
   isDuplicateOrderReferenceError,
   isExpectedProcurementError,
 } from "@/lib/procurement/errors";
-import { createOrder, updateOrder } from "@/lib/procurement/orders";
+import {
+  createOrder,
+  updateOrder,
+  updateOrderInline,
+} from "@/lib/procurement/orders";
 
 function errorState(error: unknown): OrderActionState {
   if (isDuplicateOrderReferenceError(error)) {
@@ -91,6 +96,30 @@ export async function updateOrderAction(
     };
   } catch (error) {
     return errorState(error);
+  }
+}
+
+export async function updateOrderInlineAction(formData: FormData) {
+  const actor = await requireMasterDataEditor();
+  const input = inlineOrderInputSchema.safeParse(Object.fromEntries(formData));
+  if (!input.success)
+    return {
+      message: input.error.issues[0]?.message ?? "Check the Order values.",
+      status: "error" as const,
+    };
+  try {
+    const values = await updateOrderInline(actor.id, input.data);
+    revalidatePath("/orders");
+    revalidatePath("/calendar");
+    revalidatePath(`/orders/${input.data.id}`);
+    return {
+      message: "Order values saved.",
+      status: "success" as const,
+      values,
+    };
+  } catch (error) {
+    const state = errorState(error);
+    return { ...state, status: "error" as const };
   }
 }
 

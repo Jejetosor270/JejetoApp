@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil, Plus } from "lucide-react";
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 
 import {
   createClientAction,
@@ -14,6 +14,12 @@ import {
   SelectionHeader,
   useBulkSelection,
 } from "@/components/bulk-actions/bulk-selection";
+import {
+  InlineCheckbox,
+  InlineEditActions,
+  InlineSelect,
+  InlineTextInput,
+} from "@/components/inline-editing/inline-edit";
 import { initialMasterDataActionState } from "@/components/master-data/action-state";
 import {
   ActionFeedback,
@@ -241,6 +247,170 @@ function EditClientForm({
   );
 }
 
+function ClientInlineRow({
+  canEdit,
+  client,
+  isSelected,
+  onFullEdit,
+  onSelect,
+}: {
+  canEdit: boolean;
+  client: ClientView;
+  isSelected: boolean;
+  onFullEdit: () => void;
+  onSelect: () => void;
+}) {
+  const initial = () => ({
+    countryCode: client.countryCode ?? "",
+    displayName: client.displayName,
+    isActive: client.isActive,
+    legalName: client.legalName,
+  });
+  const [saved, setSaved] = useState(initial);
+  const [draft, setDraft] = useState(initial);
+  const [editing, setEditing] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [pending, startTransition] = useTransition();
+  const save = () => {
+    const data = new FormData();
+    Object.entries({
+      billingAddressLine1: client.billingAddressLine1 ?? "",
+      billingAddressLine2: client.billingAddressLine2 ?? "",
+      billingCity: client.billingCity ?? "",
+      billingPostalCode: client.billingPostalCode ?? "",
+      contactName: client.contactName ?? "",
+      countryCode: draft.countryCode,
+      defaultCurrencyCode: client.defaultCurrencyCode,
+      displayName: draft.displayName,
+      email: client.email ?? "",
+      id: client.id,
+      legalName: draft.legalName,
+      notes: client.notes ?? "",
+      phone: client.phone ?? "",
+      vatNumber: client.vatNumber ?? "",
+    }).forEach(([key, value]) => data.set(key, value));
+    if (draft.isActive) data.set("isActive", "on");
+    startTransition(async () => {
+      const result = await updateClientAction(
+        initialMasterDataActionState,
+        data,
+      );
+      setFeedback(result.message ?? "");
+      if (result.status === "success") {
+        setSaved(draft);
+        setEditing(false);
+      }
+    });
+  };
+  return (
+    <tr className="hover:bg-muted/25 align-top">
+      {canEdit ? (
+        <SelectionCell
+          checked={isSelected}
+          label={`Client ${saved.displayName}`}
+          onChange={onSelect}
+        />
+      ) : null}
+      <td className="px-4 py-3 font-medium">
+        {editing ? (
+          <InlineTextInput
+            ariaLabel="Client display name"
+            onChange={(value) =>
+              setDraft((current) => ({ ...current, displayName: value }))
+            }
+            value={draft.displayName}
+          />
+        ) : (
+          saved.displayName
+        )}
+      </td>
+      <td className="text-muted-foreground px-4 py-3">
+        {editing ? (
+          <InlineTextInput
+            ariaLabel="Client legal name"
+            onChange={(value) =>
+              setDraft((current) => ({ ...current, legalName: value }))
+            }
+            value={draft.legalName}
+          />
+        ) : (
+          saved.legalName
+        )}
+      </td>
+      <td className="px-4 py-3">
+        {editing ? (
+          <InlineSelect
+            ariaLabel="Client country"
+            onChange={(value) =>
+              setDraft((current) => ({ ...current, countryCode: value }))
+            }
+            value={draft.countryCode}
+          >
+            <option value="">Not specified</option>
+            {countries.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.label}
+              </option>
+            ))}
+          </InlineSelect>
+        ) : (
+          countryLabel(saved.countryCode)
+        )}
+      </td>
+      <td className="px-4 py-3">{client.vatNumber ?? "—"}</td>
+      <td className="px-4 py-3 font-mono">{client.defaultCurrencyCode}</td>
+      <td className="px-4 py-3">{client.contactName ?? "—"}</td>
+      <td className="px-4 py-3">
+        {editing ? (
+          <InlineCheckbox
+            ariaLabel="Client active"
+            checked={draft.isActive}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                isActive: event.target.checked,
+              }))
+            }
+          />
+        ) : (
+          <StatusBadge active={saved.isActive} />
+        )}
+      </td>
+      {canEdit ? (
+        <td className="px-4 py-3 text-right">
+          <InlineEditActions
+            editing={editing}
+            feedback={feedback}
+            onCancel={() => {
+              setDraft(saved);
+              setFeedback("");
+              setEditing(false);
+            }}
+            onEdit={() => {
+              setDraft(saved);
+              setFeedback("");
+              setEditing(true);
+            }}
+            onSave={save}
+            pending={pending}
+          />
+          {!editing ? (
+            <Button
+              className="mt-1"
+              onClick={onFullEdit}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <Pencil data-icon="inline-start" /> Full details
+            </Button>
+          ) : null}
+        </td>
+      ) : null}
+    </tr>
+  );
+}
+
 export function ClientManagement({
   canEdit,
   clients,
@@ -301,45 +471,14 @@ export function ClientManagement({
             </thead>
             <tbody className="divide-y">
               {clients.map((client) => (
-                <tr className="hover:bg-muted/25" key={client.id}>
-                  {canEdit ? (
-                    <SelectionCell
-                      checked={selection.isSelected(client.id)}
-                      label={`Client ${client.displayName}`}
-                      onChange={() => selection.toggle(client.id)}
-                    />
-                  ) : null}
-                  <td className="px-4 py-3 font-medium">
-                    {client.displayName}
-                  </td>
-                  <td className="text-muted-foreground px-4 py-3">
-                    {client.legalName}
-                  </td>
-                  <td className="px-4 py-3">
-                    {countryLabel(client.countryCode)}
-                  </td>
-                  <td className="px-4 py-3">{client.vatNumber ?? "—"}</td>
-                  <td className="px-4 py-3 font-mono">
-                    {client.defaultCurrencyCode}
-                  </td>
-                  <td className="px-4 py-3">{client.contactName ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge active={client.isActive} />
-                  </td>
-                  {canEdit ? (
-                    <td className="px-4 py-3 text-right">
-                      <Button
-                        onClick={() => setEditing(client)}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        <Pencil data-icon="inline-start" />
-                        Edit
-                      </Button>
-                    </td>
-                  ) : null}
-                </tr>
+                <ClientInlineRow
+                  canEdit={canEdit}
+                  client={client}
+                  isSelected={selection.isSelected(client.id)}
+                  key={client.id}
+                  onFullEdit={() => setEditing(client)}
+                  onSelect={() => selection.toggle(client.id)}
+                />
               ))}
             </tbody>
           </table>

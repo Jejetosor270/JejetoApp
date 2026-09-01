@@ -32,6 +32,7 @@ import {
 import { paymentSchedulePresets } from "@/domain/payments/presets";
 import type {
   CreateInstallmentInput,
+  InlineInstallmentInput,
   SettlementInput,
   UpdateInstallmentInput,
 } from "@/domain/payments/validation";
@@ -441,6 +442,79 @@ export async function updateInstallment(
       entityType: "INSTALLMENT",
       summary: "Updated a payment or receipt installment.",
     });
+  });
+}
+
+export async function updateInstallmentInline(
+  actorId: string,
+  input: InlineInstallmentInput,
+) {
+  const current = await getDatabase().paymentInstallment.findUnique({
+    where: { id: input.id },
+    include: {
+      order: { select: { orderNumber: true } },
+      settlements: { select: { amount: true } },
+    },
+  });
+  if (!current) throw new PaymentNotFoundError();
+  const amount = new Decimal(input.scheduledAmount);
+  const paid = current.settlements.reduce(
+    (total, settlement) => total.plus(settlement.amount),
+    new Decimal(0),
+  );
+  if (paid.greaterThan(amount))
+    throw new PaymentValidationError(
+      "Scheduled amount cannot be reduced below the amount already paid or received.",
+    );
+  const amountChanged = !amount.equals(current.scheduledAmount);
+  return getDatabase().$transaction(async (transaction) => {
+    const installment = await transaction.paymentInstallment.update({
+      where: { id: input.id },
+      data: {
+        ...(amountChanged
+          ? { basis: InstallmentBasis.FIXED_AMOUNT, percentageRate: null }
+          : {}),
+        dueDate: dateOnlyToDate(input.dueDate),
+        label: input.label,
+        notes: input.notes ?? null,
+        scheduledAmount: amount.toFixed(4),
+        updatedById: actorId,
+      },
+      select: {
+        dueDate: true,
+        id: true,
+        isCancelled: true,
+        label: true,
+        notes: true,
+        scheduledAmount: true,
+      },
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "UPDATED",
+      entityId: installment.id,
+      entityReference: `${current.order.orderNumber} · ${installment.label}`,
+      entityType: "INSTALLMENT",
+      metadata: { fields: ["dueDate", "label", "notes", "scheduledAmount"] },
+      summary:
+        "Updated a payment or receipt installment from the Payments table.",
+    });
+    const outstanding = installment.isCancelled
+      ? new Decimal(0)
+      : installmentOutstanding(installment.scheduledAmount, paid);
+    return {
+      dueDate: dateToDateOnly(installment.dueDate),
+      label: installment.label,
+      notes: installment.notes,
+      outstandingAmount: outstanding.toString(),
+      scheduledAmount: installment.scheduledAmount.toString(),
+      status: derivePaymentStatus({
+        dueDate: dateToDateOnly(installment.dueDate),
+        isCancelled: installment.isCancelled,
+        paidAmount: paid,
+        scheduledAmount: installment.scheduledAmount,
+        today: businessToday(),
+      }),
+    };
   });
 }
 

@@ -7,6 +7,7 @@ import {
   bulkUpdateItemsAction,
   deleteSelectedItemsAction,
   updateItemFinancialInlineAction,
+  updateItemGeneralInlineAction,
   updateItemStatusInlineAction,
   updateItemTrackingInlineAction,
 } from "@/app/(app)/items/actions";
@@ -16,6 +17,14 @@ import {
   SelectionHeader,
   useBulkSelection,
 } from "@/components/bulk-actions/bulk-selection";
+import {
+  InlineDateInput,
+  InlineEditActions,
+  InlineMoneyInput,
+  InlineSelect,
+  InlineTextInput,
+} from "@/components/inline-editing/inline-edit";
+import { vatRecoverabilities, vatTreatments } from "@/config/vat";
 import {
   itemBudgetVariance,
   projectFreightEstimate,
@@ -31,6 +40,11 @@ import {
 import { itemCommercialStatuses, itemLogisticsStatuses } from "@/config/items";
 import type { ManagedItem } from "@/lib/items/items";
 import { itemViewColumns } from "@/config/item-views";
+import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
+import {
+  dateOnlyToEuropeanInput,
+  europeanInputToDateOnly,
+} from "@/domain/payments/dates";
 
 type Options = Awaited<
   ReturnType<typeof import("@/lib/items/items").listItemOptions>
@@ -60,7 +74,7 @@ function FinancialRow({
   canEdit: boolean;
   item: ManagedItem;
 }) {
-  const [draft, setDraft] = useState({
+  const initialDraft = () => ({
     budgetTotal: item.totalSellingPriceHt ?? "",
     budgetUnit: item.unitSellingPriceHt ?? "",
     budgetVarianceComment: item.budgetVarianceComment ?? "",
@@ -68,7 +82,13 @@ function FinancialRow({
     quantity: item.quantity,
     totalPurchase: item.totalPurchasePriceHt ?? "",
     unitPurchase: item.unitPurchasePriceHt ?? "",
+    vatRate: rateToPercentInput(item.vatRate),
+    vatRecoverability: item.vatRecoverability ?? "",
+    vatTreatment: item.vatTreatment ?? "",
   });
+  const [saved, setSaved] = useState(initialDraft);
+  const [draft, setDraft] = useState(initialDraft);
+  const [editing, setEditing] = useState(false);
   const [basis, setBasis] = useState<ItemFinancialEditBasis>("BUDGET_UNIT");
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
@@ -128,7 +148,7 @@ function FinancialRow({
     <input
       aria-label={`${label} for ${item.itemReference ?? item.name}`}
       className={`${control} w-24 text-right tabular-nums`}
-      disabled={!canEdit}
+      disabled={!editing}
       inputMode="decimal"
       onChange={(event) =>
         updateFinancial(nextBasis, field, event.target.value)
@@ -159,7 +179,7 @@ function FinancialRow({
         <input
           aria-label={`Markup percentage for ${item.itemReference ?? item.name}`}
           className={`${control} w-20 text-right tabular-nums`}
-          disabled={!canEdit}
+          disabled={!editing}
           inputMode="decimal"
           onChange={(event) =>
             updateFinancial("MARKUP", "markupPercent", event.target.value)
@@ -167,6 +187,71 @@ function FinancialRow({
           value={draft.markupPercent}
         />
         <span className="ml-1">%</span>
+      </td>
+      <td className="p-2">
+        <select
+          aria-label={`VAT treatment for ${item.itemReference ?? item.name}`}
+          className={control}
+          disabled={!editing}
+          onChange={(event) =>
+            setDraft((current) => {
+              const vatTreatment = event.target.value;
+              return {
+                ...current,
+                vatRecoverability: inputVatRecoverabilityApplies(vatTreatment)
+                  ? current.vatRecoverability
+                  : "",
+                vatTreatment,
+              };
+            })
+          }
+          value={draft.vatTreatment}
+        >
+          <option value="">—</option>
+          {vatTreatments.map((value) => (
+            <option key={value} value={value}>
+              {value.replaceAll("_", " ")}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td className="p-2">
+        <input
+          aria-label={`VAT percentage for ${item.itemReference ?? item.name}`}
+          className={`${control} w-20 text-right tabular-nums`}
+          disabled={!editing}
+          inputMode="decimal"
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, vatRate: event.target.value }))
+          }
+          value={draft.vatRate}
+        />
+        <span className="ml-1">%</span>
+      </td>
+      <td className="p-2">
+        {inputVatRecoverabilityApplies(draft.vatTreatment) ? (
+          <select
+            aria-label={`VAT recoverability for ${item.itemReference ?? item.name}`}
+            className={control}
+            disabled={!editing}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                vatRecoverability: event.target.value,
+              }))
+            }
+            value={draft.vatRecoverability}
+          >
+            <option value="">—</option>
+            {vatRecoverabilities.map((value) => (
+              <option key={value} value={value}>
+                {value.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+        ) : (
+          "—"
+        )}
       </td>
       <td className="p-2 tabular-nums">
         {item.budgetPurchaseTotalPriceHt ? (
@@ -196,7 +281,7 @@ function FinancialRow({
         <input
           aria-label={`Variance comment for ${item.itemReference ?? item.name}`}
           className={`${control} w-52`}
-          disabled={!canEdit}
+          disabled={!editing}
           onChange={(event) =>
             setDraft((current) => ({
               ...current,
@@ -211,10 +296,20 @@ function FinancialRow({
       </td>
       {canEdit ? (
         <td className="p-2">
-          <button
-            className={saveButton}
-            disabled={pending}
-            onClick={() => {
+          <InlineEditActions
+            editing={editing}
+            feedback={feedback}
+            onCancel={() => {
+              setDraft(saved);
+              setFeedback("");
+              setEditing(false);
+            }}
+            onEdit={() => {
+              setDraft(saved);
+              setFeedback("");
+              setEditing(true);
+            }}
+            onSave={() => {
               const data = new FormData();
               data.set("id", item.id);
               data.set("basis", basis);
@@ -225,28 +320,33 @@ function FinancialRow({
               data.set("budgetTotal", draft.budgetTotal);
               data.set("markupRate", draft.markupPercent);
               data.set("budgetVarianceComment", draft.budgetVarianceComment);
+              data.set("vatRate", draft.vatRate);
+              data.set("vatRecoverability", draft.vatRecoverability);
+              data.set("vatTreatment", draft.vatTreatment);
               startTransition(async () => {
                 const result = await updateItemFinancialInlineAction(data);
                 setFeedback(result.message);
-                if (result.status === "success" && result.values)
-                  setDraft((current) => ({
-                    ...current,
+                if (result.status === "success" && result.values) {
+                  const next = {
+                    ...draft,
                     budgetTotal: result.values.budgetTotal ?? "",
                     budgetUnit: result.values.budgetUnit ?? "",
                     markupPercent: rateToPercentInput(result.values.markupRate),
                     quantity: result.values.quantity,
                     totalPurchase: result.values.totalPurchase ?? "",
                     unitPurchase: result.values.unitPurchase ?? "",
-                  }));
+                    vatRate: rateToPercentInput(result.values.vatRate),
+                    vatRecoverability: result.values.vatRecoverability ?? "",
+                    vatTreatment: result.values.vatTreatment ?? "",
+                  };
+                  setSaved(next);
+                  setDraft(next);
+                  setEditing(false);
+                }
               });
             }}
-            type="button"
-          >
-            {pending ? "Saving…" : "Save"}
-          </button>
-          {feedback ? (
-            <span className="mt-1 block max-w-32 text-xs">{feedback}</span>
-          ) : null}
+            pending={pending}
+          />
         </td>
       ) : null}
     </tr>
@@ -254,10 +354,15 @@ function FinancialRow({
 }
 
 function StatusRow({ canEdit, item }: { canEdit: boolean; item: ManagedItem }) {
+  const [saved, setSaved] = useState({
+    commercialStatus: item.commercialStatus,
+    logisticsStatus: item.logisticsStatus,
+  });
   const [commercialStatus, setCommercialStatus] = useState(
     item.commercialStatus,
   );
   const [logisticsStatus, setLogisticsStatus] = useState(item.logisticsStatus);
+  const [editing, setEditing] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
   return (
@@ -267,7 +372,7 @@ function StatusRow({ canEdit, item }: { canEdit: boolean; item: ManagedItem }) {
       <td className="px-3 py-2">
         <select
           className={control}
-          disabled={!canEdit}
+          disabled={!editing}
           onChange={(event) =>
             setCommercialStatus(
               event.target.value as (typeof itemCommercialStatuses)[number],
@@ -285,7 +390,7 @@ function StatusRow({ canEdit, item }: { canEdit: boolean; item: ManagedItem }) {
       <td className="px-3 py-2">
         <select
           className={control}
-          disabled={!canEdit}
+          disabled={!editing}
           onChange={(event) =>
             setLogisticsStatus(
               event.target.value as (typeof itemLogisticsStatuses)[number],
@@ -305,10 +410,22 @@ function StatusRow({ canEdit, item }: { canEdit: boolean; item: ManagedItem }) {
       </td>
       {canEdit ? (
         <td className="px-3 py-2">
-          <button
-            className={saveButton}
-            disabled={pending}
-            onClick={() => {
+          <InlineEditActions
+            editing={editing}
+            feedback={feedback}
+            onCancel={() => {
+              setCommercialStatus(saved.commercialStatus);
+              setLogisticsStatus(saved.logisticsStatus);
+              setFeedback("");
+              setEditing(false);
+            }}
+            onEdit={() => {
+              setCommercialStatus(saved.commercialStatus);
+              setLogisticsStatus(saved.logisticsStatus);
+              setFeedback("");
+              setEditing(true);
+            }}
+            onSave={() => {
               const data = new FormData();
               data.set("id", item.id);
               data.set("commercialStatus", commercialStatus);
@@ -316,13 +433,14 @@ function StatusRow({ canEdit, item }: { canEdit: boolean; item: ManagedItem }) {
               startTransition(async () => {
                 const result = await updateItemStatusInlineAction(data);
                 setFeedback(result.message);
+                if (result.status === "success") {
+                  setSaved({ commercialStatus, logisticsStatus });
+                  setEditing(false);
+                }
               });
             }}
-            type="button"
-          >
-            {pending ? "Saving…" : "Save"}
-          </button>
-          {feedback ? <span className="ml-2 text-xs">{feedback}</span> : null}
+            pending={pending}
+          />
         </td>
       ) : null}
     </tr>
@@ -338,20 +456,33 @@ function TrackingRow({
   item: ManagedItem;
   options: Options;
 }) {
-  const [draft, setDraft] = useState({
-    deliveredResidenceDate: item.deliveredResidenceDate ?? "",
-    estimatedFabricatorDate: item.estimatedFabricatorDate ?? "",
-    estimatedResidenceDate: item.estimatedResidenceDate ?? "",
-    estimatedWarehouseDate: item.estimatedWarehouseDate ?? "",
+  const initialDraft = () => ({
+    deliveredResidenceDate: dateOnlyToEuropeanInput(
+      item.deliveredResidenceDate,
+    ),
+    estimatedFabricatorDate: dateOnlyToEuropeanInput(
+      item.estimatedFabricatorDate,
+    ),
+    estimatedResidenceDate: dateOnlyToEuropeanInput(
+      item.estimatedResidenceDate,
+    ),
+    estimatedWarehouseDate: dateOnlyToEuropeanInput(
+      item.estimatedWarehouseDate,
+    ),
     expectedWarehouseId: item.expectedWarehouseId ?? "",
     fabricatorId: item.fabricatorId ?? "",
-    inTransitDate: item.inTransitDate ?? "",
-    installedDate: item.installedDate ?? "",
+    inTransitDate: dateOnlyToEuropeanInput(item.inTransitDate),
+    installedDate: dateOnlyToEuropeanInput(item.installedDate),
     logisticsStatus: item.logisticsStatus,
-    receivedFabricatorDate: item.receivedFabricatorDate ?? "",
-    receivedWarehouseDate: item.receivedWarehouseDate ?? "",
+    receivedFabricatorDate: dateOnlyToEuropeanInput(
+      item.receivedFabricatorDate,
+    ),
+    receivedWarehouseDate: dateOnlyToEuropeanInput(item.receivedWarehouseDate),
     receivedWarehouseId: item.receivedWarehouseId ?? "",
   });
+  const [saved, setSaved] = useState(initialDraft);
+  const [draft, setDraft] = useState(initialDraft);
+  const [editing, setEditing] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
   const set = (field: keyof typeof draft, value: string) =>
@@ -365,7 +496,7 @@ function TrackingRow({
       <td className="p-2">
         <select
           className={control}
-          disabled={!canEdit}
+          disabled={!editing}
           onChange={(event) => set("logisticsStatus", event.target.value)}
           value={draft.logisticsStatus}
         >
@@ -379,7 +510,7 @@ function TrackingRow({
       <td className="p-2">
         <select
           className={control}
-          disabled={!canEdit}
+          disabled={!editing}
           onChange={(event) => set("fabricatorId", event.target.value)}
           value={draft.fabricatorId}
         >
@@ -394,7 +525,7 @@ function TrackingRow({
       <td className="p-2">
         <select
           className={control}
-          disabled={!canEdit}
+          disabled={!editing}
           onChange={(event) => set("expectedWarehouseId", event.target.value)}
           value={draft.expectedWarehouseId}
         >
@@ -415,11 +546,11 @@ function TrackingRow({
         ] as const
       ).map((field) => (
         <td className="p-2" key={field}>
-          <input
+          <InlineDateInput
+            ariaLabel={`${field} for ${item.itemReference ?? item.name}`}
             className={control}
-            disabled={!canEdit}
-            onChange={(event) => set(field, event.target.value)}
-            type="date"
+            disabled={!editing}
+            onChange={(value) => set(field, value)}
             value={draft[field]}
           />
         </td>
@@ -428,39 +559,63 @@ function TrackingRow({
         {(
           ["inTransitDate", "deliveredResidenceDate", "installedDate"] as const
         ).map((field) => (
-          <input
-            aria-label={`${field} for ${item.itemReference ?? item.name}`}
+          <InlineDateInput
+            ariaLabel={`${field} for ${item.itemReference ?? item.name}`}
             className={`${control} mb-1 block`}
-            disabled={!canEdit}
+            disabled={!editing}
             key={field}
-            onChange={(event) => set(field, event.target.value)}
-            type="date"
+            onChange={(value) => set(field, value)}
             value={draft[field]}
           />
         ))}
       </td>
       {canEdit ? (
         <td className="p-2">
-          <button
-            className={saveButton}
-            disabled={pending}
-            onClick={() => {
+          <InlineEditActions
+            editing={editing}
+            feedback={feedback}
+            onCancel={() => {
+              setDraft(saved);
+              setFeedback("");
+              setEditing(false);
+            }}
+            onEdit={() => {
+              setDraft(saved);
+              setFeedback("");
+              setEditing(true);
+            }}
+            onSave={() => {
               const data = new FormData();
+              const dateFields = new Set([
+                "deliveredResidenceDate",
+                "estimatedFabricatorDate",
+                "estimatedResidenceDate",
+                "estimatedWarehouseDate",
+                "inTransitDate",
+                "installedDate",
+                "receivedFabricatorDate",
+                "receivedWarehouseDate",
+              ]);
               Object.entries({ ...draft, id: item.id }).forEach(
-                ([key, value]) => data.set(key, value),
+                ([key, value]) => {
+                  const serverValue =
+                    dateFields.has(key) && value.trim()
+                      ? (europeanInputToDateOnly(value) ?? value)
+                      : value;
+                  data.set(key, serverValue);
+                },
               );
               startTransition(async () => {
                 const result = await updateItemTrackingInlineAction(data);
                 setFeedback(result.message);
+                if (result.status === "success") {
+                  setSaved(draft);
+                  setEditing(false);
+                }
               });
             }}
-            type="button"
-          >
-            {pending ? "Saving…" : "Save"}
-          </button>
-          {feedback ? (
-            <span className="mt-1 block text-xs">{feedback}</span>
-          ) : null}
+            pending={pending}
+          />
         </td>
       ) : null}
     </tr>
@@ -470,12 +625,60 @@ function TrackingRow({
 function GeneralRow({
   canEdit,
   item,
+  options,
   selection,
 }: {
   canEdit: boolean;
   item: ManagedItem;
+  options: Options;
   selection: ReturnType<typeof useBulkSelection>;
 }) {
+  const initial = () => ({
+    buildingId: item.buildingId ?? "",
+    category: item.category ?? "",
+    itemReference: item.itemReference ?? "",
+    name: item.name,
+    quantity: item.quantity,
+    roomId: item.roomId ?? "",
+    supplierId: item.supplierId ?? "",
+    unitOfMeasure: item.unitOfMeasure,
+  });
+  const [saved, setSaved] = useState(initial);
+  const [draft, setDraft] = useState(initial);
+  const [editing, setEditing] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [pending, startTransition] = useTransition();
+  const project = options.projects.find(
+    (candidate) => candidate.id === item.projectId,
+  );
+  const building = project?.buildings.find(
+    (candidate) => candidate.id === draft.buildingId,
+  );
+  const save = () => {
+    const data = new FormData();
+    Object.entries({ ...draft, id: item.id }).forEach(([key, value]) =>
+      data.set(key, value),
+    );
+    startTransition(async () => {
+      const result = await updateItemGeneralInlineAction(data);
+      setFeedback(result.message);
+      if (result.status === "success" && result.values) {
+        const next = {
+          buildingId: result.values.buildingId ?? "",
+          category: result.values.category ?? "",
+          itemReference: result.values.itemReference ?? "",
+          name: result.values.name,
+          quantity: result.values.quantity,
+          roomId: result.values.roomId ?? "",
+          supplierId: result.values.supplierId ?? "",
+          unitOfMeasure: result.values.unitOfMeasure,
+        };
+        setSaved(next);
+        setDraft(next);
+        setEditing(false);
+      }
+    });
+  };
   return (
     <tr className="hover:bg-muted/25">
       {canEdit ? (
@@ -485,16 +688,169 @@ function GeneralRow({
           onChange={() => selection.toggle(item.id)}
         />
       ) : null}
-      <ItemIdentity item={item} />
-      <td className="px-3 py-2">{item.project.name}</td>
-      <td className="px-3 py-2">{item.building?.name ?? "Unallocated"}</td>
-      <td className="px-3 py-2">{item.room?.name ?? "—"}</td>
-      <td className="px-3 py-2">{item.supplier?.displayName ?? "—"}</td>
-      <td className="px-3 py-2 text-right tabular-nums">
-        {formatQuantity(item.quantity)} {item.unitOfMeasure}
+      <td className="max-w-72 px-3 py-2">
+        {editing ? (
+          <div className="grid gap-1">
+            <InlineTextInput
+              ariaLabel={`Item reference for ${saved.name}`}
+              onChange={(value) =>
+                setDraft((current) => ({ ...current, itemReference: value }))
+              }
+              value={draft.itemReference}
+            />
+            <InlineTextInput
+              ariaLabel={`Description for ${saved.itemReference || saved.name}`}
+              className="w-64"
+              onChange={(value) =>
+                setDraft((current) => ({ ...current, name: value }))
+              }
+              value={draft.name}
+            />
+          </div>
+        ) : (
+          <>
+            <Link
+              className="font-medium hover:underline"
+              href={`/items/${item.id}`}
+            >
+              {saved.itemReference || "—"}
+            </Link>
+            <span className="text-muted-foreground block truncate">
+              {saved.name}
+            </span>
+          </>
+        )}
       </td>
-      <td className="px-3 py-2">{item.category ?? "—"}</td>
+      <td className="px-3 py-2">{item.project.name}</td>
+      <td className="px-3 py-2">
+        {editing ? (
+          <InlineSelect
+            ariaLabel={`Building for ${saved.itemReference || saved.name}`}
+            onChange={(value) =>
+              setDraft((current) => ({
+                ...current,
+                buildingId: value,
+                roomId: "",
+              }))
+            }
+            value={draft.buildingId}
+          >
+            <option value="">Unallocated</option>
+            {project?.buildings.map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>
+                {candidate.name}
+              </option>
+            ))}
+          </InlineSelect>
+        ) : (
+          (project?.buildings.find(
+            (candidate) => candidate.id === saved.buildingId,
+          )?.name ?? "Unallocated")
+        )}
+      </td>
+      <td className="px-3 py-2">
+        {editing ? (
+          <InlineSelect
+            ariaLabel={`Room for ${saved.itemReference || saved.name}`}
+            disabled={!draft.buildingId}
+            onChange={(value) =>
+              setDraft((current) => ({ ...current, roomId: value }))
+            }
+            value={draft.roomId}
+          >
+            <option value="">—</option>
+            {building?.rooms.map((room) => (
+              <option key={room.id} value={room.id}>
+                {room.name}
+              </option>
+            ))}
+          </InlineSelect>
+        ) : (
+          (project?.buildings
+            .flatMap((candidate) => candidate.rooms)
+            .find((room) => room.id === saved.roomId)?.name ?? "—")
+        )}
+      </td>
+      <td className="px-3 py-2">
+        {editing ? (
+          <InlineSelect
+            ariaLabel={`Supplier for ${saved.itemReference || saved.name}`}
+            onChange={(value) =>
+              setDraft((current) => ({ ...current, supplierId: value }))
+            }
+            value={draft.supplierId}
+          >
+            <option value="">—</option>
+            {options.suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.displayName}
+              </option>
+            ))}
+          </InlineSelect>
+        ) : (
+          (options.suppliers.find(
+            (supplier) => supplier.id === saved.supplierId,
+          )?.displayName ?? "—")
+        )}
+      </td>
+      <td className="px-3 py-2 text-right tabular-nums">
+        {editing ? (
+          <span className="flex gap-1">
+            <InlineMoneyInput
+              ariaLabel={`Quantity for ${saved.itemReference || saved.name}`}
+              className="w-20"
+              onChange={(value) =>
+                setDraft((current) => ({ ...current, quantity: value }))
+              }
+              value={draft.quantity}
+            />
+            <InlineTextInput
+              ariaLabel={`Unit for ${saved.itemReference || saved.name}`}
+              className="w-16"
+              onChange={(value) =>
+                setDraft((current) => ({ ...current, unitOfMeasure: value }))
+              }
+              value={draft.unitOfMeasure}
+            />
+          </span>
+        ) : (
+          `${formatQuantity(saved.quantity)} ${saved.unitOfMeasure}`
+        )}
+      </td>
+      <td className="px-3 py-2">
+        {editing ? (
+          <InlineTextInput
+            ariaLabel={`Category for ${saved.itemReference || saved.name}`}
+            onChange={(value) =>
+              setDraft((current) => ({ ...current, category: value }))
+            }
+            value={draft.category}
+          />
+        ) : (
+          saved.category || "—"
+        )}
+      </td>
       <td className="px-3 py-2">{item.updatedAt.toISOString().slice(0, 10)}</td>
+      {canEdit ? (
+        <td className="px-3 py-2">
+          <InlineEditActions
+            editing={editing}
+            feedback={feedback}
+            onCancel={() => {
+              setDraft(saved);
+              setFeedback("");
+              setEditing(false);
+            }}
+            onEdit={() => {
+              setDraft(saved);
+              setFeedback("");
+              setEditing(true);
+            }}
+            onSave={save}
+            pending={pending}
+          />
+        </td>
+      ) : null}
     </tr>
   );
 }
@@ -524,10 +880,7 @@ export function ItemTable({
           value,
           value.replaceAll("_", " "),
         ]);
-  const headers = [
-    ...itemViewColumns[view],
-    ...(canEdit && view !== "general" ? ["Save"] : []),
-  ];
+  const headers = [...itemViewColumns[view], ...(canEdit ? ["Edit"] : [])];
   return (
     <section className="bg-card overflow-hidden rounded-lg border">
       {canEdit && view === "general" ? (
@@ -622,6 +975,7 @@ export function ItemTable({
                   canEdit={canEdit}
                   item={item}
                   key={item.id}
+                  options={options}
                   selection={selection}
                 />
               ),

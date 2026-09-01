@@ -12,6 +12,7 @@ import {
 } from "@/domain/payments/form-data";
 import {
   createInstallmentSchema,
+  inlineInstallmentSchema,
   installmentIdSchema,
   presetSchema,
   settlementIdSchema,
@@ -30,6 +31,7 @@ import {
   removeSettlement,
   removeUnpaidInstallment,
   updateInstallment,
+  updateInstallmentInline,
 } from "@/lib/payments/payments";
 
 function refreshPaymentViews(): void {
@@ -91,6 +93,28 @@ export async function updateInstallmentAction(
     return { message: "Installment updated.", status: "success" };
   } catch (error) {
     return errorState(error);
+  }
+}
+
+export async function updateInstallmentInlineAction(formData: FormData) {
+  const actor = await requireMasterDataEditor();
+  const input = inlineInstallmentSchema.safeParse(Object.fromEntries(formData));
+  if (!input.success)
+    return {
+      message: input.error.issues[0]?.message ?? "Check the installment.",
+      status: "error" as const,
+    };
+  try {
+    const values = await updateInstallmentInline(actor.id, input.data);
+    refreshPaymentViews();
+    return {
+      message: "Installment values saved.",
+      status: "success" as const,
+      values,
+    };
+  } catch (error) {
+    const state = errorState(error);
+    return { ...state, status: "error" as const };
   }
 }
 

@@ -4,6 +4,8 @@ import {
   createItemInputSchema,
   createLocationInputSchema,
   createRoomInputSchema,
+  inlineItemFinancialInputSchema,
+  inlineItemGeneralInputSchema,
 } from "@/domain/items/validation";
 
 const base = {
@@ -62,5 +64,32 @@ describe("Item, Room, and Location validation", () => {
         vatTreatment: "DOMESTIC",
       }).success,
     ).toBe(true);
+  });
+
+  it("validates inline hierarchy and VAT drafts before persistence", () => {
+    expect(
+      inlineItemGeneralInputSchema.safeParse({
+        id: "c56dbf34-60ef-4d12-8270-b029eba51b3e",
+        name: "Chair",
+        quantity: "1",
+        roomId: "b3b6cd92-24c5-4661-81d1-3dc1bd2eed3f",
+        unitOfMeasure: "EA",
+      }).success,
+    ).toBe(false);
+    expect(
+      inlineItemFinancialInputSchema.safeParse({
+        basis: "UNIT_PURCHASE",
+        budgetTotal: "120",
+        budgetUnit: "120",
+        id: "c56dbf34-60ef-4d12-8270-b029eba51b3e",
+        markupRate: "20",
+        quantity: "1",
+        totalPurchase: "100",
+        unitPurchase: "100",
+        vatRate: "20",
+        vatRecoverability: "RECOVERABLE",
+        vatTreatment: "OUT_OF_SCOPE",
+      }).success,
+    ).toBe(false);
   });
 });

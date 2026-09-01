@@ -104,6 +104,13 @@ export const createInstallmentSchema =
 export const updateInstallmentSchema = z
   .object({ id: z.uuid("Invalid installment."), ...installmentFields })
   .superRefine(validateInstallment);
+export const inlineInstallmentSchema = z.object({
+  dueDate: dateOnly,
+  id: z.uuid("Invalid installment."),
+  label: z.string().trim().min(1).max(200),
+  notes: optionalText(4000),
+  scheduledAmount: money("Scheduled amount", false),
+});
 export const settlementSchema = z.object({
   amount: money("Settlement amount", false),
   fxRate: optionalFxRate,
@@ -130,5 +137,6 @@ export const presetSchema = z.object({
   ),
 });
 export type CreateInstallmentInput = z.infer<typeof createInstallmentSchema>;
+export type InlineInstallmentInput = z.infer<typeof inlineInstallmentSchema>;
 export type UpdateInstallmentInput = z.infer<typeof updateInstallmentSchema>;
 export type SettlementInput = z.infer<typeof settlementSchema>;

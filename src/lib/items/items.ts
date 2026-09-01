@@ -21,8 +21,11 @@ import type {
   CreateLocationInput,
   CreateRoomInput,
   InlineItemFinancialInput,
+  InlineItemGeneralInput,
   InlineItemStatusInput,
   InlineItemTrackingInput,
+  UpdateLocationInlineInput,
+  UpdateRoomInlineInput,
   UpdateItemInput,
 } from "@/domain/items/validation";
 import { paginationSkip, type PageInput } from "@/domain/listing/validation";
@@ -545,6 +548,16 @@ export async function updateItemFinancialInline(
     });
     if (!current) throw new ItemValidationError("This Item no longer exists.");
     const draft = reconcileItemFinancialDraft(input);
+    const vat = calculateItemFinancials({
+      pricingMode: "SELLING_PRICE",
+      quantity: draft.quantity,
+      totalPurchasePriceHt: draft.totalPurchase,
+      totalSellingPriceHt: draft.budgetTotal,
+      unitPurchasePriceHt: draft.unitPurchase,
+      unitSellingPriceHt: draft.budgetUnit,
+      vatAmount: null,
+      vatRate: input.vatRate,
+    });
     await transaction.item.update({
       where: { id: input.id },
       data: {
@@ -556,6 +569,10 @@ export async function updateItemFinancialInline(
         totalSellingPriceHt: draft.budgetTotal,
         unitPurchasePriceHt: draft.unitPurchase,
         unitSellingPriceHt: draft.budgetUnit,
+        vatAmount: vat.vatAmount,
+        vatRate: input.vatRate,
+        vatRecoverability: input.vatRecoverability,
+        vatTreatment: input.vatTreatment,
         updatedById: actorId,
       },
     });
@@ -565,11 +582,131 @@ export async function updateItemFinancialInline(
       entityReference: current.itemReference ?? current.name,
       entityType: "ITEM",
       metadata: {
-        fields: ["quantity", "purchase", "budget", "varianceComment"],
+        fields: ["quantity", "purchase", "budget", "vat", "varianceComment"],
       },
       summary: "Updated Item financial and budget-comparison values.",
     });
-    return draft;
+    return {
+      ...draft,
+      vatAmount: vat.vatAmount,
+      vatRate: input.vatRate,
+      vatRecoverability: input.vatRecoverability,
+      vatTreatment: input.vatTreatment,
+    };
+  });
+}
+
+export async function updateItemGeneralInline(
+  actorId: string,
+  input: InlineItemGeneralInput,
+) {
+  return getDatabase().$transaction(async (transaction) => {
+    const current = await transaction.item.findUnique({
+      where: { id: input.id },
+      select: {
+        itemReference: true,
+        name: true,
+        projectId: true,
+        totalPurchasePriceHt: true,
+        totalSellingPriceHt: true,
+        unitPurchasePriceHt: true,
+        unitSellingPriceHt: true,
+      },
+    });
+    if (!current) throw new ItemValidationError("This Item no longer exists.");
+    const [building, room, supplier] = await Promise.all([
+      input.buildingId
+        ? transaction.building.findFirst({
+            where: {
+              id: input.buildingId,
+              isActive: true,
+              projectId: current.projectId,
+            },
+            select: { id: true },
+          })
+        : null,
+      input.roomId && input.buildingId
+        ? transaction.room.findFirst({
+            where: {
+              buildingId: input.buildingId,
+              id: input.roomId,
+              isActive: true,
+            },
+            select: { id: true },
+          })
+        : null,
+      input.supplierId
+        ? transaction.supplier.findFirst({
+            where: { id: input.supplierId, isActive: true },
+            select: { id: true },
+          })
+        : null,
+    ]);
+    if (input.buildingId && !building)
+      throw new ItemValidationError(
+        "The Building must belong to this Project and remain active.",
+      );
+    if (input.roomId && !room)
+      throw new ItemValidationError(
+        "The Room must belong to the selected Building and remain active.",
+      );
+    if (input.supplierId && !supplier)
+      throw new ItemValidationError("Choose an active Supplier.");
+    const financial = reconcileItemFinancialDraft({
+      basis: "QUANTITY",
+      budgetTotal: current.totalSellingPriceHt?.toString() ?? null,
+      budgetUnit: current.unitSellingPriceHt?.toString() ?? null,
+      markupRate: null,
+      quantity: input.quantity,
+      totalPurchase: current.totalPurchasePriceHt?.toString() ?? null,
+      unitPurchase: current.unitPurchasePriceHt?.toString() ?? null,
+    });
+    const item = await transaction.item.update({
+      where: { id: input.id },
+      data: {
+        buildingId: input.buildingId ?? null,
+        category: input.category ?? null,
+        itemReference: input.itemReference ?? null,
+        name: input.name,
+        quantity: financial.quantity,
+        roomId: input.roomId ?? null,
+        supplierId: input.supplierId ?? null,
+        totalPurchasePriceHt: financial.totalPurchase,
+        totalSellingPriceHt: financial.budgetTotal,
+        unitOfMeasure: input.unitOfMeasure,
+        updatedById: actorId,
+      },
+      select: {
+        buildingId: true,
+        category: true,
+        itemReference: true,
+        name: true,
+        quantity: true,
+        roomId: true,
+        supplierId: true,
+        unitOfMeasure: true,
+      },
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "UPDATED",
+      entityId: input.id,
+      entityReference: item.itemReference ?? item.name,
+      entityType: "ITEM",
+      metadata: {
+        fields: [
+          "itemReference",
+          "name",
+          "supplierId",
+          "buildingId",
+          "roomId",
+          "quantity",
+          "unitOfMeasure",
+          "category",
+        ],
+      },
+      summary: "Updated routine Item fields from the Items table.",
+    });
+    return { ...item, quantity: item.quantity.toString() };
   });
 }
 
@@ -823,6 +960,92 @@ export async function createLogisticsLocation(
     });
     return location;
   });
+}
+
+export async function updateRoomInline(
+  actorId: string,
+  input: UpdateRoomInlineInput,
+) {
+  try {
+    return await getDatabase().$transaction(async (transaction) => {
+      const room = await transaction.room.update({
+        where: { id: input.id },
+        data: {
+          code: input.code ?? null,
+          isActive: input.isActive,
+          name: input.name,
+          updatedById: actorId,
+        },
+        select: { code: true, id: true, isActive: true, name: true },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: room.id,
+        entityReference: room.name,
+        entityType: "ROOM",
+        metadata: { fields: ["code", "name", "isActive"] },
+        summary: "Updated the Room from the Project table.",
+      });
+      return room;
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    )
+      throw new ItemValidationError("This Room no longer exists.");
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    )
+      throw new ItemValidationError(
+        "A Room in this Building already uses that name or code.",
+      );
+    throw error;
+  }
+}
+
+export async function updateLocationInline(
+  actorId: string,
+  input: UpdateLocationInlineInput,
+) {
+  try {
+    return await getDatabase().$transaction(async (transaction) => {
+      const location = await transaction.logisticsLocation.update({
+        where: { id: input.id },
+        data: {
+          countryCode: input.countryCode ?? null,
+          isActive: input.isActive,
+          name: input.name,
+          type: input.type,
+          updatedById: actorId,
+        },
+        select: {
+          countryCode: true,
+          id: true,
+          isActive: true,
+          name: true,
+          type: true,
+        },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: location.id,
+        entityReference: location.name,
+        entityType: "LOGISTICS_LOCATION",
+        metadata: { fields: ["name", "type", "countryCode", "isActive"] },
+        summary: "Updated the logistics Location from Settings.",
+      });
+      return location;
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    )
+      throw new ItemValidationError("This Location no longer exists.");
+    throw error;
+  }
 }
 
 export async function listLogisticsLocations() {

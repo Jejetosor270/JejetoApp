@@ -2,8 +2,9 @@
 
 import { Plus } from "lucide-react";
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState, useTransition } from "react";
 
+import { updateProjectAction } from "@/app/(app)/projects/[projectId]/actions";
 import {
   createProjectAction,
   deleteSelectedProjectsAction,
@@ -14,6 +15,12 @@ import {
   SelectionHeader,
   useBulkSelection,
 } from "@/components/bulk-actions/bulk-selection";
+import {
+  InlineEditActions,
+  InlinePercentInput,
+  InlineSelect,
+  InlineTextInput,
+} from "@/components/inline-editing/inline-edit";
 import { initialMasterDataActionState } from "@/components/master-data/action-state";
 import {
   ActionFeedback,
@@ -22,6 +29,7 @@ import {
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { countries, countryLabel } from "@/config/countries";
+import { rateToPercentInput } from "@/domain/procurement/presentation";
 
 interface ClientOption {
   displayName: string;
@@ -38,13 +46,19 @@ interface ManagerOption {
 interface ProjectView {
   _count: { buildings: number; orders: number };
   client: ClientOption;
+  clientId: string;
   code: string;
   countryCode: string | null;
   expectedCompletionDate: string | null;
+  freightEstimateNotes: string | null;
+  freightEstimateRate: string | null;
   id: string;
   name: string;
+  notes: string | null;
   projectManager: ManagerOption | null;
+  projectManagerId: string | null;
   reportingCurrencyCode: string;
+  startDate: string | null;
   status: string;
 }
 
@@ -176,6 +190,174 @@ function CreateProjectForm({
   );
 }
 
+function ProjectInlineRow({
+  canEdit,
+  isSelected,
+  onSelect,
+  project,
+  statuses,
+}: {
+  canEdit: boolean;
+  isSelected: boolean;
+  onSelect: () => void;
+  project: ProjectView;
+  statuses: string[];
+}) {
+  const initial = () => ({
+    code: project.code,
+    countryCode: project.countryCode ?? "",
+    freightEstimateRate: rateToPercentInput(project.freightEstimateRate),
+    name: project.name,
+    status: project.status,
+  });
+  const [saved, setSaved] = useState(initial);
+  const [draft, setDraft] = useState(initial);
+  const [editing, setEditing] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [pending, startTransition] = useTransition();
+  const set = (field: keyof typeof draft, value: string) =>
+    setDraft((current) => ({ ...current, [field]: value }));
+  const save = () => {
+    const data = new FormData();
+    Object.entries({
+      clientId: project.clientId,
+      code: draft.code,
+      countryCode: draft.countryCode,
+      expectedCompletionDate: project.expectedCompletionDate ?? "",
+      freightEstimateNotes: project.freightEstimateNotes ?? "",
+      freightEstimateRate: draft.freightEstimateRate,
+      id: project.id,
+      name: draft.name,
+      notes: project.notes ?? "",
+      projectManagerId: project.projectManagerId ?? "",
+      reportingCurrencyCode: project.reportingCurrencyCode,
+      startDate: project.startDate ?? "",
+      status: draft.status,
+    }).forEach(([key, value]) => data.set(key, value));
+    startTransition(async () => {
+      const result = await updateProjectAction(
+        initialMasterDataActionState,
+        data,
+      );
+      setFeedback(result.message ?? "");
+      if (result.status === "success") {
+        setSaved(draft);
+        setEditing(false);
+      }
+    });
+  };
+  return (
+    <tr className="hover:bg-muted/25 align-top">
+      {canEdit ? (
+        <SelectionCell
+          checked={isSelected}
+          label={`Project ${saved.name}`}
+          onChange={onSelect}
+        />
+      ) : null}
+      <td className="px-4 py-3 font-medium">
+        {editing ? (
+          <InlineTextInput
+            ariaLabel="Project name"
+            onChange={(value) => set("name", value)}
+            value={draft.name}
+          />
+        ) : (
+          <Link
+            className="hover:text-primary underline-offset-4 hover:underline"
+            href={`/projects/${project.id}`}
+          >
+            {saved.name}
+          </Link>
+        )}
+      </td>
+      <td className="px-4 py-3 font-mono text-xs">
+        {editing ? (
+          <InlineTextInput
+            ariaLabel="Project code"
+            onChange={(value) => set("code", value)}
+            value={draft.code}
+          />
+        ) : (
+          saved.code
+        )}
+      </td>
+      <td className="px-4 py-3">{project.client.displayName}</td>
+      <td className="px-4 py-3">
+        {editing ? (
+          <InlineSelect
+            ariaLabel="Project country"
+            onChange={(value) => set("countryCode", value)}
+            value={draft.countryCode}
+          >
+            <option value="">Not specified</option>
+            {countries.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.label}
+              </option>
+            ))}
+          </InlineSelect>
+        ) : (
+          countryLabel(saved.countryCode)
+        )}
+      </td>
+      <td className="px-4 py-3 font-mono">{project.reportingCurrencyCode}</td>
+      <td className="px-4 py-3">{project.projectManager?.name ?? "—"}</td>
+      <td className="px-4 py-3">
+        {editing ? (
+          <InlineSelect
+            ariaLabel="Project status"
+            onChange={(value) => set("status", value)}
+            value={draft.status}
+          >
+            {statuses.map((status) => (
+              <option key={status} value={status}>
+                {statusLabels[status] ?? status}
+              </option>
+            ))}
+          </InlineSelect>
+        ) : (
+          (statusLabels[saved.status] ?? saved.status)
+        )}
+      </td>
+      <td className="px-4 py-3">{dateLabel(project.expectedCompletionDate)}</td>
+      <td className="px-4 py-3">
+        {editing ? (
+          <InlinePercentInput
+            ariaLabel="Project freight estimate percentage"
+            onChange={(value) => set("freightEstimateRate", value)}
+            value={draft.freightEstimateRate}
+          />
+        ) : saved.freightEstimateRate ? (
+          `${saved.freightEstimateRate}%`
+        ) : (
+          "—"
+        )}
+      </td>
+      {canEdit ? (
+        <td className="px-4 py-3">
+          <InlineEditActions
+            editing={editing}
+            feedback={feedback}
+            onCancel={() => {
+              setDraft(saved);
+              setFeedback("");
+              setEditing(false);
+            }}
+            onEdit={() => {
+              setDraft(saved);
+              setFeedback("");
+              setEditing(true);
+            }}
+            onSave={save}
+            pending={pending}
+          />
+        </td>
+      ) : null}
+    </tr>
+  );
+}
+
 export function ProjectManagement({
   canEdit,
   clients,
@@ -243,46 +425,22 @@ export function ProjectManagement({
                 <th className="px-4 py-3">Project manager</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Expected completion</th>
+                <th className="px-4 py-3">Freight estimate</th>
+                {canEdit ? (
+                  <th className="px-4 py-3 text-right">Edit</th>
+                ) : null}
               </tr>
             </thead>
             <tbody className="divide-y">
               {projects.map((project) => (
-                <tr className="hover:bg-muted/25" key={project.id}>
-                  {canEdit ? (
-                    <SelectionCell
-                      checked={selection.isSelected(project.id)}
-                      label={`Project ${project.name}`}
-                      onChange={() => selection.toggle(project.id)}
-                    />
-                  ) : null}
-                  <td className="px-4 py-3 font-medium">
-                    <Link
-                      className="hover:text-primary underline-offset-4 hover:underline"
-                      href={`/projects/${project.id}`}
-                    >
-                      {project.name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs">
-                    {project.code}
-                  </td>
-                  <td className="px-4 py-3">{project.client.displayName}</td>
-                  <td className="px-4 py-3">
-                    {countryLabel(project.countryCode)}
-                  </td>
-                  <td className="px-4 py-3 font-mono">
-                    {project.reportingCurrencyCode}
-                  </td>
-                  <td className="px-4 py-3">
-                    {project.projectManager?.name ?? "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    {statusLabels[project.status] ?? project.status}
-                  </td>
-                  <td className="px-4 py-3">
-                    {dateLabel(project.expectedCompletionDate)}
-                  </td>
-                </tr>
+                <ProjectInlineRow
+                  canEdit={canEdit}
+                  isSelected={selection.isSelected(project.id)}
+                  key={project.id}
+                  onSelect={() => selection.toggle(project.id)}
+                  project={project}
+                  statuses={statuses}
+                />
               ))}
             </tbody>
           </table>

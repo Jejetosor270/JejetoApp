@@ -35,6 +35,7 @@ import {
   recordSettlement,
   removeUnpaidInstallment,
   updateInstallment,
+  updateInstallmentInline,
 } from "@/lib/payments/payments";
 
 const order = {
@@ -114,6 +115,24 @@ describe("payment persistence", () => {
       }),
       where: { id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a" },
     });
+  });
+
+  it("rejects an inline amount below recorded settlements", async () => {
+    database.paymentInstallment.findUnique.mockResolvedValue({
+      basis: "FIXED_AMOUNT",
+      order: { orderNumber: "PO-001" },
+      scheduledAmount: "30000",
+      settlements: [{ amount: "20000" }],
+    });
+    await expect(
+      updateInstallmentInline("actor-1", {
+        dueDate: "2026-09-20",
+        id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+        label: "Deposit",
+        scheduledAmount: "19999.9999",
+      }),
+    ).rejects.toThrow("below the amount already paid");
+    expect(transaction.paymentInstallment.update).not.toHaveBeenCalled();
   });
 
   it("cancels installments and hard-deletes only those without settlements", async () => {

@@ -273,5 +273,13 @@ export const createOrderInputSchema = baseOrderSchema.superRefine(validOrder);
 export const updateOrderInputSchema = z
   .object({ id: z.uuid("Invalid order."), ...orderFields })
   .superRefine(validOrder);
+export const inlineOrderInputSchema = z.object({
+  expectedDeliveryDate: optionalDateOnly,
+  expectedReadyDate: optionalDateOnly,
+  id: z.uuid("Invalid order."),
+  orderNumber: z.string().trim().min(1).max(50),
+  status: z.enum(ProcurementOrderStatus),
+});
 export type CreateOrderInput = z.infer<typeof createOrderInputSchema>;
+export type InlineOrderInput = z.infer<typeof inlineOrderInputSchema>;
 export type UpdateOrderInput = z.infer<typeof updateOrderInputSchema>;

@@ -2,9 +2,12 @@
 
 import Decimal from "decimal.js";
 import { Pencil, Plus } from "lucide-react";
-import { type ReactNode, useActionState, useState } from "react";
+import { type ReactNode, useActionState, useState, useTransition } from "react";
 
-import { createRoomAction } from "@/app/(app)/items/actions";
+import {
+  createRoomAction,
+  updateRoomInlineAction,
+} from "@/app/(app)/items/actions";
 import {
   createBuildingAction,
   updateBuildingAction,
@@ -19,6 +22,11 @@ import {
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
+import {
+  InlineCheckbox,
+  InlineEditActions,
+  InlineTextInput,
+} from "@/components/inline-editing/inline-edit";
 import { countries } from "@/config/countries";
 
 interface Option {
@@ -416,6 +424,103 @@ function RoomForm({
   );
 }
 
+function RoomInlineEditor({
+  canEdit,
+  room,
+}: {
+  canEdit: boolean;
+  room: BuildingView["rooms"][number];
+}) {
+  const initial = () => ({
+    code: room.code ?? "",
+    isActive: room.isActive,
+    name: room.name,
+  });
+  const [saved, setSaved] = useState(initial);
+  const [draft, setDraft] = useState(initial);
+  const [editing, setEditing] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [pending, startTransition] = useTransition();
+  const save = () => {
+    const data = new FormData();
+    data.set("id", room.id);
+    data.set("code", draft.code);
+    data.set("name", draft.name);
+    if (draft.isActive) data.set("isActive", "on");
+    startTransition(async () => {
+      const result = await updateRoomInlineAction(data);
+      setFeedback(result.message);
+      if (result.status === "success" && result.values) {
+        const next = {
+          code: result.values.code ?? "",
+          isActive: result.values.isActive,
+          name: result.values.name,
+        };
+        setSaved(next);
+        setDraft(next);
+        setEditing(false);
+      }
+    });
+  };
+  return (
+    <div className="flex min-w-80 items-center gap-2 border-b py-1 last:border-0">
+      {editing ? (
+        <>
+          <InlineTextInput
+            ariaLabel="Room code"
+            className="w-20"
+            onChange={(value) =>
+              setDraft((current) => ({ ...current, code: value }))
+            }
+            value={draft.code}
+          />
+          <InlineTextInput
+            ariaLabel="Room name"
+            onChange={(value) =>
+              setDraft((current) => ({ ...current, name: value }))
+            }
+            value={draft.name}
+          />
+          <InlineCheckbox
+            ariaLabel="Room active"
+            checked={draft.isActive}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                isActive: event.target.checked,
+              }))
+            }
+          />
+        </>
+      ) : (
+        <span className="min-w-40">
+          {saved.code ? `${saved.code} · ` : ""}
+          {saved.name}
+          {saved.isActive ? "" : " · Inactive"}
+        </span>
+      )}
+      {canEdit ? (
+        <InlineEditActions
+          editing={editing}
+          feedback={feedback}
+          onCancel={() => {
+            setDraft(saved);
+            setFeedback("");
+            setEditing(false);
+          }}
+          onEdit={() => {
+            setDraft(saved);
+            setFeedback("");
+            setEditing(true);
+          }}
+          onSave={save}
+          pending={pending}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 export function ProjectDetail({
   buildings,
   canEdit,
@@ -548,7 +653,15 @@ export function ProjectDetail({
                     {building.description ?? "—"}
                   </td>
                   <td className="text-muted-foreground px-4 py-3">
-                    {building.rooms.map((room) => room.name).join(", ") || "—"}
+                    {building.rooms.length
+                      ? building.rooms.map((room) => (
+                          <RoomInlineEditor
+                            canEdit={canEdit}
+                            key={room.id}
+                            room={room}
+                          />
+                        ))
+                      : "—"}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge active={building.isActive} />

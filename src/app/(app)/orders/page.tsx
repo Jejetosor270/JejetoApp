@@ -233,6 +233,7 @@ export default async function OrdersPage({
       <OrderTable
         canEdit={canEditMasterData(user.role)}
         orders={result.items}
+        statuses={options.statuses}
       />
       <Pagination
         page={pageInput.page}

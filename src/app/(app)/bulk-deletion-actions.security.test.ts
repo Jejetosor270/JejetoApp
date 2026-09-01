@@ -18,8 +18,14 @@ vi.mock("@/lib/deletion/bulk", () => ({
 }));
 
 import { deleteSelectedClientsAction } from "@/app/(app)/clients/actions";
-import { deleteSelectedOrdersAction } from "@/app/(app)/orders/actions";
-import { deleteSelectedInstallmentsAction } from "@/app/(app)/payments/actions";
+import {
+  deleteSelectedOrdersAction,
+  updateOrderInlineAction,
+} from "@/app/(app)/orders/actions";
+import {
+  deleteSelectedInstallmentsAction,
+  updateInstallmentInlineAction,
+} from "@/app/(app)/payments/actions";
 import { deleteSelectedProjectsAction } from "@/app/(app)/projects/actions";
 import { deleteSelectedSuppliersAction } from "@/app/(app)/suppliers/actions";
 
@@ -41,4 +47,11 @@ describe("bulk deletion action authorization", () => {
       await expect(action(new FormData())).rejects.toThrow("Unauthorized");
     },
   );
+
+  it.each([
+    ["Order inline", updateOrderInlineAction],
+    ["installment inline", updateInstallmentInlineAction],
+  ])("rejects unauthorized %s edits before validation", async (_, action) => {
+    await expect(action(new FormData())).rejects.toThrow("Unauthorized");
+  });
 });

@@ -216,12 +216,14 @@ export default async function PaymentsPage({
       <PaymentInstallmentTable
         canEdit={canEditMasterData(user.role)}
         installments={result.items.map((item) => ({
+          actualDate: item.actualDate,
           clientName: item.clientName,
           currencyCode: item.currencyCode,
           direction: item.direction,
           dueDate: item.dueDate,
           id: item.id,
           label: item.label,
+          notes: item.notes,
           orderId: item.orderId,
           orderNumber: item.orderNumber,
           outstandingAmount: item.outstandingAmount,

@@ -176,7 +176,9 @@ export default async function ProjectsPage({
         projects={result.items.map((project) => ({
           ...project,
           expectedCompletionDate:
-            project.expectedCompletionDate?.toISOString() ?? null,
+            project.expectedCompletionDate?.toISOString().slice(0, 10) ?? null,
+          freightEstimateRate: project.freightEstimateRate?.toString() ?? null,
+          startDate: project.startDate?.toISOString().slice(0, 10) ?? null,
         }))}
         statuses={options.statuses}
       />

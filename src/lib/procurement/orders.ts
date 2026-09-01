@@ -24,6 +24,7 @@ import {
 } from "@/domain/finance/calculations";
 import type {
   CreateOrderInput,
+  InlineOrderInput,
   UpdateOrderInput,
 } from "@/domain/procurement/validation";
 import {
@@ -889,6 +890,69 @@ export async function updateOrder(
     await getDatabase().$transaction((transaction) =>
       updateOrderRecord(transaction, actorId, input, reportingCurrencyCode),
     );
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    )
+      throw new ProcurementNotFoundError();
+    throw error;
+  }
+}
+
+export async function updateOrderInline(
+  actorId: string,
+  input: InlineOrderInput,
+) {
+  try {
+    return await getDatabase().$transaction(async (transaction) => {
+      const order = await transaction.procurementOrder.update({
+        where: { id: input.id },
+        data: {
+          expectedDeliveryDate: input.expectedDeliveryDate
+            ? dateOnlyToDate(input.expectedDeliveryDate)
+            : null,
+          expectedReadyDate: input.expectedReadyDate
+            ? dateOnlyToDate(input.expectedReadyDate)
+            : null,
+          orderNumber: input.orderNumber,
+          status: input.status,
+          updatedById: actorId,
+        },
+        select: {
+          expectedDeliveryDate: true,
+          expectedReadyDate: true,
+          id: true,
+          orderNumber: true,
+          status: true,
+        },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: order.id,
+        entityReference: order.orderNumber,
+        entityType: "ORDER",
+        metadata: {
+          fields: [
+            "orderNumber",
+            "status",
+            "expectedReadyDate",
+            "expectedDeliveryDate",
+          ],
+        },
+        summary:
+          "Updated routine Procurement Order fields from the Orders table.",
+      });
+      return {
+        ...order,
+        expectedDeliveryDate: order.expectedDeliveryDate
+          ? dateToDateOnly(order.expectedDeliveryDate)
+          : null,
+        expectedReadyDate: order.expectedReadyDate
+          ? dateToDateOnly(order.expectedReadyDate)
+          : null,
+      };
+    });
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&

@@ -12,9 +12,12 @@ import {
   createLocationInputSchema,
   createRoomInputSchema,
   inlineItemFinancialInputSchema,
+  inlineItemGeneralInputSchema,
   inlineItemStatusInputSchema,
   inlineItemTrackingInputSchema,
   updateItemInputSchema,
+  updateLocationInlineInputSchema,
+  updateRoomInlineInputSchema,
 } from "@/domain/items/validation";
 import {
   ItemCommercialStatus,
@@ -30,8 +33,11 @@ import {
   ItemValidationError,
   updateItem,
   updateItemFinancialInline,
+  updateItemGeneralInline,
   updateItemStatusInline,
   updateItemTrackingInline,
+  updateLocationInline,
+  updateRoomInline,
 } from "@/lib/items/items";
 
 function formValues(formData: FormData) {
@@ -231,6 +237,50 @@ export async function createLocationAction(
   }
 }
 
+export async function updateRoomInlineAction(formData: FormData) {
+  const actor = await requireMasterDataEditor();
+  const input = updateRoomInlineInputSchema.safeParse({
+    ...formValues(formData),
+    isActive: formData.has("isActive"),
+  });
+  if (!input.success)
+    return {
+      message: input.error.issues[0]?.message ?? "Check the Room.",
+      status: "error" as const,
+    };
+  try {
+    const values = await updateRoomInline(actor.id, input.data);
+    revalidatePath("/projects/[projectId]", "page");
+    revalidatePath("/items");
+    return { message: "Room saved.", status: "success" as const, values };
+  } catch (error) {
+    const state = errorState(error);
+    return { ...state, status: "error" as const };
+  }
+}
+
+export async function updateLocationInlineAction(formData: FormData) {
+  const actor = await requireMasterDataEditor();
+  const input = updateLocationInlineInputSchema.safeParse({
+    ...formValues(formData),
+    isActive: formData.has("isActive"),
+  });
+  if (!input.success)
+    return {
+      message: input.error.issues[0]?.message ?? "Check the Location.",
+      status: "error" as const,
+    };
+  try {
+    const values = await updateLocationInline(actor.id, input.data);
+    revalidatePath("/settings");
+    revalidatePath("/items");
+    return { message: "Location saved.", status: "success" as const, values };
+  } catch (error) {
+    const state = errorState(error);
+    return { ...state, status: "error" as const };
+  }
+}
+
 export async function updateItemFinancialInlineAction(formData: FormData) {
   const actor = await requireMasterDataEditor();
   const input = inlineItemFinancialInputSchema.safeParse(formValues(formData));
@@ -245,6 +295,29 @@ export async function updateItemFinancialInlineAction(formData: FormData) {
     revalidatePath(`/items/${input.data.id}`);
     return {
       message: "Financial values saved.",
+      status: "success" as const,
+      values,
+    };
+  } catch (error) {
+    const state = errorState(error);
+    return { ...state, status: "error" as const };
+  }
+}
+
+export async function updateItemGeneralInlineAction(formData: FormData) {
+  const actor = await requireMasterDataEditor();
+  const input = inlineItemGeneralInputSchema.safeParse(formValues(formData));
+  if (!input.success)
+    return {
+      message: input.error.issues[0]?.message ?? "Check the Item values.",
+      status: "error" as const,
+    };
+  try {
+    const values = await updateItemGeneralInline(actor.id, input.data);
+    refresh();
+    revalidatePath(`/items/${input.data.id}`);
+    return {
+      message: "Item values saved.",
       status: "success" as const,
       values,
     };

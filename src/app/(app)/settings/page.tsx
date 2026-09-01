@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { SettingsForm } from "@/app/(app)/settings/settings-form";
 import { LocationForm } from "@/components/items/location-form";
+import { LocationList } from "@/components/items/location-list";
 import {
   DEFAULT_ITEM_EXTRACTION_MODEL,
   ITEM_EXTRACTION_PROVIDER,
@@ -68,30 +69,7 @@ export default async function SettingsPage() {
         <div className="mt-4">
           <LocationForm />
         </div>
-        <ul className="mt-4 divide-y rounded-lg border text-sm">
-          {locations.map((location) => (
-            <li
-              className="flex items-center justify-between gap-3 px-3 py-2"
-              key={location.id}
-            >
-              <span>
-                <span className="font-medium">{location.name}</span>
-                <span className="text-muted-foreground ml-2 text-xs">
-                  {location.city ?? location.countryCode ?? "No address"}
-                </span>
-              </span>
-              <span className="text-muted-foreground text-xs">
-                {location.type.replaceAll("_", " ")} ·{" "}
-                {location.isActive ? "Active" : "Inactive"}
-              </span>
-            </li>
-          ))}
-          {locations.length === 0 ? (
-            <li className="text-muted-foreground px-3 py-4 text-xs">
-              No logistics Locations yet.
-            </li>
-          ) : null}
-        </ul>
+        <LocationList locations={locations} />
       </section>
       <section className="bg-card rounded-lg border p-5">
         <h2 className="text-sm font-semibold">Financial reporting</h2>

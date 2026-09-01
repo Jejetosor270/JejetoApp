@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createInstallmentSchema,
+  inlineInstallmentSchema,
   settlementSchema,
 } from "@/domain/payments/validation";
 
@@ -60,6 +61,25 @@ describe("payment validation", () => {
         amount: "0",
         installmentId: base.orderId,
         settledAt: "2026-09-15",
+      }),
+    ).toThrow();
+  });
+
+  it("normalizes a valid inline schedule amount and rejects invalid dates", () => {
+    expect(
+      inlineInstallmentSchema.parse({
+        dueDate: "2026-09-20",
+        id: base.orderId,
+        label: "Balance",
+        scheduledAmount: "25000",
+      }).scheduledAmount,
+    ).toBe("25000.0000");
+    expect(() =>
+      inlineInstallmentSchema.parse({
+        dueDate: "20/09/2026",
+        id: base.orderId,
+        label: "Balance",
+        scheduledAmount: "25000",
       }),
     ).toThrow();
   });

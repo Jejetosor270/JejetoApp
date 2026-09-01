@@ -1,19 +1,13 @@
 "use client";
 
-import {
-  KeyRound,
-  LoaderCircle,
-  Pencil,
-  Plus,
-  UserCog,
-  Users,
-} from "lucide-react";
+import { KeyRound, LoaderCircle, Plus, UserCog, Users } from "lucide-react";
 import {
   useActionState,
   useCallback,
   useEffect,
   useRef,
   useState,
+  useTransition,
 } from "react";
 
 import {
@@ -32,6 +26,12 @@ import {
   SelectionHeader,
   useBulkSelection,
 } from "@/components/bulk-actions/bulk-selection";
+import {
+  InlineCheckbox,
+  InlineEditActions,
+  InlineSelect,
+  InlineTextInput,
+} from "@/components/inline-editing/inline-edit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { minimumPasswordLength } from "@/domain/users/password-policy";
@@ -368,6 +368,164 @@ function PasswordResetForm({ employeeId }: { employeeId: string }) {
   );
 }
 
+function EmployeeInlineRow({
+  currentAdministratorId,
+  employee,
+  isSelected,
+  onFullEdit,
+  onSelect,
+  onUpdated,
+}: {
+  currentAdministratorId: string;
+  employee: EmployeeView;
+  isSelected: boolean;
+  onFullEdit: () => void;
+  onSelect: () => void;
+  onUpdated: (employee: UpdatedEmployeeActionData) => void;
+}) {
+  const initial = () => ({
+    email: employee.email,
+    isActive: employee.isActive,
+    name: employee.name,
+    role: employee.role,
+  });
+  const [saved, setSaved] = useState(initial);
+  const [draft, setDraft] = useState(initial);
+  const [editing, setEditing] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [pending, startTransition] = useTransition();
+  const save = () => {
+    const data = new FormData();
+    data.set("email", draft.email);
+    data.set("id", employee.id);
+    data.set("name", draft.name);
+    data.set("role", draft.role);
+    if (draft.isActive) data.set("isActive", "on");
+    startTransition(async () => {
+      const result = await updateEmployeeAction(initialUserActionState, data);
+      setFeedback(result.message ?? "");
+      if (result.status === "success" && result.employee) {
+        const next = {
+          email: result.employee.email,
+          isActive: result.employee.isActive,
+          name: result.employee.name,
+          role: result.employee.role,
+        };
+        setSaved(next);
+        setDraft(next);
+        setEditing(false);
+        onUpdated(result.employee);
+      }
+    });
+  };
+  return (
+    <tr className="hover:bg-muted/25 align-top">
+      <SelectionCell
+        checked={isSelected}
+        disabled={employee.id === currentAdministratorId}
+        label={`employee ${saved.name}${employee.id === currentAdministratorId ? " (current account)" : ""}`}
+        onChange={onSelect}
+      />
+      <td className="px-4 py-3 font-medium sm:px-5">
+        {editing ? (
+          <InlineTextInput
+            ariaLabel="Employee name"
+            onChange={(value) =>
+              setDraft((current) => ({ ...current, name: value }))
+            }
+            value={draft.name}
+          />
+        ) : (
+          saved.name
+        )}
+      </td>
+      <td className="text-muted-foreground px-4 py-3">
+        {editing ? (
+          <InlineTextInput
+            ariaLabel="Employee email"
+            onChange={(value) =>
+              setDraft((current) => ({ ...current, email: value }))
+            }
+            value={draft.email}
+          />
+        ) : (
+          saved.email
+        )}
+      </td>
+      <td className="px-4 py-3">
+        {editing ? (
+          <InlineSelect
+            ariaLabel="Employee role"
+            onChange={(value) =>
+              setDraft((current) => ({
+                ...current,
+                role: value as EmployeeRole,
+              }))
+            }
+            value={draft.role}
+          >
+            <option value="USER">User</option>
+            <option value="MANAGER">Manager</option>
+            <option value="ADMIN">Administrator</option>
+          </InlineSelect>
+        ) : (
+          roleLabel(saved.role)
+        )}
+      </td>
+      <td className="px-4 py-3">
+        {editing ? (
+          <InlineCheckbox
+            ariaLabel="Employee active"
+            checked={draft.isActive}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                isActive: event.target.checked,
+              }))
+            }
+          />
+        ) : (
+          <Badge variant={saved.isActive ? "secondary" : "outline"}>
+            {saved.isActive ? "Active" : "Inactive"}
+          </Badge>
+        )}
+      </td>
+      <td className="text-muted-foreground px-4 py-3 text-xs">
+        {formatDate(employee.createdAt)}
+      </td>
+      <td className="px-4 py-3 text-right">
+        <InlineEditActions
+          editing={editing}
+          feedback={feedback}
+          onCancel={() => {
+            setDraft(saved);
+            setFeedback("");
+            setEditing(false);
+          }}
+          onEdit={() => {
+            setDraft(saved);
+            setFeedback("");
+            setEditing(true);
+          }}
+          onSave={save}
+          pending={pending}
+        />
+        {!editing ? (
+          <Button
+            className="mt-1"
+            onClick={onFullEdit}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            <KeyRound data-icon="inline-start" /> Password
+          </Button>
+        ) : null}
+      </td>
+    </tr>
+  );
+}
+
 export function UserManagement({
   currentAdministratorId,
   employees,
@@ -488,42 +646,15 @@ export function UserManagement({
             </thead>
             <tbody className="divide-y">
               {displayedEmployees.map((employee) => (
-                <tr key={employee.id} className="hover:bg-muted/25">
-                  <SelectionCell
-                    checked={selection.isSelected(employee.id)}
-                    disabled={employee.id === currentAdministratorId}
-                    label={`employee ${employee.name}${employee.id === currentAdministratorId ? " (current account)" : ""}`}
-                    onChange={() => selection.toggle(employee.id)}
-                  />
-                  <td className="px-4 py-3 font-medium sm:px-5">
-                    {employee.name}
-                  </td>
-                  <td className="text-muted-foreground px-4 py-3">
-                    {employee.email}
-                  </td>
-                  <td className="px-4 py-3">{roleLabel(employee.role)}</td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      variant={employee.isActive ? "secondary" : "outline"}
-                    >
-                      {employee.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </td>
-                  <td className="text-muted-foreground px-4 py-3 text-xs">
-                    {formatDate(employee.createdAt)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button
-                      onClick={() => setEditingEmployee(employee)}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      <Pencil aria-hidden="true" data-icon="inline-start" />
-                      Edit
-                    </Button>
-                  </td>
-                </tr>
+                <EmployeeInlineRow
+                  currentAdministratorId={currentAdministratorId}
+                  employee={employee}
+                  isSelected={selection.isSelected(employee.id)}
+                  key={employee.id}
+                  onFullEdit={() => setEditingEmployee(employee)}
+                  onSelect={() => selection.toggle(employee.id)}
+                  onUpdated={handleEmployeeUpdated}
+                />
               ))}
             </tbody>
           </table>

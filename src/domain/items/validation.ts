@@ -204,6 +204,22 @@ export const createLocationInputSchema = z.object({
   postalCode: optionalText(32),
   type: z.enum(LogisticsLocationType),
 });
+export const updateRoomInlineInputSchema = z.object({
+  code: optionalText(40),
+  id: z.uuid("Choose a valid Room."),
+  isActive: z.boolean(),
+  name: z.string().trim().min(1).max(160),
+});
+export const updateLocationInlineInputSchema = z.object({
+  countryCode: z.preprocess(
+    blankToUndefined,
+    z.string().trim().toUpperCase().refine(isSupportedCountryCode).optional(),
+  ),
+  id: z.uuid("Choose a valid Location."),
+  isActive: z.boolean(),
+  name: z.string().trim().min(1).max(160),
+  type: z.enum(LogisticsLocationType),
+});
 export const updateFreightEstimateSchema = z.object({
   id: z.uuid(),
   freightEstimateRate: optionalRate("Freight estimate"),
@@ -242,24 +258,75 @@ const nullableRate = (label: string) =>
       z.null(),
     ]),
   );
-export const inlineItemFinancialInputSchema = z.object({
-  basis: z.enum([
-    "QUANTITY",
-    "UNIT_PURCHASE",
-    "TOTAL_PURCHASE",
-    "BUDGET_UNIT",
-    "BUDGET_TOTAL",
-    "MARKUP",
-  ]),
-  budgetTotal: nullableDecimal("Budget total"),
-  budgetUnit: nullableDecimal("Budget unit"),
-  budgetVarianceComment: optionalText(500),
-  id: z.uuid(),
-  markupRate: nullableRate("Markup"),
-  quantity: requiredDecimal("Quantity"),
-  totalPurchase: nullableDecimal("Purchase total"),
-  unitPurchase: nullableDecimal("Purchase unit"),
-});
+export const inlineItemFinancialInputSchema = z
+  .object({
+    basis: z.enum([
+      "QUANTITY",
+      "UNIT_PURCHASE",
+      "TOTAL_PURCHASE",
+      "BUDGET_UNIT",
+      "BUDGET_TOTAL",
+      "MARKUP",
+    ]),
+    budgetTotal: nullableDecimal("Budget total"),
+    budgetUnit: nullableDecimal("Budget unit"),
+    budgetVarianceComment: optionalText(500),
+    id: z.uuid(),
+    markupRate: nullableRate("Markup"),
+    quantity: requiredDecimal("Quantity"),
+    totalPurchase: nullableDecimal("Purchase total"),
+    unitPurchase: nullableDecimal("Purchase unit"),
+    vatRate: nullableRate("VAT"),
+    vatRecoverability: z.preprocess(
+      (value) =>
+        typeof value === "string" && value.trim() === "" ? null : value,
+      z.enum(VatRecoverability).nullable(),
+    ),
+    vatTreatment: z.preprocess(
+      (value) =>
+        typeof value === "string" && value.trim() === "" ? null : value,
+      z.enum(VatTreatment).nullable(),
+    ),
+  })
+  .superRefine((value, context) => {
+    if (value.vatRecoverability && !value.vatTreatment)
+      context.addIssue({
+        code: "custom",
+        message: "Choose a VAT treatment before recoverability.",
+        path: ["vatTreatment"],
+      });
+    if (
+      value.vatRecoverability &&
+      !inputVatRecoverabilityApplies(value.vatTreatment)
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Recoverability does not apply to this VAT treatment.",
+        path: ["vatRecoverability"],
+      });
+  });
+
+export const inlineItemGeneralInputSchema = z
+  .object({
+    buildingId: optionalUuid,
+    category: optionalText(80),
+    id: z.uuid(),
+    itemReference: optionalText(120),
+    name: z.string().trim().min(1, "Description is required.").max(240),
+    quantity: requiredDecimal("Quantity"),
+    roomId: optionalUuid,
+    supplierId: optionalUuid,
+    unitOfMeasure: z
+      .string()
+      .trim()
+      .min(1)
+      .max(24)
+      .transform((value) => value.toUpperCase()),
+  })
+  .refine((value) => !value.roomId || Boolean(value.buildingId), {
+    message: "Choose a Building before choosing a Room.",
+    path: ["roomId"],
+  });
 
 export const inlineItemStatusInputSchema = z.object({
   commercialStatus: z.enum(ItemCommercialStatus),
@@ -287,8 +354,15 @@ export type CreateItemInput = z.infer<typeof createItemInputSchema>;
 export type UpdateItemInput = z.infer<typeof updateItemInputSchema>;
 export type CreateRoomInput = z.infer<typeof createRoomInputSchema>;
 export type CreateLocationInput = z.infer<typeof createLocationInputSchema>;
+export type UpdateLocationInlineInput = z.infer<
+  typeof updateLocationInlineInputSchema
+>;
+export type UpdateRoomInlineInput = z.infer<typeof updateRoomInlineInputSchema>;
 export type InlineItemFinancialInput = z.infer<
   typeof inlineItemFinancialInputSchema
+>;
+export type InlineItemGeneralInput = z.infer<
+  typeof inlineItemGeneralInputSchema
 >;
 export type InlineItemStatusInput = z.infer<typeof inlineItemStatusInputSchema>;
 export type InlineItemTrackingInput = z.infer<

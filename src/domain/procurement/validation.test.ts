@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { createOrderInputSchema } from "@/domain/procurement/validation";
+import {
+  createOrderInputSchema,
+  inlineOrderInputSchema,
+} from "@/domain/procurement/validation";
 
 const base = {
   buildingIds: [],
@@ -69,5 +72,24 @@ describe("single procurement order cost validation", () => {
         inputVatRate: "0",
       }),
     ).toThrow("Recoverability does not apply");
+  });
+
+  it("validates routine inline Order references, statuses, and date-only values", () => {
+    expect(
+      inlineOrderInputSchema.parse({
+        expectedDeliveryDate: "2026-10-20",
+        id: base.projectId,
+        orderNumber: "PO-002",
+        status: "ORDERED",
+      }).status,
+    ).toBe("ORDERED");
+    expect(() =>
+      inlineOrderInputSchema.parse({
+        expectedDeliveryDate: "20/10/2026",
+        id: base.projectId,
+        orderNumber: "PO-002",
+        status: "ORDERED",
+      }),
+    ).toThrow();
   });
 });

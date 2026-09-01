@@ -45,6 +45,9 @@ describe("inline Item persistence", () => {
       quantity: "2.0000",
       totalPurchase: "200.0000",
       unitPurchase: "100.0000",
+      vatRate: null,
+      vatRecoverability: null,
+      vatTreatment: null,
     });
 
     expect(result).toMatchObject({

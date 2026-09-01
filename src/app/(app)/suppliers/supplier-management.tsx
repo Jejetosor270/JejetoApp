@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil, Plus } from "lucide-react";
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 
 import {
   createSupplierAction,
@@ -14,6 +14,12 @@ import {
   SelectionHeader,
   useBulkSelection,
 } from "@/components/bulk-actions/bulk-selection";
+import {
+  InlineCheckbox,
+  InlineEditActions,
+  InlineSelect,
+  InlineTextInput,
+} from "@/components/inline-editing/inline-edit";
 import { initialMasterDataActionState } from "@/components/master-data/action-state";
 import {
   ActionFeedback,
@@ -269,6 +275,200 @@ function EditSupplierForm({
   );
 }
 
+function SupplierInlineRow({
+  canEdit,
+  currencies,
+  isSelected,
+  onFullEdit,
+  onSelect,
+  supplier,
+}: {
+  canEdit: boolean;
+  currencies: CurrencyOption[];
+  isSelected: boolean;
+  onFullEdit: () => void;
+  onSelect: () => void;
+  supplier: SupplierView;
+}) {
+  const initial = () => ({
+    countryCode: supplier.countryCode ?? "",
+    defaultCurrencyCode: supplier.defaultCurrencyCode,
+    displayName: supplier.displayName,
+    isActive: supplier.isActive,
+    legalName: supplier.legalName,
+    vatNumber: supplier.vatNumber ?? "",
+  });
+  const [saved, setSaved] = useState(initial);
+  const [draft, setDraft] = useState(initial);
+  const [editing, setEditing] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [pending, startTransition] = useTransition();
+  const set = (field: keyof typeof draft, value: string | boolean) =>
+    setDraft((current) => ({ ...current, [field]: value }));
+  const save = () => {
+    const data = new FormData();
+    Object.entries({
+      addressLine1: supplier.addressLine1 ?? "",
+      addressLine2: supplier.addressLine2 ?? "",
+      city: supplier.city ?? "",
+      contactName: supplier.contactName ?? "",
+      countryCode: draft.countryCode,
+      defaultCurrencyCode: draft.defaultCurrencyCode,
+      defaultLeadTimeWeeks: supplier.defaultLeadTimeWeeks?.toString() ?? "",
+      defaultPaymentTermsDays:
+        supplier.defaultPaymentTermsDays?.toString() ?? "",
+      defaultPaymentTermsNotes: supplier.defaultPaymentTermsNotes ?? "",
+      displayName: draft.displayName,
+      email: supplier.email ?? "",
+      id: supplier.id,
+      legalName: draft.legalName,
+      notes: supplier.notes ?? "",
+      phone: supplier.phone ?? "",
+      postalCode: supplier.postalCode ?? "",
+      vatNumber: draft.vatNumber,
+    }).forEach(([key, value]) => data.set(key, value));
+    if (draft.isActive) data.set("isActive", "on");
+    startTransition(async () => {
+      const result = await updateSupplierAction(
+        initialMasterDataActionState,
+        data,
+      );
+      setFeedback(result.message ?? "");
+      if (result.status === "success") {
+        setSaved(draft);
+        setEditing(false);
+      }
+    });
+  };
+  return (
+    <tr className="hover:bg-muted/25 align-top">
+      {canEdit ? (
+        <SelectionCell
+          checked={isSelected}
+          label={`Supplier ${saved.displayName}`}
+          onChange={onSelect}
+        />
+      ) : null}
+      <td className="px-4 py-3 font-medium">
+        {editing ? (
+          <InlineTextInput
+            ariaLabel="Supplier display name"
+            onChange={(value) => set("displayName", value)}
+            value={draft.displayName}
+          />
+        ) : (
+          saved.displayName
+        )}
+      </td>
+      <td className="text-muted-foreground px-4 py-3">
+        {editing ? (
+          <InlineTextInput
+            ariaLabel="Supplier legal name"
+            onChange={(value) => set("legalName", value)}
+            value={draft.legalName}
+          />
+        ) : (
+          saved.legalName
+        )}
+      </td>
+      <td className="px-4 py-3">
+        {editing ? (
+          <InlineSelect
+            ariaLabel="Supplier country"
+            onChange={(value) => set("countryCode", value)}
+            value={draft.countryCode}
+          >
+            <option value="">Not specified</option>
+            {countries.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.label}
+              </option>
+            ))}
+          </InlineSelect>
+        ) : (
+          countryLabel(saved.countryCode)
+        )}
+      </td>
+      <td className="px-4 py-3">
+        {editing ? (
+          <InlineTextInput
+            ariaLabel="Supplier VAT number"
+            onChange={(value) => set("vatNumber", value)}
+            value={draft.vatNumber}
+          />
+        ) : (
+          saved.vatNumber || "—"
+        )}
+      </td>
+      <td className="px-4 py-3 font-mono">
+        {editing ? (
+          <InlineSelect
+            ariaLabel="Supplier default currency"
+            onChange={(value) => set("defaultCurrencyCode", value)}
+            value={draft.defaultCurrencyCode}
+          >
+            {currencies.map((currency) => (
+              <option key={currency.code} value={currency.code}>
+                {currency.code}
+              </option>
+            ))}
+          </InlineSelect>
+        ) : (
+          saved.defaultCurrencyCode
+        )}
+      </td>
+      <td className="px-4 py-3">
+        {supplier.defaultLeadTimeWeeks === null
+          ? "—"
+          : `${supplier.defaultLeadTimeWeeks} weeks`}
+      </td>
+      <td className="px-4 py-3">{supplier.contactName ?? "—"}</td>
+      <td className="px-4 py-3">
+        {editing ? (
+          <InlineCheckbox
+            ariaLabel="Supplier active"
+            checked={draft.isActive}
+            onChange={(event) => set("isActive", event.target.checked)}
+          />
+        ) : (
+          <StatusBadge active={saved.isActive} />
+        )}
+      </td>
+      {canEdit ? (
+        <td className="px-4 py-3 text-right">
+          <InlineEditActions
+            editing={editing}
+            feedback={feedback}
+            onCancel={() => {
+              setDraft(saved);
+              setFeedback("");
+              setEditing(false);
+            }}
+            onEdit={() => {
+              setDraft(saved);
+              setFeedback("");
+              setEditing(true);
+            }}
+            onSave={save}
+            pending={pending}
+          />
+          {!editing ? (
+            <Button
+              className="mt-1"
+              onClick={onFullEdit}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <Pencil data-icon="inline-start" /> Full details
+            </Button>
+          ) : null}
+        </td>
+      ) : null}
+    </tr>
+  );
+}
+
 export function SupplierManagement({
   canEdit,
   currencies,
@@ -330,50 +530,15 @@ export function SupplierManagement({
             </thead>
             <tbody className="divide-y">
               {suppliers.map((supplier) => (
-                <tr className="hover:bg-muted/25" key={supplier.id}>
-                  {canEdit ? (
-                    <SelectionCell
-                      checked={selection.isSelected(supplier.id)}
-                      label={`Supplier ${supplier.displayName}`}
-                      onChange={() => selection.toggle(supplier.id)}
-                    />
-                  ) : null}
-                  <td className="px-4 py-3 font-medium">
-                    {supplier.displayName}
-                  </td>
-                  <td className="text-muted-foreground px-4 py-3">
-                    {supplier.legalName}
-                  </td>
-                  <td className="px-4 py-3">
-                    {countryLabel(supplier.countryCode)}
-                  </td>
-                  <td className="px-4 py-3">{supplier.vatNumber ?? "—"}</td>
-                  <td className="px-4 py-3 font-mono">
-                    {supplier.defaultCurrencyCode}
-                  </td>
-                  <td className="px-4 py-3">
-                    {supplier.defaultLeadTimeWeeks === null
-                      ? "—"
-                      : `${supplier.defaultLeadTimeWeeks} weeks`}
-                  </td>
-                  <td className="px-4 py-3">{supplier.contactName ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge active={supplier.isActive} />
-                  </td>
-                  {canEdit ? (
-                    <td className="px-4 py-3 text-right">
-                      <Button
-                        onClick={() => setEditing(supplier)}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        <Pencil data-icon="inline-start" />
-                        Edit
-                      </Button>
-                    </td>
-                  ) : null}
-                </tr>
+                <SupplierInlineRow
+                  canEdit={canEdit}
+                  currencies={currencies}
+                  isSelected={selection.isSelected(supplier.id)}
+                  key={supplier.id}
+                  onFullEdit={() => setEditing(supplier)}
+                  onSelect={() => selection.toggle(supplier.id)}
+                  supplier={supplier}
+                />
               ))}
             </tbody>
           </table>
