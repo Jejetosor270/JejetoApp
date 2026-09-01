@@ -11,6 +11,7 @@ import {
   VatDirection,
   VatRecoverability,
   VatTreatment,
+  PaymentDirection,
 } from "@/generated/prisma/client";
 import {
   amountIncludingVat,
@@ -29,12 +30,14 @@ import type {
 } from "@/domain/procurement/validation";
 import {
   addWeeksToDateOnly,
+  businessToday,
   dateOnlyToDate,
   dateToDateOnly,
 } from "@/domain/payments/dates";
 import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
 import { paginationSkip, type PageInput } from "@/domain/listing/validation";
+import { supplierPayableBase } from "@/domain/payments/calculations";
 
 import { ProcurementNotFoundError, ProcurementRelationError } from "./errors";
 
@@ -55,6 +58,23 @@ const orderInclude = {
     },
   },
   vatEntries: true,
+  paymentInstallments: {
+    where: { direction: PaymentDirection.SUPPLIER_PAYMENT },
+    include: { settlements: true },
+    orderBy: { dueDate: "asc" },
+  },
+  clientBillingAllocations: {
+    where: { billingDocument: { isCancelled: false } },
+    include: {
+      billingDocument: {
+        select: {
+          currencyCode: true,
+          documentType: true,
+          fxRateToReporting: true,
+        },
+      },
+    },
+  },
 } satisfies Prisma.ProcurementOrderInclude;
 type OrderRecord = Prisma.ProcurementOrderGetPayload<{
   include: typeof orderInclude;
@@ -96,6 +116,14 @@ export interface OrderCostSummary {
   sellingFxRate: string | null;
 }
 export interface OrderSummary {
+  billing: {
+    actualGrossProfit: string | null;
+    actualMarginRate: string | null;
+    actualMarkupRate: string | null;
+    conversionComplete: boolean;
+    invoicedAllocated: string | null;
+    quotedAllocated: string | null;
+  };
   actualDeliveryDate: string | null;
   buildingIds: string[];
   buildings: string[];
@@ -127,6 +155,15 @@ export interface OrderSummary {
   };
   supplierOrderConfirmationReference: string | null;
   supplierQuoteReference: string | null;
+  supplierPayment: {
+    nextDueDate: string | null;
+    outstanding: string | null;
+    paid: string;
+    scheduled: string;
+    status:
+      "NOT_SCHEDULED" | "SCHEDULED" | "OVERDUE" | "PARTIALLY_PAID" | "PAID";
+    totalPayable: string | null;
+  };
   targetMarginRate: string | null;
   totalSellingAmountIncludingVat: string | null;
   totalSellingRevenue: string | null;
@@ -311,7 +348,103 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
   const missingFx: string[] = [];
   if (landed && reportingLanded === null) missingFx.push("purchase FX");
   if (totalRevenue && reportingRevenue === null) missingFx.push("selling FX");
+  let quotedAllocated = new Decimal(0);
+  let invoicedAllocated = new Decimal(0);
+  let billingConversionComplete = true;
+  for (const allocation of order.clientBillingAllocations) {
+    const document = allocation.billingDocument;
+    const convertedAllocation = reportingAmount({
+      fxRateToReporting: document.fxRateToReporting?.toString() ?? undefined,
+      originalAmount: allocation.allocatedAmount.toString(),
+      originalCurrencyCode: document.currencyCode,
+      reportingCurrencyCode: order.project.reportingCurrencyCode,
+    });
+    if (convertedAllocation === null) {
+      billingConversionComplete = false;
+      continue;
+    }
+    if (document.documentType === "INVOICE")
+      invoicedAllocated = invoicedAllocated.plus(convertedAllocation);
+    else quotedAllocated = quotedAllocated.plus(convertedAllocation);
+  }
+  const actualMetrics =
+    billingConversionComplete &&
+    reportingEconomic &&
+    invoicedAllocated.greaterThan(0)
+      ? {
+          grossProfit: invoicedAllocated.minus(reportingEconomic),
+          marginRate: invoicedAllocated
+            .minus(reportingEconomic)
+            .dividedBy(invoicedAllocated),
+          markupRate: reportingEconomic.isZero()
+            ? null
+            : invoicedAllocated
+                .minus(reportingEconomic)
+                .dividedBy(reportingEconomic),
+        }
+      : null;
+  const supplierPurchase = costAmount(
+    order,
+    ProcurementCostCategory.SUPPLIER_PURCHASE,
+  );
+  const supplierPayable = supplierPurchase
+    ? supplierPayableBase({
+        inputVatAmount: input?.vatAmount.toString() ?? null,
+        inputVatTreatment: input?.treatment ?? null,
+        supplierPurchase,
+      })
+    : null;
+  const scheduledSupplier = order.paymentInstallments
+    .filter((item) => !item.isCancelled)
+    .reduce(
+      (sum, installment) => sum.plus(installment.scheduledAmount),
+      new Decimal(0),
+    );
+  const paidSupplier = order.paymentInstallments.reduce(
+    (sum, installment) =>
+      installment.settlements.reduce(
+        (installmentSum, settlement) => installmentSum.plus(settlement.amount),
+        sum,
+      ),
+    new Decimal(0),
+  );
+  const outstandingSupplier = supplierPayable
+    ? Decimal.max(supplierPayable.minus(paidSupplier), 0)
+    : null;
+  const nextSupplierDue = order.paymentInstallments.find(
+    (installment) =>
+      !installment.isCancelled &&
+      installment.settlements
+        .reduce(
+          (sum, settlement) => sum.plus(settlement.amount),
+          new Decimal(0),
+        )
+        .lessThan(installment.scheduledAmount),
+  );
+  const today = businessToday();
+  const supplierPaymentStatus =
+    supplierPayable && paidSupplier.greaterThanOrEqualTo(supplierPayable)
+      ? "PAID"
+      : paidSupplier.greaterThan(0)
+        ? "PARTIALLY_PAID"
+        : nextSupplierDue && dateToDateOnly(nextSupplierDue.dueDate) < today
+          ? "OVERDUE"
+          : order.paymentInstallments.length
+            ? "SCHEDULED"
+            : "NOT_SCHEDULED";
   return {
+    billing: {
+      actualGrossProfit: actualMetrics?.grossProfit.toString() ?? null,
+      actualMarginRate: actualMetrics?.marginRate.toString() ?? null,
+      actualMarkupRate: actualMetrics?.markupRate?.toString() ?? null,
+      conversionComplete: billingConversionComplete,
+      invoicedAllocated: billingConversionComplete
+        ? invoicedAllocated.toString()
+        : null,
+      quotedAllocated: billingConversionComplete
+        ? quotedAllocated.toString()
+        : null,
+    },
     actualDeliveryDate: order.actualDeliveryDate
       ? dateToDateOnly(order.actualDeliveryDate)
       : null,
@@ -346,6 +479,16 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
     supplierOrderConfirmationReference:
       order.supplierOrderConfirmationReference,
     supplierQuoteReference: order.supplierQuoteReference,
+    supplierPayment: {
+      nextDueDate: nextSupplierDue
+        ? dateToDateOnly(nextSupplierDue.dueDate)
+        : null,
+      outstanding: outstandingSupplier?.toString() ?? null,
+      paid: paidSupplier.toString(),
+      scheduled: scheduledSupplier.toString(),
+      status: supplierPaymentStatus,
+      totalPayable: supplierPayable?.toString() ?? null,
+    },
     targetMarginRate: order.targetMarginRate?.toString() ?? null,
     totalSellingAmountIncludingVat:
       totalSellingAmountIncludingVat?.toString() ?? null,

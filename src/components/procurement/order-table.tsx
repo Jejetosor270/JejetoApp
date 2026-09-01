@@ -1,5 +1,6 @@
 "use client";
 
+import Decimal from "decimal.js";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
@@ -27,6 +28,9 @@ import {
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import type { OrderSummary } from "@/lib/procurement/orders";
 
+export type OrderViewMode =
+  "general" | "financial" | "supplier-payment" | "delivery";
+
 function dateLabel(value: string): string {
   return new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
@@ -46,12 +50,14 @@ function OrderRow({
   onSelect,
   order,
   statuses,
+  view,
 }: {
   canEdit: boolean;
   isSelected: boolean;
   onSelect: () => void;
   order: OrderSummary;
   statuses: readonly string[];
+  view: OrderViewMode;
 }) {
   const initial = () => ({
     expectedDeliveryDate: dateOnlyToEuropeanInput(order.expectedDeliveryDate),
@@ -94,6 +100,137 @@ function OrderRow({
       }
     });
   };
+  const selectionCell = canEdit ? (
+    <SelectionCell
+      checked={isSelected}
+      label={`Order ${saved.orderNumber}`}
+      onChange={onSelect}
+    />
+  ) : null;
+  if (view === "financial") {
+    const other = [cost.customsDuties, cost.miscellaneous]
+      .filter((value): value is string => value !== null)
+      .reduce((sum, value) => sum.plus(value), new Decimal(0));
+    return (
+      <tr className="hover:bg-muted/25 align-top">
+        {selectionCell}
+        <td className="px-4 py-3 font-mono text-xs">
+          <Link href={`/orders/${order.id}`}>{order.orderNumber}</Link>
+        </td>
+        <td className="px-4 py-3">{order.supplier.displayName}</td>
+        <td className="px-4 py-3">{order.project.name}</td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatMoney(cost.purchaseCost, order.orderCurrencyCode)}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatMoney(cost.freight, order.orderCurrencyCode)}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatMoney(other.toString(), order.orderCurrencyCode)}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatMoney(
+            cost.reportingEconomicLandedCost,
+            order.project.reportingCurrencyCode,
+          )}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatMoney(
+            cost.reportingSellingRevenue,
+            order.project.reportingCurrencyCode,
+          )}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatMoney(
+            order.billing.quotedAllocated,
+            order.project.reportingCurrencyCode,
+          )}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatMoney(
+            order.billing.invoicedAllocated,
+            order.project.reportingCurrencyCode,
+          )}
+          {!order.billing.conversionComplete ? (
+            <span className="text-destructive block text-[0.6875rem]">
+              Missing billing FX
+            </span>
+          ) : null}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatRate(order.billing.actualMarkupRate ?? cost.markupRate)}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatRate(order.billing.actualMarginRate ?? cost.grossMarginRate)}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatMoney(
+            order.billing.actualGrossProfit ?? cost.grossProfit,
+            order.project.reportingCurrencyCode,
+          )}
+        </td>
+        {canEdit ? <td /> : null}
+      </tr>
+    );
+  }
+  if (view === "supplier-payment") {
+    return (
+      <tr className="hover:bg-muted/25 align-top">
+        {selectionCell}
+        <td className="px-4 py-3">{order.supplier.displayName}</td>
+        <td className="px-4 py-3 font-mono text-xs">
+          <Link href={`/orders/${order.id}`}>{order.orderNumber}</Link>
+        </td>
+        <td className="px-4 py-3">{order.project.name}</td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatMoney(
+            order.supplierPayment.totalPayable,
+            order.orderCurrencyCode,
+          )}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatMoney(
+            order.supplierPayment.scheduled,
+            order.orderCurrencyCode,
+          )}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatMoney(order.supplierPayment.paid, order.orderCurrencyCode)}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatMoney(
+            order.supplierPayment.outstanding,
+            order.orderCurrencyCode,
+          )}
+        </td>
+        <td className="px-4 py-3">
+          {formatDateOnly(order.supplierPayment.nextDueDate)}
+        </td>
+        <td className="px-4 py-3">
+          {order.supplierPayment.status.replaceAll("_", " ")}
+        </td>
+        {canEdit ? <td /> : null}
+      </tr>
+    );
+  }
+  if (view === "delivery") {
+    return (
+      <tr className="hover:bg-muted/25 align-top">
+        {selectionCell}
+        <td className="px-4 py-3 font-mono text-xs">
+          <Link href={`/orders/${order.id}`}>{order.orderNumber}</Link>
+        </td>
+        <td className="px-4 py-3">{saved.status.replaceAll("_", " ")}</td>
+        <td className="px-4 py-3">{formatDateOnly(order.expectedReadyDate)}</td>
+        <td className="px-4 py-3">
+          {formatDateOnly(order.expectedDeliveryDate)}
+        </td>
+        <td className="px-4 py-3">{order.supplier.displayName}</td>
+        <td className="px-4 py-3">{order.project.name}</td>
+        {canEdit ? <td /> : null}
+      </tr>
+    );
+  }
   return (
     <tr className="hover:bg-muted/25 align-top">
       {canEdit ? (
@@ -220,10 +357,12 @@ export function OrderTable({
   canEdit,
   orders,
   statuses,
+  view,
 }: {
   canEdit: boolean;
   orders: OrderSummary[];
   statuses: readonly string[];
+  view: OrderViewMode;
 }) {
   const selection = useBulkSelection(orders.map((order) => order.id));
   return (
@@ -238,7 +377,7 @@ export function OrderTable({
         />
       ) : null}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[88rem] text-left text-sm">
+        <table className="w-full min-w-[74rem] text-left text-sm">
           <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
             <tr>
               {canEdit ? (
@@ -248,18 +387,59 @@ export function OrderTable({
                   onChange={selection.toggleAll}
                 />
               ) : null}
-              <th className="px-4 py-3">Reference</th>
-              <th className="px-4 py-3">Package</th>
-              <th className="px-4 py-3">Project</th>
-              <th className="px-4 py-3">Supplier</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Expected ready</th>
-              <th className="px-4 py-3">Expected delivery</th>
-              <th className="px-4 py-3">Buildings</th>
-              <th className="px-4 py-3 text-right">Economic landed cost</th>
-              <th className="px-4 py-3 text-right">Selling revenue</th>
-              <th className="px-4 py-3 text-right">Margin</th>
-              <th className="px-4 py-3">Updated</th>
+              {view === "general" ? (
+                <>
+                  <th className="px-4 py-3">Reference</th>
+                  <th className="px-4 py-3">Package</th>
+                  <th className="px-4 py-3">Project</th>
+                  <th className="px-4 py-3">Supplier</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Expected ready</th>
+                  <th className="px-4 py-3">Expected delivery</th>
+                  <th className="px-4 py-3">Buildings</th>
+                  <th className="px-4 py-3 text-right">Economic landed cost</th>
+                  <th className="px-4 py-3 text-right">Selling revenue</th>
+                  <th className="px-4 py-3 text-right">Margin</th>
+                  <th className="px-4 py-3">Updated</th>
+                </>
+              ) : view === "financial" ? (
+                <>
+                  <th className="px-4 py-3">Reference</th>
+                  <th className="px-4 py-3">Supplier</th>
+                  <th className="px-4 py-3">Project</th>
+                  <th className="px-4 py-3 text-right">Purchase HT</th>
+                  <th className="px-4 py-3 text-right">Freight HT</th>
+                  <th className="px-4 py-3 text-right">Other costs</th>
+                  <th className="px-4 py-3 text-right">Economic cost</th>
+                  <th className="px-4 py-3 text-right">Planned sell</th>
+                  <th className="px-4 py-3 text-right">Quoted allocated</th>
+                  <th className="px-4 py-3 text-right">Invoiced allocated</th>
+                  <th className="px-4 py-3 text-right">Markup</th>
+                  <th className="px-4 py-3 text-right">Margin</th>
+                  <th className="px-4 py-3 text-right">Gross profit</th>
+                </>
+              ) : view === "supplier-payment" ? (
+                <>
+                  <th className="px-4 py-3">Supplier</th>
+                  <th className="px-4 py-3">Order reference</th>
+                  <th className="px-4 py-3">Project</th>
+                  <th className="px-4 py-3 text-right">Payable</th>
+                  <th className="px-4 py-3 text-right">Scheduled</th>
+                  <th className="px-4 py-3 text-right">Paid</th>
+                  <th className="px-4 py-3 text-right">Outstanding</th>
+                  <th className="px-4 py-3">Next due</th>
+                  <th className="px-4 py-3">Payment status</th>
+                </>
+              ) : (
+                <>
+                  <th className="px-4 py-3">Reference</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Expected ready</th>
+                  <th className="px-4 py-3">Expected delivery</th>
+                  <th className="px-4 py-3">Supplier</th>
+                  <th className="px-4 py-3">Project</th>
+                </>
+              )}
               {canEdit ? <th className="px-4 py-3 text-right">Edit</th> : null}
             </tr>
           </thead>
@@ -272,6 +452,7 @@ export function OrderTable({
                 onSelect={() => selection.toggle(order.id)}
                 order={order}
                 statuses={statuses}
+                view={view}
               />
             ))}
           </tbody>

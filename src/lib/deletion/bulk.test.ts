@@ -6,6 +6,15 @@ const transaction = vi.hoisted(() => ({
   itemImport: { deleteMany: vi.fn() },
   room: { deleteMany: vi.fn() },
   client: { deleteMany: vi.fn(), findMany: vi.fn() },
+  clientBillingAllocation: { deleteMany: vi.fn() },
+  clientBillingDocument: {
+    deleteMany: vi.fn(),
+    findMany: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  clientDocumentImport: { deleteMany: vi.fn() },
+  clientPaymentInstallment: { deleteMany: vi.fn(), findMany: vi.fn() },
+  clientReceipt: { deleteMany: vi.fn() },
   paymentInstallment: { deleteMany: vi.fn(), findMany: vi.fn() },
   paymentSettlement: { deleteMany: vi.fn() },
   procurementOrder: { deleteMany: vi.fn(), findMany: vi.fn() },
@@ -41,6 +50,9 @@ const orderId = "c12b6b9b-10e9-4e42-b93f-38796de4f65a";
 const secondOrderId = "d12b6b9b-10e9-4e42-b93f-38796de4f65a";
 
 function expectOrderHierarchyDeleted(ids: string[]): void {
+  expect(transaction.clientBillingAllocation.deleteMany).toHaveBeenCalledWith({
+    where: { orderId: { in: ids } },
+  });
   expect(transaction.supplierQuoteImport.deleteMany).toHaveBeenCalledWith({
     where: { orderId: { in: ids } },
   });
@@ -67,6 +79,7 @@ function expectOrderHierarchyDeleted(ids: string[]): void {
 describe("transactional populated-hierarchy deletion", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    transaction.clientBillingDocument.findMany.mockResolvedValue([]);
     for (const model of Object.values(transaction)) {
       if ("deleteMany" in model)
         model.deleteMany.mockResolvedValue({ count: 1 });

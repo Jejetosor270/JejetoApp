@@ -10,16 +10,18 @@ import { formatMoney } from "@/domain/procurement/presentation";
 import { ProjectStatus } from "@/generated/prisma/client";
 import { requireUser } from "@/lib/auth/current-user";
 import { getPortfolioReportingSnapshot } from "@/lib/reporting/reports";
+import { getPortfolioClientBillingSummary } from "@/lib/billing/billing";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
-  const [, report] = await Promise.all([
+  const [, report, billing] = await Promise.all([
     requireUser(),
     getPortfolioReportingSnapshot(
       { projectStatus: ProjectStatus.ACTIVE },
       { horizon: "30d" },
     ),
+    getPortfolioClientBillingSummary(),
   ]);
   const currency = report.companyCurrencyCode;
 
@@ -47,6 +49,46 @@ export default async function DashboardPage() {
       </header>
 
       <CompanyFinancialSummary report={report} />
+
+      <section className="bg-card rounded-lg border p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Client Billing</h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Actual Client Invoices and receipts across active {currency}
+              -reporting Projects.
+            </p>
+          </div>
+          <Link
+            className="text-primary text-xs hover:underline"
+            href="/billing"
+          >
+            Open Client Billing
+          </Link>
+        </div>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {(
+            [
+              ["Client invoiced HT", billing.invoicedHt],
+              ["Client paid TTC", billing.paidTtc],
+              ["Client outstanding TTC", billing.outstandingTtc],
+              ["Client overdue TTC", billing.overdueTtc],
+            ] as const
+          ).map(([label, value]) => (
+            <div className="bg-muted/25 rounded-md border p-3" key={label}>
+              <dt className="text-muted-foreground text-xs">{label}</dt>
+              <dd className="financial-figure mt-1 font-semibold">
+                {formatMoney(value, currency)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {!billing.complete ? (
+          <p className="text-destructive mt-3 text-xs">
+            Billing totals are incomplete because required FX is missing.
+          </p>
+        ) : null}
+      </section>
 
       <section className="bg-card rounded-lg border p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">

@@ -118,6 +118,7 @@ export interface ReportingOrderRow {
   economicLandedCost: string | null;
   grossMarginRate: string | null;
   grossProfit: string | null;
+  markupRate: string | null;
   id: string;
   landedCost: string | null;
   orderNumber: string;
@@ -469,6 +470,7 @@ function projectSnapshot(input: {
       economicLandedCost: contribution?.economicLandedCost?.toString() ?? null,
       grossMarginRate: contribution?.grossMarginRate?.toString() ?? null,
       grossProfit: contribution?.grossProfit?.toString() ?? null,
+      markupRate: contribution?.markupRate?.toString() ?? null,
       id: order.id,
       landedCost: contribution?.landedCost?.toString() ?? null,
       orderNumber: order.orderNumber,

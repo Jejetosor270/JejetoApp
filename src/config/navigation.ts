@@ -44,12 +44,17 @@ export const navigationGroups: readonly NavigationGroup[] = [
         label: "Projects",
       },
       { href: "/orders", icon: Package, isAvailable: true, label: "Orders" },
-      { href: "/items", icon: ListTree, isAvailable: true, label: "Items" },
       {
-        href: "/payments",
+        href: "/items",
+        icon: ListTree,
+        isAvailable: true,
+        label: "Items (Beta)",
+      },
+      {
+        href: "/billing",
         icon: WalletCards,
         isAvailable: true,
-        label: "Payments",
+        label: "Payments / Billing",
       },
       {
         href: "/calendar",
@@ -111,12 +116,15 @@ export const navigationGroups: readonly NavigationGroup[] = [
 
 export function navigationForRole(
   role: "ADMIN" | "MANAGER" | "USER",
+  itemManagementEnabled = false,
 ): readonly NavigationGroup[] {
   return navigationGroups
     .map((group) => ({
       ...group,
       items: group.items.filter(
-        (item) => !item.roles || item.roles.includes(role),
+        (item) =>
+          (!item.roles || item.roles.includes(role)) &&
+          (item.href !== "/items" || itemManagementEnabled),
       ),
     }))
     .filter((group) => group.items.length > 0);

@@ -38,11 +38,15 @@ interface CurrencyOption {
   name: string;
 }
 interface ProjectView {
+  clientBudgetTargetHt: { toString(): string } | string | null;
   client: { id: string; displayName: string };
   clientId: string;
   code: string;
   countryCode: string | null;
   expectedCompletionDate: string | null;
+  estimatedFreightCostHt: { toString(): string } | string | null;
+  estimatedPurchaseCostHt: { toString(): string } | string | null;
+  expectedSellHt: { toString(): string } | string | null;
   freightEstimateNotes: string | null;
   freightEstimateRate: { toString(): string } | string | null;
   id: string;
@@ -54,6 +58,8 @@ interface ProjectView {
   reportingCurrencyLocked: boolean;
   startDate: string | null;
   status: string;
+  targetMarkupRate: { toString(): string } | string | null;
+  targetMode: "MARKUP" | "EXPECTED_SELL";
 }
 interface BuildingView {
   description: string | null;
@@ -209,6 +215,67 @@ function ProjectFields({
           inputMode="decimal"
           name="freightEstimateRate"
         />
+      </Field>
+      <Field label="Client Budget Target HT">
+        <input
+          className={inputClassName}
+          defaultValue={project.clientBudgetTargetHt?.toString() ?? ""}
+          inputMode="decimal"
+          name="clientBudgetTargetHt"
+        />
+      </Field>
+      <Field label="Estimated Purchase Cost HT">
+        <input
+          className={inputClassName}
+          defaultValue={project.estimatedPurchaseCostHt?.toString() ?? ""}
+          inputMode="decimal"
+          name="estimatedPurchaseCostHt"
+        />
+      </Field>
+      <Field label="Estimated Freight / Logistics HT">
+        <input
+          className={inputClassName}
+          defaultValue={project.estimatedFreightCostHt?.toString() ?? ""}
+          inputMode="decimal"
+          name="estimatedFreightCostHt"
+        />
+      </Field>
+      <Field label="Target calculation">
+        <select
+          className={inputClassName}
+          defaultValue={project.targetMode}
+          name="targetMode"
+        >
+          <option value="MARKUP">Derive sell from target markup</option>
+          <option value="EXPECTED_SELL">
+            Derive markup from expected sell
+          </option>
+        </select>
+      </Field>
+      <Field label="Target markup %">
+        <input
+          className={inputClassName}
+          defaultValue={
+            project.targetMarkupRate
+              ? new Decimal(project.targetMarkupRate.toString())
+                  .times(100)
+                  .toString()
+              : ""
+          }
+          inputMode="decimal"
+          name="targetMarkupRate"
+        />
+      </Field>
+      <Field label="Expected Sell HT">
+        <input
+          className={inputClassName}
+          defaultValue={project.expectedSellHt?.toString() ?? ""}
+          inputMode="decimal"
+          name="expectedSellHt"
+        />
+        <span className="text-muted-foreground text-xs font-normal">
+          In markup mode this is recalculated when you save.
+        </span>
       </Field>
       <Field label="Freight estimate notes">
         <input

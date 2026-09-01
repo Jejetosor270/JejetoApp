@@ -1,21 +1,30 @@
 import "server-only";
 
 import { getDatabase } from "@/lib/db";
+import { getApplicationSettings } from "@/lib/settings/application-settings";
 
 export interface GlobalSearchResult {
   context: string;
   href: string;
   id: string;
   label: string;
-  type: "Project" | "Building" | "Client" | "Supplier" | "Order" | "Item";
+  type:
+    | "Project"
+    | "Building"
+    | "Client"
+    | "Supplier"
+    | "Order"
+    | "Item"
+    | "Billing";
 }
 
 export async function globalSearch(
   query: string,
 ): Promise<GlobalSearchResult[]> {
   const database = getDatabase();
+  const settings = await getApplicationSettings();
   const contains = { contains: query, mode: "insensitive" as const };
-  const [projects, buildings, clients, suppliers, orders, items] =
+  const [projects, buildings, clients, suppliers, orders, items, billing] =
     await Promise.all([
       database.project.findMany({
         where: { OR: [{ name: contains }, { code: contains }] },
@@ -81,30 +90,44 @@ export async function globalSearch(
         },
         take: 8,
       }),
-      database.item.findMany({
-        where: {
-          OR: [
-            { itemReference: contains },
-            { name: contains },
-            { description: contains },
-            { supplierSku: contains },
-            { supplier: { displayName: contains } },
-            { room: { name: contains } },
-            { building: { name: contains } },
-            { project: { name: contains } },
-          ],
-        },
-        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+      settings.itemManagementEnabled
+        ? database.item.findMany({
+            where: {
+              OR: [
+                { itemReference: contains },
+                { name: contains },
+                { description: contains },
+                { supplierSku: contains },
+                { supplier: { displayName: contains } },
+                { room: { name: contains } },
+                { building: { name: contains } },
+                { project: { name: contains } },
+              ],
+            },
+            orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+            select: {
+              building: { select: { name: true } },
+              id: true,
+              itemReference: true,
+              name: true,
+              project: { select: { name: true } },
+              room: { select: { name: true } },
+              supplier: { select: { displayName: true } },
+            },
+            take: 12,
+          })
+        : Promise.resolve([]),
+      database.clientBillingDocument.findMany({
+        where: { reference: contains },
+        orderBy: { updatedAt: "desc" },
         select: {
-          building: { select: { name: true } },
+          client: { select: { displayName: true } },
+          documentType: true,
           id: true,
-          itemReference: true,
-          name: true,
           project: { select: { name: true } },
-          room: { select: { name: true } },
-          supplier: { select: { displayName: true } },
+          reference: true,
         },
-        take: 12,
+        take: 8,
       }),
     ]);
   return [
@@ -142,6 +165,13 @@ export async function globalSearch(
       id: order.id,
       label: order.orderNumber,
       type: "Order" as const,
+    })),
+    ...billing.map((document) => ({
+      context: `${document.client.displayName} · ${document.project.name} · ${document.documentType}`,
+      href: `/billing?query=${encodeURIComponent(document.reference)}`,
+      id: document.id,
+      label: document.reference,
+      type: "Billing" as const,
     })),
     ...items.map((item) => ({
       context: [

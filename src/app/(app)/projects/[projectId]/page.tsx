@@ -11,6 +11,14 @@ import { projectItemSummary } from "@/lib/items/items";
 import { formatMoney } from "@/domain/procurement/presentation";
 import { projectFreightEstimate } from "@/domain/items/calculations";
 import { getProjectReportingSnapshot } from "@/lib/reporting/reports";
+import { getApplicationSettings } from "@/lib/settings/application-settings";
+import { getProjectClientBillingSummary } from "@/lib/billing/billing";
+import {
+  calculateProjectActualProfitability,
+  calculateProjectTargets,
+  calculateNetCashPosition,
+  financialVariance,
+} from "@/domain/projects/targets";
 
 export const metadata: Metadata = { title: "Project" };
 
@@ -26,16 +34,57 @@ export default async function ProjectPage({
   const horizon: CashFlowHorizon = isCashFlowHorizon(requestedHorizon)
     ? requestedHorizon
     : "12m";
-  const [user, options, result, reporting, itemSummary] = await Promise.all([
-    requireUser(),
-    listProjectFormOptions(),
-    getProject(projectId),
-    getProjectReportingSnapshot(projectId, { horizon }),
-    projectItemSummary(projectId),
-  ]);
+  const settings = await getApplicationSettings();
+  const [user, options, result, reporting, itemSummary, billing] =
+    await Promise.all([
+      requireUser(),
+      listProjectFormOptions(),
+      getProject(projectId),
+      getProjectReportingSnapshot(projectId, { horizon }),
+      settings.itemManagementEnabled
+        ? projectItemSummary(projectId)
+        : Promise.resolve(null),
+      getProjectClientBillingSummary(projectId),
+    ]);
   if (!result || !reporting) notFound();
   const { buildings, project } = result;
-  const estimatedFreight = itemSummary.purchase
+  const targets = calculateProjectTargets({
+    estimatedFreightCostHt: project.estimatedFreightCostHt?.toString() ?? null,
+    estimatedPurchaseCostHt:
+      project.estimatedPurchaseCostHt?.toString() ?? null,
+    expectedSellHt: project.expectedSellHt?.toString() ?? null,
+    targetMarkupRate: project.targetMarkupRate?.toString() ?? null,
+    targetMode: project.targetMode,
+  });
+  const actualProfitability = calculateProjectActualProfitability(
+    reporting.financial.complete
+      ? reporting.financial.totals.economicLandedCost.value
+      : null,
+    billing?.complete ? billing.invoicedHt : null,
+  );
+  const phase11CashPosition = calculateNetCashPosition(
+    billing?.complete ? billing.paidTtc : null,
+    reporting.payments.supplier.paid.complete
+      ? reporting.payments.supplier.paid.value
+      : null,
+  );
+  const targetVariances = {
+    cost: financialVariance(
+      reporting.financial.complete
+        ? reporting.financial.totals.economicLandedCost.value
+        : null,
+      targets.estimatedCostHt,
+    ),
+    markup: financialVariance(
+      actualProfitability.markupRate,
+      targets.targetMarkupRate,
+    ),
+    sell: financialVariance(
+      billing?.complete ? billing.invoicedHt : null,
+      project.clientBudgetTargetHt?.toString() ?? targets.expectedSellHt,
+    ),
+  };
+  const estimatedFreight = itemSummary?.purchase
     ? projectFreightEstimate(
         itemSummary.purchase,
         project.freightEstimateRate?.toString() ?? null,
@@ -49,52 +98,73 @@ export default async function ProjectPage({
       currencies={options.currencies}
       financialDashboard={
         <>
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">Items</p>
-              <p className="mt-1 text-xl font-semibold">{itemSummary.count}</p>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">Item purchase HT</p>
-              <p className="financial-figure mt-1 font-semibold">
-                {formatMoney(
-                  itemSummary.purchase,
-                  project.reportingCurrencyCode,
-                )}
-              </p>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">Item selling HT</p>
-              <p className="financial-figure mt-1 font-semibold">
-                {formatMoney(
-                  itemSummary.selling,
-                  project.reportingCurrencyCode,
-                )}
-              </p>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">
-                Estimated Project freight
-              </p>
-              <p className="financial-figure mt-1 font-semibold">
-                {formatMoney(estimatedFreight, project.reportingCurrencyCode)}
-              </p>
-            </div>
-          </section>
+          {itemSummary ? (
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground text-xs">Items</p>
+                <p className="mt-1 text-xl font-semibold">
+                  {itemSummary.count}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground text-xs">
+                  Item purchase HT
+                </p>
+                <p className="financial-figure mt-1 font-semibold">
+                  {formatMoney(
+                    itemSummary.purchase,
+                    project.reportingCurrencyCode,
+                  )}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground text-xs">Item selling HT</p>
+                <p className="financial-figure mt-1 font-semibold">
+                  {formatMoney(
+                    itemSummary.selling,
+                    project.reportingCurrencyCode,
+                  )}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground text-xs">
+                  Estimated Project freight
+                </p>
+                <p className="financial-figure mt-1 font-semibold">
+                  {formatMoney(estimatedFreight, project.reportingCurrencyCode)}
+                </p>
+              </div>
+            </section>
+          ) : null}
           <ProjectFinancialDashboard
+            actualProfitability={actualProfitability}
+            billing={billing}
+            clientBudgetTargetHt={
+              project.clientBudgetTargetHt?.toString() ?? null
+            }
             horizon={horizon}
+            phase11CashPosition={phase11CashPosition}
             projectId={projectId}
             report={reporting}
+            targets={targets}
+            variances={targetVariances}
           />
         </>
       }
       managers={options.managers}
       project={{
         ...project,
+        clientBudgetTargetHt: project.clientBudgetTargetHt?.toString() ?? null,
         expectedCompletionDate:
           project.expectedCompletionDate?.toISOString() ?? null,
         freightEstimateRate: project.freightEstimateRate?.toString() ?? null,
+        estimatedFreightCostHt:
+          project.estimatedFreightCostHt?.toString() ?? null,
+        estimatedPurchaseCostHt:
+          project.estimatedPurchaseCostHt?.toString() ?? null,
+        expectedSellHt: project.expectedSellHt?.toString() ?? null,
         startDate: project.startDate?.toISOString() ?? null,
+        targetMarkupRate: project.targetMarkupRate?.toString() ?? null,
       }}
       statuses={options.statuses}
     />

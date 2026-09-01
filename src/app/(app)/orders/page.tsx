@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { OrderForm } from "@/components/procurement/order-form";
-import { OrderTable } from "@/components/procurement/order-table";
+import {
+  OrderTable,
+  type OrderViewMode,
+} from "@/components/procurement/order-table";
 import { PageSizeField, Pagination } from "@/components/listing/pagination";
 import { ExportLink } from "@/components/export/export-link";
 import {
@@ -39,6 +42,13 @@ export default async function OrdersPage({
 }) {
   const params = await searchParams;
   const query = firstQueryValue(params, "query") ?? "";
+  const requestedView = firstQueryValue(params, "view");
+  const view: OrderViewMode =
+    requestedView === "financial" ||
+    requestedView === "supplier-payment" ||
+    requestedView === "delivery"
+      ? requestedView
+      : "general";
   const projectId = optionalUuid(firstQueryValue(params, "projectId"));
   const supplierId = optionalUuid(firstQueryValue(params, "supplierId"));
   const buildingId = optionalUuid(firstQueryValue(params, "buildingId"));
@@ -91,6 +101,28 @@ export default async function OrdersPage({
           queryString={queryStringFromParams(params)}
         />
       </header>
+      <nav className="flex flex-wrap gap-2" aria-label="Order view">
+        {(
+          [
+            ["general", "General"],
+            ["financial", "Financial"],
+            ["supplier-payment", "Supplier Payment"],
+            ["delivery", "Delivery / Status"],
+          ] as const
+        ).map(([value, label]) => (
+          <Link
+            className={
+              view === value
+                ? "bg-primary text-primary-foreground rounded-md px-3 py-2 text-sm font-medium"
+                : "border-input rounded-md border px-3 py-2 text-sm font-medium"
+            }
+            href={`/orders?${new URLSearchParams({ view: value }).toString()}`}
+            key={value}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
       <form className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
         <input
           className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
@@ -234,6 +266,7 @@ export default async function OrdersPage({
         canEdit={canEditMasterData(user.role)}
         orders={result.items}
         statuses={options.statuses}
+        view={view}
       />
       <Pagination
         page={pageInput.page}

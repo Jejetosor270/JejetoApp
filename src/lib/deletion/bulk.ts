@@ -21,6 +21,9 @@ async function deleteOrderHierarchy(
   if (orderIds.length === 0) return;
 
   const orderWhere = { orderId: { in: orderIds } };
+  await transaction.clientBillingAllocation.deleteMany({
+    where: { orderId: { in: orderIds } },
+  });
   await transaction.supplierQuoteImport.deleteMany({ where: orderWhere });
   await transaction.paymentSettlement.deleteMany({
     where: { installment: { orderId: { in: orderIds } } },
@@ -33,6 +36,48 @@ async function deleteOrderHierarchy(
     where: { id: { in: orderIds } },
   });
   missingSelection(orderIds.length, deleted.count);
+}
+
+async function deleteClientBillingHierarchy(
+  transaction: Prisma.TransactionClient,
+  projectIds: string[],
+): Promise<void> {
+  if (projectIds.length === 0) return;
+  const documents = await transaction.clientBillingDocument.findMany({
+    where: { projectId: { in: projectIds } },
+    select: { id: true },
+  });
+  const documentIds = documents.map((document) => document.id);
+  if (!documentIds.length) return;
+  const installments = await transaction.clientPaymentInstallment.findMany({
+    where: { billingDocumentId: { in: documentIds } },
+    select: { id: true },
+  });
+  await transaction.clientBillingDocument.updateMany({
+    where: {
+      matchedInstallmentId: { in: installments.map((item) => item.id) },
+    },
+    data: { matchedInstallmentId: null },
+  });
+  await transaction.clientReceipt.deleteMany({
+    where: { installmentId: { in: installments.map((item) => item.id) } },
+  });
+  await transaction.clientDocumentImport.deleteMany({
+    where: { billingDocumentId: { in: documentIds } },
+  });
+  await transaction.clientBillingAllocation.deleteMany({
+    where: { billingDocumentId: { in: documentIds } },
+  });
+  await transaction.clientPaymentInstallment.deleteMany({
+    where: { billingDocumentId: { in: documentIds } },
+  });
+  await transaction.clientBillingDocument.updateMany({
+    where: { supersedesDocumentId: { in: documentIds } },
+    data: { supersedesDocumentId: null },
+  });
+  await transaction.clientBillingDocument.deleteMany({
+    where: { id: { in: documentIds } },
+  });
 }
 
 async function destructiveTransaction(
@@ -175,6 +220,7 @@ export async function deleteProjects(
     await transaction.supplierQuoteImport.deleteMany({
       where: { projectId: { in: ids } },
     });
+    await deleteClientBillingHierarchy(transaction, ids);
     await deleteOrderHierarchy(
       transaction,
       orders.map((order) => order.id),
@@ -228,6 +274,7 @@ export async function deleteClients(
     await transaction.supplierQuoteImport.deleteMany({
       where: { projectId: { in: projectIds } },
     });
+    await deleteClientBillingHierarchy(transaction, projectIds);
     await deleteOrderHierarchy(
       transaction,
       orders.map((order) => order.id),

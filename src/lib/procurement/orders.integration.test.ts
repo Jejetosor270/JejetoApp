@@ -5,6 +5,7 @@ import { createOrderInputSchema } from "@/domain/procurement/validation";
 import {
   FreightTreatment,
   PricingMode,
+  ProcurementCostCategory,
   ProcurementOrderStatus,
   VatDirection,
   VatTreatment,
@@ -42,6 +43,7 @@ function sellingOrder(
     actualDispatchAt: null,
     actualProductionAt: null,
     buildings: [],
+    clientBillingAllocations: [],
     category: null,
     costLines: [],
     createdAt: timestamp,
@@ -59,6 +61,7 @@ function sellingOrder(
     orderDate: null,
     orderNumber: "PO-001",
     packageName: "Example",
+    paymentInstallments: [],
     pricingMode: PricingMode.SELLING_PRICE,
     project: {
       id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
@@ -186,6 +189,85 @@ describe("single order cost write", () => {
 
     expect(summary.totalSellingRevenue).toBe("95000");
     expect(summary.totalSellingAmountIncludingVat).toBe("95000");
+  });
+
+  it("derives Order profitability from comparable Invoice allocations", () => {
+    const order = sellingOrder("18000", VatTreatment.DOMESTIC);
+    const summary = summarizeOrder({
+      ...order,
+      clientBillingAllocations: [
+        {
+          allocatedAmount: new Decimal("100000"),
+          basis: "FIXED_AMOUNT",
+          billingDocument: {
+            currencyCode: "EUR",
+            documentType: "INVOICE",
+            fxRateToReporting: null,
+          },
+          billingDocumentId: "a22b6b9b-10e9-4e42-b93f-38796de4f65a",
+          createdAt: timestamp,
+          createdById: null,
+          id: "b22b6b9b-10e9-4e42-b93f-38796de4f65a",
+          orderId: order.id,
+          percentageRate: null,
+          updatedAt: timestamp,
+          updatedById: null,
+        },
+      ],
+      costLines: [
+        {
+          category: ProcurementCostCategory.SUPPLIER_PURCHASE,
+          createdAt: timestamp,
+          createdById: null,
+          description: null,
+          id: "c22b6b9b-10e9-4e42-b93f-38796de4f65a",
+          originalAmount: new Decimal("70000"),
+          orderId: order.id,
+          updatedAt: timestamp,
+          updatedById: null,
+        },
+      ],
+    });
+
+    expect(summary.billing).toMatchObject({
+      actualGrossProfit: "30000",
+      actualMarginRate: "0.3",
+      actualMarkupRate: expect.stringMatching(/^0\.428571/),
+      conversionComplete: true,
+      invoicedAllocated: "100000",
+    });
+  });
+
+  it("marks allocated billing incomplete instead of treating missing FX as zero", () => {
+    const order = sellingOrder("18000", VatTreatment.DOMESTIC);
+    const summary = summarizeOrder({
+      ...order,
+      clientBillingAllocations: [
+        {
+          allocatedAmount: new Decimal("100000"),
+          basis: "FIXED_AMOUNT",
+          billingDocument: {
+            currencyCode: "USD",
+            documentType: "INVOICE",
+            fxRateToReporting: null,
+          },
+          billingDocumentId: "a22b6b9b-10e9-4e42-b93f-38796de4f65a",
+          createdAt: timestamp,
+          createdById: null,
+          id: "b22b6b9b-10e9-4e42-b93f-38796de4f65a",
+          orderId: order.id,
+          percentageRate: null,
+          updatedAt: timestamp,
+          updatedById: null,
+        },
+      ],
+    });
+
+    expect(summary.billing).toMatchObject({
+      actualGrossProfit: null,
+      conversionComplete: false,
+      invoicedAllocated: null,
+    });
   });
 
   it("rejects a reviewed Building that is not part of the selected Project", async () => {

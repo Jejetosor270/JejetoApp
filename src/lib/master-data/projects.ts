@@ -1,6 +1,11 @@
 import "server-only";
 
-import { Prisma, ProjectStatus } from "@/generated/prisma/client";
+import {
+  Prisma,
+  ProjectStatus,
+  ProjectTargetMode,
+} from "@/generated/prisma/client";
+import { calculateProjectTargets } from "@/domain/projects/targets";
 import type {
   CreateBuildingInput,
   CreateProjectInput,
@@ -20,11 +25,15 @@ import {
 const projectSelect = {
   _count: { select: { buildings: true, orders: true } },
   client: { select: { displayName: true, id: true } },
+  clientBudgetTargetHt: true,
   clientId: true,
   code: true,
   countryCode: true,
   createdAt: true,
   expectedCompletionDate: true,
+  estimatedFreightCostHt: true,
+  estimatedPurchaseCostHt: true,
+  expectedSellHt: true,
   freightEstimateNotes: true,
   freightEstimateRate: true,
   id: true,
@@ -35,6 +44,8 @@ const projectSelect = {
   reportingCurrencyCode: true,
   startDate: true,
   status: true,
+  targetMarkupRate: true,
+  targetMode: true,
   updatedAt: true,
 } satisfies Prisma.ProjectSelect;
 
@@ -65,11 +76,23 @@ function dateOrNull(value: string | undefined): Date | null {
 }
 
 function projectData(input: CreateProjectInput) {
+  const targetMode = input.targetMode ?? ProjectTargetMode.MARKUP;
+  const targets = calculateProjectTargets({
+    estimatedFreightCostHt: input.estimatedFreightCostHt ?? null,
+    estimatedPurchaseCostHt: input.estimatedPurchaseCostHt ?? null,
+    expectedSellHt: input.expectedSellHt ?? null,
+    targetMarkupRate: input.targetMarkupRate ?? null,
+    targetMode,
+  });
   return {
+    clientBudgetTargetHt: input.clientBudgetTargetHt ?? null,
     clientId: input.clientId,
     code: input.code,
     countryCode: input.countryCode ?? null,
     expectedCompletionDate: dateOrNull(input.expectedCompletionDate),
+    estimatedFreightCostHt: input.estimatedFreightCostHt ?? null,
+    estimatedPurchaseCostHt: input.estimatedPurchaseCostHt ?? null,
+    expectedSellHt: targets.expectedSellHt,
     freightEstimateNotes: input.freightEstimateNotes ?? null,
     freightEstimateRate: input.freightEstimateRate ?? null,
     name: input.name,
@@ -78,6 +101,8 @@ function projectData(input: CreateProjectInput) {
     reportingCurrencyCode: input.reportingCurrencyCode,
     startDate: dateOrNull(input.startDate),
     status: input.status,
+    targetMarkupRate: targets.targetMarkupRate,
+    targetMode,
   };
 }
 
@@ -269,7 +294,10 @@ export async function updateProject(
           entityId: project.id,
           entityReference: project.code,
           entityType: "PROJECT",
-          summary: "Updated the Project.",
+          metadata: {
+            changedFields: ["project details", "financial targets"],
+          },
+          summary: "Updated the Project and its financial targets.",
         });
         return project;
       },

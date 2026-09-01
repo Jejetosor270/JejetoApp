@@ -42,6 +42,12 @@ export function CompanyFinancialSummary({
       "/orders",
     ],
     [
+      "Markup",
+      formatRate(report.financial.markupRate),
+      false,
+      "/orders?view=financial",
+    ],
+    [
       "Supplier outstanding",
       formatMoney(report.payments.supplier.totalRemaining, currency),
       report.payments.supplier.totalRemaining === null,
@@ -80,7 +86,7 @@ export function CompanyFinancialSummary({
           {report.financial.complete ? "Complete" : "Incomplete"}
         </Badge>
       </div>
-      <dl className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9">
+      <dl className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5 xl:grid-cols-10">
         {kpis.map(([label, value, incomplete, href]) => (
           <div className="bg-muted/25 rounded-md border p-3" key={label}>
             <dt className="text-muted-foreground text-xs">

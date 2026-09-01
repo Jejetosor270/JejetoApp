@@ -125,6 +125,26 @@ enum ItemSourceType {
   SUPPLIER_QUOTE_PDF
 }
 
+enum ProjectTargetMode {
+  MARKUP
+  EXPECTED_SELL
+}
+
+enum ClientBillingDocumentType {
+  QUOTE
+  INVOICE
+}
+
+enum ClientBillingAllocationBasis {
+  FIXED_AMOUNT
+  PERCENTAGE
+}
+
+enum ClientDocumentImportAction {
+  CREATED
+  UPDATED
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   name         String   @db.VarChar(160)
@@ -148,36 +168,45 @@ model User {
 
   managedProjects Project[] @relation("ProjectManager")
 
-  createdClients             Client[]                   @relation("ClientCreatedBy")
-  updatedClients             Client[]                   @relation("ClientUpdatedBy")
-  createdSuppliers           Supplier[]                 @relation("SupplierCreatedBy")
-  updatedSuppliers           Supplier[]                 @relation("SupplierUpdatedBy")
-  createdProjects            Project[]                  @relation("ProjectCreatedBy")
-  updatedProjects            Project[]                  @relation("ProjectUpdatedBy")
-  createdBuildings           Building[]                 @relation("BuildingCreatedBy")
-  updatedBuildings           Building[]                 @relation("BuildingUpdatedBy")
-  createdOrders              ProcurementOrder[]         @relation("ProcurementOrderCreatedBy")
-  updatedOrders              ProcurementOrder[]         @relation("ProcurementOrderUpdatedBy")
-  linkedOrderBuildings       ProcurementOrderBuilding[] @relation("OrderBuildingCreatedBy")
-  createdCostLines           ProcurementOrderCostLine[] @relation("CostLineCreatedBy")
-  updatedCostLines           ProcurementOrderCostLine[] @relation("CostLineUpdatedBy")
-  createdVatEntries          ProcurementOrderVatEntry[] @relation("VatEntryCreatedBy")
-  updatedVatEntries          ProcurementOrderVatEntry[] @relation("VatEntryUpdatedBy")
-  createdPaymentInstallments PaymentInstallment[]       @relation("PaymentInstallmentCreatedBy")
-  updatedPaymentInstallments PaymentInstallment[]       @relation("PaymentInstallmentUpdatedBy")
-  createdPaymentSettlements  PaymentSettlement[]        @relation("PaymentSettlementCreatedBy")
-  updatedPaymentSettlements  PaymentSettlement[]        @relation("PaymentSettlementUpdatedBy")
-  processedSupplierQuotes    SupplierQuoteImport[]       @relation("SupplierQuoteImportProcessedBy")
-  auditEvents                AuditEvent[]                 @relation("AuditEventActor")
-  createdApplicationSettings ApplicationSetting[]        @relation("ApplicationSettingCreatedBy")
-  updatedApplicationSettings ApplicationSetting[]        @relation("ApplicationSettingUpdatedBy")
-  createdRooms               Room[]                       @relation("RoomCreatedBy")
-  updatedRooms               Room[]                       @relation("RoomUpdatedBy")
-  createdLogisticsLocations  LogisticsLocation[]          @relation("LogisticsLocationCreatedBy")
-  updatedLogisticsLocations  LogisticsLocation[]          @relation("LogisticsLocationUpdatedBy")
-  createdItems               Item[]                       @relation("ItemCreatedBy")
-  updatedItems               Item[]                       @relation("ItemUpdatedBy")
-  itemImports                ItemImport[]                 @relation("ItemImportImportedBy")
+  createdClients                   Client[]                   @relation("ClientCreatedBy")
+  updatedClients                   Client[]                   @relation("ClientUpdatedBy")
+  createdSuppliers                 Supplier[]                 @relation("SupplierCreatedBy")
+  updatedSuppliers                 Supplier[]                 @relation("SupplierUpdatedBy")
+  createdProjects                  Project[]                  @relation("ProjectCreatedBy")
+  updatedProjects                  Project[]                  @relation("ProjectUpdatedBy")
+  createdBuildings                 Building[]                 @relation("BuildingCreatedBy")
+  updatedBuildings                 Building[]                 @relation("BuildingUpdatedBy")
+  createdOrders                    ProcurementOrder[]         @relation("ProcurementOrderCreatedBy")
+  updatedOrders                    ProcurementOrder[]         @relation("ProcurementOrderUpdatedBy")
+  linkedOrderBuildings             ProcurementOrderBuilding[] @relation("OrderBuildingCreatedBy")
+  createdCostLines                 ProcurementOrderCostLine[] @relation("CostLineCreatedBy")
+  updatedCostLines                 ProcurementOrderCostLine[] @relation("CostLineUpdatedBy")
+  createdVatEntries                ProcurementOrderVatEntry[] @relation("VatEntryCreatedBy")
+  updatedVatEntries                ProcurementOrderVatEntry[] @relation("VatEntryUpdatedBy")
+  createdPaymentInstallments       PaymentInstallment[]       @relation("PaymentInstallmentCreatedBy")
+  updatedPaymentInstallments       PaymentInstallment[]       @relation("PaymentInstallmentUpdatedBy")
+  createdPaymentSettlements        PaymentSettlement[]        @relation("PaymentSettlementCreatedBy")
+  updatedPaymentSettlements        PaymentSettlement[]        @relation("PaymentSettlementUpdatedBy")
+  processedSupplierQuotes          SupplierQuoteImport[]      @relation("SupplierQuoteImportProcessedBy")
+  auditEvents                      AuditEvent[]               @relation("AuditEventActor")
+  createdApplicationSettings       ApplicationSetting[]       @relation("ApplicationSettingCreatedBy")
+  updatedApplicationSettings       ApplicationSetting[]       @relation("ApplicationSettingUpdatedBy")
+  createdRooms                     Room[]                     @relation("RoomCreatedBy")
+  updatedRooms                     Room[]                     @relation("RoomUpdatedBy")
+  createdLogisticsLocations        LogisticsLocation[]        @relation("LogisticsLocationCreatedBy")
+  updatedLogisticsLocations        LogisticsLocation[]        @relation("LogisticsLocationUpdatedBy")
+  createdItems                     Item[]                     @relation("ItemCreatedBy")
+  updatedItems                     Item[]                     @relation("ItemUpdatedBy")
+  itemImports                      ItemImport[]               @relation("ItemImportImportedBy")
+  createdClientBillingDocuments    ClientBillingDocument[]    @relation("ClientBillingDocumentCreatedBy")
+  updatedClientBillingDocuments    ClientBillingDocument[]    @relation("ClientBillingDocumentUpdatedBy")
+  createdClientPaymentInstallments ClientPaymentInstallment[] @relation("ClientPaymentInstallmentCreatedBy")
+  updatedClientPaymentInstallments ClientPaymentInstallment[] @relation("ClientPaymentInstallmentUpdatedBy")
+  createdClientReceipts            ClientReceipt[]            @relation("ClientReceiptCreatedBy")
+  updatedClientReceipts            ClientReceipt[]            @relation("ClientReceiptUpdatedBy")
+  createdClientBillingAllocations  ClientBillingAllocation[]  @relation("ClientBillingAllocationCreatedBy")
+  updatedClientBillingAllocations  ClientBillingAllocation[]  @relation("ClientBillingAllocationUpdatedBy")
+  processedClientDocuments         ClientDocumentImport[]     @relation("ClientDocumentImportProcessedBy")
 
   @@index([isActive])
   @@map("users")
@@ -197,9 +226,11 @@ model Currency {
   orders        ProcurementOrder[] @relation("OrderCurrency")
   sellingOrders ProcurementOrder[] @relation("OrderSellingCurrency")
 
-  paymentInstallments PaymentInstallment[]
-  applicationSettings ApplicationSetting[]
-  items               Item[]
+  paymentInstallments       PaymentInstallment[]
+  applicationSettings       ApplicationSetting[]
+  items                     Item[]
+  clientBillingDocuments    ClientBillingDocument[]
+  clientPaymentInstallments ClientPaymentInstallment[]
 
   @@index([isActive])
   @@map("currencies")
@@ -226,10 +257,12 @@ model Client {
   createdById         String?  @db.Uuid
   updatedById         String?  @db.Uuid
 
-  defaultCurrency Currency  @relation("ClientDefaultCurrency", fields: [defaultCurrencyCode], references: [code], onDelete: Restrict)
-  createdBy       User?     @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy       User?     @relation("ClientUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  projects        Project[]
+  defaultCurrency  Currency                @relation("ClientDefaultCurrency", fields: [defaultCurrencyCode], references: [code], onDelete: Restrict)
+  createdBy        User?                   @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy        User?                   @relation("ClientUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  projects         Project[]
+  billingDocuments ClientBillingDocument[]
+  documentImports  ClientDocumentImport[]
 
   @@index([displayName])
   @@index([isActive])
@@ -263,9 +296,9 @@ model Supplier {
   createdById              String?  @db.Uuid
   updatedById              String?  @db.Uuid
 
-  defaultCurrency Currency           @relation("SupplierDefaultCurrency", fields: [defaultCurrencyCode], references: [code], onDelete: Restrict)
-  createdBy       User?              @relation("SupplierCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy       User?              @relation("SupplierUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  defaultCurrency Currency              @relation("SupplierDefaultCurrency", fields: [defaultCurrencyCode], references: [code], onDelete: Restrict)
+  createdBy       User?                 @relation("SupplierCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy       User?                 @relation("SupplierUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   orders          ProcurementOrder[]
   quoteImports    SupplierQuoteImport[]
   items           Item[]
@@ -280,34 +313,42 @@ model Supplier {
 }
 
 model Project {
-  id                     String        @id @default(uuid()) @db.Uuid
-  name                   String        @db.VarChar(200)
-  code                   String        @unique @db.VarChar(40)
-  clientId               String        @db.Uuid
-  countryCode            String?       @db.Char(2)
-  reportingCurrencyCode  String        @db.Char(3)
-  projectManagerId       String?       @db.Uuid
-  startDate              DateTime?     @db.Date
-  expectedCompletionDate DateTime?     @db.Date
-  status                 ProjectStatus @default(PLANNING)
-  notes                  String?       @db.Text
-  freightEstimateRate    Decimal?      @db.Decimal(9, 6)
-  freightEstimateNotes   String?       @db.VarChar(500)
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
-  createdById            String?       @db.Uuid
-  updatedById            String?       @db.Uuid
+  id                      String            @id @default(uuid()) @db.Uuid
+  name                    String            @db.VarChar(200)
+  code                    String            @unique @db.VarChar(40)
+  clientId                String            @db.Uuid
+  countryCode             String?           @db.Char(2)
+  reportingCurrencyCode   String            @db.Char(3)
+  projectManagerId        String?           @db.Uuid
+  startDate               DateTime?         @db.Date
+  expectedCompletionDate  DateTime?         @db.Date
+  status                  ProjectStatus     @default(PLANNING)
+  notes                   String?           @db.Text
+  freightEstimateRate     Decimal?          @db.Decimal(9, 6)
+  freightEstimateNotes    String?           @db.VarChar(500)
+  clientBudgetTargetHt    Decimal?          @db.Decimal(19, 4)
+  estimatedPurchaseCostHt Decimal?          @db.Decimal(19, 4)
+  estimatedFreightCostHt  Decimal?          @db.Decimal(19, 4)
+  targetMarkupRate        Decimal?          @db.Decimal(9, 6)
+  expectedSellHt          Decimal?          @db.Decimal(19, 4)
+  targetMode              ProjectTargetMode @default(MARKUP)
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  createdById             String?           @db.Uuid
+  updatedById             String?           @db.Uuid
 
-  client            Client             @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  reportingCurrency Currency           @relation("ProjectReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
-  projectManager    User?              @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
-  createdBy         User?              @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy         User?              @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  client            Client                  @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  reportingCurrency Currency                @relation("ProjectReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
+  projectManager    User?                   @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
+  createdBy         User?                   @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy         User?                   @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   buildings         Building[]
   orders            ProcurementOrder[]
   quoteImports      SupplierQuoteImport[]
   items             Item[]
   itemImports       ItemImport[]
+  billingDocuments  ClientBillingDocument[]
+  documentImports   ClientDocumentImport[]
 
   @@index([clientId])
   @@index([projectManagerId])
@@ -384,13 +425,14 @@ model ProcurementOrder {
   createdBy       User?    @relation("ProcurementOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy       User?    @relation("ProcurementOrderUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
-  buildings           ProcurementOrderBuilding[]
-  costLines           ProcurementOrderCostLine[]
-  vatEntries          ProcurementOrderVatEntry[]
-  paymentInstallments PaymentInstallment[]
-  quoteImports        SupplierQuoteImport[]
-  items               Item[]
-  itemImports         ItemImport[]
+  buildings                ProcurementOrderBuilding[]
+  costLines                ProcurementOrderCostLine[]
+  vatEntries               ProcurementOrderVatEntry[]
+  paymentInstallments      PaymentInstallment[]
+  quoteImports             SupplierQuoteImport[]
+  items                    Item[]
+  itemImports              ItemImport[]
+  clientBillingAllocations ClientBillingAllocation[]
 
   @@index([projectId])
   @@index([supplierId])
@@ -569,6 +611,7 @@ model ApplicationSetting {
   id                           String   @id @default("company") @db.VarChar(40)
   companyName                  String   @db.VarChar(160)
   companyReportingCurrencyCode String   @default("EUR") @db.Char(3)
+  itemManagementEnabled        Boolean  @default(false)
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
   createdById                  String?  @db.Uuid
@@ -579,6 +622,152 @@ model ApplicationSetting {
   updatedBy                User?    @relation("ApplicationSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@map("application_settings")
+}
+
+model ClientBillingDocument {
+  id                         String                    @id @default(uuid()) @db.Uuid
+  clientId                   String                    @db.Uuid
+  projectId                  String                    @db.Uuid
+  documentType               ClientBillingDocumentType
+  reference                  String                    @db.VarChar(120)
+  documentDate               DateTime                  @db.Date
+  dueDate                    DateTime?                 @db.Date
+  currencyCode               String                    @db.Char(3)
+  fxRateToReporting          Decimal?                  @db.Decimal(20, 10)
+  totalHt                    Decimal                   @db.Decimal(19, 4)
+  vatTreatment               VatTreatment?
+  vatRate                    Decimal?                  @db.Decimal(9, 6)
+  vatAmount                  Decimal                   @default(0) @db.Decimal(19, 4)
+  totalTtc                   Decimal                   @db.Decimal(19, 4)
+  paymentTermsRaw            String?                   @db.Text
+  notes                      String?                   @db.Text
+  isCancelled                Boolean                   @default(false)
+  isProjectRemainderApproved Boolean                   @default(false)
+  supersedesDocumentId       String?                   @db.Uuid
+  matchedInstallmentId       String?                   @db.Uuid
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+  createdById                String?                   @db.Uuid
+  updatedById                String?                   @db.Uuid
+
+  client              Client                     @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  project             Project                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  currency            Currency                   @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
+  supersedesDocument  ClientBillingDocument?     @relation("ClientBillingRevision", fields: [supersedesDocumentId], references: [id], onDelete: SetNull)
+  revisions           ClientBillingDocument[]    @relation("ClientBillingRevision")
+  matchedInstallment  ClientPaymentInstallment?  @relation("MatchedClientInstallment", fields: [matchedInstallmentId], references: [id], onDelete: SetNull)
+  createdBy           User?                      @relation("ClientBillingDocumentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy           User?                      @relation("ClientBillingDocumentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  paymentInstallments ClientPaymentInstallment[] @relation("ClientDocumentInstallments")
+  allocations         ClientBillingAllocation[]
+  imports             ClientDocumentImport[]
+
+  @@unique([clientId, documentType, reference])
+  @@index([projectId, documentType, documentDate])
+  @@index([clientId, documentType, documentDate])
+  @@index([dueDate])
+  @@index([matchedInstallmentId])
+  @@map("client_billing_documents")
+}
+
+model ClientPaymentInstallment {
+  id                        String           @id @default(uuid()) @db.Uuid
+  billingDocumentId         String           @db.Uuid
+  sequence                  Int
+  label                     String           @db.VarChar(200)
+  basis                     InstallmentBasis
+  percentageRate            Decimal?         @db.Decimal(9, 6)
+  scheduledAmount           Decimal          @db.Decimal(19, 4)
+  currencyCode              String           @db.Char(3)
+  dueDate                   DateTime         @db.Date
+  expectedFxRateToReporting Decimal?         @db.Decimal(20, 10)
+  isCancelled               Boolean          @default(false)
+  notes                     String?          @db.Text
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+  createdById               String?          @db.Uuid
+  updatedById               String?          @db.Uuid
+
+  billingDocument ClientBillingDocument   @relation("ClientDocumentInstallments", fields: [billingDocumentId], references: [id], onDelete: Restrict)
+  currency        Currency                @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
+  createdBy       User?                   @relation("ClientPaymentInstallmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy       User?                   @relation("ClientPaymentInstallmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  receipts        ClientReceipt[]
+  matchedInvoices ClientBillingDocument[] @relation("MatchedClientInstallment")
+
+  @@unique([billingDocumentId, sequence])
+  @@index([dueDate])
+  @@index([currencyCode, dueDate])
+  @@map("client_payment_installments")
+}
+
+model ClientReceipt {
+  id                String   @id @default(uuid()) @db.Uuid
+  installmentId     String   @db.Uuid
+  amount            Decimal  @db.Decimal(19, 4)
+  receivedAt        DateTime @db.Date
+  fxRateToReporting Decimal? @db.Decimal(20, 10)
+  reference         String?  @db.VarChar(120)
+  notes             String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdById       String?  @db.Uuid
+  updatedById       String?  @db.Uuid
+
+  installment ClientPaymentInstallment @relation(fields: [installmentId], references: [id], onDelete: Restrict)
+  createdBy   User?                    @relation("ClientReceiptCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   User?                    @relation("ClientReceiptUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([installmentId, receivedAt])
+  @@map("client_receipts")
+}
+
+model ClientBillingAllocation {
+  id                String                       @id @default(uuid()) @db.Uuid
+  billingDocumentId String                       @db.Uuid
+  orderId           String                       @db.Uuid
+  basis             ClientBillingAllocationBasis
+  percentageRate    Decimal?                     @db.Decimal(9, 6)
+  allocatedAmount   Decimal                      @db.Decimal(19, 4)
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  createdById       String?                      @db.Uuid
+  updatedById       String?                      @db.Uuid
+
+  billingDocument ClientBillingDocument @relation(fields: [billingDocumentId], references: [id], onDelete: Restrict)
+  order           ProcurementOrder      @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  createdBy       User?                 @relation("ClientBillingAllocationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy       User?                 @relation("ClientBillingAllocationUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([billingDocumentId, orderId])
+  @@index([orderId])
+  @@map("client_billing_allocations")
+}
+
+model ClientDocumentImport {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  billingDocumentId  String                     @db.Uuid
+  clientId           String                     @db.Uuid
+  projectId          String                     @db.Uuid
+  documentType       ClientBillingDocumentType
+  originalFilename   String                     @db.VarChar(255)
+  documentReference  String?                    @db.VarChar(120)
+  extractionProvider String                     @db.VarChar(50)
+  extractionModel    String                     @db.VarChar(120)
+  duplicateWarning   Boolean                    @default(false)
+  action             ClientDocumentImportAction
+  processedAt        DateTime                   @default(now())
+  processedById      String?                    @db.Uuid
+
+  billingDocument ClientBillingDocument @relation(fields: [billingDocumentId], references: [id], onDelete: Restrict)
+  client          Client                @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  project         Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  processedBy     User?                 @relation("ClientDocumentImportProcessedBy", fields: [processedById], references: [id], onDelete: SetNull)
+
+  @@index([billingDocumentId, processedAt])
+  @@index([clientId, documentReference])
+  @@index([projectId, processedAt])
+  @@map("client_document_imports")
 }
 
 model Room {
@@ -605,20 +794,20 @@ model Room {
 }
 
 model LogisticsLocation {
-  id           String                    @id @default(uuid()) @db.Uuid
-  name         String                    @db.VarChar(160)
+  id           String                @id @default(uuid()) @db.Uuid
+  name         String                @db.VarChar(160)
   type         LogisticsLocationType
-  addressLine1 String?                   @db.VarChar(200)
-  addressLine2 String?                   @db.VarChar(200)
-  city         String?                   @db.VarChar(120)
-  postalCode   String?                   @db.VarChar(32)
-  countryCode  String?                   @db.Char(2)
-  notes        String?                   @db.Text
-  isActive     Boolean                   @default(true)
-  createdAt    DateTime                  @default(now())
-  updatedAt    DateTime                  @updatedAt
-  createdById  String?                   @db.Uuid
-  updatedById  String?                   @db.Uuid
+  addressLine1 String?               @db.VarChar(200)
+  addressLine2 String?               @db.VarChar(200)
+  city         String?               @db.VarChar(120)
+  postalCode   String?               @db.VarChar(32)
+  countryCode  String?               @db.Char(2)
+  notes        String?               @db.Text
+  isActive     Boolean               @default(true)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  createdById  String?               @db.Uuid
+  updatedById  String?               @db.Uuid
 
   createdBy User? @relation("LogisticsLocationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy User? @relation("LogisticsLocationUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
@@ -634,22 +823,22 @@ model LogisticsLocation {
 }
 
 model ItemImport {
-  id               String         @id @default(uuid()) @db.Uuid
-  projectId        String         @db.Uuid
-  supplierId       String?        @db.Uuid
-  procurementOrderId String?      @db.Uuid
-  sourceType       ItemSourceType
-  originalFilename String         @db.VarChar(255)
-  importedAt       DateTime       @default(now())
-  importedById     String?        @db.Uuid
-  rowCount         Int
-  createdCount     Int
-  updatedCount     Int
-  skippedCount     Int
-  warningCount     Int
-  extractionProvider String?      @db.VarChar(50)
-  extractionModel  String?        @db.VarChar(120)
-  mappingMetadata  Json?
+  id                 String         @id @default(uuid()) @db.Uuid
+  projectId          String         @db.Uuid
+  supplierId         String?        @db.Uuid
+  procurementOrderId String?        @db.Uuid
+  sourceType         ItemSourceType
+  originalFilename   String         @db.VarChar(255)
+  importedAt         DateTime       @default(now())
+  importedById       String?        @db.Uuid
+  rowCount           Int
+  createdCount       Int
+  updatedCount       Int
+  skippedCount       Int
+  warningCount       Int
+  extractionProvider String?        @db.VarChar(50)
+  extractionModel    String?        @db.VarChar(120)
+  mappingMetadata    Json?
 
   project          Project           @relation(fields: [projectId], references: [id], onDelete: Restrict)
   supplier         Supplier?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
@@ -665,82 +854,82 @@ model ItemImport {
 }
 
 model Item {
-  id                  String               @id @default(uuid()) @db.Uuid
-  projectId           String               @db.Uuid
-  buildingId          String?              @db.Uuid
-  roomId              String?              @db.Uuid
-  supplierId          String?              @db.Uuid
-  procurementOrderId  String?              @db.Uuid
-  importId            String?              @db.Uuid
-  sourceType          ItemSourceType       @default(MANUAL)
-  sourceSheet         String?              @db.VarChar(120)
-  sourceRowNumber     Int?
-  sourceReference     String?              @db.VarChar(120)
-  itemReference       String?              @db.VarChar(120)
-  supplierSku         String?              @db.VarChar(160)
-  name                String               @db.VarChar(240)
-  description         String?              @db.Text
-  category            String?              @db.VarChar(80)
-  brand               String?              @db.VarChar(160)
-  finishColor         String?              @db.VarChar(240)
-  notes               String?              @db.Text
-  quantity            Decimal              @default(1) @db.Decimal(19, 4)
-  unitOfMeasure       String               @default("EA") @db.VarChar(24)
-  weightEach          Decimal?             @db.Decimal(19, 4)
-  totalWeight         Decimal?             @db.Decimal(19, 4)
-  volumeEach          Decimal?             @db.Decimal(19, 4)
-  totalVolume         Decimal?             @db.Decimal(19, 4)
-  purchaseCurrencyCode String?             @db.Char(3)
-  unitPurchasePriceHt Decimal?              @db.Decimal(19, 4)
-  totalPurchasePriceHt Decimal?             @db.Decimal(19, 4)
-  budgetPurchaseUnitPriceHt Decimal?        @db.Decimal(19, 4)
-  budgetPurchaseTotalPriceHt Decimal?       @db.Decimal(19, 4)
-  budgetVarianceComment String?             @db.VarChar(500)
-  pricingMode         PricingMode          @default(SELLING_PRICE)
-  targetMarginRate    Decimal?              @db.Decimal(9, 6)
-  unitSellingPriceHt  Decimal?              @db.Decimal(19, 4)
-  totalSellingPriceHt Decimal?              @db.Decimal(19, 4)
-  vatTreatment        VatTreatment?
-  vatRecoverability   VatRecoverability?
-  vatRate             Decimal?              @db.Decimal(9, 6)
-  vatAmount           Decimal?              @db.Decimal(19, 4)
-  commercialStatus    ItemCommercialStatus  @default(BUDGET)
-  logisticsStatus     ItemLogisticsStatus   @default(PENDING)
-  estimatedWarehouseDate DateTime?          @db.Date
-  estimatedFabricatorDate DateTime?         @db.Date
-  receivedFabricatorDate DateTime?          @db.Date
-  receivedWarehouseDate DateTime?           @db.Date
-  inTransitDate       DateTime?              @db.Date
-  estimatedResidenceDate DateTime?          @db.Date
-  deliveredResidenceDate DateTime?          @db.Date
-  installedDate       DateTime?              @db.Date
-  expectedWarehouseId String?                @db.Uuid
-  receivedWarehouseId String?                @db.Uuid
-  fabricatorId        String?                @db.Uuid
-  destinationLocationId String?              @db.Uuid
-  issueDescription    String?                @db.Text
-  claimStatus         String?                @db.VarChar(120)
-  claimOpenedDate     DateTime?              @db.Date
-  claimResolvedDate   DateTime?              @db.Date
-  claimNotes          String?                @db.Text
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
-  createdById         String?                @db.Uuid
-  updatedById         String?                @db.Uuid
+  id                         String               @id @default(uuid()) @db.Uuid
+  projectId                  String               @db.Uuid
+  buildingId                 String?              @db.Uuid
+  roomId                     String?              @db.Uuid
+  supplierId                 String?              @db.Uuid
+  procurementOrderId         String?              @db.Uuid
+  importId                   String?              @db.Uuid
+  sourceType                 ItemSourceType       @default(MANUAL)
+  sourceSheet                String?              @db.VarChar(120)
+  sourceRowNumber            Int?
+  sourceReference            String?              @db.VarChar(120)
+  itemReference              String?              @db.VarChar(120)
+  supplierSku                String?              @db.VarChar(160)
+  name                       String               @db.VarChar(240)
+  description                String?              @db.Text
+  category                   String?              @db.VarChar(80)
+  brand                      String?              @db.VarChar(160)
+  finishColor                String?              @db.VarChar(240)
+  notes                      String?              @db.Text
+  quantity                   Decimal              @default(1) @db.Decimal(19, 4)
+  unitOfMeasure              String               @default("EA") @db.VarChar(24)
+  weightEach                 Decimal?             @db.Decimal(19, 4)
+  totalWeight                Decimal?             @db.Decimal(19, 4)
+  volumeEach                 Decimal?             @db.Decimal(19, 4)
+  totalVolume                Decimal?             @db.Decimal(19, 4)
+  purchaseCurrencyCode       String?              @db.Char(3)
+  unitPurchasePriceHt        Decimal?             @db.Decimal(19, 4)
+  totalPurchasePriceHt       Decimal?             @db.Decimal(19, 4)
+  budgetPurchaseUnitPriceHt  Decimal?             @db.Decimal(19, 4)
+  budgetPurchaseTotalPriceHt Decimal?             @db.Decimal(19, 4)
+  budgetVarianceComment      String?              @db.VarChar(500)
+  pricingMode                PricingMode          @default(SELLING_PRICE)
+  targetMarginRate           Decimal?             @db.Decimal(9, 6)
+  unitSellingPriceHt         Decimal?             @db.Decimal(19, 4)
+  totalSellingPriceHt        Decimal?             @db.Decimal(19, 4)
+  vatTreatment               VatTreatment?
+  vatRecoverability          VatRecoverability?
+  vatRate                    Decimal?             @db.Decimal(9, 6)
+  vatAmount                  Decimal?             @db.Decimal(19, 4)
+  commercialStatus           ItemCommercialStatus @default(BUDGET)
+  logisticsStatus            ItemLogisticsStatus  @default(PENDING)
+  estimatedWarehouseDate     DateTime?            @db.Date
+  estimatedFabricatorDate    DateTime?            @db.Date
+  receivedFabricatorDate     DateTime?            @db.Date
+  receivedWarehouseDate      DateTime?            @db.Date
+  inTransitDate              DateTime?            @db.Date
+  estimatedResidenceDate     DateTime?            @db.Date
+  deliveredResidenceDate     DateTime?            @db.Date
+  installedDate              DateTime?            @db.Date
+  expectedWarehouseId        String?              @db.Uuid
+  receivedWarehouseId        String?              @db.Uuid
+  fabricatorId               String?              @db.Uuid
+  destinationLocationId      String?              @db.Uuid
+  issueDescription           String?              @db.Text
+  claimStatus                String?              @db.VarChar(120)
+  claimOpenedDate            DateTime?            @db.Date
+  claimResolvedDate          DateTime?            @db.Date
+  claimNotes                 String?              @db.Text
+  createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
+  createdById                String?              @db.Uuid
+  updatedById                String?              @db.Uuid
 
   project             Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  building            Building?           @relation(fields: [buildingId], references: [id], onDelete: SetNull)
-  room                Room?               @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  supplier            Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  procurementOrder    ProcurementOrder?   @relation(fields: [procurementOrderId], references: [id], onDelete: SetNull)
-  itemImport          ItemImport?         @relation(fields: [importId], references: [id], onDelete: SetNull)
-  purchaseCurrency    Currency?           @relation(fields: [purchaseCurrencyCode], references: [code], onDelete: Restrict)
-  expectedWarehouse   LogisticsLocation?  @relation("ItemExpectedWarehouse", fields: [expectedWarehouseId], references: [id], onDelete: SetNull)
-  receivedWarehouse   LogisticsLocation?  @relation("ItemReceivedWarehouse", fields: [receivedWarehouseId], references: [id], onDelete: SetNull)
-  fabricator          LogisticsLocation?  @relation("ItemFabricator", fields: [fabricatorId], references: [id], onDelete: SetNull)
-  destinationLocation LogisticsLocation?  @relation("ItemDestinationLocation", fields: [destinationLocationId], references: [id], onDelete: SetNull)
-  createdBy           User?               @relation("ItemCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy           User?               @relation("ItemUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  building            Building?          @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+  room                Room?              @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  supplier            Supplier?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  procurementOrder    ProcurementOrder?  @relation(fields: [procurementOrderId], references: [id], onDelete: SetNull)
+  itemImport          ItemImport?        @relation(fields: [importId], references: [id], onDelete: SetNull)
+  purchaseCurrency    Currency?          @relation(fields: [purchaseCurrencyCode], references: [code], onDelete: Restrict)
+  expectedWarehouse   LogisticsLocation? @relation("ItemExpectedWarehouse", fields: [expectedWarehouseId], references: [id], onDelete: SetNull)
+  receivedWarehouse   LogisticsLocation? @relation("ItemReceivedWarehouse", fields: [receivedWarehouseId], references: [id], onDelete: SetNull)
+  fabricator          LogisticsLocation? @relation("ItemFabricator", fields: [fabricatorId], references: [id], onDelete: SetNull)
+  destinationLocation LogisticsLocation? @relation("ItemDestinationLocation", fields: [destinationLocationId], references: [id], onDelete: SetNull)
+  createdBy           User?              @relation("ItemCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy           User?              @relation("ItemUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([buildingId])

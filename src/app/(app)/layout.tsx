@@ -25,7 +25,11 @@ async function ProtectedApplicationLayout({
   ]);
 
   return (
-    <AppShell companyName={settings.companyName} user={user}>
+    <AppShell
+      companyName={settings.companyName}
+      itemManagementEnabled={settings.itemManagementEnabled}
+      user={user}
+    >
       {children}
     </AppShell>
   );

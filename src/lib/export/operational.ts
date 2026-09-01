@@ -33,6 +33,8 @@ export const exportEntities = [
   "clients",
   "projects",
   "items",
+  "billing",
+  "client-receipts",
 ] as const;
 export type ExportEntity = (typeof exportEntities)[number];
 
@@ -253,12 +255,17 @@ async function projectsCsv(params: Params): Promise<string> {
     orderBy: [{ name: "asc" }, { id: "asc" }],
     select: {
       client: { select: { displayName: true } },
+      clientBudgetTargetHt: true,
       code: true,
       countryCode: true,
       expectedCompletionDate: true,
+      estimatedFreightCostHt: true,
+      estimatedPurchaseCostHt: true,
+      expectedSellHt: true,
       name: true,
       reportingCurrencyCode: true,
       status: true,
+      targetMarkupRate: true,
     },
     where,
   });
@@ -271,6 +278,11 @@ async function projectsCsv(params: Params): Promise<string> {
       "Reporting currency",
       "Status",
       "Expected completion date",
+      "Client budget target HT",
+      "Estimated purchase cost HT",
+      "Estimated freight cost HT",
+      "Target markup rate",
+      "Expected sell HT",
     ],
     items.map((item) => [
       item.name,
@@ -284,6 +296,13 @@ async function projectsCsv(params: Params): Promise<string> {
             item.expectedCompletionDate.toISOString().slice(0, 10),
           )
         : "",
+      money(item.clientBudgetTargetHt?.toString() ?? null),
+      money(item.estimatedPurchaseCostHt?.toString() ?? null),
+      money(item.estimatedFreightCostHt?.toString() ?? null),
+      item.targetMarkupRate
+        ? trustedCsvValue(item.targetMarkupRate.toString())
+        : "",
+      money(item.expectedSellHt?.toString() ?? null),
     ]),
   );
 }
@@ -423,6 +442,138 @@ async function itemsCsv(params: Params): Promise<string> {
   );
 }
 
+async function billingCsv(params: Params): Promise<string> {
+  const query = firstQueryValue(params, "query")?.trim() ?? "";
+  const clientId = optionalUuid(firstQueryValue(params, "clientId"));
+  const projectId = optionalUuid(firstQueryValue(params, "projectId"));
+  const documentType = firstQueryValue(params, "documentType");
+  const items = await getDatabase().clientBillingDocument.findMany({
+    where: {
+      ...(clientId ? { clientId } : {}),
+      ...(projectId ? { projectId } : {}),
+      ...(documentType === "QUOTE" || documentType === "INVOICE"
+        ? { documentType }
+        : {}),
+      ...(query
+        ? {
+            OR: [
+              { reference: { contains: query, mode: "insensitive" } },
+              {
+                client: {
+                  displayName: { contains: query, mode: "insensitive" },
+                },
+              },
+              { project: { name: { contains: query, mode: "insensitive" } } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ documentDate: "desc" }, { id: "asc" }],
+    select: {
+      client: { select: { displayName: true } },
+      currencyCode: true,
+      documentDate: true,
+      documentType: true,
+      dueDate: true,
+      fxRateToReporting: true,
+      project: { select: { name: true, reportingCurrencyCode: true } },
+      reference: true,
+      totalHt: true,
+      totalTtc: true,
+      vatAmount: true,
+    },
+  });
+  return csvDocument(
+    [
+      "Client",
+      "Project",
+      "Type",
+      "Reference",
+      "Document date",
+      "Due date",
+      "Currency",
+      "HT",
+      "VAT",
+      "TTC",
+      "FX to Project currency",
+      "Project currency",
+    ],
+    items.map((item) => [
+      item.client.displayName,
+      item.project.name,
+      trustedCsvValue(item.documentType),
+      item.reference,
+      trustedCsvValue(item.documentDate.toISOString().slice(0, 10)),
+      item.dueDate
+        ? trustedCsvValue(item.dueDate.toISOString().slice(0, 10))
+        : "",
+      trustedCsvValue(item.currencyCode),
+      money(item.totalHt.toString()),
+      money(item.vatAmount.toString()),
+      money(item.totalTtc.toString()),
+      item.fxRateToReporting
+        ? trustedCsvValue(item.fxRateToReporting.toString())
+        : "",
+      trustedCsvValue(item.project.reportingCurrencyCode),
+    ]),
+  );
+}
+
+async function clientReceiptsCsv(): Promise<string> {
+  const items = await getDatabase().clientReceipt.findMany({
+    orderBy: [{ receivedAt: "desc" }, { id: "asc" }],
+    select: {
+      amount: true,
+      fxRateToReporting: true,
+      installment: {
+        select: {
+          billingDocument: {
+            select: {
+              client: { select: { displayName: true } },
+              project: { select: { name: true, reportingCurrencyCode: true } },
+              reference: true,
+            },
+          },
+          currencyCode: true,
+          label: true,
+        },
+      },
+      receivedAt: true,
+      reference: true,
+    },
+  });
+  return csvDocument(
+    [
+      "Client",
+      "Project",
+      "Document",
+      "Installment",
+      "Payment reference",
+      "Received date",
+      "Amount",
+      "Currency",
+      "Actual FX",
+      "Project currency",
+    ],
+    items.map((item) => [
+      item.installment.billingDocument.client.displayName,
+      item.installment.billingDocument.project.name,
+      item.installment.billingDocument.reference,
+      item.installment.label,
+      item.reference ?? "",
+      trustedCsvValue(item.receivedAt.toISOString().slice(0, 10)),
+      money(item.amount.toString()),
+      trustedCsvValue(item.installment.currencyCode),
+      item.fxRateToReporting
+        ? trustedCsvValue(item.fxRateToReporting.toString())
+        : "",
+      trustedCsvValue(
+        item.installment.billingDocument.project.reportingCurrencyCode,
+      ),
+    ]),
+  );
+}
+
 export async function operationalCsv(
   entity: ExportEntity,
   params: Params,
@@ -431,5 +582,7 @@ export async function operationalCsv(
   if (entity === "payments") return paymentsCsv(params);
   if (entity === "projects") return projectsCsv(params);
   if (entity === "items") return itemsCsv(params);
+  if (entity === "billing") return billingCsv(params);
+  if (entity === "client-receipts") return clientReceiptsCsv();
   return directoryCsv(entity, params);
 }

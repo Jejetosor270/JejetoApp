@@ -8,14 +8,16 @@ A web application for managing project procurement packages, financial performan
 - Client, supplier, Project, and Building master data
 - Supplier-package Procurement Orders with one authoritative cost structure
 - Decimal-safe landed cost, VAT, FX, margin, and markup calculations
-- Supplier payment and Client receipt schedules with partial settlements
+- Supplier payment schedules plus Client billing, receipt schedules, and partial settlements
 - Derived procurement calendar, Project reporting, and cash-flow forecasting
 - Review-first AI-assisted supplier quote intake for PDF and image quotes
 - URL-based operational filtering, sorting, server pagination, and global search
 - Secure filtered CSV exports and ADMIN/MANAGER activity history
 - Safe company settings and protected employee-account administration
-- Project-specific Items, Rooms, logistics status/locations, claims, and Decimal-safe item pricing
+- Optional Item Management (Beta) for Project-specific Items, Rooms, logistics, claims, and pricing
 - Review-first XLSX Project-budget imports and supplier-quote line-item extraction
+- Review-first AI-assisted Client Quote and Invoice PDF intake with optional multi-Order allocation
+- Project financial targets and actual profitability derived from Orders and Client billing
 
 ## Technical stack
 
@@ -41,6 +43,7 @@ npm run dev
 - `OPENAI_API_KEY` (required for supplier quote extraction; server-side only)
 - `QUOTE_EXTRACTION_MODEL` (optional server-side override; defaults to `gpt-5.6-luna`)
 - `ITEM_EXTRACTION_MODEL` (optional independent Item mapping/extraction override; defaults to `gpt-5.6-luna`)
+- `CLIENT_DOCUMENT_EXTRACTION_MODEL` (optional Client Quote/Invoice extraction override; defaults to `gpt-5.6-luna`)
 - `DIRECT_URL` (recommended for migrations when the runtime URL is pooled)
 
 Keep environment values outside source control. Optional one-time administrator bootstrap variables are documented in `.env.example`.

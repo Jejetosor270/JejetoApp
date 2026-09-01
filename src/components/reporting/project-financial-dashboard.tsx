@@ -10,6 +10,22 @@ import type {
   SerializedAggregateAmount,
   SerializedDirectionPaymentSummary,
 } from "@/lib/reporting/reports";
+import type { ProjectTargetSummary } from "@/domain/projects/targets";
+
+interface Phase11BillingSummary {
+  complete: boolean;
+  invoicedHt: string;
+  outstandingTtc: string;
+  overdueTtc: string;
+  paidTtc: string;
+  quotedHt: string;
+}
+
+interface ActualProfitability {
+  grossProfit: string | null;
+  marginRate: string | null;
+  markupRate: string | null;
+}
 
 function AggregateMoney({
   aggregate,
@@ -83,13 +99,29 @@ function PaymentDirectionSummary({
 }
 
 export function ProjectFinancialDashboard({
+  actualProfitability,
+  billing,
+  clientBudgetTargetHt,
   horizon,
+  phase11CashPosition,
   projectId,
   report,
+  targets,
+  variances,
 }: {
+  actualProfitability: ActualProfitability;
+  billing: Phase11BillingSummary | null;
+  clientBudgetTargetHt: string | null;
   horizon: CashFlowHorizon;
+  phase11CashPosition: string | null;
   projectId: string;
   report: ProjectReportingSnapshot;
+  targets: ProjectTargetSummary;
+  variances: {
+    cost: string | null;
+    markup: string | null;
+    sell: string | null;
+  };
 }) {
   const currency = report.reportingCurrencyCode;
   const missingOrders = report.orderRows.filter((order) =>
@@ -97,6 +129,97 @@ export function ProjectFinancialDashboard({
   );
   return (
     <div className="space-y-5">
+      <section className="grid gap-4 xl:grid-cols-2">
+        <article className="bg-card rounded-lg border p-4">
+          <h2 className="text-sm font-semibold">Budget / Target</h2>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Planning values in {currency}; Client Budget remains independent
+            from markup-derived expected sell.
+          </p>
+          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+            {(
+              [
+                ["Client Budget Target HT", clientBudgetTargetHt, "money"],
+                [
+                  "Estimated economic cost HT",
+                  targets.estimatedCostHt,
+                  "money",
+                ],
+                ["Target markup", targets.targetMarkupRate, "rate"],
+                ["Expected sell HT", targets.expectedSellHt, "money"],
+                ["Expected gross profit", targets.expectedGrossProfit, "money"],
+                ["Expected margin", targets.expectedMarginRate, "rate"],
+              ] as const
+            ).map(([label, value, kind]) => (
+              <div className="contents" key={label}>
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="financial-figure text-right font-semibold">
+                  {kind === "rate"
+                    ? formatRate(value)
+                    : formatMoney(value, currency)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </article>
+        <article className="bg-card rounded-lg border p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">
+                Client Billing & actual profitability
+              </h2>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Billing is authoritative for actual Client sell; Order selling
+                values remain the procurement plan.
+              </p>
+            </div>
+            <Link
+              className="border-input rounded-md border px-2.5 py-1.5 text-xs font-medium"
+              href={`/billing?projectId=${projectId}`}
+            >
+              Open Billing
+            </Link>
+          </div>
+          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+            {(
+              [
+                ["Client quoted HT", billing?.quotedHt ?? null],
+                ["Client invoiced HT", billing?.invoicedHt ?? null],
+                ["Client paid TTC", billing?.paidTtc ?? null],
+                ["Client outstanding TTC", billing?.outstandingTtc ?? null],
+                ["Client overdue TTC", billing?.overdueTtc ?? null],
+                ["Actual gross profit HT", actualProfitability.grossProfit],
+              ] as const
+            ).map(([label, value]) => (
+              <div className="contents" key={label}>
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="financial-figure text-right font-semibold">
+                  {formatMoney(value, currency)}
+                </dd>
+              </div>
+            ))}
+            <dt className="text-muted-foreground">Actual markup / margin</dt>
+            <dd className="financial-figure text-right font-semibold">
+              {formatRate(actualProfitability.markupRate)} /{" "}
+              {formatRate(actualProfitability.marginRate)}
+            </dd>
+            <dt className="text-muted-foreground">
+              Sell / cost / markup variance
+            </dt>
+            <dd className="financial-figure text-right font-semibold">
+              {formatMoney(variances.sell, currency)} /{" "}
+              {formatMoney(variances.cost, currency)} /{" "}
+              {formatRate(variances.markup)}
+            </dd>
+          </dl>
+          {!billing?.complete ? (
+            <p className="text-destructive mt-3 text-xs">
+              Client billing totals are incomplete because a required FX rate is
+              missing.
+            </p>
+          ) : null}
+        </article>
+      </section>
       <section className="bg-card rounded-lg border p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -269,12 +392,12 @@ export function ProjectFinancialDashboard({
               Project cash position
             </p>
             <p className="financial-figure mt-1 text-lg font-semibold">
-              {formatMoney(report.cashPosition, currency)}
+              {formatMoney(phase11CashPosition, currency)}
             </p>
             <p className="text-muted-foreground mt-1 text-xs leading-5">
-              Client cash received minus Supplier cash paid. A negative value
-              means the company has financed more Supplier cash than it has
-              received from the Client. This is not profit.
+              Phase 11 Client Billing receipts minus Supplier cash paid. A
+              negative value means the company has financed more Supplier cash
+              than it has received from the Client. This is not profit.
             </p>
           </div>
         </article>
@@ -328,6 +451,7 @@ export function ProjectFinancialDashboard({
                 <th className="px-3 py-2 text-right">Selling</th>
                 <th className="px-3 py-2 text-right">Gross profit</th>
                 <th className="px-3 py-2 text-right">Margin</th>
+                <th className="px-3 py-2 text-right">Markup</th>
                 <th className="px-3 py-2 text-right">Supplier outstanding</th>
                 <th className="px-3 py-2 text-right">Client outstanding</th>
                 <th className="px-3 py-2">Status</th>
@@ -363,6 +487,9 @@ export function ProjectFinancialDashboard({
                   ))}
                   <td className="financial-figure px-3 py-2 text-right">
                     {formatRate(order.grossMarginRate)}
+                  </td>
+                  <td className="financial-figure px-3 py-2 text-right">
+                    {formatRate(order.markupRate)}
                   </td>
                   <td className="financial-figure px-3 py-2 text-right">
                     {formatMoney(order.supplierOutstanding, currency)}

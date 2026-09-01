@@ -18,9 +18,11 @@ import { navigationForRole } from "@/config/navigation";
 
 export function MobileNavigation({
   companyName,
+  itemManagementEnabled,
   role,
 }: {
   companyName: string;
+  itemManagementEnabled: boolean;
   role: "ADMIN" | "MANAGER" | "USER";
 }) {
   return (
@@ -45,7 +47,7 @@ export function MobileNavigation({
         </SheetHeader>
 
         <nav aria-label="Mobile navigation" className="space-y-5 px-3 py-4">
-          {navigationForRole(role).map((group) => (
+          {navigationForRole(role, itemManagementEnabled).map((group) => (
             <div key={group.label}>
               <p className="text-muted-foreground mb-1.5 px-2 text-[0.6875rem] font-medium tracking-[0.08em] uppercase">
                 {group.label}

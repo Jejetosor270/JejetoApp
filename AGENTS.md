@@ -115,6 +115,17 @@ Do not introduce a reusable product/SKU catalog, inventory, warehouse management
 - XLSX parsing is deterministic first, with at most one optional semantic mapping call. Supplier quote line extraction uses the independently configurable `ITEM_EXTRACTION_MODEL`, defaulting to `gpt-5.6-luna`.
 - XLSX, PDF, and image sources are request-scoped, cleared after processing, and never stored. Persist only reviewed Items and lightweight import metadata.
 
+## Phase 11 client billing and project financial management
+
+- Item Management is an ADMIN-controlled optional Beta module. Disabling it hides Item routes and navigation without deleting Item data; the core Project, Order, payment, billing, and reporting workflows must not depend on Items.
+- Project targets store employee-approved budget, estimated purchase/freight costs, and either target markup or expected sell HT. Derived target values use Decimal-safe formulas and never replace actual Order or billing values.
+- Client Quotes and Invoices are separate from supplier Procurement Orders. Their PDF sources are request-scoped extraction inputs only; persist reviewed structured billing data and lightweight import metadata, never source binaries or raw AI output.
+- AI may classify and propose Client, Project, monetary values, VAT, payment terms, and likely duplicates, but an ADMIN or MANAGER confirms every authoritative field. FX remains a manual application input.
+- Client payment schedules are TTC cash expectations. A confirmed Invoice may explicitly match one planned Quote installment or create its own billing schedule, but must not duplicate both cash expectations.
+- Client billing may remain Project-level or allocate HT across one or many Orders. Allocations are Decimal-safe commercial attribution, cannot exceed document HT, and never overwrite authoritative Order prices or become accounting journal entries.
+- Client receipt transactions are the authoritative actual Client cash-in records. Derive paid, outstanding, overdue, and Project cash position from schedules and receipts; keep these distinct from HT profitability.
+- Order and Project profitability aggregate comparable reporting-currency HT revenue and economic Order cost before deriving markup or margin. Missing required FX makes the result incomplete.
+
 ## Database conventions
 
 - UUID primary keys; UTC timestamps; `@db.Date` for business dates without time-of-day meaning.

@@ -1,6 +1,7 @@
 "use client";
 
 import { Pencil, Plus } from "lucide-react";
+import Link from "next/link";
 import { useActionState, useState, useTransition } from "react";
 
 import {
@@ -321,7 +322,15 @@ function ClientInlineRow({
             value={draft.displayName}
           />
         ) : (
-          saved.displayName
+          <Link
+            className="hover:text-primary hover:underline"
+            href={`/billing?clientId=${client.id}`}
+          >
+            {saved.displayName}
+            <span className="text-muted-foreground ml-2 text-xs font-normal">
+              Billing
+            </span>
+          </Link>
         )}
       </td>
       <td className="text-muted-foreground px-4 py-3">

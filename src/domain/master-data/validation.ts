@@ -2,7 +2,7 @@ import { z } from "zod";
 import Decimal from "decimal.js";
 
 import { isSupportedCountryCode } from "@/config/countries";
-import { ProjectStatus } from "@/generated/prisma/client";
+import { ProjectStatus, ProjectTargetMode } from "@/generated/prisma/client";
 
 const optionalText = (maximum: number) =>
   z.preprocess(
@@ -60,6 +60,20 @@ const optionalPercentRate = z.preprocess(
     )
     .refine((value) => new Decimal(value).lessThanOrEqualTo(100))
     .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
+    .optional(),
+);
+
+const optionalMoney = z.preprocess(
+  (value) =>
+    typeof value === "string" && value.trim() === "" ? undefined : value,
+  z
+    .string()
+    .trim()
+    .regex(
+      /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/,
+      "Enter a positive monetary amount.",
+    )
+    .transform((value) => new Decimal(value).toFixed(4))
     .optional(),
 );
 
@@ -138,6 +152,7 @@ export const updateSupplierInputSchema = z.object({
 });
 
 const projectFields = {
+  clientBudgetTargetHt: optionalMoney,
   clientId: z.uuid("Choose a valid client."),
   code: z
     .string()
@@ -146,6 +161,9 @@ const projectFields = {
     .max(40),
   countryCode: optionalCountryCode,
   expectedCompletionDate: optionalDate,
+  estimatedFreightCostHt: optionalMoney,
+  estimatedPurchaseCostHt: optionalMoney,
+  expectedSellHt: optionalMoney,
   freightEstimateNotes: optionalText(500),
   freightEstimateRate: optionalPercentRate,
   name: z
@@ -162,6 +180,8 @@ const projectFields = {
   reportingCurrencyCode: currencyCode,
   startDate: optionalDate,
   status: z.enum(ProjectStatus),
+  targetMarkupRate: optionalPercentRate,
+  targetMode: z.enum(ProjectTargetMode).optional(),
 };
 
 const projectDateOrder = (value: {

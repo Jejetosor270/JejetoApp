@@ -49,6 +49,14 @@ const buildingId = "d12b6b9b-10e9-4e42-b93f-38796de4f65a";
 function existingOrder(): OrderSummary {
   return {
     actualDeliveryDate: null,
+    billing: {
+      actualGrossProfit: null,
+      actualMarginRate: null,
+      actualMarkupRate: null,
+      conversionComplete: true,
+      invoicedAllocated: "0",
+      quotedAllocated: "0",
+    },
     buildingIds: [buildingId],
     buildings: ["A"],
     category: null,
@@ -102,6 +110,14 @@ function existingOrder(): OrderSummary {
     },
     supplierOrderConfirmationReference: null,
     supplierQuoteReference: "OLD-QUOTE",
+    supplierPayment: {
+      nextDueDate: null,
+      outstanding: null,
+      paid: "0",
+      scheduled: "0",
+      status: "NOT_SCHEDULED",
+      totalPayable: null,
+    },
     targetMarginRate: null,
     totalSellingAmountIncludingVat: null,
     totalSellingRevenue: null,

@@ -7,10 +7,12 @@ import type { AccountControlUser } from "@/components/app-shell/account-control"
 export function AppShell({
   children,
   companyName,
+  itemManagementEnabled,
   user,
 }: {
   children: ReactNode;
   companyName: string;
+  itemManagementEnabled: boolean;
   user: AccountControlUser;
 }) {
   return (
@@ -22,10 +24,18 @@ export function AppShell({
         Skip to main content
       </a>
       <aside className="border-sidebar-border bg-sidebar fixed inset-y-0 left-0 z-40 hidden w-60 border-r lg:block">
-        <SidebarNavigation companyName={companyName} role={user.role} />
+        <SidebarNavigation
+          companyName={companyName}
+          itemManagementEnabled={itemManagementEnabled}
+          role={user.role}
+        />
       </aside>
       <div className="flex min-h-svh min-w-0 flex-col lg:col-start-2">
-        <TopBar companyName={companyName} user={user} />
+        <TopBar
+          companyName={companyName}
+          itemManagementEnabled={itemManagementEnabled}
+          user={user}
+        />
         <main
           id="main-content"
           className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8"

@@ -6,7 +6,14 @@ export function ExportLink({
   queryString,
 }: {
   entity:
-    "clients" | "items" | "orders" | "payments" | "projects" | "suppliers";
+    | "billing"
+    | "client-receipts"
+    | "clients"
+    | "items"
+    | "orders"
+    | "payments"
+    | "projects"
+    | "suppliers";
   queryString: string;
 }) {
   const query = new URLSearchParams(queryString);

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 const database = vi.hoisted(() => ({
   building: { findMany: vi.fn() },
   client: { findMany: vi.fn() },
+  clientBillingDocument: { findMany: vi.fn() },
   item: { findMany: vi.fn() },
   procurementOrder: { findMany: vi.fn() },
   project: { findMany: vi.fn() },
@@ -10,6 +11,10 @@ const database = vi.hoisted(() => ({
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
+vi.mock("@/lib/settings/application-settings", () => ({
+  getApplicationSettings: () =>
+    Promise.resolve({ itemManagementEnabled: true }),
+}));
 
 import { globalSearch } from "@/lib/search/global-search";
 
@@ -20,6 +25,7 @@ describe("global Item search", () => {
     database.client.findMany.mockResolvedValue([]);
     database.supplier.findMany.mockResolvedValue([]);
     database.procurementOrder.findMany.mockResolvedValue([]);
+    database.clientBillingDocument.findMany.mockResolvedValue([]);
     database.item.findMany.mockResolvedValue([
       {
         building: { name: "Villa 1" },

@@ -137,6 +137,37 @@ export default async function OrderPage({
                 order.project.reportingCurrencyCode,
               )}
             </dd>
+            <dt>Client quoted / allocated HT</dt>
+            <dd className="financial-figure text-right">
+              {formatMoney(
+                order.billing.quotedAllocated,
+                order.project.reportingCurrencyCode,
+              )}
+            </dd>
+            <dt>Client invoiced / allocated HT</dt>
+            <dd className="financial-figure text-right">
+              {formatMoney(
+                order.billing.invoicedAllocated,
+                order.project.reportingCurrencyCode,
+              )}
+              {!order.billing.conversionComplete ? (
+                <span className="text-destructive block text-[0.6875rem]">
+                  Incomplete · billing FX required
+                </span>
+              ) : null}
+            </dd>
+            <dt>Actual allocated gross profit</dt>
+            <dd className="financial-figure text-right">
+              {formatMoney(
+                order.billing.actualGrossProfit,
+                order.project.reportingCurrencyCode,
+              )}
+            </dd>
+            <dt>Actual markup / margin</dt>
+            <dd className="financial-figure text-right">
+              {formatRate(order.billing.actualMarkupRate)} /{" "}
+              {formatRate(order.billing.actualMarginRate)}
+            </dd>
           </dl>
           <p className="text-muted-foreground mt-4 border-t pt-3 text-xs">
             Purchase FX:{" "}

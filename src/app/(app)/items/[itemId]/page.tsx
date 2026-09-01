@@ -6,6 +6,7 @@ import { ItemForm } from "@/components/items/item-form";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { getItem, listItemOptions } from "@/lib/items/items";
+import { isItemManagementEnabled } from "@/lib/settings/application-settings";
 
 export const metadata: Metadata = { title: "Item detail" };
 
@@ -14,6 +15,7 @@ export default async function ItemPage({
 }: {
   params: Promise<{ itemId: string }>;
 }) {
+  if (!(await isItemManagementEnabled())) notFound();
   const { itemId } = await params;
   const [user, item, options] = await Promise.all([
     requireUser(),

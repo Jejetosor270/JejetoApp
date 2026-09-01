@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 import { ExportLink } from "@/components/export/export-link";
 import { ItemTable, type ItemViewMode } from "@/components/items/item-table";
@@ -20,6 +21,7 @@ import {
 } from "@/generated/prisma/client";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listItemOptions, listItemsPage } from "@/lib/items/items";
+import { isItemManagementEnabled } from "@/lib/settings/application-settings";
 
 export const metadata: Metadata = { title: "Items" };
 const control = "border-input bg-background h-9 rounded-lg border px-3 text-sm";
@@ -29,6 +31,7 @@ export default async function ItemsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  if (!(await isItemManagementEnabled())) notFound();
   const params = await searchParams;
   const view =
     selectedValue(
