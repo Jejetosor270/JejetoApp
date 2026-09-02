@@ -1,10 +1,35 @@
-ALTER TYPE "PricingMode" ADD VALUE 'PROJECT_MARKUP';
-ALTER TYPE "PricingMode" ADD VALUE 'ORDER_MARKUP';
-ALTER TYPE "PricingMode" ADD VALUE 'DIRECT_SELLING_PRICE';
+ALTER TYPE "PricingMode" ADD VALUE IF NOT EXISTS 'PROJECT_MARKUP';
+ALTER TYPE "PricingMode" ADD VALUE IF NOT EXISTS 'ORDER_MARKUP';
+ALTER TYPE "PricingMode" ADD VALUE IF NOT EXISTS 'DIRECT_SELLING_PRICE';
+
+-- Phase 4 constrained Orders to the two original pricing modes. Replace that
+-- constraint before touching any Order rows. The transition constraint accepts
+-- both legacy and Phase 11.2 values while the deterministic backfill runs.
+-- The IF EXISTS drops also make this safe after a partially executed attempt.
+ALTER TABLE "procurement_orders"
+  DROP CONSTRAINT IF EXISTS "procurement_orders_pricing_mode_check",
+  DROP CONSTRAINT IF EXISTS "procurement_orders_pricing_mode_transition_check",
+  DROP CONSTRAINT IF EXISTS "procurement_orders_explicit_pricing_method_check";
 
 ALTER TABLE "procurement_orders"
-  ADD COLUMN "outputVatTaxableBaseOverride" DECIMAL(19,4),
+  ADD CONSTRAINT "procurement_orders_pricing_mode_transition_check"
+  CHECK (
+    "pricingMode" IN (
+      'PROJECT_MARKUP',
+      'ORDER_MARKUP',
+      'DIRECT_SELLING_PRICE'
+    ) OR
+    ("pricingMode" = 'SELLING_PRICE' AND "targetMarginRate" IS NULL) OR
+    ("pricingMode" = 'TARGET_MARGIN' AND "sellingPriceAmount" IS NULL) OR
+    "pricingMode" = 'COMPONENT_MARKUP'
+  );
+
+ALTER TABLE "procurement_orders"
+  ADD COLUMN IF NOT EXISTS "outputVatTaxableBaseOverride" DECIMAL(19,4),
   ALTER COLUMN "pricingMode" SET DEFAULT 'PROJECT_MARKUP';
+
+ALTER TABLE "procurement_orders"
+  DROP CONSTRAINT IF EXISTS "procurement_orders_output_vat_base_override_non_negative_check";
 
 ALTER TABLE "procurement_orders"
   ADD CONSTRAINT "procurement_orders_output_vat_base_override_non_negative_check"
@@ -61,8 +86,13 @@ UPDATE "procurement_orders"
 SET "pricingMode" = 'DIRECT_SELLING_PRICE'
 WHERE "pricingMode" IN ('SELLING_PRICE', 'TARGET_MARGIN');
 
+-- Only the three Phase 11.2 methods remain after the backfill. Replace the
+-- transition constraint with the final authoritative Order constraint.
 ALTER TABLE "procurement_orders"
-  ADD CONSTRAINT "procurement_orders_explicit_pricing_method_check"
+  DROP CONSTRAINT "procurement_orders_pricing_mode_transition_check";
+
+ALTER TABLE "procurement_orders"
+  ADD CONSTRAINT "procurement_orders_pricing_mode_check"
   CHECK (
     "pricingMode" IN (
       'PROJECT_MARKUP',

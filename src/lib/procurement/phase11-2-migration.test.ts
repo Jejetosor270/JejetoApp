@@ -23,8 +23,9 @@ describe("Phase 11.2 Order pricing migration", () => {
     expect(migration).toContain("'DIRECT_SELLING_PRICE'");
     expect(migration).toContain('"outputVatTaxableBaseOverride"');
     expect(migration).toContain("SET DEFAULT 'PROJECT_MARKUP'");
+    expect(migration).toContain('"procurement_orders_pricing_mode_check"');
     expect(migration).toContain(
-      '"procurement_orders_explicit_pricing_method_check"',
+      `("pricingMode" = 'SELLING_PRICE' AND "targetMarginRate" IS NULL)`,
     );
   });
 
@@ -37,5 +38,31 @@ describe("Phase 11.2 Order pricing migration", () => {
   it("maps old package and target modes without deleting target history", () => {
     expect(migration).toContain("IN ('SELLING_PRICE', 'TARGET_MARGIN')");
     expect(migration).not.toMatch(/SET\s+"targetMarginRate"\s*=\s*NULL/i);
+  });
+
+  it("replaces the legacy constraint before backfill and tightens it afterward", () => {
+    const transition = migration.indexOf(
+      'ADD CONSTRAINT "procurement_orders_pricing_mode_transition_check"',
+    );
+    const firstBackfill = migration.indexOf('UPDATE "procurement_orders"');
+    const directBackfill = migration.indexOf(
+      "WHERE \"pricingMode\" IN ('SELLING_PRICE', 'TARGET_MARGIN')",
+    );
+    const finalConstraint = migration.indexOf(
+      'ADD CONSTRAINT "procurement_orders_pricing_mode_check"',
+    );
+    expect(transition).toBeGreaterThan(-1);
+    expect(transition).toBeLessThan(firstBackfill);
+    expect(finalConstraint).toBeGreaterThan(directBackfill);
+  });
+
+  it("is safe to retry after a failed partial execution", () => {
+    expect(migration).toMatch(/ADD VALUE IF NOT EXISTS 'PROJECT_MARKUP'/);
+    expect(migration).toMatch(
+      /ADD COLUMN IF NOT EXISTS "outputVatTaxableBaseOverride"/,
+    );
+    expect(migration).toContain(
+      'DROP CONSTRAINT IF EXISTS "procurement_orders_pricing_mode_check"',
+    );
   });
 });
