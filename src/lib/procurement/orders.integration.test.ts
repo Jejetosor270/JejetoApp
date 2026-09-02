@@ -59,6 +59,7 @@ function sellingOrder(
     leadTimeWeeks: null,
     notes: null,
     otherCostMarkupOverrideRate: null,
+    outputVatTaxableBaseOverride: new Decimal("90000"),
     orderCurrencyCode: "EUR",
     orderDate: null,
     orderNumber: "PO-001",
@@ -122,6 +123,9 @@ describe("single order cost write", () => {
 
   it("writes one normalized order cost and VAT set", async () => {
     database.project.findUnique.mockResolvedValue({
+      defaultFreightMarkupRate: new Decimal(0),
+      defaultOtherCostMarkupRate: new Decimal(0),
+      defaultProductMarkupRate: new Decimal(0),
       reportingCurrencyCode: "EUR",
     });
     database.supplier.findUnique.mockResolvedValue({
@@ -141,8 +145,10 @@ describe("single order cost write", () => {
       inputVatTreatment: "IMPORT",
       orderCurrencyCode: "USD",
       orderNumber: "PO-001",
+      outputVatRate: "20",
+      outputVatTreatment: "DOMESTIC",
       packageName: "Example",
-      pricingMode: "SELLING_PRICE",
+      pricingMode: "DIRECT_SELLING_PRICE",
       projectId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
       purchaseCost: "65000",
       purchaseFxRate: "0.8575",
@@ -173,6 +179,11 @@ describe("single order cost write", () => {
             recoverability: "NON_RECOVERABLE",
             vatAmount: "13000.0000",
           }),
+          expect.objectContaining({
+            direction: "OUTPUT",
+            taxableBaseAmount: "100000.0000",
+            vatAmount: "20000.0000",
+          }),
         ]),
       }),
     );
@@ -189,9 +200,10 @@ describe("single order cost write", () => {
   });
 
   it("does not invent VAT for a reverse-charge sale", () => {
-    const summary = summarizeOrder(
-      sellingOrder("0", VatTreatment.REVERSE_CHARGE),
-    );
+    const order = sellingOrder("0", VatTreatment.REVERSE_CHARGE);
+    const outputVat = order.vatEntries[0];
+    if (outputVat) outputVat.vatRate = new Decimal(0);
+    const summary = summarizeOrder(order);
 
     expect(summary.totalSellingRevenue).toBe("95000");
     expect(summary.totalSellingAmountIncludingVat).toBe("95000");
@@ -199,11 +211,14 @@ describe("single order cost write", () => {
 
   it("derives Product and Freight selling independently from inherited markups", () => {
     const order = sellingOrder("0", VatTreatment.OUT_OF_SCOPE);
+    const outputVat = order.vatEntries[0];
+    if (outputVat) outputVat.vatRate = new Decimal(0);
     const summary = summarizeOrder({
       ...order,
       freightResaleAmount: null,
       freightTreatment: FreightTreatment.INCLUDED_IN_PACKAGE_PRICE,
-      pricingMode: PricingMode.COMPONENT_MARKUP,
+      outputVatTaxableBaseOverride: null,
+      pricingMode: PricingMode.PROJECT_MARKUP,
       project: {
         ...order.project,
         defaultFreightMarkupRate: new Decimal("0.15"),
@@ -244,7 +259,39 @@ describe("single order cost write", () => {
       totalSellReporting: "141.5000",
     });
     expect(summary.totalSellingRevenue).toBe("141.5");
+    expect(summary.costs.outputVat?.taxableBase).toBe("141.5");
     expect(summary.costs.grossProfit).toBe("31.5");
+  });
+
+  it("reprices PROJECT_MARKUP dynamically while preserving a manual VAT base", () => {
+    const order = sellingOrder("20", VatTreatment.DOMESTIC);
+    order.pricingMode = PricingMode.PROJECT_MARKUP;
+    order.freightTreatment = FreightTreatment.NOT_APPLICABLE;
+    order.freightResaleAmount = null;
+    order.costLines = [
+      {
+        category: ProcurementCostCategory.SUPPLIER_PURCHASE,
+        createdAt: timestamp,
+        createdById: null,
+        description: null,
+        id: "a32b6b9b-10e9-4e42-b93f-38796de4f65a",
+        originalAmount: new Decimal("100"),
+        orderId: order.id,
+        updatedAt: timestamp,
+        updatedById: null,
+      },
+    ];
+    order.project.defaultProductMarkupRate = new Decimal("0.30");
+    order.outputVatTaxableBaseOverride = null;
+    const first = summarizeOrder(order);
+    order.project.defaultProductMarkupRate = new Decimal("0.40");
+    const second = summarizeOrder(order);
+    expect(first.totalSellingRevenue).toBe("130");
+    expect(first.costs.outputVat?.taxableBase).toBe("130");
+    expect(first.costs.outputVat?.amount).toBe("26");
+    expect(second.totalSellingRevenue).toBe("140");
+    expect(second.costs.outputVat?.taxableBase).toBe("140");
+    expect(second.costs.outputVat?.amount).toBe("28");
   });
 
   it("derives Order profitability from comparable Invoice allocations", () => {
@@ -328,6 +375,9 @@ describe("single order cost write", () => {
 
   it("rejects a reviewed Building that is not part of the selected Project", async () => {
     database.project.findUnique.mockResolvedValue({
+      defaultFreightMarkupRate: new Decimal(0),
+      defaultOtherCostMarkupRate: new Decimal(0),
+      defaultProductMarkupRate: new Decimal(0),
       reportingCurrencyCode: "EUR",
     });
     database.supplier.findUnique.mockResolvedValue({ id: "supplier" });
@@ -339,7 +389,7 @@ describe("single order cost write", () => {
       orderCurrencyCode: "EUR",
       orderNumber: "PO-BUILDING-CHECK",
       packageName: "Building validation",
-      pricingMode: "SELLING_PRICE",
+      pricingMode: "PROJECT_MARKUP",
       projectId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
       sellingCurrencyCode: "EUR",
       status: "DRAFT",

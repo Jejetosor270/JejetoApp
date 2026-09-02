@@ -4,13 +4,13 @@ import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 
 import {
   FreightTreatment,
-  PricingMode,
   ProcurementOrderStatus,
   VatRecoverability,
   VatTreatment,
 } from "@/generated/prisma/client";
 import { isSupportedCountryCode } from "@/config/countries";
 import { isDateOnly } from "@/domain/payments/dates";
+import { orderPricingMethods } from "@/domain/finance/order-pricing";
 
 const optionalText = (maximum: number) =>
   z.preprocess(
@@ -143,10 +143,12 @@ const orderFields = {
   outputVatCountryCode: optionalCountryCode,
   outputVatCustomTreatmentNote: optionalText(240),
   outputVatRate: optionalVatRate,
-  outputVatTaxableBase: optionalMoney("Output VAT taxable base"),
+  outputVatTaxableBaseOverride: optionalMoney(
+    "Output VAT taxable base override",
+  ),
   outputVatTreatment: optionalEnum(VatTreatment),
   packageName: z.string().trim().min(2).max(200),
-  pricingMode: z.enum(PricingMode),
+  pricingMode: z.enum(orderPricingMethods),
   projectId: z.uuid("Choose a valid project."),
   purchaseFxRate: optionalFxRate,
   purchaseCost: optionalMoney("Purchase cost"),
@@ -180,7 +182,7 @@ type VatValidationInput = Pick<
   | "outputVatCountryCode"
   | "outputVatCustomTreatmentNote"
   | "outputVatRate"
-  | "outputVatTaxableBase"
+  | "outputVatTaxableBaseOverride"
   | "outputVatTreatment"
 >;
 function validVat(
@@ -194,7 +196,9 @@ function validVat(
     value[`${direction}VatCountryCode`],
     value[`${direction}VatCustomTreatmentNote`],
     value[`${direction}VatRate`],
-    value[`${direction}VatTaxableBase`],
+    direction === "input"
+      ? value.inputVatTaxableBase
+      : value.outputVatTaxableBaseOverride,
     direction === "input" ? value.inputVatRecoverability : undefined,
   ].some(Boolean);
   if (!treatment) {
@@ -207,7 +211,7 @@ function validVat(
     }
     return;
   }
-  if (!value[`${direction}VatTaxableBase`]) {
+  if (direction === "input" && !value.inputVatTaxableBase) {
     context.addIssue({
       code: "custom",
       path: [`${direction}VatTaxableBase`],
@@ -248,12 +252,39 @@ function validOrder(
       message: "Freight resale requires separately recharged freight.",
     });
   }
+  if (
+    value.pricingMode !== "DIRECT_SELLING_PRICE" &&
+    value.freightResaleAmount &&
+    !new Decimal(value.freightResaleAmount).isZero()
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["freightResaleAmount"],
+      message: "A direct freight resale amount requires Direct Selling Price.",
+    });
+  }
+  const hasEveryOrderMarkup = Boolean(
+    value.productMarkupOverrideRate !== undefined &&
+    value.freightMarkupOverrideRate !== undefined &&
+    value.otherCostMarkupOverrideRate !== undefined,
+  );
+  const hasAnyOrderMarkup = Boolean(
+    value.productMarkupOverrideRate !== undefined ||
+    value.freightMarkupOverrideRate !== undefined ||
+    value.otherCostMarkupOverrideRate !== undefined,
+  );
   const invalidPricing =
-    value.pricingMode === PricingMode.TARGET_MARGIN
-      ? !value.targetMarginRate || Boolean(value.sellingPriceAmount)
-      : value.pricingMode === PricingMode.SELLING_PRICE
-        ? Boolean(value.targetMarginRate)
-        : Boolean(value.targetMarginRate) || Boolean(value.sellingPriceAmount);
+    value.pricingMode === "DIRECT_SELLING_PRICE"
+      ? !value.sellingPriceAmount ||
+        hasAnyOrderMarkup ||
+        Boolean(value.targetMarginRate)
+      : value.pricingMode === "ORDER_MARKUP"
+        ? !hasEveryOrderMarkup ||
+          Boolean(value.sellingPriceAmount) ||
+          Boolean(value.targetMarginRate)
+        : hasAnyOrderMarkup ||
+          Boolean(value.sellingPriceAmount) ||
+          Boolean(value.targetMarginRate);
   if (invalidPricing) {
     context.addIssue({
       code: "custom",

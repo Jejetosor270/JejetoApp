@@ -11,7 +11,7 @@ const base = {
   orderCurrencyCode: "USD",
   orderNumber: "PO-001",
   packageName: "Example package",
-  pricingMode: "SELLING_PRICE",
+  pricingMode: "DIRECT_SELLING_PRICE",
   projectId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
   purchaseCost: "70000",
   sellingCurrencyCode: "EUR",
@@ -29,17 +29,34 @@ describe("single procurement order cost validation", () => {
     expect(value.purchaseCost).toBe("70000.0000");
     expect(value.purchaseFxRate).toBe("0.8575000000");
   });
-  it("accepts component markup overrides and keeps blank values as inheritance", () => {
+  it("accepts explicit component markup rates for an Order", () => {
     const value = createOrderInputSchema.parse({
       ...base,
       freightMarkupOverrideRate: "15",
-      pricingMode: "COMPONENT_MARKUP",
+      pricingMode: "ORDER_MARKUP",
       productMarkupOverrideRate: "30",
+      otherCostMarkupOverrideRate: "10",
       sellingPriceAmount: undefined,
     });
     expect(value.productMarkupOverrideRate).toBe("0.300000");
     expect(value.freightMarkupOverrideRate).toBe("0.150000");
-    expect(value.otherCostMarkupOverrideRate).toBeUndefined();
+    expect(value.otherCostMarkupOverrideRate).toBe("0.100000");
+  });
+  it("accepts Project markup without competing Order or direct inputs", () => {
+    const value = createOrderInputSchema.parse({
+      ...base,
+      pricingMode: "PROJECT_MARKUP",
+      sellingPriceAmount: undefined,
+    });
+    expect(value.pricingMode).toBe("PROJECT_MARKUP");
+  });
+  it("allows automatic output VAT base without redundant manual input", () => {
+    const value = createOrderInputSchema.parse({
+      ...base,
+      outputVatRate: "20",
+      outputVatTreatment: "DOMESTIC",
+    });
+    expect(value.outputVatTaxableBaseOverride).toBeUndefined();
   });
   it("validates independent VAT and non-recoverability", () => {
     const value = createOrderInputSchema.parse({
@@ -49,7 +66,7 @@ describe("single procurement order cost validation", () => {
       inputVatTaxableBase: "70000",
       inputVatRate: "8",
       outputVatTreatment: "DOMESTIC",
-      outputVatTaxableBase: "100000",
+      outputVatTaxableBaseOverride: "100000",
       outputVatRate: "20",
     });
     expect(value.inputVatRate).toBe("0.080000");

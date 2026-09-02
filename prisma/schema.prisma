@@ -42,6 +42,9 @@ enum PricingMode {
   SELLING_PRICE
   TARGET_MARGIN
   COMPONENT_MARKUP
+  PROJECT_MARKUP
+  ORDER_MARKUP
+  DIRECT_SELLING_PRICE
 }
 
 enum ProcurementCostCategory {
@@ -399,7 +402,7 @@ model ProcurementOrder {
   supplierOrderConfirmationReference String?                @db.VarChar(120)
   status                             ProcurementOrderStatus @default(DRAFT)
   freightTreatment                   FreightTreatment       @default(NOT_APPLICABLE)
-  pricingMode                        PricingMode            @default(SELLING_PRICE)
+  pricingMode                        PricingMode            @default(PROJECT_MARKUP)
   purchaseFxRateToReporting          Decimal?               @db.Decimal(20, 10)
   sellingFxRateToReporting           Decimal?               @db.Decimal(20, 10)
   sellingPriceAmount                 Decimal?               @db.Decimal(19, 4)
@@ -409,6 +412,7 @@ model ProcurementOrder {
   productMarkupOverrideRate          Decimal?               @db.Decimal(9, 6)
   freightMarkupOverrideRate          Decimal?               @db.Decimal(9, 6)
   otherCostMarkupOverrideRate        Decimal?               @db.Decimal(9, 6)
+  outputVatTaxableBaseOverride       Decimal?               @db.Decimal(19, 4)
   quoteDate                          DateTime?              @db.Date
   orderDate                          DateTime?              @db.Date
   acknowledgementDate                DateTime?              @db.Date

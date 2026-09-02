@@ -48,7 +48,10 @@ export function orderFormValues(formData: FormData) {
       "outputVatCustomTreatmentNote",
     ),
     outputVatRate: stringValue(formData, "outputVatRate"),
-    outputVatTaxableBase: stringValue(formData, "outputVatTaxableBase"),
+    outputVatTaxableBaseOverride: stringValue(
+      formData,
+      "outputVatTaxableBaseOverride",
+    ),
     outputVatTreatment: stringValue(formData, "outputVatTreatment"),
     packageName: stringValue(formData, "packageName"),
     pricingMode: stringValue(formData, "pricingMode"),

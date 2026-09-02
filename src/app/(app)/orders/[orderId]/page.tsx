@@ -66,40 +66,58 @@ export default async function OrderPage({
               <dd className="financial-figure text-right">
                 {formatMoney(cost.freight, order.orderCurrencyCode)}
               </dd>
-              <dt>Product markup</dt>
-              <dd className="financial-figure text-right">
-                {formatRate(order.componentPricing.productMarkupRate)}
-                <span className="text-muted-foreground block text-[0.6875rem]">
-                  {order.componentPricing.productMarkupSource ===
-                  "PROJECT_DEFAULT"
-                    ? "Project default"
-                    : "Order override"}
-                </span>
+              <dt>Pricing method</dt>
+              <dd className="text-right">
+                {order.pricingMode.replaceAll("_", " ").toLowerCase()}
               </dd>
-              <dt>Product Sell HT (reporting)</dt>
-              <dd className="financial-figure text-right">
-                {formatMoney(
-                  order.componentPricing.productSellReporting,
-                  order.project.reportingCurrencyCode,
-                )}
-              </dd>
-              <dt>Freight markup</dt>
-              <dd className="financial-figure text-right">
-                {formatRate(order.componentPricing.freightMarkupRate)}
-                <span className="text-muted-foreground block text-[0.6875rem]">
-                  {order.componentPricing.freightMarkupSource ===
-                  "PROJECT_DEFAULT"
-                    ? "Project default"
-                    : "Order override"}
-                </span>
-              </dd>
-              <dt>Freight Sell HT (reporting)</dt>
-              <dd className="financial-figure text-right">
-                {formatMoney(
-                  order.componentPricing.freightSellReporting,
-                  order.project.reportingCurrencyCode,
-                )}
-              </dd>
+              {order.pricingMode !== "DIRECT_SELLING_PRICE" ? (
+                <>
+                  <dt>Product markup</dt>
+                  <dd className="financial-figure text-right">
+                    {formatRate(order.componentPricing.productMarkupRate)}
+                    <span className="text-muted-foreground block text-[0.6875rem]">
+                      {order.componentPricing.productMarkupSource ===
+                      "PROJECT_DEFAULT"
+                        ? "Project default"
+                        : "Order override"}
+                    </span>
+                  </dd>
+                  <dt>Product Sell HT (reporting)</dt>
+                  <dd className="financial-figure text-right">
+                    {formatMoney(
+                      order.componentPricing.productSellReporting,
+                      order.project.reportingCurrencyCode,
+                    )}
+                  </dd>
+                  <dt>Freight markup</dt>
+                  <dd className="financial-figure text-right">
+                    {formatRate(order.componentPricing.freightMarkupRate)}
+                    <span className="text-muted-foreground block text-[0.6875rem]">
+                      {order.componentPricing.freightMarkupSource ===
+                      "PROJECT_DEFAULT"
+                        ? "Project default"
+                        : "Order override"}
+                    </span>
+                  </dd>
+                  <dt>Freight Sell HT (reporting)</dt>
+                  <dd className="financial-figure text-right">
+                    {formatMoney(
+                      order.componentPricing.freightSellReporting,
+                      order.project.reportingCurrencyCode,
+                    )}
+                  </dd>
+                </>
+              ) : (
+                <>
+                  <dt>Direct package selling HT</dt>
+                  <dd className="financial-figure text-right">
+                    {formatMoney(
+                      order.packageSellingPrice,
+                      order.sellingCurrencyCode,
+                    )}
+                  </dd>
+                </>
+              )}
               <dt>Customs / duties</dt>
               <dd className="financial-figure text-right">
                 {formatMoney(cost.customsDuties, order.orderCurrencyCode)}
@@ -150,6 +168,18 @@ export default async function OrderPage({
                   cost.outputVat?.amount ?? null,
                   order.sellingCurrencyCode,
                 )}
+              </dd>
+              <dt>VAT Base HT</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  cost.outputVat?.taxableBase ?? null,
+                  order.sellingCurrencyCode,
+                )}
+                <span className="text-muted-foreground block text-[0.6875rem]">
+                  {cost.outputVat?.taxableBaseIsManual
+                    ? "Manual override"
+                    : "Automatic · Total Sell HT"}
+                </span>
               </dd>
               <dt>Selling TTC</dt>
               <dd className="financial-figure text-right">

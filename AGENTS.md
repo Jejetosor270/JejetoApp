@@ -38,7 +38,8 @@ Do not introduce a reusable product/SKU catalog, inventory, warehouse management
 - A Procurement Order is a supplier-level project package, never a product, SKU, room, or inventory item; it may relate to several Buildings in its Project.
 - Each Procurement Order has one current authoritative cost structure.
 - Cost components are normalized `ProcurementOrderCostLine` records. Do not add duplicate cost states or persist derived landed-cost/margin totals that can become stale.
-- Commercial pricing is shared by the order. `SELLING_PRICE` stores the manually entered package price; `TARGET_MARGIN` stores the target rate and derives package price from the current landed cost.
+- Every Order has one active pricing method: `PROJECT_MARKUP` dynamically uses the Project's Product/Freight/Other defaults, `ORDER_MARKUP` uses three explicit Order rates, and `DIRECT_SELLING_PRICE` uses the coherent direct package price plus any separately recharged freight. New Orders default to `PROJECT_MARKUP`; legacy Item pricing continues to use its Item-specific modes.
+- Output VAT taxable base is Total Selling HT by default. `outputVatTaxableBaseOverride = NULL` means AUTO; a non-null value is an explicit manual override. Derived VAT entries must be recalculated from the effective base and rate without changing INPUT VAT behavior.
 - Separately recharged freight is added once to total selling revenue and backed out of the calculated package price in target-margin mode. Freight remains part of landed cost regardless of commercial treatment.
 - INPUT and OUTPUT VAT are independent entries. VAT is neither revenue nor cost by default, no VAT rate is hardcoded, and unusual treatments remain representable.
 - Preserve original amount/currency, manual FX rate, converted amount, and reporting currency. ISO currency codes are relational data, not a closed enum.

@@ -48,7 +48,10 @@ function currentOrderValues(order: OrderSummary): CreateOrderInput {
     expectedReadyDate: order.expectedReadyDate ?? undefined,
     freight: order.costs.freight ?? undefined,
     freightMarkupOverrideRate: percent(order.freightMarkupOverrideRate),
-    freightResaleAmount: order.freightResaleAmount ?? undefined,
+    freightResaleAmount:
+      order.pricingMode === PricingMode.DIRECT_SELLING_PRICE
+        ? (order.freightResaleAmount ?? undefined)
+        : undefined,
     freightTreatment: order.freightTreatment,
     inputVatAmount: order.costs.inputVat?.amountIsManual
       ? order.costs.inputVat.amount
@@ -74,7 +77,8 @@ function currentOrderValues(order: OrderSummary): CreateOrderInput {
     outputVatCustomTreatmentNote:
       order.costs.outputVat?.customTreatmentNote ?? undefined,
     outputVatRate: percent(order.costs.outputVat?.rate ?? null),
-    outputVatTaxableBase: order.costs.outputVat?.taxableBase ?? undefined,
+    outputVatTaxableBaseOverride:
+      order.outputVatTaxableBaseOverride ?? undefined,
     outputVatTreatment: order.costs.outputVat?.treatment ?? undefined,
     packageName: order.packageName,
     pricingMode: order.pricingMode,
@@ -86,7 +90,7 @@ function currentOrderValues(order: OrderSummary): CreateOrderInput {
     sellingCurrencyCode: order.sellingCurrencyCode,
     sellingFxRate: order.costs.sellingFxRate ?? undefined,
     sellingPriceAmount:
-      order.pricingMode === PricingMode.SELLING_PRICE
+      order.pricingMode === PricingMode.DIRECT_SELLING_PRICE
         ? (order.packageSellingPrice ?? undefined)
         : undefined,
     status: order.status,
@@ -94,7 +98,7 @@ function currentOrderValues(order: OrderSummary): CreateOrderInput {
     supplierOrderConfirmationReference:
       order.supplierOrderConfirmationReference ?? undefined,
     supplierQuoteReference: order.supplierQuoteReference ?? undefined,
-    targetMarginRate: percent(order.targetMarginRate),
+    targetMarginRate: undefined,
   });
   if (!input.success) {
     throw new QuoteConfirmationError(
@@ -148,11 +152,7 @@ function reviewedOrderValues(
     freightMarkupOverrideRate: current?.freightMarkupOverrideRate
       ? new Decimal(current.freightMarkupOverrideRate).times(100).toString()
       : undefined,
-    freightResaleAmount: input.applyFreight
-      ? input.freightTreatment === FreightTreatment.RECHARGED_SEPARATELY
-        ? input.freightResaleAmount
-        : undefined
-      : current?.freightResaleAmount,
+    freightResaleAmount: current?.freightResaleAmount,
     freightTreatment: input.applyFreight
       ? input.freightTreatment
       : (current?.freightTreatment ?? FreightTreatment.NOT_APPLICABLE),
@@ -200,10 +200,10 @@ function reviewedOrderValues(
     outputVatRate: current?.outputVatRate
       ? new Decimal(current.outputVatRate).times(100).toString()
       : undefined,
-    outputVatTaxableBase: current?.outputVatTaxableBase,
+    outputVatTaxableBaseOverride: current?.outputVatTaxableBaseOverride,
     outputVatTreatment: current?.outputVatTreatment,
     packageName: current?.packageName ?? input.packageName ?? input.orderNumber,
-    pricingMode: current?.pricingMode ?? PricingMode.SELLING_PRICE,
+    pricingMode: current?.pricingMode ?? PricingMode.PROJECT_MARKUP,
     projectId: input.projectId,
     purchaseCost: input.applyPurchaseCost
       ? input.purchaseCost

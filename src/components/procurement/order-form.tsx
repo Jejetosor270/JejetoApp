@@ -20,10 +20,13 @@ import { countries } from "@/config/countries";
 import { rateToPercentInput } from "@/domain/procurement/presentation";
 import { addWeeksToDateOnly } from "@/domain/payments/dates";
 import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
+import { vatAmount as calculateVatAmount } from "@/domain/finance/calculations";
 import {
-  calculateComponentMarkup,
-  markupFromSelling,
-} from "@/domain/finance/component-markup";
+  calculateOrderPricingDraft,
+  effectiveVatBase,
+  initializePricingMethod,
+  type OrderPricingMethod,
+} from "@/domain/finance/order-pricing";
 
 interface BuildingOption {
   id: string;
@@ -92,6 +95,7 @@ export interface EditableOrder {
   leadTimeWeeks: number | null;
   notes: string | null;
   otherCostMarkupOverrideRate: string | null;
+  outputVatTaxableBaseOverride: string | null;
   orderCurrencyCode: string;
   orderNumber: string;
   orderDate: string | null;
@@ -119,9 +123,9 @@ const labels: Record<string, string> = {
   INCLUDED_IN_PACKAGE_PRICE: "Included in package price",
   NOT_APPLICABLE: "Not applicable",
   RECHARGED_SEPARATELY: "Recharged separately",
-  SELLING_PRICE: "Enter selling price",
-  TARGET_MARGIN: "Calculate from target margin",
-  COMPONENT_MARKUP: "Product and freight markup",
+  PROJECT_MARKUP: "Project Markup",
+  ORDER_MARKUP: "Specific Order Markup",
+  DIRECT_SELLING_PRICE: "Direct Selling Price",
   RECOVERABLE: "Recoverable",
   NON_RECOVERABLE: "Non-recoverable",
 };
@@ -133,6 +137,22 @@ function label(value: string): string {
       .toLowerCase()
       .replace(/^./, (letter) => letter.toUpperCase())
   );
+}
+function editablePricingMethod(order?: EditableOrder): OrderPricingMethod {
+  if (!order) return "PROJECT_MARKUP";
+  if (
+    order.pricingMode === "PROJECT_MARKUP" ||
+    order.pricingMode === "ORDER_MARKUP" ||
+    order.pricingMode === "DIRECT_SELLING_PRICE"
+  )
+    return order.pricingMode;
+  if (order.pricingMode === "COMPONENT_MARKUP")
+    return order.productMarkupOverrideRate !== null ||
+      order.freightMarkupOverrideRate !== null ||
+      order.otherCostMarkupOverrideRate !== null
+      ? "ORDER_MARKUP"
+      : "PROJECT_MARKUP";
+  return "DIRECT_SELLING_PRICE";
 }
 function Money({
   defaultValue,
@@ -297,8 +317,8 @@ export function OrderForm({
       project?.reportingCurrencyCode ??
       "EUR",
   );
-  const [pricingMode, setPricingMode] = useState(
-    order?.pricingMode ?? "COMPONENT_MARKUP",
+  const [pricingMode, setPricingMode] = useState<OrderPricingMethod>(
+    editablePricingMethod(order),
   );
   const [freightTreatment, setFreightTreatment] = useState(
     order?.freightTreatment ?? "NOT_APPLICABLE",
@@ -331,33 +351,113 @@ export function OrderForm({
   const [otherMarkupOverride, setOtherMarkupOverride] = useState(
     rateToPercentInput(order?.otherCostMarkupOverrideRate ?? null),
   );
+  const [purchaseFxRate, setPurchaseFxRate] = useState(
+    order?.costs.purchaseFxRate ?? "",
+  );
+  const [sellingFxRate, setSellingFxRate] = useState(
+    order?.costs.sellingFxRate ?? "",
+  );
+  const [directSellingPrice, setDirectSellingPrice] = useState(
+    order?.packageSellingPrice ?? "",
+  );
+  const [freightResale, setFreightResale] = useState(
+    order?.freightResaleAmount ?? "",
+  );
+  const [outputVatTreatment, setOutputVatTreatment] = useState(
+    order?.costs.outputVat?.treatment ?? "",
+  );
+  const [outputVatRate, setOutputVatRate] = useState(
+    rateToPercentInput(order?.costs.outputVat?.rate ?? null),
+  );
+  const [manualOutputVatBase, setManualOutputVatBase] = useState(
+    order?.outputVatTaxableBaseOverride ?? "",
+  );
+  const [outputVatBaseIsManual, setOutputVatBaseIsManual] = useState(
+    order?.outputVatTaxableBaseOverride !== null &&
+      order?.outputVatTaxableBaseOverride !== undefined,
+  );
   const toRate = (percent: string, inherited: string) =>
     percent.trim() ? new Decimal(percent).dividedBy(100).toString() : inherited;
-  let livePricing: ReturnType<typeof calculateComponentMarkup> | null = null;
+  let livePricing: ReturnType<typeof calculateOrderPricingDraft> | null = null;
   try {
     if (project) {
-      livePricing = calculateComponentMarkup({
+      const useProjectDefaults = pricingMode === "PROJECT_MARKUP";
+      livePricing = calculateOrderPricingDraft({
+        directPackageSell: directSellingPrice || "0",
         freightCost: freightCost || "0",
-        freightMarkupRate: toRate(
-          freightMarkupOverride,
-          project.defaultFreightMarkupRate,
-        ),
+        freightMarkupRate: useProjectDefaults
+          ? project.defaultFreightMarkupRate
+          : toRate(freightMarkupOverride, project.defaultFreightMarkupRate),
+        freightResale: freightResale || "0",
+        freightTreatment,
+        method: pricingMode,
         otherCost: new Decimal(customsCost || 0)
           .plus(miscellaneousCost || 0)
           .toString(),
-        otherMarkupRate: toRate(
-          otherMarkupOverride,
-          project.defaultOtherCostMarkupRate,
-        ),
+        otherMarkupRate: useProjectDefaults
+          ? project.defaultOtherCostMarkupRate
+          : toRate(otherMarkupOverride, project.defaultOtherCostMarkupRate),
         productCost: purchaseCost || "0",
-        productMarkupRate: toRate(
-          productMarkupOverride,
-          project.defaultProductMarkupRate,
-        ),
+        productMarkupRate: useProjectDefaults
+          ? project.defaultProductMarkupRate
+          : toRate(productMarkupOverride, project.defaultProductMarkupRate),
+        purchaseCurrencyCode: purchaseCurrency,
+        purchaseFxRate,
+        reportingCurrencyCode: project.reportingCurrencyCode,
+        sellingCurrencyCode: sellingCurrency,
+        sellingFxRate,
       });
     }
   } catch {
     livePricing = null;
+  }
+  const automaticOutputVatBase = livePricing?.totalSell ?? null;
+  const outputVatBase = effectiveVatBase(
+    automaticOutputVatBase,
+    outputVatBaseIsManual ? manualOutputVatBase || "0" : null,
+  );
+  let liveOutputVat = "0.0000";
+  try {
+    if (outputVatTreatment)
+      liveOutputVat = calculateVatAmount(
+        outputVatBase ?? "0",
+        outputVatRate ? new Decimal(outputVatRate).dividedBy(100) : "0",
+      ).toFixed(4);
+  } catch {
+    liveOutputVat = "0.0000";
+  }
+  const liveTtc = automaticOutputVatBase
+    ? new Decimal(automaticOutputVatBase).plus(liveOutputVat).toFixed(4)
+    : null;
+  function changePricingMethod(next: OrderPricingMethod) {
+    if (!project) return setPricingMode(next);
+    const initialized = initializePricingMethod(next, {
+      effectiveFreightMarkupRate:
+        pricingMode === "PROJECT_MARKUP"
+          ? project.defaultFreightMarkupRate
+          : toRate(freightMarkupOverride, project.defaultFreightMarkupRate),
+      effectiveOtherMarkupRate:
+        pricingMode === "PROJECT_MARKUP"
+          ? project.defaultOtherCostMarkupRate
+          : toRate(otherMarkupOverride, project.defaultOtherCostMarkupRate),
+      effectiveProductMarkupRate:
+        pricingMode === "PROJECT_MARKUP"
+          ? project.defaultProductMarkupRate
+          : toRate(productMarkupOverride, project.defaultProductMarkupRate),
+      freightSell: livePricing?.freightSell ?? null,
+      freightTreatment,
+      totalSell: livePricing?.totalSell ?? null,
+    });
+    if ("productMarkupPercent" in initialized) {
+      setProductMarkupOverride(initialized.productMarkupPercent);
+      setFreightMarkupOverride(initialized.freightMarkupPercent ?? "");
+      setOtherMarkupOverride(initialized.otherMarkupPercent ?? "");
+    }
+    if ("directPackageSell" in initialized) {
+      setDirectSellingPrice(initialized.directPackageSell);
+      setFreightResale(initialized.freightResale ?? "");
+    }
+    setPricingMode(next);
   }
   function refreshExpectedReady(nextDate: string, nextWeeks: string) {
     const weeks = Number(nextWeeks);
@@ -684,15 +784,16 @@ export function OrderForm({
             >
               <input
                 className={`${inputClassName} ${purchaseCurrency === project?.reportingCurrencyCode ? "bg-muted" : ""}`}
-                defaultValue={order?.costs.purchaseFxRate ?? ""}
                 disabled={purchaseCurrency === project?.reportingCurrencyCode}
                 inputMode="decimal"
                 name="purchaseFxRate"
+                onChange={(event) => setPurchaseFxRate(event.target.value)}
                 placeholder={
                   purchaseCurrency === project?.reportingCurrencyCode
                     ? "1 (automatic)"
                     : "e.g. 0.857500"
                 }
+                value={purchaseFxRate}
               />
             </Field>
             <Field
@@ -700,15 +801,16 @@ export function OrderForm({
             >
               <input
                 className={`${inputClassName} ${sellingCurrency === project?.reportingCurrencyCode ? "bg-muted" : ""}`}
-                defaultValue={order?.costs.sellingFxRate ?? ""}
                 disabled={sellingCurrency === project?.reportingCurrencyCode}
                 inputMode="decimal"
                 name="sellingFxRate"
+                onChange={(event) => setSellingFxRate(event.target.value)}
                 placeholder={
                   sellingCurrency === project?.reportingCurrencyCode
                     ? "1 (automatic)"
                     : "e.g. 1.170000"
                 }
+                value={sellingFxRate}
               />
             </Field>
           </div>
@@ -723,12 +825,120 @@ export function OrderForm({
               options={options}
               value={order?.costs.inputVat ?? null}
             />
-            <VatFields
-              currency={sellingCurrency}
-              direction="output"
-              options={options}
-              value={order?.costs.outputVat ?? null}
-            />
+            <section className="bg-background/60 rounded-md border p-3">
+              <h4 className="text-xs font-semibold">Sales VAT</h4>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Field label="Treatment">
+                  <select
+                    className={inputClassName}
+                    name="outputVatTreatment"
+                    onChange={(event) => {
+                      setOutputVatTreatment(event.target.value);
+                      if (!event.target.value) setOutputVatRate("");
+                    }}
+                    value={outputVatTreatment}
+                  >
+                    <option value="">Not recorded</option>
+                    {options.vatTreatments.map((item) => (
+                      <option key={item} value={item}>
+                        {label(item)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="VAT rate %">
+                  <input
+                    className={inputClassName}
+                    inputMode="decimal"
+                    name="outputVatRate"
+                    onChange={(event) => setOutputVatRate(event.target.value)}
+                    placeholder="20.00"
+                    value={outputVatRate}
+                  />
+                </Field>
+                <Field
+                  label={`VAT Base HT (${sellingCurrency}) · ${outputVatBaseIsManual ? "MANUAL OVERRIDE" : "AUTO"}`}
+                >
+                  {outputVatBaseIsManual ? (
+                    <MoneyInput
+                      name="outputVatTaxableBaseOverride"
+                      onValueChange={setManualOutputVatBase}
+                      value={manualOutputVatBase}
+                    />
+                  ) : (
+                    <>
+                      <input
+                        name="outputVatTaxableBaseOverride"
+                        type="hidden"
+                        value=""
+                      />
+                      <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                        {outputVatBase ?? "Incomplete"}
+                      </p>
+                    </>
+                  )}
+                </Field>
+                <div className="flex items-end">
+                  <button
+                    className="text-primary text-sm font-medium"
+                    onClick={() => {
+                      if (outputVatBaseIsManual) {
+                        setManualOutputVatBase("");
+                        setOutputVatBaseIsManual(false);
+                      } else {
+                        setManualOutputVatBase(automaticOutputVatBase ?? "0");
+                        setOutputVatBaseIsManual(true);
+                      }
+                    }}
+                    type="button"
+                  >
+                    {outputVatBaseIsManual
+                      ? "Use calculated VAT base"
+                      : "Override VAT base"}
+                  </button>
+                </div>
+                <Field label={`VAT amount (${sellingCurrency})`}>
+                  <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                    {liveOutputVat}
+                  </p>
+                  <input name="outputVatAmount" type="hidden" value="" />
+                </Field>
+                <Field label={`Selling TTC (${sellingCurrency})`}>
+                  <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                    {liveTtc ?? "Incomplete"}
+                  </p>
+                </Field>
+                <Field label="Country">
+                  <select
+                    className={inputClassName}
+                    defaultValue={order?.costs.outputVat?.countryCode ?? ""}
+                    name="outputVatCountryCode"
+                  >
+                    <option value="">Not specified</option>
+                    {countries.map((country) => (
+                      <option key={country.code} value={country.code}>
+                        {country.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <label className="grid gap-1.5 text-sm font-medium">
+                  Custom treatment note
+                  <input
+                    className={inputClassName}
+                    defaultValue={
+                      order?.costs.outputVat?.customTreatmentNote ?? ""
+                    }
+                    name="outputVatCustomTreatmentNote"
+                  />
+                </label>
+              </div>
+              <p className="text-muted-foreground mt-3 text-xs">
+                {outputVatBaseIsManual
+                  ? "Pricing changes do not replace this manual base."
+                  : "Calculated automatically from Total Sell HT."}
+              </p>
+            </section>
           </div>
         </section>
         <section className="bg-muted/20 rounded-lg border p-4">
@@ -738,46 +948,18 @@ export function OrderForm({
               <select
                 className={inputClassName}
                 name="pricingMode"
-                onChange={(event) => setPricingMode(event.target.value)}
+                onChange={(event) =>
+                  changePricingMethod(event.target.value as OrderPricingMethod)
+                }
                 value={pricingMode}
               >
-                {options.pricingModes
-                  .filter(
-                    (item) =>
-                      item !== "TARGET_MARGIN" ||
-                      order?.pricingMode === "TARGET_MARGIN",
-                  )
-                  .map((item) => (
-                    <option key={item} value={item}>
-                      {label(item)}
-                    </option>
-                  ))}
+                {options.pricingModes.map((item) => (
+                  <option key={item} value={item}>
+                    {label(item)}
+                  </option>
+                ))}
               </select>
             </Field>
-            {pricingMode === "SELLING_PRICE" ? (
-              <Money
-                defaultValue={order?.packageSellingPrice}
-                label="Package selling price HT"
-                name="sellingPriceAmount"
-              />
-            ) : (
-              <input name="sellingPriceAmount" type="hidden" value="" />
-            )}
-            {pricingMode === "TARGET_MARGIN" ? (
-              <Field label="Legacy target gross margin %">
-                <input
-                  className={inputClassName}
-                  defaultValue={rateToPercentInput(
-                    order?.targetMarginRate ?? null,
-                  )}
-                  inputMode="decimal"
-                  name="targetMarginPercent"
-                  placeholder="30.00"
-                />
-              </Field>
-            ) : (
-              <input name="targetMarginPercent" type="hidden" value="" />
-            )}
             <Field label="Freight treatment">
               <select
                 className={inputClassName}
@@ -792,19 +974,17 @@ export function OrderForm({
                 ))}
               </select>
             </Field>
-            {pricingMode === "COMPONENT_MARKUP" ? (
-              <input name="freightResaleAmount" type="hidden" value="" />
-            ) : (
-              <Money
-                defaultValue={order?.freightResaleAmount}
-                label="Separate freight resale HT"
-                name="freightResaleAmount"
-              />
-            )}
           </div>
-          {pricingMode === "COMPONENT_MARKUP" && project ? (
+          <p className="text-muted-foreground mt-2 text-xs">
+            {pricingMode === "PROJECT_MARKUP"
+              ? "Uses this Project's default Product, Freight and Other Cost markup rates."
+              : pricingMode === "ORDER_MARKUP"
+                ? "Uses explicit markup rates for this Order only."
+                : "Selling HT is entered directly; effective markup is calculated."}
+          </p>
+          {pricingMode === "ORDER_MARKUP" && project ? (
             <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <Field label="Product markup override %">
+              <Field label="Product markup %">
                 <input
                   className={inputClassName}
                   inputMode="decimal"
@@ -812,11 +992,18 @@ export function OrderForm({
                   onChange={(event) =>
                     setProductMarkupOverride(event.target.value)
                   }
-                  placeholder={`${new Decimal(project.defaultProductMarkupRate).times(100).toString()} · Project default`}
+                  placeholder="0.00"
                   value={productMarkupOverride}
                 />
+                <span className="text-muted-foreground text-xs">
+                  Project default:{" "}
+                  {new Decimal(project.defaultProductMarkupRate)
+                    .times(100)
+                    .toString()}
+                  %
+                </span>
               </Field>
-              <Field label="Freight markup override %">
+              <Field label="Freight markup %">
                 <input
                   className={inputClassName}
                   inputMode="decimal"
@@ -824,11 +1011,18 @@ export function OrderForm({
                   onChange={(event) =>
                     setFreightMarkupOverride(event.target.value)
                   }
-                  placeholder={`${new Decimal(project.defaultFreightMarkupRate).times(100).toString()} · Project default`}
+                  placeholder="0.00"
                   value={freightMarkupOverride}
                 />
+                <span className="text-muted-foreground text-xs">
+                  Project default:{" "}
+                  {new Decimal(project.defaultFreightMarkupRate)
+                    .times(100)
+                    .toString()}
+                  %
+                </span>
               </Field>
-              <Field label="Other cost markup override %">
+              <Field label="Other Cost markup %">
                 <input
                   className={inputClassName}
                   inputMode="decimal"
@@ -836,72 +1030,17 @@ export function OrderForm({
                   onChange={(event) =>
                     setOtherMarkupOverride(event.target.value)
                   }
-                  placeholder={`${new Decimal(project.defaultOtherCostMarkupRate).times(100).toString()} · Project default`}
+                  placeholder="0.00"
                   value={otherMarkupOverride}
                 />
+                <span className="text-muted-foreground text-xs">
+                  Project default:{" "}
+                  {new Decimal(project.defaultOtherCostMarkupRate)
+                    .times(100)
+                    .toString()}
+                  %
+                </span>
               </Field>
-              <p className="text-muted-foreground text-xs md:col-span-3">
-                Leave an override blank to inherit the Project default. Clearing
-                it returns this Order to inheritance.
-              </p>
-              <div className="rounded-md border p-3 text-sm">
-                <p className="text-muted-foreground text-xs">Product Sell HT</p>
-                {purchaseCurrency === sellingCurrency ? (
-                  <input
-                    aria-label="Product selling HT"
-                    className={`${inputClassName} mt-1`}
-                    inputMode="decimal"
-                    onChange={(event) => {
-                      const rate = markupFromSelling(
-                        purchaseCost || "0",
-                        event.target.value || "0",
-                      );
-                      if (rate && !rate.isNegative())
-                        setProductMarkupOverride(rate.times(100).toString());
-                    }}
-                    value={livePricing?.productSell ?? ""}
-                  />
-                ) : (
-                  <p className="financial-figure mt-1">
-                    Calculated after Save using authoritative FX
-                  </p>
-                )}
-              </div>
-              <div className="rounded-md border p-3 text-sm">
-                <p className="text-muted-foreground text-xs">Freight Sell HT</p>
-                {purchaseCurrency === sellingCurrency ? (
-                  <input
-                    aria-label="Freight selling HT"
-                    className={`${inputClassName} mt-1`}
-                    inputMode="decimal"
-                    onChange={(event) => {
-                      const rate = markupFromSelling(
-                        freightCost || "0",
-                        event.target.value || "0",
-                      );
-                      if (rate && !rate.isNegative())
-                        setFreightMarkupOverride(rate.times(100).toString());
-                    }}
-                    value={livePricing?.freightSell ?? ""}
-                  />
-                ) : (
-                  <p className="financial-figure mt-1">
-                    Calculated after Save using authoritative FX
-                  </p>
-                )}
-              </div>
-              <div className="rounded-md border p-3 text-sm">
-                <p className="text-muted-foreground text-xs">
-                  Total Sell / Profit / Effective Markup
-                </p>
-                <p className="financial-figure mt-1">
-                  {purchaseCurrency !== sellingCurrency
-                    ? "Reporting totals calculated on Save using FX"
-                    : livePricing
-                      ? `${livePricing.totalSell} / ${livePricing.grossProfit} / ${new Decimal(livePricing.effectiveMarkupRate ?? 0).times(100).toFixed(2)}%`
-                      : "Check entered amounts"}
-                </p>
-              </div>
             </div>
           ) : (
             <>
@@ -922,6 +1061,109 @@ export function OrderForm({
               />
             </>
           )}
+          {pricingMode === "PROJECT_MARKUP" && project ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {[
+                ["Product", project.defaultProductMarkupRate],
+                ["Freight", project.defaultFreightMarkupRate],
+                ["Other Cost", project.defaultOtherCostMarkupRate],
+              ].map(([name, rate]) => (
+                <div className="rounded-md border p-3 text-sm" key={name}>
+                  <p className="text-muted-foreground text-xs">{name} markup</p>
+                  <p className="financial-figure mt-1">
+                    {new Decimal(rate ?? "0").times(100).toFixed(2)}% · Project
+                    default
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {pricingMode === "DIRECT_SELLING_PRICE" ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <Field label={`Package selling HT (${sellingCurrency})`}>
+                <MoneyInput
+                  name="sellingPriceAmount"
+                  onValueChange={setDirectSellingPrice}
+                  value={directSellingPrice}
+                />
+              </Field>
+              {freightTreatment === "RECHARGED_SEPARATELY" ? (
+                <Field
+                  label={`Separate freight resale HT (${sellingCurrency})`}
+                >
+                  <MoneyInput
+                    name="freightResaleAmount"
+                    onValueChange={setFreightResale}
+                    value={freightResale}
+                  />
+                </Field>
+              ) : (
+                <input name="freightResaleAmount" type="hidden" value="" />
+              )}
+              <div className="rounded-md border p-3 text-sm">
+                <p className="text-muted-foreground text-xs">
+                  Effective package markup
+                </p>
+                <p className="financial-figure mt-1">
+                  {livePricing?.productMarkupRate
+                    ? `${new Decimal(livePricing.productMarkupRate).times(100).toFixed(2)}%`
+                    : "Incomplete · FX or cost required"}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <input name="sellingPriceAmount" type="hidden" value="" />
+              <input name="freightResaleAmount" type="hidden" value="" />
+            </>
+          )}
+          <input name="targetMarginPercent" type="hidden" value="" />
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {pricingMode !== "DIRECT_SELLING_PRICE" ? (
+              <>
+                <div className="rounded-md border p-3 text-sm">
+                  <p className="text-muted-foreground text-xs">
+                    Product Sell HT
+                  </p>
+                  <p className="financial-figure mt-1">
+                    {livePricing?.productSell ?? "Incomplete"}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3 text-sm">
+                  <p className="text-muted-foreground text-xs">
+                    Freight Sell HT
+                  </p>
+                  <p className="financial-figure mt-1">
+                    {livePricing?.freightSell ?? "Incomplete"}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3 text-sm">
+                  <p className="text-muted-foreground text-xs">Other Sell HT</p>
+                  <p className="financial-figure mt-1">
+                    {livePricing?.otherSell ?? "Incomplete"}
+                  </p>
+                </div>
+              </>
+            ) : null}
+            <div className="rounded-md border p-3 text-sm">
+              <p className="text-muted-foreground text-xs">Total Sell HT</p>
+              <p className="financial-figure mt-1">
+                {livePricing?.totalSell ?? "Incomplete"} {sellingCurrency}
+              </p>
+            </div>
+            <div className="rounded-md border p-3 text-sm">
+              <p className="text-muted-foreground text-xs">
+                Gross Profit / Effective Markup
+              </p>
+              <p className="financial-figure mt-1">
+                {livePricing?.grossProfitReporting ?? "Incomplete"}{" "}
+                {project?.reportingCurrencyCode ?? ""} /{" "}
+                {livePricing?.effectiveMarkupRate
+                  ? `${new Decimal(livePricing.effectiveMarkupRate).times(100).toFixed(2)}%`
+                  : "—"}
+              </p>
+            </div>
+          </div>
         </section>
         <div className="flex items-center gap-3">
           <SubmitButton pending={pending}>

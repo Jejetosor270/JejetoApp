@@ -27,6 +27,11 @@ import {
   calculateComponentMarkup,
   resolveMarkup,
 } from "@/domain/finance/component-markup";
+import {
+  calculateOrderPricingDraft,
+  effectiveVatBase,
+  orderPricingMethods,
+} from "@/domain/finance/order-pricing";
 import type {
   CreateOrderInput,
   InlineOrderInput,
@@ -106,6 +111,7 @@ export interface VatSummary {
   recoverability: VatRecoverability | null;
   reportingAmount: string | null;
   taxableBase: string;
+  taxableBaseIsManual: boolean;
   treatment: VatTreatment;
 }
 export interface OrderCostSummary {
@@ -165,6 +171,7 @@ export interface OrderSummary {
   leadTimeWeeks: number | null;
   notes: string | null;
   otherCostMarkupOverrideRate: string | null;
+  outputVatTaxableBaseOverride: string | null;
   orderCurrencyCode: string;
   orderNumber: string;
   orderDate: string | null;
@@ -238,23 +245,27 @@ function vatSummary(
   currency: string,
   reportingCurrency: string,
   rate: Decimal | null,
+  taxableBaseIsManual = false,
+  effectiveTaxableBase?: Decimal | null,
+  effectiveVatAmount?: Decimal | null,
 ): VatSummary | null {
   if (!entry) return null;
   const reporting = reportingAmount({
     fxRateToReporting: fxRate(currency, reportingCurrency, rate),
-    originalAmount: entry.vatAmount.toString(),
+    originalAmount: (effectiveVatAmount ?? entry.vatAmount).toString(),
     originalCurrencyCode: currency,
     reportingCurrencyCode: reportingCurrency,
   });
   return {
-    amount: entry.vatAmount.toString(),
+    amount: (effectiveVatAmount ?? entry.vatAmount).toString(),
     amountIsManual: entry.isAmountOverride,
     countryCode: entry.countryCode,
     customTreatmentNote: entry.customTreatmentNote,
     rate: entry.vatRate?.toString() ?? null,
     recoverability: entry.recoverability,
     reportingAmount: reporting?.toString() ?? null,
-    taxableBase: entry.taxableBaseAmount.toString(),
+    taxableBase: (effectiveTaxableBase ?? entry.taxableBaseAmount).toString(),
+    taxableBaseIsManual,
     treatment: entry.treatment,
   };
 }
@@ -299,17 +310,19 @@ function targetPackagePrice(
 }
 
 function componentPricing(order: OrderRecord) {
+  const projectPricing = order.pricingMode === PricingMode.PROJECT_MARKUP;
+  const orderPricing = order.pricingMode === PricingMode.ORDER_MARKUP;
   const productMarkup = resolveMarkup(
     order.project.defaultProductMarkupRate.toString(),
-    order.productMarkupOverrideRate?.toString(),
+    projectPricing ? null : order.productMarkupOverrideRate?.toString(),
   );
   const freightMarkup = resolveMarkup(
     order.project.defaultFreightMarkupRate.toString(),
-    order.freightMarkupOverrideRate?.toString(),
+    projectPricing ? null : order.freightMarkupOverrideRate?.toString(),
   );
   const otherMarkup = resolveMarkup(
     order.project.defaultOtherCostMarkupRate.toString(),
-    order.otherCostMarkupOverrideRate?.toString(),
+    projectPricing ? null : order.otherCostMarkupOverrideRate?.toString(),
   );
   const convertCost = (amount: string | null) =>
     reportingAmount({
@@ -335,7 +348,13 @@ function componentPricing(order: OrderRecord) {
     costAmount(order, ProcurementCostCategory.MISCELLANEOUS),
   );
   const calculated =
-    product && freight && customs && miscellaneous
+    (projectPricing ||
+      orderPricing ||
+      order.pricingMode === PricingMode.COMPONENT_MARKUP) &&
+    product &&
+    freight &&
+    customs &&
+    miscellaneous
       ? calculateComponentMarkup({
           freightCost: freight.toString(),
           freightMarkupRate: freightMarkup.rate,
@@ -406,10 +425,13 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
     : null;
   const component = componentPricing(order);
   const packagePrice =
-    order.pricingMode === PricingMode.SELLING_PRICE
+    order.pricingMode === PricingMode.SELLING_PRICE ||
+    order.pricingMode === PricingMode.DIRECT_SELLING_PRICE
       ? order.sellingPriceAmount
         ? new Decimal(order.sellingPriceAmount.toString())
-        : null
+        : order.targetMarginRate
+          ? targetPackagePrice(order, reportingEconomic)
+          : null
       : order.pricingMode === PricingMode.TARGET_MARGIN
         ? targetPackagePrice(order, reportingEconomic)
         : component.totalSellOriginal
@@ -420,7 +442,9 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
             : component.totalSellOriginal
           : null;
   const totalRevenue =
-    order.pricingMode === PricingMode.COMPONENT_MARKUP
+    order.pricingMode === PricingMode.COMPONENT_MARKUP ||
+    order.pricingMode === PricingMode.PROJECT_MARKUP ||
+    order.pricingMode === PricingMode.ORDER_MARKUP
       ? component.totalSellOriginal
       : packagePrice
         ? totalSellingRevenue(
@@ -429,8 +453,20 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
             order.freightResaleAmount?.toString() ?? "0",
           )
         : null;
+  const effectiveOutputBase = output
+    ? (order.outputVatTaxableBaseOverride ?? totalRevenue)
+    : null;
+  const effectiveOutputVat =
+    output && effectiveOutputBase
+      ? output.isAmountOverride
+        ? output.vatAmount
+        : calculateVatAmount(
+            effectiveOutputBase,
+            output.vatRate?.toString() ?? "0",
+          )
+      : null;
   const totalSellingAmountIncludingVat = totalRevenue
-    ? amountIncludingVat(totalRevenue, output?.vatAmount.toString() ?? "0")
+    ? amountIncludingVat(totalRevenue, effectiveOutputVat?.toString() ?? "0")
     : null;
   const reportingRevenue = totalRevenue
     ? reportingAmount({
@@ -593,7 +629,9 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
       ? dateToDateOnly(order.expectedReadyDate)
       : null,
     freightResaleAmount:
-      order.pricingMode === PricingMode.COMPONENT_MARKUP &&
+      (order.pricingMode === PricingMode.COMPONENT_MARKUP ||
+        order.pricingMode === PricingMode.PROJECT_MARKUP ||
+        order.pricingMode === PricingMode.ORDER_MARKUP) &&
       order.freightTreatment === FreightTreatment.RECHARGED_SEPARATELY
         ? (component.freightSellOriginal?.toString() ?? null)
         : (order.freightResaleAmount?.toString() ?? null),
@@ -605,6 +643,8 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
     notes: order.notes,
     otherCostMarkupOverrideRate:
       order.otherCostMarkupOverrideRate?.toString() ?? null,
+    outputVatTaxableBaseOverride:
+      order.outputVatTaxableBaseOverride?.toString() ?? null,
     orderCurrencyCode: order.orderCurrencyCode,
     orderNumber: order.orderNumber,
     orderDate: order.orderDate ? dateToDateOnly(order.orderDate) : null,
@@ -666,6 +706,9 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
         order.sellingCurrencyCode,
         order.project.reportingCurrencyCode,
         order.sellingFxRateToReporting,
+        order.outputVatTaxableBaseOverride !== null,
+        effectiveOutputBase,
+        effectiveOutputVat,
       ),
       purchaseCost: costAmount(
         order,
@@ -707,59 +750,46 @@ export function projectProcurementSummary(
   };
 }
 
-function inputLandedCost(input: CreateOrderInput): Decimal | null {
-  if (
-    !input.purchaseCost &&
-    !input.freight &&
-    !input.customsDuties &&
-    !input.miscellaneous
-  )
-    return null;
-  return landedCost({
-    supplierPurchase: input.purchaseCost ?? "0",
-    freight: input.freight ?? "0",
-    customsDuties: input.customsDuties ?? "0",
-    miscellaneous: input.miscellaneous ?? "0",
+interface ProjectPricingContext {
+  defaultFreightMarkupRate: string;
+  defaultOtherCostMarkupRate: string;
+  defaultProductMarkupRate: string;
+  reportingCurrencyCode: string;
+}
+
+function inputPricing(input: CreateOrderInput, project: ProjectPricingContext) {
+  const projectMode = input.pricingMode === "PROJECT_MARKUP";
+  return calculateOrderPricingDraft({
+    directPackageSell: input.sellingPriceAmount ?? "0",
+    freightCost: input.freight ?? "0",
+    freightMarkupRate: projectMode
+      ? project.defaultFreightMarkupRate
+      : (input.freightMarkupOverrideRate ?? "0"),
+    freightResale: input.freightResaleAmount ?? "0",
+    freightTreatment: input.freightTreatment,
+    method: input.pricingMode,
+    otherCost: new Decimal(input.customsDuties ?? "0")
+      .plus(input.miscellaneous ?? "0")
+      .toString(),
+    otherMarkupRate: projectMode
+      ? project.defaultOtherCostMarkupRate
+      : (input.otherCostMarkupOverrideRate ?? "0"),
+    productCost: input.purchaseCost ?? "0",
+    productMarkupRate: projectMode
+      ? project.defaultProductMarkupRate
+      : (input.productMarkupOverrideRate ?? "0"),
+    purchaseCurrencyCode: input.orderCurrencyCode,
+    purchaseFxRate: input.purchaseFxRate,
+    reportingCurrencyCode: project.reportingCurrencyCode,
+    sellingCurrencyCode: input.sellingCurrencyCode,
+    sellingFxRate: input.sellingFxRate,
   });
 }
-function inputEconomicCost(
-  input: CreateOrderInput,
-  reportingCurrencyCode: string,
-): Decimal | null {
-  const landed = inputLandedCost(input);
-  if (!landed) return null;
-  const reporting = reportingAmount({
-    fxRateToReporting: input.purchaseFxRate,
-    originalAmount: landed,
-    originalCurrencyCode: input.orderCurrencyCode,
-    reportingCurrencyCode,
-  });
-  if (!reporting) return null;
-  if (
-    input.inputVatTreatment &&
-    input.inputVatRecoverability === VatRecoverability.NON_RECOVERABLE &&
-    input.inputVatTaxableBase
-  ) {
-    const vat =
-      input.inputVatAmount ??
-      calculateVatAmount(
-        input.inputVatTaxableBase,
-        input.inputVatRate ?? "0",
-      ).toFixed(4);
-    const reportingVat = reportingAmount({
-      fxRateToReporting: input.purchaseFxRate,
-      originalAmount: vat,
-      originalCurrencyCode: input.orderCurrencyCode,
-      reportingCurrencyCode,
-    });
-    return reportingVat ? economicLandedCost(reporting, reportingVat) : null;
-  }
-  return reporting;
-}
+
 async function assertRelations(
   input: CreateOrderInput,
   database: OrderRelationClient = getDatabase(),
-): Promise<string> {
+): Promise<ProjectPricingContext> {
   const [project, supplier, purchaseCurrency, sellingCurrency, buildings] =
     await Promise.all([
       database.project.findUnique({
@@ -801,35 +831,20 @@ async function assertRelations(
     throw new ProcurementRelationError(
       "Every selected building must belong to the chosen project.",
     );
-  if (input.pricingMode === PricingMode.TARGET_MARGIN) {
-    const economic = inputEconomicCost(input, project.reportingCurrencyCode);
-    const sellingRate = reportingAmount({
-      fxRateToReporting: input.sellingFxRate,
-      originalAmount: "1",
-      originalCurrencyCode: input.sellingCurrencyCode,
-      reportingCurrencyCode: project.reportingCurrencyCode,
-    });
-    if (!economic || !sellingRate || !input.targetMarginRate)
-      throw new ProcurementRelationError(
-        "Target-margin pricing requires converted current cost and selling FX.",
-      );
-    const freight =
-      input.freightTreatment === FreightTreatment.RECHARGED_SEPARATELY
-        ? new Decimal(input.freightResaleAmount ?? "0")
-        : new Decimal(0);
-    if (
-      sellingPriceFromTargetMargin(economic, input.targetMarginRate)
-        .dividedBy(sellingRate)
-        .minus(freight)
-        .isNegative()
-    )
-      throw new ProcurementRelationError(
-        "Freight resale cannot exceed required selling revenue.",
-      );
-  }
-  return project.reportingCurrencyCode;
+  const context = {
+    defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
+    defaultOtherCostMarkupRate: project.defaultOtherCostMarkupRate.toString(),
+    defaultProductMarkupRate: project.defaultProductMarkupRate.toString(),
+    reportingCurrencyCode: project.reportingCurrencyCode,
+  };
+  const pricing = inputPricing(input, context);
+  if (input.outputVatTreatment && pricing.totalSell === null)
+    throw new ProcurementRelationError(
+      "Output VAT requires a complete Selling HT calculation.",
+    );
+  return context;
 }
-function orderData(input: CreateOrderInput, reportingCurrencyCode: string) {
+function orderData(input: CreateOrderInput, project: ProjectPricingContext) {
   const expectedReadyDate =
     input.expectedReadyDate ??
     (input.orderDate !== undefined && input.leadTimeWeeks !== undefined
@@ -848,18 +863,18 @@ function orderData(input: CreateOrderInput, reportingCurrencyCode: string) {
       ? dateOnlyToDate(expectedReadyDate)
       : null,
     freightResaleAmount:
-      input.pricingMode !== PricingMode.COMPONENT_MARKUP &&
+      input.pricingMode === "DIRECT_SELLING_PRICE" &&
       input.freightTreatment === FreightTreatment.RECHARGED_SEPARATELY
         ? (input.freightResaleAmount ?? null)
         : null,
     freightMarkupOverrideRate:
-      input.pricingMode === PricingMode.COMPONENT_MARKUP
+      input.pricingMode === "ORDER_MARKUP"
         ? (input.freightMarkupOverrideRate ?? null)
         : null,
     freightTreatment: input.freightTreatment,
     notes: input.notes ?? null,
     otherCostMarkupOverrideRate:
-      input.pricingMode === PricingMode.COMPONENT_MARKUP
+      input.pricingMode === "ORDER_MARKUP"
         ? (input.otherCostMarkupOverrideRate ?? null)
         : null,
     leadTimeWeeks: input.leadTimeWeeks ?? null,
@@ -867,24 +882,25 @@ function orderData(input: CreateOrderInput, reportingCurrencyCode: string) {
     orderNumber: input.orderNumber,
     orderDate: input.orderDate ? dateOnlyToDate(input.orderDate) : null,
     packageName: input.packageName,
+    outputVatTaxableBaseOverride: input.outputVatTaxableBaseOverride ?? null,
     pricingMode: input.pricingMode,
     productMarkupOverrideRate:
-      input.pricingMode === PricingMode.COMPONENT_MARKUP
+      input.pricingMode === "ORDER_MARKUP"
         ? (input.productMarkupOverrideRate ?? null)
         : null,
     projectId: input.projectId,
     purchaseFxRateToReporting:
-      input.orderCurrencyCode === reportingCurrencyCode
+      input.orderCurrencyCode === project.reportingCurrencyCode
         ? null
         : (input.purchaseFxRate ?? null),
     quoteDate: input.quoteDate ? dateOnlyToDate(input.quoteDate) : null,
     sellingCurrencyCode: input.sellingCurrencyCode,
     sellingFxRateToReporting:
-      input.sellingCurrencyCode === reportingCurrencyCode
+      input.sellingCurrencyCode === project.reportingCurrencyCode
         ? null
         : (input.sellingFxRate ?? null),
     sellingPriceAmount:
-      input.pricingMode === PricingMode.SELLING_PRICE
+      input.pricingMode === "DIRECT_SELLING_PRICE"
         ? (input.sellingPriceAmount ?? null)
         : null,
     status: input.status,
@@ -892,10 +908,7 @@ function orderData(input: CreateOrderInput, reportingCurrencyCode: string) {
     supplierOrderConfirmationReference:
       input.supplierOrderConfirmationReference ?? null,
     supplierQuoteReference: input.supplierQuoteReference ?? null,
-    targetMarginRate:
-      input.pricingMode === PricingMode.TARGET_MARGIN
-        ? (input.targetMarginRate ?? null)
-        : null,
+    targetMarginRate: null,
   };
 }
 function costLines(input: CreateOrderInput) {
@@ -906,7 +919,15 @@ function costLines(input: CreateOrderInput) {
     [ProcurementCostCategory.MISCELLANEOUS, input.miscellaneous],
   ] as const;
 }
-function vatEntries(input: CreateOrderInput, actorId: string) {
+function vatEntries(
+  input: CreateOrderInput,
+  actorId: string,
+  project: ProjectPricingContext,
+) {
+  const outputBase = effectiveVatBase(
+    inputPricing(input, project).totalSell,
+    input.outputVatTaxableBaseOverride,
+  );
   const values = [
     {
       amount: input.inputVatAmount,
@@ -925,7 +946,7 @@ function vatEntries(input: CreateOrderInput, actorId: string) {
       direction: VatDirection.OUTPUT,
       rate: input.outputVatRate,
       recoverability: null,
-      taxableBase: input.outputVatTaxableBase,
+      taxableBase: outputBase ?? undefined,
       treatment: input.outputVatTreatment,
     },
   ] as const;
@@ -958,6 +979,7 @@ async function replaceOrderFinancialData(
   orderId: string,
   actorId: string,
   input: CreateOrderInput,
+  project: ProjectPricingContext,
 ): Promise<void> {
   await Promise.all([
     transaction.procurementOrderCostLine.deleteMany({ where: { orderId } }),
@@ -976,7 +998,7 @@ async function replaceOrderFinancialData(
         ]
       : [],
   );
-  const vat = vatEntries(input, actorId).map((entry) => ({
+  const vat = vatEntries(input, actorId, project).map((entry) => ({
     ...entry,
     orderId,
   }));
@@ -1026,7 +1048,7 @@ export async function listOrderOptions() {
   return {
     currencies,
     freightTreatments: Object.values(FreightTreatment),
-    pricingModes: Object.values(PricingMode),
+    pricingModes: [...orderPricingMethods],
     projects: projects.map((project) => ({
       ...project,
       defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
@@ -1154,9 +1176,9 @@ export async function createOrder(
   actorId: string,
   input: CreateOrderInput,
 ): Promise<string> {
-  const reportingCurrencyCode = await assertRelations(input);
+  const project = await assertRelations(input);
   return getDatabase().$transaction((transaction) =>
-    createOrderRecord(transaction, actorId, input, reportingCurrencyCode),
+    createOrderRecord(transaction, actorId, input, project),
   );
 }
 
@@ -1164,11 +1186,11 @@ async function createOrderRecord(
   transaction: Prisma.TransactionClient,
   actorId: string,
   input: CreateOrderInput,
-  reportingCurrencyCode: string,
+  project: ProjectPricingContext,
 ): Promise<string> {
   const order = await transaction.procurementOrder.create({
     data: {
-      ...orderData(input, reportingCurrencyCode),
+      ...orderData(input, project),
       buildings: {
         create: input.buildingIds.map((buildingId) => ({
           buildingId,
@@ -1180,7 +1202,13 @@ async function createOrderRecord(
     },
     select: { id: true },
   });
-  await replaceOrderFinancialData(transaction, order.id, actorId, input);
+  await replaceOrderFinancialData(
+    transaction,
+    order.id,
+    actorId,
+    input,
+    project,
+  );
   await writeAuditEvent(transaction, actorId, {
     action: "CREATED",
     entityId: order.id,
@@ -1189,11 +1217,13 @@ async function createOrderRecord(
     metadata: {
       fields: [
         "supplierId",
+        "pricingMode",
         "costLines",
         "productMarkupOverrideRate",
         "freightMarkupOverrideRate",
         "otherCostMarkupOverrideRate",
         "sellingPriceAmount",
+        "outputVatTaxableBaseOverride",
         "vatEntries",
       ],
     },
@@ -1207,18 +1237,18 @@ export async function createOrderInTransaction(
   actorId: string,
   input: CreateOrderInput,
 ): Promise<string> {
-  const reportingCurrencyCode = await assertRelations(input, transaction);
-  return createOrderRecord(transaction, actorId, input, reportingCurrencyCode);
+  const project = await assertRelations(input, transaction);
+  return createOrderRecord(transaction, actorId, input, project);
 }
 
 export async function updateOrder(
   actorId: string,
   input: UpdateOrderInput,
 ): Promise<void> {
-  const reportingCurrencyCode = await assertRelations(input);
+  const project = await assertRelations(input);
   try {
     await getDatabase().$transaction((transaction) =>
-      updateOrderRecord(transaction, actorId, input, reportingCurrencyCode),
+      updateOrderRecord(transaction, actorId, input, project),
     );
   } catch (error) {
     if (
@@ -1297,7 +1327,7 @@ async function updateOrderRecord(
   transaction: Prisma.TransactionClient,
   actorId: string,
   input: UpdateOrderInput,
-  reportingCurrencyCode: string,
+  project: ProjectPricingContext,
 ): Promise<void> {
   const { id, ...fields } = input;
   const current = await transaction.procurementOrder.findUnique({
@@ -1321,7 +1351,7 @@ async function updateOrderRecord(
   await transaction.procurementOrder.update({
     where: { id },
     data: {
-      ...orderData(fields, reportingCurrencyCode),
+      ...orderData(fields, project),
       updatedById: actorId,
     },
   });
@@ -1337,7 +1367,7 @@ async function updateOrderRecord(
       })),
     });
   }
-  await replaceOrderFinancialData(transaction, id, actorId, fields);
+  await replaceOrderFinancialData(transaction, id, actorId, fields, project);
   await writeAuditEvent(transaction, actorId, {
     action: "UPDATED",
     entityId: id,
@@ -1346,11 +1376,13 @@ async function updateOrderRecord(
     metadata: {
       fields: [
         "supplierId",
+        "pricingMode",
         "costLines",
         "productMarkupOverrideRate",
         "freightMarkupOverrideRate",
         "otherCostMarkupOverrideRate",
         "sellingPriceAmount",
+        "outputVatTaxableBaseOverride",
         "vatEntries",
       ],
     },
@@ -1364,9 +1396,9 @@ export async function updateOrderInTransaction(
   actorId: string,
   input: UpdateOrderInput,
 ): Promise<void> {
-  const reportingCurrencyCode = await assertRelations(input, transaction);
+  const project = await assertRelations(input, transaction);
   try {
-    await updateOrderRecord(transaction, actorId, input, reportingCurrencyCode);
+    await updateOrderRecord(transaction, actorId, input, project);
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
