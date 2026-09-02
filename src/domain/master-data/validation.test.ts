@@ -46,6 +46,22 @@ describe("master-data validation", () => {
     ).toThrow("Expected completion");
   });
 
+  it("uses the shared human percentage convention for Project rates", () => {
+    const result = createProjectInputSchema.parse({
+      clientId: "f45ac9c9-10e9-4e42-b93f-38796de4f65a",
+      code: "PRJ-2",
+      defaultFreightMarkupRate: "15,5",
+      defaultOtherCostMarkupRate: "15%",
+      defaultProductMarkupRate: "30",
+      name: "Example project",
+      reportingCurrencyCode: "EUR",
+      status: "PLANNING",
+    });
+    expect(result.defaultFreightMarkupRate).toBe("0.155000");
+    expect(result.defaultOtherCostMarkupRate).toBe("0.150000");
+    expect(result.defaultProductMarkupRate).toBe("0.300000");
+  });
+
   it("requires a parent project for a building", () => {
     expect(() =>
       createBuildingInputSchema.parse({ name: "Building A", shortCode: "A" }),

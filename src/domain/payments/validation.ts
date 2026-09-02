@@ -4,6 +4,7 @@ import { z } from "zod";
 import { InstallmentBasis, PaymentDirection } from "@/generated/prisma/client";
 import { isDateOnly } from "@/domain/payments/dates";
 import { paymentSchedulePresets } from "@/domain/payments/presets";
+import { optionalPercentageFraction } from "@/domain/validation/percentage";
 
 const optionalText = (maximum: number) =>
   z.preprocess(
@@ -44,17 +45,12 @@ const optionalFxRate = z.preprocess(
     .transform((value) => new Decimal(value).toFixed(10))
     .optional(),
 );
-const percentage = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
-  z
-    .string()
-    .trim()
-    .regex(/^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/)
-    .refine((value) => new Decimal(value).greaterThan(0))
-    .refine((value) => new Decimal(value).lessThanOrEqualTo(100))
-    .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
-    .optional(),
+const percentage = optionalPercentageFraction({
+  label: "Payment percentage",
+  maximumPercent: "100",
+}).refine(
+  (value) => value === undefined || new Decimal(value).greaterThan(0),
+  "Payment percentage must be greater than zero.",
 );
 const dateOnly = z
   .string()

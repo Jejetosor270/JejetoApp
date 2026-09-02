@@ -1,8 +1,8 @@
 "use server";
 
-import Decimal from "decimal.js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { optionalPercentageFraction } from "@/domain/validation/percentage";
 
 import type { BulkActionState } from "@/domain/deletion/action-state";
 import type { ItemActionState } from "@/domain/items/action-state";
@@ -145,12 +145,10 @@ const bulkSchema = z
     projectId: z.uuid().optional(),
     roomId: z.uuid().optional(),
     supplierId: z.uuid().optional(),
-    vatRate: z
-      .string()
-      .trim()
-      .regex(/^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/)
-      .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
-      .optional(),
+    vatRate: optionalPercentageFraction({
+      label: "VAT rate",
+      maximumPercent: "100",
+    }),
   })
   .refine(
     (value) => Object.values(value).some(Boolean),

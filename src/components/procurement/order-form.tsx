@@ -2,7 +2,13 @@
 
 import Decimal from "decimal.js";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import {
+  useActionState,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   createOrderAction,
@@ -27,6 +33,11 @@ import {
   initializePricingMethod,
   type OrderPricingMethod,
 } from "@/domain/finance/order-pricing";
+import {
+  type OrderDraft,
+  updateOrderDraftField,
+} from "@/domain/procurement/order-draft";
+import { humanPercentageToFraction } from "@/domain/validation/percentage";
 
 interface BuildingOption {
   id: string;
@@ -110,7 +121,6 @@ export interface EditableOrder {
   supplier: SupplierOption;
   supplierOrderConfirmationReference: string | null;
   supplierQuoteReference: string | null;
-  targetMarginRate: string | null;
 }
 
 const labels: Record<string, string> = {
@@ -155,57 +165,67 @@ function editablePricingMethod(order?: EditableOrder): OrderPricingMethod {
   return "DIRECT_SELLING_PRICE";
 }
 function Money({
-  defaultValue,
+  error,
   label: fieldLabel,
   name,
+  onValueChange,
+  value,
 }: {
-  defaultValue?: string | null | undefined;
+  error?: string | undefined;
   label: string;
   name: string;
+  onValueChange: (value: string) => void;
+  value: string;
 }) {
   return (
-    <Field label={fieldLabel}>
+    <Field error={error} label={fieldLabel}>
       <MoneyInput
-        defaultValue={defaultValue ?? ""}
+        invalid={Boolean(error)}
         name={name}
+        onValueChange={onValueChange}
         placeholder="0.00"
+        value={value}
       />
     </Field>
   );
 }
-function VatFields({
-  direction,
+function InputVatFields({
   currency,
+  draft,
+  fieldErrors,
+  onChange,
   options,
-  value,
 }: {
-  direction: "input" | "output";
   currency: string;
+  draft: OrderDraft;
+  fieldErrors: Record<string, string>;
+  onChange: <K extends keyof OrderDraft>(
+    field: K,
+    value: OrderDraft[K],
+  ) => void;
   options: OrderFormOptions;
-  value: VatView | null;
 }) {
-  const prefix = direction === "input" ? "Purchase" : "Sales";
-  const [treatment, setTreatment] = useState(value?.treatment ?? "");
-  const [recoverability, setRecoverability] = useState(
-    value?.recoverability ?? "",
+  const showRecoverability = inputVatRecoverabilityApplies(
+    draft.inputVatTreatment,
   );
-  const showRecoverability =
-    direction === "input" && inputVatRecoverabilityApplies(treatment);
+  const errorClass = (name: string) =>
+    `${inputClassName}${fieldErrors[name] ? " border-destructive focus-visible:border-destructive" : ""}`;
   return (
     <section className="bg-background/60 rounded-md border p-3">
-      <h4 className="text-xs font-semibold">{prefix} VAT</h4>
+      <h4 className="text-xs font-semibold">Purchase VAT</h4>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <Field label="Treatment">
+        <Field error={fieldErrors.inputVatTreatment} label="Treatment">
           <select
-            className={inputClassName}
-            name={`${direction}VatTreatment`}
+            aria-invalid={Boolean(fieldErrors.inputVatTreatment) || undefined}
+            className={errorClass("inputVatTreatment")}
+            name="inputVatTreatment"
             onChange={(event) => {
               const nextTreatment = event.target.value;
-              setTreatment(nextTreatment);
+              onChange("inputVatTreatment", nextTreatment);
               if (!inputVatRecoverabilityApplies(nextTreatment))
-                setRecoverability("");
+                onChange("inputVatRecoverability", "");
             }}
-            value={treatment}
+            value={draft.inputVatTreatment}
           >
             <option value="">Not recorded</option>
             {options.vatTreatments.map((item) => (
@@ -216,12 +236,20 @@ function VatFields({
           </select>
         </Field>
         {showRecoverability ? (
-          <Field label="Recoverability">
+          <Field
+            error={fieldErrors.inputVatRecoverability}
+            label="Recoverability"
+          >
             <select
-              className={inputClassName}
+              aria-invalid={
+                Boolean(fieldErrors.inputVatRecoverability) || undefined
+              }
+              className={errorClass("inputVatRecoverability")}
               name="inputVatRecoverability"
-              onChange={(event) => setRecoverability(event.target.value)}
-              value={recoverability}
+              onChange={(event) =>
+                onChange("inputVatRecoverability", event.target.value)
+              }
+              value={draft.inputVatRecoverability}
             >
               <option value="">Choose</option>
               {options.vatRecoverabilities.map((item) => (
@@ -231,33 +259,43 @@ function VatFields({
               ))}
             </select>
           </Field>
-        ) : direction === "input" ? (
+        ) : (
           <input name="inputVatRecoverability" type="hidden" value="" />
-        ) : null}
+        )}
         <Money
-          defaultValue={value?.taxableBase}
+          error={fieldErrors.inputVatTaxableBase}
           label={`Taxable base HT (${currency})`}
-          name={`${direction}VatTaxableBase`}
+          name="inputVatTaxableBase"
+          onValueChange={(value) => onChange("inputVatTaxableBase", value)}
+          value={draft.inputVatTaxableBase}
         />
-        <Field label="VAT rate %">
+        <Field error={fieldErrors.inputVatRate} label="VAT rate %">
           <input
-            className={inputClassName}
-            defaultValue={rateToPercentInput(value?.rate ?? null)}
+            aria-invalid={Boolean(fieldErrors.inputVatRate) || undefined}
+            className={errorClass("inputVatRate")}
             inputMode="decimal"
-            name={`${direction}VatRate`}
+            name="inputVatRate"
+            onChange={(event) => onChange("inputVatRate", event.target.value)}
             placeholder="20.00"
+            value={draft.inputVatRate}
           />
         </Field>
         <Money
-          defaultValue={value?.amountIsManual ? value.amount : ""}
+          error={fieldErrors.inputVatAmount}
           label={`VAT amount override (${currency})`}
-          name={`${direction}VatAmount`}
+          name="inputVatAmount"
+          onValueChange={(value) => onChange("inputVatAmount", value)}
+          value={draft.inputVatAmount}
         />
-        <Field label="Country">
+        <Field error={fieldErrors.inputVatCountryCode} label="Country">
           <select
-            className={inputClassName}
-            defaultValue={value?.countryCode ?? ""}
-            name={`${direction}VatCountryCode`}
+            aria-invalid={Boolean(fieldErrors.inputVatCountryCode) || undefined}
+            className={errorClass("inputVatCountryCode")}
+            name="inputVatCountryCode"
+            onChange={(event) =>
+              onChange("inputVatCountryCode", event.target.value)
+            }
+            value={draft.inputVatCountryCode}
           >
             <option value="">Not specified</option>
             {countries.map((country) => (
@@ -267,14 +305,22 @@ function VatFields({
             ))}
           </select>
         </Field>
-        <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">
-          Custom treatment note
+        <Field
+          error={fieldErrors.inputVatCustomTreatmentNote}
+          label="Custom treatment note"
+        >
           <input
-            className={inputClassName}
-            defaultValue={value?.customTreatmentNote ?? ""}
-            name={`${direction}VatCustomTreatmentNote`}
+            aria-invalid={
+              Boolean(fieldErrors.inputVatCustomTreatmentNote) || undefined
+            }
+            className={errorClass("inputVatCustomTreatmentNote")}
+            name="inputVatCustomTreatmentNote"
+            onChange={(event) =>
+              onChange("inputVatCustomTreatmentNote", event.target.value)
+            }
+            value={draft.inputVatCustomTreatmentNote}
           />
-        </label>
+        </Field>
       </div>
     </section>
   );
@@ -293,91 +339,141 @@ export function OrderForm({
   const router = useRouter();
   const isEditing = Boolean(order);
   const serverAction = order ? updateOrderAction : createOrderAction;
+  const resilientAction = useCallback(
+    async (
+      previousState: typeof initialOrderActionState,
+      formData: FormData,
+    ) => {
+      try {
+        return await serverAction(previousState, formData);
+      } catch {
+        return {
+          formError:
+            "The save could not be completed. Your draft is still here; please try again.",
+          message:
+            "The save could not be completed. Your draft is still here; please try again.",
+          status: "error" as const,
+        };
+      }
+    },
+    [serverAction],
+  );
   const [state, action, pending] = useActionState(
-    serverAction,
+    resilientAction,
     initialOrderActionState,
   );
-  const [projectId, setProjectId] = useState(
-    order?.project.id ?? options.projects[0]?.id ?? "",
-  );
-  const [supplierId, setSupplierId] = useState(
-    order?.supplier.id ?? options.suppliers[0]?.id ?? "",
-  );
-  const project = options.projects.find((item) => item.id === projectId);
-  const supplier = options.suppliers.find((item) => item.id === supplierId);
-  const [purchaseCurrency, setPurchaseCurrency] = useState(
-    order?.orderCurrencyCode ??
-      supplier?.defaultCurrencyCode ??
-      project?.reportingCurrencyCode ??
-      "EUR",
-  );
-  const [sellingCurrency, setSellingCurrency] = useState(
-    order?.sellingCurrencyCode ??
-      project?.client.defaultCurrencyCode ??
-      project?.reportingCurrencyCode ??
-      "EUR",
-  );
-  const [pricingMode, setPricingMode] = useState<OrderPricingMethod>(
-    editablePricingMethod(order),
-  );
-  const [freightTreatment, setFreightTreatment] = useState(
-    order?.freightTreatment ?? "NOT_APPLICABLE",
-  );
-  const [orderDate, setOrderDate] = useState(order?.orderDate ?? "");
-  const [leadTimeWeeks, setLeadTimeWeeks] = useState(
-    order?.leadTimeWeeks?.toString() ??
-      supplier?.defaultLeadTimeWeeks?.toString() ??
+  const initialProject =
+    options.projects.find((item) => item.id === order?.project.id) ??
+    options.projects[0];
+  const initialSupplier =
+    options.suppliers.find((item) => item.id === order?.supplier.id) ??
+    options.suppliers[0];
+  const [draft, setDraft] = useState<OrderDraft>(() => ({
+    actualDeliveryDate: order?.actualDeliveryDate ?? "",
+    buildingIds: order?.buildingIds ?? [],
+    category: order?.category ?? "",
+    customsDuties: order?.costs.customsDuties ?? "",
+    description: order?.description ?? "",
+    expectedDeliveryDate: order?.expectedDeliveryDate ?? "",
+    expectedReadyDate: order?.expectedReadyDate ?? "",
+    freight: order?.costs.freight ?? "",
+    freightMarkupOverridePercent: rateToPercentInput(
+      order?.freightMarkupOverrideRate ?? null,
+    ),
+    freightResaleAmount: order?.freightResaleAmount ?? "",
+    freightTreatment: order?.freightTreatment ?? "NOT_APPLICABLE",
+    inputVatAmount: order?.costs.inputVat?.amountIsManual
+      ? order.costs.inputVat.amount
+      : "",
+    inputVatCountryCode: order?.costs.inputVat?.countryCode ?? "",
+    inputVatCustomTreatmentNote:
+      order?.costs.inputVat?.customTreatmentNote ?? "",
+    inputVatRate: rateToPercentInput(order?.costs.inputVat?.rate ?? null),
+    inputVatRecoverability: order?.costs.inputVat?.recoverability ?? "",
+    inputVatTaxableBase: order?.costs.inputVat?.taxableBase ?? "",
+    inputVatTreatment: order?.costs.inputVat?.treatment ?? "",
+    leadTimeWeeks:
+      order?.leadTimeWeeks?.toString() ??
+      initialSupplier?.defaultLeadTimeWeeks?.toString() ??
       "",
-  );
-  const [expectedReadyDate, setExpectedReadyDate] = useState(
-    order?.expectedReadyDate ?? "",
-  );
-  const [purchaseCost, setPurchaseCost] = useState(
-    order?.costs.purchaseCost ?? "",
-  );
-  const [freightCost, setFreightCost] = useState(order?.costs.freight ?? "");
-  const [customsCost, setCustomsCost] = useState(
-    order?.costs.customsDuties ?? "",
-  );
-  const [miscellaneousCost, setMiscellaneousCost] = useState(
-    order?.costs.miscellaneous ?? "",
-  );
-  const [productMarkupOverride, setProductMarkupOverride] = useState(
-    rateToPercentInput(order?.productMarkupOverrideRate ?? null),
-  );
-  const [freightMarkupOverride, setFreightMarkupOverride] = useState(
-    rateToPercentInput(order?.freightMarkupOverrideRate ?? null),
-  );
-  const [otherMarkupOverride, setOtherMarkupOverride] = useState(
-    rateToPercentInput(order?.otherCostMarkupOverrideRate ?? null),
-  );
-  const [purchaseFxRate, setPurchaseFxRate] = useState(
-    order?.costs.purchaseFxRate ?? "",
-  );
-  const [sellingFxRate, setSellingFxRate] = useState(
-    order?.costs.sellingFxRate ?? "",
-  );
-  const [directSellingPrice, setDirectSellingPrice] = useState(
-    order?.packageSellingPrice ?? "",
-  );
-  const [freightResale, setFreightResale] = useState(
-    order?.freightResaleAmount ?? "",
-  );
-  const [outputVatTreatment, setOutputVatTreatment] = useState(
-    order?.costs.outputVat?.treatment ?? "",
-  );
-  const [outputVatRate, setOutputVatRate] = useState(
-    rateToPercentInput(order?.costs.outputVat?.rate ?? null),
-  );
-  const [manualOutputVatBase, setManualOutputVatBase] = useState(
-    order?.outputVatTaxableBaseOverride ?? "",
-  );
-  const [outputVatBaseIsManual, setOutputVatBaseIsManual] = useState(
-    order?.outputVatTaxableBaseOverride !== null &&
-      order?.outputVatTaxableBaseOverride !== undefined,
-  );
+    miscellaneous: order?.costs.miscellaneous ?? "",
+    notes: order?.notes ?? "",
+    orderCurrencyCode:
+      order?.orderCurrencyCode ??
+      initialSupplier?.defaultCurrencyCode ??
+      initialProject?.reportingCurrencyCode ??
+      "EUR",
+    orderDate: order?.orderDate ?? "",
+    orderNumber: order?.orderNumber ?? "",
+    otherCostMarkupOverridePercent: rateToPercentInput(
+      order?.otherCostMarkupOverrideRate ?? null,
+    ),
+    outputVatBaseMode:
+      order?.outputVatTaxableBaseOverride === null ||
+      order?.outputVatTaxableBaseOverride === undefined
+        ? "AUTO"
+        : "MANUAL",
+    outputVatCountryCode: order?.costs.outputVat?.countryCode ?? "",
+    outputVatCustomTreatmentNote:
+      order?.costs.outputVat?.customTreatmentNote ?? "",
+    outputVatRate: rateToPercentInput(order?.costs.outputVat?.rate ?? null),
+    outputVatTaxableBaseOverride: order?.outputVatTaxableBaseOverride ?? "",
+    outputVatTreatment: order?.costs.outputVat?.treatment ?? "",
+    packageName: order?.packageName ?? "",
+    pricingMode: editablePricingMethod(order),
+    productMarkupOverridePercent: rateToPercentInput(
+      order?.productMarkupOverrideRate ?? null,
+    ),
+    projectId: order?.project.id ?? initialProject?.id ?? "",
+    purchaseCost: order?.costs.purchaseCost ?? "",
+    purchaseFxRate: order?.costs.purchaseFxRate ?? "",
+    quoteDate: order?.quoteDate ?? "",
+    sellingCurrencyCode:
+      order?.sellingCurrencyCode ??
+      initialProject?.client.defaultCurrencyCode ??
+      initialProject?.reportingCurrencyCode ??
+      "EUR",
+    sellingFxRate: order?.costs.sellingFxRate ?? "",
+    sellingPriceAmount: order?.packageSellingPrice ?? "",
+    status: order?.status ?? "DRAFT",
+    supplierId: order?.supplier.id ?? initialSupplier?.id ?? "",
+    supplierOrderConfirmationReference:
+      order?.supplierOrderConfirmationReference ?? "",
+    supplierQuoteReference: order?.supplierQuoteReference ?? "",
+  }));
+  function changeDraft<K extends keyof OrderDraft>(
+    field: K,
+    value: OrderDraft[K],
+  ) {
+    setDraft((current) => updateOrderDraftField(current, field, value));
+  }
+  const projectId = draft.projectId;
+  const supplierId = draft.supplierId;
+  const project = options.projects.find((item) => item.id === projectId);
+  const purchaseCurrency = draft.orderCurrencyCode;
+  const sellingCurrency = draft.sellingCurrencyCode;
+  const pricingMode = draft.pricingMode;
+  const freightTreatment = draft.freightTreatment;
+  const orderDate = draft.orderDate;
+  const leadTimeWeeks = draft.leadTimeWeeks;
+  const expectedReadyDate = draft.expectedReadyDate;
+  const purchaseCost = draft.purchaseCost;
+  const freightCost = draft.freight;
+  const customsCost = draft.customsDuties;
+  const miscellaneousCost = draft.miscellaneous;
+  const productMarkupOverride = draft.productMarkupOverridePercent;
+  const freightMarkupOverride = draft.freightMarkupOverridePercent;
+  const otherMarkupOverride = draft.otherCostMarkupOverridePercent;
+  const purchaseFxRate = draft.purchaseFxRate;
+  const sellingFxRate = draft.sellingFxRate;
+  const directSellingPrice = draft.sellingPriceAmount;
+  const freightResale = draft.freightResaleAmount;
+  const outputVatTreatment = draft.outputVatTreatment;
+  const outputVatRate = draft.outputVatRate;
+  const manualOutputVatBase = draft.outputVatTaxableBaseOverride;
+  const outputVatBaseIsManual = draft.outputVatBaseMode === "MANUAL";
   const toRate = (percent: string, inherited: string) =>
-    percent.trim() ? new Decimal(percent).dividedBy(100).toString() : inherited;
+    humanPercentageToFraction(percent) ?? inherited;
   let livePricing: ReturnType<typeof calculateOrderPricingDraft> | null = null;
   try {
     if (project) {
@@ -418,10 +514,11 @@ export function OrderForm({
   );
   let liveOutputVat = "0.0000";
   try {
-    if (outputVatTreatment)
+    const normalizedOutputVatRate = humanPercentageToFraction(outputVatRate);
+    if (outputVatTreatment && normalizedOutputVatRate !== null)
       liveOutputVat = calculateVatAmount(
         outputVatBase ?? "0",
-        outputVatRate ? new Decimal(outputVatRate).dividedBy(100) : "0",
+        normalizedOutputVatRate,
       ).toFixed(4);
   } catch {
     liveOutputVat = "0.0000";
@@ -430,7 +527,10 @@ export function OrderForm({
     ? new Decimal(automaticOutputVatBase).plus(liveOutputVat).toFixed(4)
     : null;
   function changePricingMethod(next: OrderPricingMethod) {
-    if (!project) return setPricingMode(next);
+    if (!project) {
+      changeDraft("pricingMode", next);
+      return;
+    }
     const initialized = initializePricingMethod(next, {
       effectiveFreightMarkupRate:
         pricingMode === "PROJECT_MARKUP"
@@ -449,30 +549,51 @@ export function OrderForm({
       totalSell: livePricing?.totalSell ?? null,
     });
     if ("productMarkupPercent" in initialized) {
-      setProductMarkupOverride(initialized.productMarkupPercent);
-      setFreightMarkupOverride(initialized.freightMarkupPercent ?? "");
-      setOtherMarkupOverride(initialized.otherMarkupPercent ?? "");
+      changeDraft(
+        "productMarkupOverridePercent",
+        initialized.productMarkupPercent,
+      );
+      changeDraft(
+        "freightMarkupOverridePercent",
+        initialized.freightMarkupPercent ?? "",
+      );
+      changeDraft(
+        "otherCostMarkupOverridePercent",
+        initialized.otherMarkupPercent ?? "",
+      );
     }
     if ("directPackageSell" in initialized) {
-      setDirectSellingPrice(initialized.directPackageSell);
-      setFreightResale(initialized.freightResale ?? "");
+      changeDraft("sellingPriceAmount", initialized.directPackageSell);
+      changeDraft("freightResaleAmount", initialized.freightResale ?? "");
     }
-    setPricingMode(next);
+    changeDraft("pricingMode", next);
   }
   function refreshExpectedReady(nextDate: string, nextWeeks: string) {
     const weeks = Number(nextWeeks);
-    setExpectedReadyDate(
+    changeDraft(
+      "expectedReadyDate",
       nextDate && Number.isInteger(weeks) && weeks >= 0
         ? addWeeksToDateOnly(nextDate, weeks)
         : "",
     );
   }
+  const formRef = useRef<HTMLFormElement>(null);
+  const fieldErrors = state.fieldErrors ?? {};
+  const errorClass = (name: string) =>
+    `${inputClassName}${fieldErrors[name] ? " border-destructive focus-visible:border-destructive" : ""}`;
   useEffect(() => {
     if (state.status === "success" && state.orderId && !isEditing) {
       router.push(`/orders/${state.orderId}`);
     }
     if (state.status === "success" && isEditing) onSaved?.();
   }, [isEditing, onSaved, router, state.orderId, state.status]);
+  useEffect(() => {
+    if (state.status !== "error") return;
+    const firstField = Object.keys(state.fieldErrors ?? {})[0];
+    if (!firstField) return;
+    const control = formRef.current?.elements.namedItem(firstField);
+    if (control instanceof HTMLElement) control.focus();
+  }, [state]);
   return (
     <section className="bg-card rounded-lg border p-4 sm:p-5">
       <div className="mb-5 flex items-center justify-between gap-3">
@@ -495,45 +616,59 @@ export function OrderForm({
           </button>
         ) : null}
       </div>
-      <form action={action} className="space-y-5">
+      <form action={action} className="space-y-5" ref={formRef}>
         {order ? <input name="id" type="hidden" value={order.id} /> : null}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Field label="Internal reference">
+          <Field error={fieldErrors.orderNumber} label="Internal reference">
             <input
-              className={inputClassName}
-              defaultValue={order?.orderNumber}
+              aria-invalid={Boolean(fieldErrors.orderNumber) || undefined}
+              className={errorClass("orderNumber")}
               name="orderNumber"
+              onChange={(event) =>
+                changeDraft("orderNumber", event.target.value)
+              }
               required
+              value={draft.orderNumber}
             />
           </Field>
-          <Field label="Package title">
+          <Field error={fieldErrors.packageName} label="Package title">
             <input
-              className={inputClassName}
-              defaultValue={order?.packageName}
+              aria-invalid={Boolean(fieldErrors.packageName) || undefined}
+              className={errorClass("packageName")}
               name="packageName"
+              onChange={(event) =>
+                changeDraft("packageName", event.target.value)
+              }
               required
+              value={draft.packageName}
             />
           </Field>
-          <Field label="Category">
+          <Field error={fieldErrors.category} label="Category">
             <input
-              className={inputClassName}
-              defaultValue={order?.category ?? ""}
+              aria-invalid={Boolean(fieldErrors.category) || undefined}
+              className={errorClass("category")}
               name="category"
+              onChange={(event) => changeDraft("category", event.target.value)}
+              value={draft.category}
             />
           </Field>
-          <Field label="Supplier quote date">
+          <Field error={fieldErrors.quoteDate} label="Supplier quote date">
             <input
-              className={inputClassName}
-              defaultValue={order?.quoteDate ?? ""}
+              aria-invalid={Boolean(fieldErrors.quoteDate) || undefined}
+              className={errorClass("quoteDate")}
               name="quoteDate"
+              onChange={(event) => changeDraft("quoteDate", event.target.value)}
               type="date"
+              value={draft.quoteDate}
             />
           </Field>
-          <Field label="Status">
+          <Field error={fieldErrors.status} label="Status">
             <select
-              className={inputClassName}
-              defaultValue={order?.status ?? "DRAFT"}
+              aria-invalid={Boolean(fieldErrors.status) || undefined}
+              className={errorClass("status")}
               name="status"
+              onChange={(event) => changeDraft("status", event.target.value)}
+              value={draft.status}
             >
               {options.statuses.map((item) => (
                 <option key={item} value={item}>
@@ -542,17 +677,19 @@ export function OrderForm({
               ))}
             </select>
           </Field>
-          <Field label="Project">
+          <Field error={fieldErrors.projectId} label="Project">
             <select
-              className={inputClassName}
+              aria-invalid={Boolean(fieldErrors.projectId) || undefined}
+              className={errorClass("projectId")}
               name="projectId"
               onChange={(event) => {
                 const next = options.projects.find(
                   (item) => item.id === event.target.value,
                 );
-                setProjectId(event.target.value);
+                changeDraft("projectId", event.target.value);
                 if (!isEditing && next)
-                  setSellingCurrency(
+                  changeDraft(
+                    "sellingCurrencyCode",
                     next.client.defaultCurrencyCode ||
                       next.reportingCurrencyCode,
                   );
@@ -566,21 +703,22 @@ export function OrderForm({
               ))}
             </select>
           </Field>
-          <Field label="Supplier">
+          <Field error={fieldErrors.supplierId} label="Supplier">
             <select
-              className={inputClassName}
+              aria-invalid={Boolean(fieldErrors.supplierId) || undefined}
+              className={errorClass("supplierId")}
               name="supplierId"
               onChange={(event) => {
                 const next = options.suppliers.find(
                   (item) => item.id === event.target.value,
                 );
-                setSupplierId(event.target.value);
+                changeDraft("supplierId", event.target.value);
                 if (!isEditing && next)
-                  setPurchaseCurrency(next.defaultCurrencyCode);
+                  changeDraft("orderCurrencyCode", next.defaultCurrencyCode);
                 if (!isEditing && next) {
                   const nextLeadTime =
                     next.defaultLeadTimeWeeks?.toString() ?? "";
-                  setLeadTimeWeeks(nextLeadTime);
+                  changeDraft("leadTimeWeeks", nextLeadTime);
                   refreshExpectedReady(orderDate, nextLeadTime);
                 }
               }}
@@ -593,11 +731,17 @@ export function OrderForm({
               ))}
             </select>
           </Field>
-          <Field label="Purchase currency">
+          <Field
+            error={fieldErrors.orderCurrencyCode}
+            label="Purchase currency"
+          >
             <select
-              className={inputClassName}
+              aria-invalid={Boolean(fieldErrors.orderCurrencyCode) || undefined}
+              className={errorClass("orderCurrencyCode")}
               name="orderCurrencyCode"
-              onChange={(event) => setPurchaseCurrency(event.target.value)}
+              onChange={(event) =>
+                changeDraft("orderCurrencyCode", event.target.value)
+              }
               value={purchaseCurrency}
             >
               {options.currencies.map((item) => (
@@ -607,11 +751,19 @@ export function OrderForm({
               ))}
             </select>
           </Field>
-          <Field label="Selling currency">
+          <Field
+            error={fieldErrors.sellingCurrencyCode}
+            label="Selling currency"
+          >
             <select
-              className={inputClassName}
+              aria-invalid={
+                Boolean(fieldErrors.sellingCurrencyCode) || undefined
+              }
+              className={errorClass("sellingCurrencyCode")}
               name="sellingCurrencyCode"
-              onChange={(event) => setSellingCurrency(event.target.value)}
+              onChange={(event) =>
+                changeDraft("sellingCurrencyCode", event.target.value)
+              }
               value={sellingCurrency}
             >
               {options.currencies.map((item) => (
@@ -621,36 +773,62 @@ export function OrderForm({
               ))}
             </select>
           </Field>
-          <Field label="Supplier quote reference">
+          <Field
+            error={fieldErrors.supplierQuoteReference}
+            label="Supplier quote reference"
+          >
             <input
-              className={inputClassName}
-              defaultValue={order?.supplierQuoteReference ?? ""}
+              aria-invalid={
+                Boolean(fieldErrors.supplierQuoteReference) || undefined
+              }
+              className={errorClass("supplierQuoteReference")}
               name="supplierQuoteReference"
+              onChange={(event) =>
+                changeDraft("supplierQuoteReference", event.target.value)
+              }
+              value={draft.supplierQuoteReference}
             />
           </Field>
-          <Field label="Supplier confirmation reference">
+          <Field
+            error={fieldErrors.supplierOrderConfirmationReference}
+            label="Supplier confirmation reference"
+          >
             <input
-              className={inputClassName}
-              defaultValue={order?.supplierOrderConfirmationReference ?? ""}
+              aria-invalid={
+                Boolean(fieldErrors.supplierOrderConfirmationReference) ||
+                undefined
+              }
+              className={errorClass("supplierOrderConfirmationReference")}
               name="supplierOrderConfirmationReference"
+              onChange={(event) =>
+                changeDraft(
+                  "supplierOrderConfirmationReference",
+                  event.target.value,
+                )
+              }
+              value={draft.supplierOrderConfirmationReference}
             />
           </Field>
-          <label className="grid gap-1.5 text-sm font-medium md:col-span-2">
-            <span>Description</span>
+          <Field error={fieldErrors.description} label="Description">
             <textarea
-              className={`${inputClassName} h-20 py-2`}
-              defaultValue={order?.description ?? ""}
+              aria-invalid={Boolean(fieldErrors.description) || undefined}
+              className={`${errorClass("description")} h-20 py-2`}
               name="description"
+              onChange={(event) =>
+                changeDraft("description", event.target.value)
+              }
+              value={draft.description}
             />
-          </label>
-          <label className="grid gap-1.5 text-sm font-medium md:col-span-2">
-            <span>Notes</span>
+          </Field>
+          <Field error={fieldErrors.notes} label="Notes">
             <textarea
-              className={`${inputClassName} h-20 py-2`}
-              defaultValue={order?.notes ?? ""}
+              aria-invalid={Boolean(fieldErrors.notes) || undefined}
+              className={`${errorClass("notes")} h-20 py-2`}
               name="notes"
+              onChange={(event) => changeDraft("notes", event.target.value)}
+              value={draft.notes}
             />
-          </label>
+          </Field>
         </div>
         <fieldset>
           <legend className="mb-2 text-sm font-semibold">
@@ -664,12 +842,20 @@ export function OrderForm({
               >
                 <input
                   className="accent-primary size-4"
-                  defaultChecked={order?.buildingIds.includes(building.id)}
+                  checked={draft.buildingIds.includes(building.id)}
                   disabled={
                     !building.isActive &&
-                    !order?.buildingIds.includes(building.id)
+                    !draft.buildingIds.includes(building.id)
                   }
                   name="buildingIds"
+                  onChange={(event) =>
+                    changeDraft(
+                      "buildingIds",
+                      event.target.checked
+                        ? [...draft.buildingIds, building.id]
+                        : draft.buildingIds.filter((id) => id !== building.id),
+                    )
+                  }
                   type="checkbox"
                   value={building.id}
                 />
@@ -688,56 +874,81 @@ export function OrderForm({
             order date and lead time, and remains editable.
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <Field label="Order date">
+            <Field error={fieldErrors.orderDate} label="Order date">
               <input
-                className={inputClassName}
+                aria-invalid={Boolean(fieldErrors.orderDate) || undefined}
+                className={errorClass("orderDate")}
                 name="orderDate"
                 onChange={(event) => {
-                  setOrderDate(event.target.value);
+                  changeDraft("orderDate", event.target.value);
                   refreshExpectedReady(event.target.value, leadTimeWeeks);
                 }}
                 type="date"
                 value={orderDate}
               />
             </Field>
-            <Field label="Lead time (weeks)">
+            <Field error={fieldErrors.leadTimeWeeks} label="Lead time (weeks)">
               <input
-                className={inputClassName}
+                aria-invalid={Boolean(fieldErrors.leadTimeWeeks) || undefined}
+                className={errorClass("leadTimeWeeks")}
                 inputMode="numeric"
                 max="520"
                 min="0"
                 name="leadTimeWeeks"
                 onChange={(event) => {
-                  setLeadTimeWeeks(event.target.value);
+                  changeDraft("leadTimeWeeks", event.target.value);
                   refreshExpectedReady(orderDate, event.target.value);
                 }}
                 type="number"
                 value={leadTimeWeeks}
               />
             </Field>
-            <Field label="Expected ready">
+            <Field error={fieldErrors.expectedReadyDate} label="Expected ready">
               <input
-                className={inputClassName}
+                aria-invalid={
+                  Boolean(fieldErrors.expectedReadyDate) || undefined
+                }
+                className={errorClass("expectedReadyDate")}
                 name="expectedReadyDate"
-                onChange={(event) => setExpectedReadyDate(event.target.value)}
+                onChange={(event) =>
+                  changeDraft("expectedReadyDate", event.target.value)
+                }
                 type="date"
                 value={expectedReadyDate}
               />
             </Field>
-            <Field label="Expected delivery">
+            <Field
+              error={fieldErrors.expectedDeliveryDate}
+              label="Expected delivery"
+            >
               <input
-                className={inputClassName}
-                defaultValue={order?.expectedDeliveryDate ?? ""}
+                aria-invalid={
+                  Boolean(fieldErrors.expectedDeliveryDate) || undefined
+                }
+                className={errorClass("expectedDeliveryDate")}
                 name="expectedDeliveryDate"
+                onChange={(event) =>
+                  changeDraft("expectedDeliveryDate", event.target.value)
+                }
                 type="date"
+                value={draft.expectedDeliveryDate}
               />
             </Field>
-            <Field label="Actual delivery">
+            <Field
+              error={fieldErrors.actualDeliveryDate}
+              label="Actual delivery"
+            >
               <input
-                className={inputClassName}
-                defaultValue={order?.actualDeliveryDate ?? ""}
+                aria-invalid={
+                  Boolean(fieldErrors.actualDeliveryDate) || undefined
+                }
+                className={errorClass("actualDeliveryDate")}
                 name="actualDeliveryDate"
+                onChange={(event) =>
+                  changeDraft("actualDeliveryDate", event.target.value)
+                }
                 type="date"
+                value={draft.actualDeliveryDate}
               />
             </Field>
           </div>
@@ -751,43 +962,57 @@ export function OrderForm({
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Field label="Product / supplier cost HT">
+            <Field
+              error={fieldErrors.purchaseCost}
+              label="Product / supplier cost HT"
+            >
               <MoneyInput
+                invalid={Boolean(fieldErrors.purchaseCost)}
                 name="purchaseCost"
-                onValueChange={setPurchaseCost}
+                onValueChange={(value) => changeDraft("purchaseCost", value)}
                 value={purchaseCost}
               />
             </Field>
-            <Field label="Freight cost HT">
+            <Field error={fieldErrors.freight} label="Freight cost HT">
               <MoneyInput
+                invalid={Boolean(fieldErrors.freight)}
                 name="freight"
-                onValueChange={setFreightCost}
+                onValueChange={(value) => changeDraft("freight", value)}
                 value={freightCost}
               />
             </Field>
-            <Field label="Customs / duties HT">
+            <Field
+              error={fieldErrors.customsDuties}
+              label="Customs / duties HT"
+            >
               <MoneyInput
+                invalid={Boolean(fieldErrors.customsDuties)}
                 name="customsDuties"
-                onValueChange={setCustomsCost}
+                onValueChange={(value) => changeDraft("customsDuties", value)}
                 value={customsCost}
               />
             </Field>
-            <Field label="Miscellaneous HT">
+            <Field error={fieldErrors.miscellaneous} label="Miscellaneous HT">
               <MoneyInput
+                invalid={Boolean(fieldErrors.miscellaneous)}
                 name="miscellaneous"
-                onValueChange={setMiscellaneousCost}
+                onValueChange={(value) => changeDraft("miscellaneous", value)}
                 value={miscellaneousCost}
               />
             </Field>
             <Field
+              error={fieldErrors.purchaseFxRate}
               label={`Purchase FX (${purchaseCurrency} → ${project?.reportingCurrencyCode ?? "reporting"})`}
             >
               <input
-                className={`${inputClassName} ${purchaseCurrency === project?.reportingCurrencyCode ? "bg-muted" : ""}`}
+                aria-invalid={Boolean(fieldErrors.purchaseFxRate) || undefined}
+                className={`${errorClass("purchaseFxRate")} ${purchaseCurrency === project?.reportingCurrencyCode ? "bg-muted" : ""}`}
                 disabled={purchaseCurrency === project?.reportingCurrencyCode}
                 inputMode="decimal"
                 name="purchaseFxRate"
-                onChange={(event) => setPurchaseFxRate(event.target.value)}
+                onChange={(event) =>
+                  changeDraft("purchaseFxRate", event.target.value)
+                }
                 placeholder={
                   purchaseCurrency === project?.reportingCurrencyCode
                     ? "1 (automatic)"
@@ -797,14 +1022,18 @@ export function OrderForm({
               />
             </Field>
             <Field
+              error={fieldErrors.sellingFxRate}
               label={`Selling FX (${sellingCurrency} → ${project?.reportingCurrencyCode ?? "reporting"})`}
             >
               <input
-                className={`${inputClassName} ${sellingCurrency === project?.reportingCurrencyCode ? "bg-muted" : ""}`}
+                aria-invalid={Boolean(fieldErrors.sellingFxRate) || undefined}
+                className={`${errorClass("sellingFxRate")} ${sellingCurrency === project?.reportingCurrencyCode ? "bg-muted" : ""}`}
                 disabled={sellingCurrency === project?.reportingCurrencyCode}
                 inputMode="decimal"
                 name="sellingFxRate"
-                onChange={(event) => setSellingFxRate(event.target.value)}
+                onChange={(event) =>
+                  changeDraft("sellingFxRate", event.target.value)
+                }
                 placeholder={
                   sellingCurrency === project?.reportingCurrencyCode
                     ? "1 (automatic)"
@@ -819,22 +1048,26 @@ export function OrderForm({
             project-reporting-currency units.
           </p>
           <div className="grid gap-3 xl:grid-cols-2">
-            <VatFields
+            <InputVatFields
               currency={purchaseCurrency}
-              direction="input"
+              draft={draft}
+              fieldErrors={fieldErrors}
+              onChange={changeDraft}
               options={options}
-              value={order?.costs.inputVat ?? null}
             />
             <section className="bg-background/60 rounded-md border p-3">
               <h4 className="text-xs font-semibold">Sales VAT</h4>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <Field label="Treatment">
+                <Field error={fieldErrors.outputVatTreatment} label="Treatment">
                   <select
-                    className={inputClassName}
+                    aria-invalid={
+                      Boolean(fieldErrors.outputVatTreatment) || undefined
+                    }
+                    className={errorClass("outputVatTreatment")}
                     name="outputVatTreatment"
                     onChange={(event) => {
-                      setOutputVatTreatment(event.target.value);
-                      if (!event.target.value) setOutputVatRate("");
+                      changeDraft("outputVatTreatment", event.target.value);
+                      if (!event.target.value) changeDraft("outputVatRate", "");
                     }}
                     value={outputVatTreatment}
                   >
@@ -846,23 +1079,34 @@ export function OrderForm({
                     ))}
                   </select>
                 </Field>
-                <Field label="VAT rate %">
+                <Field error={fieldErrors.outputVatRate} label="VAT rate %">
                   <input
-                    className={inputClassName}
+                    aria-invalid={
+                      Boolean(fieldErrors.outputVatRate) || undefined
+                    }
+                    className={errorClass("outputVatRate")}
                     inputMode="decimal"
                     name="outputVatRate"
-                    onChange={(event) => setOutputVatRate(event.target.value)}
+                    onChange={(event) =>
+                      changeDraft("outputVatRate", event.target.value)
+                    }
                     placeholder="20.00"
                     value={outputVatRate}
                   />
                 </Field>
                 <Field
+                  error={fieldErrors.outputVatTaxableBaseOverride}
                   label={`VAT Base HT (${sellingCurrency}) · ${outputVatBaseIsManual ? "MANUAL OVERRIDE" : "AUTO"}`}
                 >
                   {outputVatBaseIsManual ? (
                     <MoneyInput
                       name="outputVatTaxableBaseOverride"
-                      onValueChange={setManualOutputVatBase}
+                      invalid={Boolean(
+                        fieldErrors.outputVatTaxableBaseOverride,
+                      )}
+                      onValueChange={(value) =>
+                        changeDraft("outputVatTaxableBaseOverride", value)
+                      }
                       value={manualOutputVatBase}
                     />
                   ) : (
@@ -883,11 +1127,14 @@ export function OrderForm({
                     className="text-primary text-sm font-medium"
                     onClick={() => {
                       if (outputVatBaseIsManual) {
-                        setManualOutputVatBase("");
-                        setOutputVatBaseIsManual(false);
+                        changeDraft("outputVatTaxableBaseOverride", "");
+                        changeDraft("outputVatBaseMode", "AUTO");
                       } else {
-                        setManualOutputVatBase(automaticOutputVatBase ?? "0");
-                        setOutputVatBaseIsManual(true);
+                        changeDraft(
+                          "outputVatTaxableBaseOverride",
+                          automaticOutputVatBase ?? "0",
+                        );
+                        changeDraft("outputVatBaseMode", "MANUAL");
                       }
                     }}
                     type="button"
@@ -901,18 +1148,23 @@ export function OrderForm({
                   <p className="financial-figure bg-muted rounded-md border px-3 py-2">
                     {liveOutputVat}
                   </p>
-                  <input name="outputVatAmount" type="hidden" value="" />
                 </Field>
                 <Field label={`Selling TTC (${sellingCurrency})`}>
                   <p className="financial-figure bg-muted rounded-md border px-3 py-2">
                     {liveTtc ?? "Incomplete"}
                   </p>
                 </Field>
-                <Field label="Country">
+                <Field error={fieldErrors.outputVatCountryCode} label="Country">
                   <select
-                    className={inputClassName}
-                    defaultValue={order?.costs.outputVat?.countryCode ?? ""}
+                    aria-invalid={
+                      Boolean(fieldErrors.outputVatCountryCode) || undefined
+                    }
+                    className={errorClass("outputVatCountryCode")}
                     name="outputVatCountryCode"
+                    onChange={(event) =>
+                      changeDraft("outputVatCountryCode", event.target.value)
+                    }
+                    value={draft.outputVatCountryCode}
                   >
                     <option value="">Not specified</option>
                     {countries.map((country) => (
@@ -922,16 +1174,26 @@ export function OrderForm({
                     ))}
                   </select>
                 </Field>
-                <label className="grid gap-1.5 text-sm font-medium">
-                  Custom treatment note
+                <Field
+                  error={fieldErrors.outputVatCustomTreatmentNote}
+                  label="Custom treatment note"
+                >
                   <input
-                    className={inputClassName}
-                    defaultValue={
-                      order?.costs.outputVat?.customTreatmentNote ?? ""
+                    aria-invalid={
+                      Boolean(fieldErrors.outputVatCustomTreatmentNote) ||
+                      undefined
                     }
+                    className={errorClass("outputVatCustomTreatmentNote")}
                     name="outputVatCustomTreatmentNote"
+                    onChange={(event) =>
+                      changeDraft(
+                        "outputVatCustomTreatmentNote",
+                        event.target.value,
+                      )
+                    }
+                    value={draft.outputVatCustomTreatmentNote}
                   />
-                </label>
+                </Field>
               </div>
               <p className="text-muted-foreground mt-3 text-xs">
                 {outputVatBaseIsManual
@@ -944,9 +1206,10 @@ export function OrderForm({
         <section className="bg-muted/20 rounded-lg border p-4">
           <h3 className="text-sm font-semibold">Commercial pricing</h3>
           <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <Field label="Pricing method">
+            <Field error={fieldErrors.pricingMode} label="Pricing method">
               <select
-                className={inputClassName}
+                aria-invalid={Boolean(fieldErrors.pricingMode) || undefined}
+                className={errorClass("pricingMode")}
                 name="pricingMode"
                 onChange={(event) =>
                   changePricingMethod(event.target.value as OrderPricingMethod)
@@ -960,11 +1223,19 @@ export function OrderForm({
                 ))}
               </select>
             </Field>
-            <Field label="Freight treatment">
+            <Field
+              error={fieldErrors.freightTreatment}
+              label="Freight treatment"
+            >
               <select
-                className={inputClassName}
+                aria-invalid={
+                  Boolean(fieldErrors.freightTreatment) || undefined
+                }
+                className={errorClass("freightTreatment")}
                 name="freightTreatment"
-                onChange={(event) => setFreightTreatment(event.target.value)}
+                onChange={(event) =>
+                  changeDraft("freightTreatment", event.target.value)
+                }
                 value={freightTreatment}
               >
                 {options.freightTreatments.map((item) => (
@@ -984,13 +1255,23 @@ export function OrderForm({
           </p>
           {pricingMode === "ORDER_MARKUP" && project ? (
             <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <Field label="Product markup %">
+              <Field
+                error={fieldErrors.productMarkupOverridePercent}
+                label="Product markup %"
+              >
                 <input
-                  className={inputClassName}
+                  aria-invalid={
+                    Boolean(fieldErrors.productMarkupOverridePercent) ||
+                    undefined
+                  }
+                  className={errorClass("productMarkupOverridePercent")}
                   inputMode="decimal"
                   name="productMarkupOverridePercent"
                   onChange={(event) =>
-                    setProductMarkupOverride(event.target.value)
+                    changeDraft(
+                      "productMarkupOverridePercent",
+                      event.target.value,
+                    )
                   }
                   placeholder="0.00"
                   value={productMarkupOverride}
@@ -1003,13 +1284,23 @@ export function OrderForm({
                   %
                 </span>
               </Field>
-              <Field label="Freight markup %">
+              <Field
+                error={fieldErrors.freightMarkupOverridePercent}
+                label="Freight markup %"
+              >
                 <input
-                  className={inputClassName}
+                  aria-invalid={
+                    Boolean(fieldErrors.freightMarkupOverridePercent) ||
+                    undefined
+                  }
+                  className={errorClass("freightMarkupOverridePercent")}
                   inputMode="decimal"
                   name="freightMarkupOverridePercent"
                   onChange={(event) =>
-                    setFreightMarkupOverride(event.target.value)
+                    changeDraft(
+                      "freightMarkupOverridePercent",
+                      event.target.value,
+                    )
                   }
                   placeholder="0.00"
                   value={freightMarkupOverride}
@@ -1022,13 +1313,23 @@ export function OrderForm({
                   %
                 </span>
               </Field>
-              <Field label="Other Cost markup %">
+              <Field
+                error={fieldErrors.otherCostMarkupOverridePercent}
+                label="Other Cost markup %"
+              >
                 <input
-                  className={inputClassName}
+                  aria-invalid={
+                    Boolean(fieldErrors.otherCostMarkupOverridePercent) ||
+                    undefined
+                  }
+                  className={errorClass("otherCostMarkupOverridePercent")}
                   inputMode="decimal"
                   name="otherCostMarkupOverridePercent"
                   onChange={(event) =>
-                    setOtherMarkupOverride(event.target.value)
+                    changeDraft(
+                      "otherCostMarkupOverridePercent",
+                      event.target.value,
+                    )
                   }
                   placeholder="0.00"
                   value={otherMarkupOverride}
@@ -1080,20 +1381,30 @@ export function OrderForm({
           ) : null}
           {pricingMode === "DIRECT_SELLING_PRICE" ? (
             <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <Field label={`Package selling HT (${sellingCurrency})`}>
+              <Field
+                error={fieldErrors.sellingPriceAmount}
+                label={`Package selling HT (${sellingCurrency})`}
+              >
                 <MoneyInput
+                  invalid={Boolean(fieldErrors.sellingPriceAmount)}
                   name="sellingPriceAmount"
-                  onValueChange={setDirectSellingPrice}
+                  onValueChange={(value) =>
+                    changeDraft("sellingPriceAmount", value)
+                  }
                   value={directSellingPrice}
                 />
               </Field>
               {freightTreatment === "RECHARGED_SEPARATELY" ? (
                 <Field
+                  error={fieldErrors.freightResaleAmount}
                   label={`Separate freight resale HT (${sellingCurrency})`}
                 >
                   <MoneyInput
+                    invalid={Boolean(fieldErrors.freightResaleAmount)}
                     name="freightResaleAmount"
-                    onValueChange={setFreightResale}
+                    onValueChange={(value) =>
+                      changeDraft("freightResaleAmount", value)
+                    }
                     value={freightResale}
                   />
                 </Field>
@@ -1117,7 +1428,6 @@ export function OrderForm({
               <input name="freightResaleAmount" type="hidden" value="" />
             </>
           )}
-          <input name="targetMarginPercent" type="hidden" value="" />
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             {pricingMode !== "DIRECT_SELLING_PRICE" ? (
               <>

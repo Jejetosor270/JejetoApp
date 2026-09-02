@@ -5,6 +5,7 @@ import { isSupportedCountryCode } from "@/config/countries";
 import { europeanInputToDateOnly, isDateOnly } from "@/domain/payments/dates";
 import { VatRecoverability, VatTreatment } from "@/generated/prisma/client";
 import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
+import { optionalPercentageFraction } from "@/domain/validation/percentage";
 
 function optionalString(maximum: number) {
   return z.preprocess(
@@ -35,17 +36,9 @@ const optionalFx = z.preprocess(
     .transform((value) => new Decimal(value).toFixed(10))
     .optional(),
 );
-const optionalPercent = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
-  z
-    .string()
-    .trim()
-    .regex(/^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/)
-    .refine((value) => new Decimal(value).lessThanOrEqualTo(100))
-    .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
-    .optional(),
-);
+const optionalPercent = optionalPercentageFraction({
+  maximumPercent: "100",
+});
 const optionalDate = z.preprocess((value) => {
   if (typeof value !== "string") return value;
   if (value.trim() === "") return undefined;

@@ -21,6 +21,7 @@ describe("procurement money presentation", () => {
     expect(formatMoneyInput("1250000")).toBe("1,250,000.00");
     expect(normalizeMoneyInput("1,250,000.25")).toBe("1250000.25");
     expect(normalizeMoneyInput("12 500.5")).toBe("12500.5");
+    expect(normalizeMoneyInput("15,5")).toBe("15.5");
     expect(normalizeMoneyInput("12,500.12345")).toBeNull();
     expect(finalizeMoneyInput("001,250.")).toBe("1250");
   });

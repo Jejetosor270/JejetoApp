@@ -32,6 +32,7 @@ import {
   QuoteExtractionBusyError,
   withQuoteExtractionGuard,
 } from "@/lib/quote-intake/operational-guard";
+import { fieldErrorMap } from "@/domain/validation/issues";
 
 export async function processClientDocumentAction(
   _: ClientDocumentProcessingState,
@@ -68,12 +69,6 @@ export async function processClientDocumentAction(
   }
 }
 
-function issueMap(issues: readonly { message: string; path: PropertyKey[] }[]) {
-  return Object.fromEntries(
-    issues.map((issue) => [issue.path.map(String).join("."), issue.message]),
-  );
-}
-
 export async function confirmClientDocumentAction(
   _: BillingActionState,
   formData: FormData,
@@ -82,7 +77,7 @@ export async function confirmClientDocumentAction(
   const input = parseClientBillingConfirmation(formData);
   if (!input.success) {
     return {
-      fieldErrors: issueMap(input.error.issues),
+      fieldErrors: fieldErrorMap(input.error.issues),
       message:
         input.error.issues[0]?.message ?? "Review the Client billing values.",
       status: "error",
@@ -131,7 +126,7 @@ export async function recordClientReceiptAction(
   const input = clientReceiptSchema.safeParse(Object.fromEntries(formData));
   if (!input.success)
     return {
-      fieldErrors: issueMap(input.error.issues),
+      fieldErrors: fieldErrorMap(input.error.issues),
       message: input.error.issues[0]?.message ?? "Check the receipt.",
       status: "error",
     };
@@ -164,7 +159,7 @@ export async function updateClientBillingInlineAction(
   );
   if (!input.success)
     return {
-      fieldErrors: issueMap(input.error.issues),
+      fieldErrors: fieldErrorMap(input.error.issues),
       message: input.error.issues[0]?.message ?? "Check the billing row.",
       status: "error",
     };

@@ -22,18 +22,27 @@ import {
   updateOrder,
   updateOrderInline,
 } from "@/lib/procurement/orders";
+import { orderFieldErrors } from "@/domain/procurement/action-errors";
 
 function errorState(error: unknown): OrderActionState {
   if (isDuplicateOrderReferenceError(error)) {
     return {
+      fieldErrors: {
+        orderNumber: "This internal reference is already in use.",
+      },
       message: "A procurement order already uses this internal reference.",
       status: "error",
     };
   }
   if (isExpectedProcurementError(error))
-    return { message: error.message, status: "error" };
+    return {
+      formError: error.message,
+      message: error.message,
+      status: "error",
+    };
   console.error("Unable to save procurement order.", error);
   return {
+    formError: "We could not save this procurement order. Please try again.",
     message: "We could not save this procurement order. Please try again.",
     status: "error",
   };
@@ -47,8 +56,9 @@ export async function createOrderAction(
   const input = createOrderInputSchema.safeParse(orderFormValues(formData));
   if (!input.success)
     return {
-      message:
-        input.error.issues[0]?.message ?? "Check the entered order details.",
+      fieldErrors: orderFieldErrors(input.error.issues),
+      formError: "Review the highlighted fields and try again.",
+      message: "Review the highlighted fields and try again.",
       status: "error",
     };
   try {
@@ -79,8 +89,9 @@ export async function updateOrderAction(
   });
   if (!input.success)
     return {
-      message:
-        input.error.issues[0]?.message ?? "Check the entered order details.",
+      fieldErrors: orderFieldErrors(input.error.issues),
+      formError: "Review the highlighted fields and try again.",
+      message: "Review the highlighted fields and try again.",
       status: "error",
     };
   try {

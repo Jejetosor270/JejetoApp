@@ -26,6 +26,13 @@ describe("payment validation", () => {
     expect(
       createInstallmentSchema.parse({
         ...base,
+        basis: "PERCENTAGE",
+        percentageRate: "15,5%",
+      }).percentageRate,
+    ).toBe("0.155000");
+    expect(
+      createInstallmentSchema.parse({
+        ...base,
         basis: "FIXED_AMOUNT",
         fixedAmount: "25000",
       }).fixedAmount,

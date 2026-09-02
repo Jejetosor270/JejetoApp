@@ -11,6 +11,7 @@ import {
 import { isSupportedCountryCode } from "@/config/countries";
 import { isDateOnly } from "@/domain/payments/dates";
 import { orderPricingMethods } from "@/domain/finance/order-pricing";
+import { optionalPercentageFraction } from "@/domain/validation/percentage";
 
 const optionalText = (maximum: number) =>
   z.preprocess(
@@ -46,17 +47,10 @@ const optionalFxRate = z.preprocess(
     .transform((value) => new Decimal(value).toFixed(10))
     .optional(),
 );
-const optionalVatRate = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
-  z
-    .string()
-    .trim()
-    .regex(/^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/)
-    .refine((value) => new Decimal(value).lessThanOrEqualTo(100))
-    .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
-    .optional(),
-);
+const optionalVatRate = optionalPercentageFraction({
+  label: "VAT rate",
+  maximumPercent: "100",
+});
 const optionalEnum = <T extends Record<string, string>>(values: T) =>
   z.preprocess(
     (value) =>
@@ -68,27 +62,7 @@ const optionalCountryCode = z.preprocess(
     typeof value === "string" && value.trim() === "" ? undefined : value,
   z.string().trim().toUpperCase().refine(isSupportedCountryCode).optional(),
 );
-const optionalTargetMargin = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
-  z
-    .string()
-    .trim()
-    .regex(/^(?:0|[1-9]\d?)(?:\.\d{1,4})?$/)
-    .refine((value) => new Decimal(value).lessThan(100))
-    .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
-    .optional(),
-);
-const optionalMarkupRate = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
-  z
-    .string()
-    .trim()
-    .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/, "Enter a valid markup percentage.")
-    .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
-    .optional(),
-);
+const optionalMarkupRate = optionalPercentageFraction({ label: "Markup" });
 const optionalDateOnly = z.preprocess(
   (value) =>
     typeof value === "string" && value.trim() === "" ? undefined : value,
@@ -165,7 +139,6 @@ const orderFields = {
   supplierId: z.uuid("Choose a valid supplier."),
   supplierOrderConfirmationReference: optionalText(120),
   supplierQuoteReference: optionalText(120),
-  targetMarginRate: optionalTargetMargin,
 };
 
 const baseOrderSchema = z.object(orderFields);
@@ -275,21 +248,15 @@ function validOrder(
   );
   const invalidPricing =
     value.pricingMode === "DIRECT_SELLING_PRICE"
-      ? !value.sellingPriceAmount ||
-        hasAnyOrderMarkup ||
-        Boolean(value.targetMarginRate)
+      ? !value.sellingPriceAmount || hasAnyOrderMarkup
       : value.pricingMode === "ORDER_MARKUP"
-        ? !hasEveryOrderMarkup ||
-          Boolean(value.sellingPriceAmount) ||
-          Boolean(value.targetMarginRate)
-        : hasAnyOrderMarkup ||
-          Boolean(value.sellingPriceAmount) ||
-          Boolean(value.targetMarginRate);
+        ? !hasEveryOrderMarkup || Boolean(value.sellingPriceAmount)
+        : hasAnyOrderMarkup || Boolean(value.sellingPriceAmount);
   if (invalidPricing) {
     context.addIssue({
       code: "custom",
       path: ["pricingMode"],
-      message: "Check the pricing method and price or target margin.",
+      message: "Check the pricing method and its required selling inputs.",
     });
   }
   validVat(value, "input", context);

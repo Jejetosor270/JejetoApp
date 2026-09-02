@@ -4,7 +4,9 @@ import {
   calculateOrderPricingDraft,
   effectiveVatBase,
   initializePricingMethod,
+  orderPricingMethods,
 } from "./order-pricing";
+import { vatAmount } from "./calculations";
 
 const base = {
   directPackageSell: "0",
@@ -22,6 +24,13 @@ const base = {
 } as const;
 
 describe("Order pricing draft", () => {
+  it("exposes exactly the three current pricing methods", () => {
+    expect(orderPricingMethods).toEqual([
+      "PROJECT_MARKUP",
+      "ORDER_MARKUP",
+      "DIRECT_SELLING_PRICE",
+    ]);
+  });
   it.each(["PROJECT_MARKUP", "ORDER_MARKUP"] as const)(
     "derives separate sells in %s",
     (method) => {
@@ -51,6 +60,33 @@ describe("Order pricing draft", () => {
     expect(effectiveVatBase("147", null)).toBe("147.0000");
     expect(effectiveVatBase("160", "120")).toBe("120.0000");
     expect(effectiveVatBase("160", null)).toBe("160.0000");
+  });
+
+  it("reacts from cost through AUTO VAT base, VAT, and TTC", () => {
+    const first = calculateOrderPricingDraft({
+      ...base,
+      freightCost: "0",
+      method: "ORDER_MARKUP",
+      otherCost: "0",
+      productCost: "100",
+    });
+    const firstBase = effectiveVatBase(first.totalSell, null);
+    const firstVat = vatAmount(firstBase ?? "0", "0.20");
+    expect(first.totalSell).toBe("130.0000");
+    expect(firstBase).toBe("130.0000");
+    expect(firstVat.toFixed(4)).toBe("26.0000");
+    expect(firstVat.plus(firstBase ?? "0").toFixed(4)).toBe("156.0000");
+
+    const changed = calculateOrderPricingDraft({
+      ...base,
+      freightCost: "0",
+      method: "ORDER_MARKUP",
+      otherCost: "0",
+      productCost: "200",
+    });
+    expect(effectiveVatBase(changed.totalSell, null)).toBe("260.0000");
+    expect(effectiveVatBase(changed.totalSell, "125")).toBe("125.0000");
+    expect(effectiveVatBase(changed.totalSell, null)).toBe("260.0000");
   });
 
   it("marks unlike currencies incomplete without authoritative FX", () => {

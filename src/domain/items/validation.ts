@@ -12,6 +12,7 @@ import {
   VatRecoverability,
   VatTreatment,
 } from "@/generated/prisma/client";
+import { optionalPercentageFraction } from "@/domain/validation/percentage";
 
 const blankToUndefined = (value: unknown) =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
@@ -45,19 +46,7 @@ const optionalDecimal = (label: string) =>
       .optional(),
   );
 const optionalRate = (label: string) =>
-  z.preprocess(
-    blankToUndefined,
-    z
-      .string()
-      .trim()
-      .regex(
-        /^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/,
-        `${label} must be between 0 and 100.`,
-      )
-      .refine((value) => new Decimal(value).lessThanOrEqualTo(100))
-      .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
-      .optional(),
-  );
+  optionalPercentageFraction({ label, maximumPercent: "100" });
 const optionalDate = z.preprocess(
   blankToUndefined,
   z.string().trim().refine(isDateOnly, "Enter a valid date.").optional(),

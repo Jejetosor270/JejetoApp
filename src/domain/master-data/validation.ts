@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 
 import { isSupportedCountryCode } from "@/config/countries";
 import { ProjectStatus, ProjectTargetMode } from "@/generated/prisma/client";
+import { optionalPercentageFraction } from "@/domain/validation/percentage";
 
 const optionalText = (maximum: number) =>
   z.preprocess(
@@ -48,20 +49,9 @@ const optionalDate = z.preprocess(
   z.iso.date("Enter a valid date.").optional(),
 );
 
-const optionalPercentRate = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
-  z
-    .string()
-    .trim()
-    .regex(
-      /^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/,
-      "Enter a percentage from 0 to 100.",
-    )
-    .refine((value) => new Decimal(value).lessThanOrEqualTo(100))
-    .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
-    .optional(),
-);
+const optionalPercentRate = optionalPercentageFraction({
+  maximumPercent: "100",
+});
 
 const optionalMoney = z.preprocess(
   (value) =>

@@ -17,7 +17,12 @@ export function formatMoneyInput(amount: string | null | undefined): string {
 }
 
 export function normalizeMoneyInput(value: string): string | null {
-  const normalized = value.replaceAll(",", "").replaceAll(/\s+/g, "").trim();
+  const compact = value.replaceAll(/\s+/g, "").trim();
+  const commaCount = (compact.match(/,/g) ?? []).length;
+  const normalized =
+    compact.includes(".") || commaCount > 1
+      ? compact.replaceAll(",", "")
+      : compact.replace(",", ".");
   if (normalized === "") return "";
   if (!/^(?:\d+)(?:\.\d{0,4})?$/.test(normalized)) return null;
   const [integer = "0", fraction] = normalized.split(".");

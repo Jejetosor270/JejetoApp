@@ -73,6 +73,5 @@ export function orderFormValues(formData: FormData) {
       "supplierOrderConfirmationReference",
     ),
     supplierQuoteReference: stringValue(formData, "supplierQuoteReference"),
-    targetMarginRate: stringValue(formData, "targetMarginPercent"),
   };
 }

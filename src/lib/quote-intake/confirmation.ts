@@ -226,9 +226,6 @@ function reviewedOrderValues(
     supplierQuoteReference: input.applyQuoteReference
       ? input.supplierQuoteReference
       : current?.supplierQuoteReference,
-    targetMarginRate: current?.targetMarginRate
-      ? new Decimal(current.targetMarginRate).times(100).toString()
-      : undefined,
   };
   const parsed = createOrderInputSchema.safeParse(candidate);
   if (!parsed.success) {

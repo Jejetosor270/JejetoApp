@@ -42,6 +42,36 @@ describe("single procurement order cost validation", () => {
     expect(value.freightMarkupOverrideRate).toBe("0.150000");
     expect(value.otherCostMarkupOverrideRate).toBe("0.100000");
   });
+  it("accepts human VAT and markup percentage variants", () => {
+    const value = createOrderInputSchema.parse({
+      ...base,
+      freightMarkupOverrideRate: "15%",
+      pricingMode: "ORDER_MARKUP",
+      productMarkupOverrideRate: "30.0000",
+      otherCostMarkupOverrideRate: "15,5",
+      outputVatRate: "20.0",
+      outputVatTreatment: "DOMESTIC",
+      sellingPriceAmount: undefined,
+    });
+    expect(value.productMarkupOverrideRate).toBe("0.300000");
+    expect(value.freightMarkupOverrideRate).toBe("0.150000");
+    expect(value.otherCostMarkupOverrideRate).toBe("0.155000");
+    expect(value.outputVatRate).toBe("0.200000");
+  });
+
+  it("never exposes a raw regex for invalid VAT input", () => {
+    const value = createOrderInputSchema.safeParse({
+      ...base,
+      outputVatRate: "20 points",
+      outputVatTreatment: "DOMESTIC",
+    });
+    expect(value.success).toBe(false);
+    if (!value.success) {
+      expect(value.error.issues[0]?.message).toBe(
+        "VAT rate must be a valid percentage, for example 15 or 15.5.",
+      );
+    }
+  });
   it("accepts Project markup without competing Order or direct inputs", () => {
     const value = createOrderInputSchema.parse({
       ...base,
