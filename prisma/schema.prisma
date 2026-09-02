@@ -41,6 +41,7 @@ enum ProcurementOrderStatus {
 enum PricingMode {
   SELLING_PRICE
   TARGET_MARGIN
+  COMPONENT_MARKUP
 }
 
 enum ProcurementCostCategory {
@@ -330,6 +331,9 @@ model Project {
   estimatedPurchaseCostHt Decimal?          @db.Decimal(19, 4)
   estimatedFreightCostHt  Decimal?          @db.Decimal(19, 4)
   targetMarkupRate        Decimal?          @db.Decimal(9, 6)
+  defaultProductMarkupRate Decimal          @default(0) @db.Decimal(9, 6)
+  defaultFreightMarkupRate Decimal          @default(0) @db.Decimal(9, 6)
+  defaultOtherCostMarkupRate Decimal        @default(0) @db.Decimal(9, 6)
   expectedSellHt          Decimal?          @db.Decimal(19, 4)
   targetMode              ProjectTargetMode @default(MARKUP)
   createdAt               DateTime          @default(now())
@@ -402,6 +406,9 @@ model ProcurementOrder {
   sellingCurrencyCode                String                 @db.Char(3)
   freightResaleAmount                Decimal?               @db.Decimal(19, 4)
   targetMarginRate                   Decimal?               @db.Decimal(9, 6)
+  productMarkupOverrideRate          Decimal?               @db.Decimal(9, 6)
+  freightMarkupOverrideRate          Decimal?               @db.Decimal(9, 6)
+  otherCostMarkupOverrideRate        Decimal?               @db.Decimal(9, 6)
   quoteDate                          DateTime?              @db.Date
   orderDate                          DateTime?              @db.Date
   acknowledgementDate                DateTime?              @db.Date

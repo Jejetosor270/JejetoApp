@@ -79,6 +79,16 @@ const optionalTargetMargin = z.preprocess(
     .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
     .optional(),
 );
+const optionalMarkupRate = z.preprocess(
+  (value) =>
+    typeof value === "string" && value.trim() === "" ? undefined : value,
+  z
+    .string()
+    .trim()
+    .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/, "Enter a valid markup percentage.")
+    .transform((value) => new Decimal(value).dividedBy(100).toFixed(6))
+    .optional(),
+);
 const optionalDateOnly = z.preprocess(
   (value) =>
     typeof value === "string" && value.trim() === "" ? undefined : value,
@@ -106,6 +116,7 @@ const orderFields = {
   customsDuties: optionalMoney("Customs and duties"),
   description: optionalText(4000),
   freight: optionalMoney("Freight"),
+  freightMarkupOverrideRate: optionalMarkupRate,
   freightResaleAmount: optionalMoney("Freight resale"),
   freightTreatment: z.enum(FreightTreatment),
   expectedDeliveryDate: optionalDateOnly,
@@ -118,6 +129,7 @@ const orderFields = {
   inputVatTaxableBase: optionalMoney("Input VAT taxable base"),
   inputVatTreatment: optionalEnum(VatTreatment),
   miscellaneous: optionalMoney("Miscellaneous cost"),
+  otherCostMarkupOverrideRate: optionalMarkupRate,
   leadTimeWeeks: optionalLeadTime,
   notes: optionalText(4000),
   orderCurrencyCode: z
@@ -138,6 +150,7 @@ const orderFields = {
   projectId: z.uuid("Choose a valid project."),
   purchaseFxRate: optionalFxRate,
   purchaseCost: optionalMoney("Purchase cost"),
+  productMarkupOverrideRate: optionalMarkupRate,
   quoteDate: optionalDateOnly,
   sellingCurrencyCode: z
     .string()
@@ -235,11 +248,13 @@ function validOrder(
       message: "Freight resale requires separately recharged freight.",
     });
   }
-  if (
+  const invalidPricing =
     value.pricingMode === PricingMode.TARGET_MARGIN
       ? !value.targetMarginRate || Boolean(value.sellingPriceAmount)
-      : Boolean(value.targetMarginRate)
-  ) {
+      : value.pricingMode === PricingMode.SELLING_PRICE
+        ? Boolean(value.targetMarginRate)
+        : Boolean(value.targetMarginRate) || Boolean(value.sellingPriceAmount);
+  if (invalidPricing) {
     context.addIssue({
       code: "custom",
       path: ["pricingMode"],

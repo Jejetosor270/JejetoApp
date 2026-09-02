@@ -26,6 +26,9 @@ const projectSelect = {
   _count: { select: { buildings: true, orders: true } },
   client: { select: { displayName: true, id: true } },
   clientBudgetTargetHt: true,
+  defaultFreightMarkupRate: true,
+  defaultOtherCostMarkupRate: true,
+  defaultProductMarkupRate: true,
   clientId: true,
   code: true,
   countryCode: true,
@@ -76,8 +79,10 @@ function dateOrNull(value: string | undefined): Date | null {
 }
 
 function projectData(input: CreateProjectInput) {
-  const targetMode = input.targetMode ?? ProjectTargetMode.MARKUP;
+  const targetMode = ProjectTargetMode.MARKUP;
   const targets = calculateProjectTargets({
+    defaultFreightMarkupRate: input.defaultFreightMarkupRate ?? null,
+    defaultProductMarkupRate: input.defaultProductMarkupRate ?? null,
     estimatedFreightCostHt: input.estimatedFreightCostHt ?? null,
     estimatedPurchaseCostHt: input.estimatedPurchaseCostHt ?? null,
     expectedSellHt: input.expectedSellHt ?? null,
@@ -87,6 +92,9 @@ function projectData(input: CreateProjectInput) {
   return {
     clientBudgetTargetHt: input.clientBudgetTargetHt ?? null,
     clientId: input.clientId,
+    defaultFreightMarkupRate: input.defaultFreightMarkupRate ?? "0",
+    defaultOtherCostMarkupRate: input.defaultOtherCostMarkupRate ?? "0",
+    defaultProductMarkupRate: input.defaultProductMarkupRate ?? "0",
     code: input.code,
     countryCode: input.countryCode ?? null,
     expectedCompletionDate: dateOrNull(input.expectedCompletionDate),
@@ -101,7 +109,7 @@ function projectData(input: CreateProjectInput) {
     reportingCurrencyCode: input.reportingCurrencyCode,
     startDate: dateOrNull(input.startDate),
     status: input.status,
-    targetMarkupRate: targets.targetMarkupRate,
+    targetMarkupRate: targets.effectiveMarkupRate,
     targetMode,
   };
 }
@@ -295,7 +303,13 @@ export async function updateProject(
           entityReference: project.code,
           entityType: "PROJECT",
           metadata: {
-            changedFields: ["project details", "financial targets"],
+            changedFields: [
+              "project details",
+              "financial targets",
+              "defaultProductMarkupRate",
+              "defaultFreightMarkupRate",
+              "defaultOtherCostMarkupRate",
+            ],
           },
           summary: "Updated the Project and its financial targets.",
         });

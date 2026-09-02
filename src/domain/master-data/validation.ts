@@ -153,6 +153,9 @@ export const updateSupplierInputSchema = z.object({
 
 const projectFields = {
   clientBudgetTargetHt: optionalMoney,
+  defaultFreightMarkupRate: optionalPercentRate,
+  defaultOtherCostMarkupRate: optionalPercentRate,
+  defaultProductMarkupRate: optionalPercentRate,
   clientId: z.uuid("Choose a valid client."),
   code: z
     .string()

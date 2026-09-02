@@ -3,6 +3,8 @@ import Decimal from "decimal.js";
 import type { ProjectTargetMode } from "@/generated/prisma/client";
 
 export interface ProjectTargetInput {
+  defaultFreightMarkupRate?: string | null;
+  defaultProductMarkupRate?: string | null;
   estimatedFreightCostHt?: string | null;
   estimatedPurchaseCostHt?: string | null;
   expectedSellHt?: string | null;
@@ -11,9 +13,12 @@ export interface ProjectTargetInput {
 }
 
 export interface ProjectTargetSummary {
+  effectiveMarkupRate: string | null;
   estimatedCostHt: string | null;
+  expectedFreightSellHt: string | null;
   expectedGrossProfit: string | null;
   expectedMarginRate: string | null;
+  expectedProductSellHt: string | null;
   expectedSellHt: string | null;
   targetMarkupRate: string | null;
 }
@@ -31,11 +36,21 @@ export function calculateProjectTargets(
       ? null
       : (purchase ?? new Decimal(0)).plus(freight ?? 0);
   const enteredMarkup = value(input.targetMarkupRate);
+  const productMarkup = value(input.defaultProductMarkupRate) ?? enteredMarkup;
+  const freightMarkup = value(input.defaultFreightMarkupRate) ?? enteredMarkup;
   const enteredSell = value(input.expectedSellHt);
+  const productSell =
+    purchase !== null && productMarkup !== null
+      ? purchase.times(new Decimal(1).plus(productMarkup))
+      : null;
+  const freightSell =
+    freight !== null && freightMarkup !== null
+      ? freight.times(new Decimal(1).plus(freightMarkup))
+      : null;
   const sell =
     input.targetMode === "MARKUP"
-      ? cost !== null && enteredMarkup !== null
-        ? cost.times(new Decimal(1).plus(enteredMarkup))
+      ? productSell !== null || freightSell !== null
+        ? (productSell ?? new Decimal(0)).plus(freightSell ?? 0)
         : null
       : enteredSell;
   const profit = cost !== null && sell !== null ? sell.minus(cost) : null;
@@ -50,9 +65,12 @@ export function calculateProjectTargets(
       ? profit.dividedBy(sell)
       : null;
   return {
+    effectiveMarkupRate: markup?.toFixed(6) ?? null,
     estimatedCostHt: cost?.toFixed(4) ?? null,
+    expectedFreightSellHt: freightSell?.toFixed(4) ?? null,
     expectedGrossProfit: profit?.toFixed(4) ?? null,
     expectedMarginRate: margin?.toFixed(6) ?? null,
+    expectedProductSellHt: productSell?.toFixed(4) ?? null,
     expectedSellHt: sell?.toFixed(4) ?? null,
     targetMarkupRate: markup?.toFixed(6) ?? null,
   };

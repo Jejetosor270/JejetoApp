@@ -47,6 +47,7 @@ function currentOrderValues(order: OrderSummary): CreateOrderInput {
     expectedDeliveryDate: order.expectedDeliveryDate ?? undefined,
     expectedReadyDate: order.expectedReadyDate ?? undefined,
     freight: order.costs.freight ?? undefined,
+    freightMarkupOverrideRate: percent(order.freightMarkupOverrideRate),
     freightResaleAmount: order.freightResaleAmount ?? undefined,
     freightTreatment: order.freightTreatment,
     inputVatAmount: order.costs.inputVat?.amountIsManual
@@ -61,6 +62,7 @@ function currentOrderValues(order: OrderSummary): CreateOrderInput {
     inputVatTreatment: order.costs.inputVat?.treatment ?? undefined,
     leadTimeWeeks: order.leadTimeWeeks ?? undefined,
     miscellaneous: order.costs.miscellaneous ?? undefined,
+    otherCostMarkupOverrideRate: percent(order.otherCostMarkupOverrideRate),
     notes: order.notes ?? undefined,
     orderCurrencyCode: order.orderCurrencyCode,
     orderDate: order.orderDate ?? undefined,
@@ -78,6 +80,7 @@ function currentOrderValues(order: OrderSummary): CreateOrderInput {
     pricingMode: order.pricingMode,
     projectId: order.project.id,
     purchaseCost: order.costs.purchaseCost ?? undefined,
+    productMarkupOverrideRate: percent(order.productMarkupOverrideRate),
     purchaseFxRate: order.costs.purchaseFxRate ?? undefined,
     quoteDate: order.quoteDate ?? undefined,
     sellingCurrencyCode: order.sellingCurrencyCode,
@@ -142,6 +145,9 @@ function reviewedOrderValues(
       ? undefined
       : current?.expectedReadyDate,
     freight: input.applyFreight ? input.freight : current?.freight,
+    freightMarkupOverrideRate: current?.freightMarkupOverrideRate
+      ? new Decimal(current.freightMarkupOverrideRate).times(100).toString()
+      : undefined,
     freightResaleAmount: input.applyFreight
       ? input.freightTreatment === FreightTreatment.RECHARGED_SEPARATELY
         ? input.freightResaleAmount
@@ -181,6 +187,9 @@ function reviewedOrderValues(
     miscellaneous: input.applyMiscellaneous
       ? input.miscellaneous
       : current?.miscellaneous,
+    otherCostMarkupOverrideRate: current?.otherCostMarkupOverrideRate
+      ? new Decimal(current.otherCostMarkupOverrideRate).times(100).toString()
+      : undefined,
     notes: current?.notes,
     orderCurrencyCode,
     orderDate: current?.orderDate,
@@ -199,6 +208,9 @@ function reviewedOrderValues(
     purchaseCost: input.applyPurchaseCost
       ? input.purchaseCost
       : current?.purchaseCost,
+    productMarkupOverrideRate: current?.productMarkupOverrideRate
+      ? new Decimal(current.productMarkupOverrideRate).times(100).toString()
+      : undefined,
     purchaseFxRate: input.applyCurrency
       ? input.purchaseFxRate
       : current?.purchaseFxRate,

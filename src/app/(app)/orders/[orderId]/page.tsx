@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { OrderForm } from "@/components/procurement/order-form";
+import { OrderDetailShell } from "@/components/procurement/order-detail-shell";
 import { PaymentSchedule } from "@/components/payments/payment-schedule";
 import {
   BUSINESS_TIME_ZONE,
@@ -34,195 +34,244 @@ export default async function OrderPage({
   const cost = order.costs;
   return (
     <div className="space-y-6">
-      <header className="bg-card rounded-lg border p-5">
-        <p className="text-primary font-mono text-xs">{order.orderNumber}</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          {order.packageName}
-        </h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          {order.project.name} · {order.supplier.displayName} ·{" "}
-          {order.status.replaceAll("_", " ")}
-        </p>
-        {order.description ? (
-          <p className="text-muted-foreground mt-4 border-t pt-4 text-sm leading-6">
-            {order.description}
+      <OrderDetailShell
+        canEdit={canEditMasterData(user.role)}
+        options={options}
+        order={order}
+      >
+        <header className="bg-card rounded-lg border p-5">
+          <p className="text-primary font-mono text-xs">{order.orderNumber}</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+            {order.packageName}
+          </h1>
+          <p className="text-muted-foreground mt-2 text-sm">
+            {order.project.name} · {order.supplier.displayName} ·{" "}
+            {order.status.replaceAll("_", " ")}
           </p>
-        ) : null}
-      </header>
-      <section className="grid gap-3 lg:grid-cols-2">
-        <article className="bg-card rounded-lg border p-4">
-          <h2 className="text-sm font-semibold">Cost & margin</h2>
-          <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-            <dt>Purchase cost HT</dt>
-            <dd className="financial-figure text-right">
-              {formatMoney(cost.purchaseCost, order.orderCurrencyCode)}
-            </dd>
-            <dt>Freight</dt>
-            <dd className="financial-figure text-right">
-              {formatMoney(cost.freight, order.orderCurrencyCode)}
-            </dd>
-            <dt>Customs / duties</dt>
-            <dd className="financial-figure text-right">
-              {formatMoney(cost.customsDuties, order.orderCurrencyCode)}
-            </dd>
-            <dt>Miscellaneous</dt>
-            <dd className="financial-figure text-right">
-              {formatMoney(cost.miscellaneous, order.orderCurrencyCode)}
-            </dd>
-            <dt className="border-t pt-2">
-              Economic cost ({order.project.reportingCurrencyCode})
-            </dt>
-            <dd className="financial-figure border-t pt-2 text-right font-semibold">
-              {formatMoney(
-                cost.reportingEconomicLandedCost,
-                order.project.reportingCurrencyCode,
-              )}
-            </dd>
-            <dt>Gross profit</dt>
-            <dd className="financial-figure text-right">
-              {formatMoney(
-                cost.grossProfit,
-                order.project.reportingCurrencyCode,
-              )}
-            </dd>
-            <dt>Gross margin</dt>
-            <dd className="financial-figure text-right">
-              {formatRate(cost.grossMarginRate)}
-            </dd>
-            <dt>Markup</dt>
-            <dd className="financial-figure text-right">
-              {formatRate(cost.markupRate)}
-            </dd>
-          </dl>
-        </article>
-        <article className="bg-card rounded-lg border p-4">
-          <h2 className="text-sm font-semibold">Selling & VAT</h2>
-          <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-            <dt>Selling HT</dt>
-            <dd className="financial-figure text-right">
-              {formatMoney(
-                order.totalSellingRevenue,
-                order.sellingCurrencyCode,
-              )}
-            </dd>
-            <dt>Output VAT</dt>
-            <dd className="financial-figure text-right">
-              {formatMoney(
-                cost.outputVat?.amount ?? null,
-                order.sellingCurrencyCode,
-              )}
-            </dd>
-            <dt>Selling TTC</dt>
-            <dd className="financial-figure text-right">
-              {formatMoney(
-                order.totalSellingAmountIncludingVat,
-                order.sellingCurrencyCode,
-              )}
-            </dd>
-            <dt>Input VAT</dt>
-            <dd className="financial-figure text-right">
-              {formatMoney(
-                cost.inputVat?.amount ?? null,
-                order.orderCurrencyCode,
-              )}
-            </dd>
-            <dt>Input VAT recovery</dt>
-            <dd className="text-right text-xs">
-              {cost.inputVat?.recoverability?.replaceAll("_", " ") ?? "—"}
-            </dd>
-            <dt>Selling reporting</dt>
-            <dd className="financial-figure text-right">
-              {formatMoney(
-                cost.reportingSellingRevenue,
-                order.project.reportingCurrencyCode,
-              )}
-            </dd>
-            <dt>Client quoted / allocated HT</dt>
-            <dd className="financial-figure text-right">
-              {formatMoney(
-                order.billing.quotedAllocated,
-                order.project.reportingCurrencyCode,
-              )}
-            </dd>
-            <dt>Client invoiced / allocated HT</dt>
-            <dd className="financial-figure text-right">
-              {formatMoney(
-                order.billing.invoicedAllocated,
-                order.project.reportingCurrencyCode,
-              )}
-              {!order.billing.conversionComplete ? (
-                <span className="text-destructive block text-[0.6875rem]">
-                  Incomplete · billing FX required
-                </span>
-              ) : null}
-            </dd>
-            <dt>Actual allocated gross profit</dt>
-            <dd className="financial-figure text-right">
-              {formatMoney(
-                order.billing.actualGrossProfit,
-                order.project.reportingCurrencyCode,
-              )}
-            </dd>
-            <dt>Actual markup / margin</dt>
-            <dd className="financial-figure text-right">
-              {formatRate(order.billing.actualMarkupRate)} /{" "}
-              {formatRate(order.billing.actualMarginRate)}
-            </dd>
-          </dl>
-          <p className="text-muted-foreground mt-4 border-t pt-3 text-xs">
-            Purchase FX:{" "}
-            {cost.purchaseFxRate ??
-              (order.orderCurrencyCode === order.project.reportingCurrencyCode
-                ? "1 (same currency)"
-                : "Missing")}{" "}
-            · Selling FX:{" "}
-            {cost.sellingFxRate ??
-              (order.sellingCurrencyCode === order.project.reportingCurrencyCode
-                ? "1 (same currency)"
-                : "Missing")}
-          </p>
-          {cost.missingFx.length ? (
-            <p className="text-destructive mt-2 text-xs">
-              Incomplete: missing {cost.missingFx.join(", ")}.
+          {order.description ? (
+            <p className="text-muted-foreground mt-4 border-t pt-4 text-sm leading-6">
+              {order.description}
             </p>
           ) : null}
-        </article>
-      </section>
-      <section className="bg-card rounded-lg border p-4">
-        <h2 className="text-sm font-semibold">Procurement timing</h2>
-        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-6">
-          <div>
-            <dt className="text-muted-foreground text-xs">Quote date</dt>
-            <dd className="mt-1">{formatDateOnly(order.quoteDate)}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground text-xs">Order date</dt>
-            <dd className="mt-1">{formatDateOnly(order.orderDate)}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground text-xs">Lead time</dt>
-            <dd className="mt-1">
-              {order.leadTimeWeeks === null
-                ? "—"
-                : `${order.leadTimeWeeks} weeks`}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground text-xs">Expected ready</dt>
-            <dd className="mt-1">{formatDateOnly(order.expectedReadyDate)}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground text-xs">Expected delivery</dt>
-            <dd className="mt-1">
-              {formatDateOnly(order.expectedDeliveryDate)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground text-xs">Actual delivery</dt>
-            <dd className="mt-1">{formatDateOnly(order.actualDeliveryDate)}</dd>
-          </div>
-        </dl>
-      </section>
+        </header>
+        <section className="grid gap-3 lg:grid-cols-2">
+          <article className="bg-card rounded-lg border p-4">
+            <h2 className="text-sm font-semibold">Cost, sell & markup</h2>
+            <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+              <dt>Product / supplier cost HT</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(cost.purchaseCost, order.orderCurrencyCode)}
+              </dd>
+              <dt>Freight</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(cost.freight, order.orderCurrencyCode)}
+              </dd>
+              <dt>Product markup</dt>
+              <dd className="financial-figure text-right">
+                {formatRate(order.componentPricing.productMarkupRate)}
+                <span className="text-muted-foreground block text-[0.6875rem]">
+                  {order.componentPricing.productMarkupSource ===
+                  "PROJECT_DEFAULT"
+                    ? "Project default"
+                    : "Order override"}
+                </span>
+              </dd>
+              <dt>Product Sell HT (reporting)</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  order.componentPricing.productSellReporting,
+                  order.project.reportingCurrencyCode,
+                )}
+              </dd>
+              <dt>Freight markup</dt>
+              <dd className="financial-figure text-right">
+                {formatRate(order.componentPricing.freightMarkupRate)}
+                <span className="text-muted-foreground block text-[0.6875rem]">
+                  {order.componentPricing.freightMarkupSource ===
+                  "PROJECT_DEFAULT"
+                    ? "Project default"
+                    : "Order override"}
+                </span>
+              </dd>
+              <dt>Freight Sell HT (reporting)</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  order.componentPricing.freightSellReporting,
+                  order.project.reportingCurrencyCode,
+                )}
+              </dd>
+              <dt>Customs / duties</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(cost.customsDuties, order.orderCurrencyCode)}
+              </dd>
+              <dt>Miscellaneous</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(cost.miscellaneous, order.orderCurrencyCode)}
+              </dd>
+              <dt className="border-t pt-2">
+                Economic cost ({order.project.reportingCurrencyCode})
+              </dt>
+              <dd className="financial-figure border-t pt-2 text-right font-semibold">
+                {formatMoney(
+                  cost.reportingEconomicLandedCost,
+                  order.project.reportingCurrencyCode,
+                )}
+              </dd>
+              <dt>Gross profit</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  cost.grossProfit,
+                  order.project.reportingCurrencyCode,
+                )}
+              </dd>
+              <dt>Effective markup</dt>
+              <dd className="financial-figure text-right">
+                {formatRate(cost.markupRate)}
+              </dd>
+              <dt className="text-muted-foreground">Analytical margin</dt>
+              <dd className="financial-figure text-muted-foreground text-right">
+                {formatRate(cost.grossMarginRate)}
+              </dd>
+            </dl>
+          </article>
+          <article className="bg-card rounded-lg border p-4">
+            <h2 className="text-sm font-semibold">Selling & VAT</h2>
+            <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+              <dt>Selling HT</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  order.totalSellingRevenue,
+                  order.sellingCurrencyCode,
+                )}
+              </dd>
+              <dt>Output VAT</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  cost.outputVat?.amount ?? null,
+                  order.sellingCurrencyCode,
+                )}
+              </dd>
+              <dt>Selling TTC</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  order.totalSellingAmountIncludingVat,
+                  order.sellingCurrencyCode,
+                )}
+              </dd>
+              <dt>Input VAT</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  cost.inputVat?.amount ?? null,
+                  order.orderCurrencyCode,
+                )}
+              </dd>
+              <dt>Input VAT recovery</dt>
+              <dd className="text-right text-xs">
+                {cost.inputVat?.recoverability?.replaceAll("_", " ") ?? "—"}
+              </dd>
+              <dt>Selling reporting</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  cost.reportingSellingRevenue,
+                  order.project.reportingCurrencyCode,
+                )}
+              </dd>
+              <dt>Client quoted / allocated HT</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  order.billing.quotedAllocated,
+                  order.project.reportingCurrencyCode,
+                )}
+              </dd>
+              <dt>Client invoiced / allocated HT</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  order.billing.invoicedAllocated,
+                  order.project.reportingCurrencyCode,
+                )}
+                {!order.billing.conversionComplete ? (
+                  <span className="text-destructive block text-[0.6875rem]">
+                    Incomplete · billing FX required
+                  </span>
+                ) : null}
+              </dd>
+              <dt>Actual allocated gross profit</dt>
+              <dd className="financial-figure text-right">
+                {formatMoney(
+                  order.billing.actualGrossProfit,
+                  order.project.reportingCurrencyCode,
+                )}
+              </dd>
+              <dt>Actual effective markup</dt>
+              <dd className="financial-figure text-right">
+                {formatRate(order.billing.actualMarkupRate)}
+                <span className="text-muted-foreground block text-[0.6875rem]">
+                  Analytical margin {formatRate(order.billing.actualMarginRate)}
+                </span>
+              </dd>
+            </dl>
+            <p className="text-muted-foreground mt-4 border-t pt-3 text-xs">
+              Purchase FX:{" "}
+              {cost.purchaseFxRate ??
+                (order.orderCurrencyCode === order.project.reportingCurrencyCode
+                  ? "1 (same currency)"
+                  : "Missing")}{" "}
+              · Selling FX:{" "}
+              {cost.sellingFxRate ??
+                (order.sellingCurrencyCode ===
+                order.project.reportingCurrencyCode
+                  ? "1 (same currency)"
+                  : "Missing")}
+            </p>
+            {cost.missingFx.length ? (
+              <p className="text-destructive mt-2 text-xs">
+                Incomplete: missing {cost.missingFx.join(", ")}.
+              </p>
+            ) : null}
+          </article>
+        </section>
+        <section className="bg-card rounded-lg border p-4">
+          <h2 className="text-sm font-semibold">Procurement timing</h2>
+          <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-6">
+            <div>
+              <dt className="text-muted-foreground text-xs">Quote date</dt>
+              <dd className="mt-1">{formatDateOnly(order.quoteDate)}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Order date</dt>
+              <dd className="mt-1">{formatDateOnly(order.orderDate)}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Lead time</dt>
+              <dd className="mt-1">
+                {order.leadTimeWeeks === null
+                  ? "—"
+                  : `${order.leadTimeWeeks} weeks`}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Expected ready</dt>
+              <dd className="mt-1">
+                {formatDateOnly(order.expectedReadyDate)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">
+                Expected delivery
+              </dt>
+              <dd className="mt-1">
+                {formatDateOnly(order.expectedDeliveryDate)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Actual delivery</dt>
+              <dd className="mt-1">
+                {formatDateOnly(order.actualDeliveryDate)}
+              </dd>
+            </div>
+          </dl>
+        </section>
+      </OrderDetailShell>
       {quoteImports.length > 0 ? (
         <section className="bg-card rounded-lg border p-4">
           <h2 className="text-sm font-semibold">Supplier quote history</h2>
@@ -287,16 +336,6 @@ export default async function OrderPage({
           today={businessToday()}
         />
       </div>
-      {canEditMasterData(user.role) ? (
-        <details>
-          <summary className="border-input inline-flex h-9 cursor-pointer list-none items-center rounded-lg border px-3 text-sm font-medium">
-            Edit order
-          </summary>
-          <div className="mt-4">
-            <OrderForm options={options} order={order} />
-          </div>
-        </details>
-      ) : null}
     </div>
   );
 }

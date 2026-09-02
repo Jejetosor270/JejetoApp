@@ -443,61 +443,62 @@ export function ClientManagement({
           currencies={currencies}
           onClose={() => setEditing(null)}
         />
-      ) : null}
-      <section className="bg-card overflow-hidden rounded-lg border">
-        {canEdit ? (
-          <BulkActionBar
-            action={deleteSelectedClientsAction}
-            clearSelection={selection.clear}
-            entityName="Client"
-            impactSummary={`${affectedProjectCount} Project${affectedProjectCount === 1 ? "" : "s"} and the complete downstream hierarchy will also be deleted.`}
-            scope="Deleting the selected Clients will also permanently delete their Projects, Buildings, Procurement Orders, payments, settlements, quote-import history, and financial records. Suppliers are preserved."
-            selectedIds={selection.selectedIds}
-          />
-        ) : null}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[48rem] text-left text-sm">
-            <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
-              <tr>
-                {canEdit ? (
-                  <SelectionHeader
-                    checked={selection.allSelected}
-                    disabled={clients.length === 0}
-                    onChange={selection.toggleAll}
+      ) : (
+        <section className="bg-card overflow-hidden rounded-lg border">
+          {canEdit ? (
+            <BulkActionBar
+              action={deleteSelectedClientsAction}
+              clearSelection={selection.clear}
+              entityName="Client"
+              impactSummary={`${affectedProjectCount} Project${affectedProjectCount === 1 ? "" : "s"} and the complete downstream hierarchy will also be deleted.`}
+              scope="Deleting the selected Clients will also permanently delete their Projects, Buildings, Procurement Orders, payments, settlements, quote-import history, and financial records. Suppliers are preserved."
+              selectedIds={selection.selectedIds}
+            />
+          ) : null}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[48rem] text-left text-sm">
+              <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
+                <tr>
+                  {canEdit ? (
+                    <SelectionHeader
+                      checked={selection.allSelected}
+                      disabled={clients.length === 0}
+                      onChange={selection.toggleAll}
+                    />
+                  ) : null}
+                  <th className="px-4 py-3">Display name</th>
+                  <th className="px-4 py-3">Legal name</th>
+                  <th className="px-4 py-3">Country</th>
+                  <th className="px-4 py-3">VAT</th>
+                  <th className="px-4 py-3">Currency</th>
+                  <th className="px-4 py-3">Contact</th>
+                  <th className="px-4 py-3">Status</th>
+                  {canEdit ? (
+                    <th className="px-4 py-3 text-right">Action</th>
+                  ) : null}
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {clients.map((client) => (
+                  <ClientInlineRow
+                    canEdit={canEdit}
+                    client={client}
+                    isSelected={selection.isSelected(client.id)}
+                    key={client.id}
+                    onFullEdit={() => setEditing(client)}
+                    onSelect={() => selection.toggle(client.id)}
                   />
-                ) : null}
-                <th className="px-4 py-3">Display name</th>
-                <th className="px-4 py-3">Legal name</th>
-                <th className="px-4 py-3">Country</th>
-                <th className="px-4 py-3">VAT</th>
-                <th className="px-4 py-3">Currency</th>
-                <th className="px-4 py-3">Contact</th>
-                <th className="px-4 py-3">Status</th>
-                {canEdit ? (
-                  <th className="px-4 py-3 text-right">Action</th>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {clients.map((client) => (
-                <ClientInlineRow
-                  canEdit={canEdit}
-                  client={client}
-                  isSelected={selection.isSelected(client.id)}
-                  key={client.id}
-                  onFullEdit={() => setEditing(client)}
-                  onSelect={() => selection.toggle(client.id)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {clients.length === 0 ? (
-          <p className="text-muted-foreground px-4 py-8 text-sm">
-            No clients yet.
-          </p>
-        ) : null}
-      </section>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {clients.length === 0 ? (
+            <p className="text-muted-foreground px-4 py-8 text-sm">
+              No clients yet.
+            </p>
+          ) : null}
+        </section>
+      )}
     </div>
   );
 }

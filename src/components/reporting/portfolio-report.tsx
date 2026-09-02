@@ -36,16 +36,16 @@ export function CompanyFinancialSummary({
       "/orders",
     ],
     [
-      "Gross margin",
-      formatRate(report.financial.grossMarginRate),
-      false,
-      "/orders",
-    ],
-    [
       "Markup",
       formatRate(report.financial.markupRate),
       false,
       "/orders?view=financial",
+    ],
+    [
+      "Gross margin",
+      formatRate(report.financial.grossMarginRate),
+      false,
+      "/orders",
     ],
     [
       "Supplier outstanding",
@@ -157,6 +157,7 @@ export function ProjectPortfolioTable({
               <th className="px-3 py-2 text-right">Sales HT</th>
               <th className="px-3 py-2 text-right">Economic cost</th>
               <th className="px-3 py-2 text-right">Gross profit</th>
+              <th className="px-3 py-2 text-right">Markup</th>
               <th className="px-3 py-2 text-right">Margin</th>
               <th className="px-3 py-2 text-right">Supplier outstanding</th>
               <th className="px-3 py-2 text-right">Client outstanding</th>
@@ -199,6 +200,9 @@ export function ProjectPortfolioTable({
                     {formatMoney(value, project.reportingCurrencyCode)}
                   </td>
                 ))}
+                <td className="financial-figure px-3 py-2 text-right">
+                  {formatRate(project.markupRate)}
+                </td>
                 <td className="financial-figure px-3 py-2 text-right">
                   {formatRate(project.grossMarginRate)}
                 </td>

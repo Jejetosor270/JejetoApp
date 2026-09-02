@@ -49,6 +49,13 @@ interface ProjectView {
   clientId: string;
   code: string;
   countryCode: string | null;
+  clientBudgetTargetHt: string | null;
+  defaultFreightMarkupRate: string;
+  defaultOtherCostMarkupRate: string;
+  defaultProductMarkupRate: string;
+  estimatedFreightCostHt: string | null;
+  estimatedPurchaseCostHt: string | null;
+  expectedSellHt: string | null;
   expectedCompletionDate: string | null;
   freightEstimateNotes: string | null;
   freightEstimateRate: string | null;
@@ -60,6 +67,8 @@ interface ProjectView {
   reportingCurrencyCode: string;
   startDate: string | null;
   status: string;
+  targetMarkupRate: string | null;
+  targetMode: string;
 }
 
 const statusLabels: Record<string, string> = {
@@ -177,6 +186,23 @@ function CreateProjectForm({
             ))}
           </select>
         </Field>
+        <Field label="Default Product Markup %">
+          <input
+            className={inputClassName}
+            defaultValue="0"
+            inputMode="decimal"
+            name="defaultProductMarkupRate"
+          />
+        </Field>
+        <Field label="Default Freight Markup %">
+          <input
+            className={inputClassName}
+            defaultValue="0"
+            inputMode="decimal"
+            name="defaultFreightMarkupRate"
+          />
+        </Field>
+        <input name="defaultOtherCostMarkupRate" type="hidden" value="0" />
         <label className="grid gap-1.5 text-sm font-medium md:col-span-2 xl:col-span-3">
           Notes
           <textarea className={`${inputClassName} h-20 py-2`} name="notes" />
@@ -221,8 +247,21 @@ function ProjectInlineRow({
     const data = new FormData();
     Object.entries({
       clientId: project.clientId,
+      clientBudgetTargetHt: project.clientBudgetTargetHt ?? "",
       code: draft.code,
       countryCode: draft.countryCode,
+      defaultFreightMarkupRate: rateToPercentInput(
+        project.defaultFreightMarkupRate,
+      ),
+      defaultOtherCostMarkupRate: rateToPercentInput(
+        project.defaultOtherCostMarkupRate,
+      ),
+      defaultProductMarkupRate: rateToPercentInput(
+        project.defaultProductMarkupRate,
+      ),
+      estimatedFreightCostHt: project.estimatedFreightCostHt ?? "",
+      estimatedPurchaseCostHt: project.estimatedPurchaseCostHt ?? "",
+      expectedSellHt: project.expectedSellHt ?? "",
       expectedCompletionDate: project.expectedCompletionDate ?? "",
       freightEstimateNotes: project.freightEstimateNotes ?? "",
       freightEstimateRate: draft.freightEstimateRate,
@@ -233,6 +272,8 @@ function ProjectInlineRow({
       reportingCurrencyCode: project.reportingCurrencyCode,
       startDate: project.startDate ?? "",
       status: draft.status,
+      targetMarkupRate: rateToPercentInput(project.targetMarkupRate),
+      targetMode: project.targetMode,
     }).forEach(([key, value]) => data.set(key, value));
     startTransition(async () => {
       const result = await updateProjectAction(

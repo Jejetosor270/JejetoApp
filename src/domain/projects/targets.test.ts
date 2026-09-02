@@ -11,17 +11,21 @@ describe("project financial targets", () => {
   it("derives expected sell, profit, markup and margin from cost and markup", () => {
     expect(
       calculateProjectTargets({
+        defaultFreightMarkupRate: "0.15",
+        defaultProductMarkupRate: "0.30",
         estimatedFreightCostHt: "10000",
         estimatedPurchaseCostHt: "90000",
-        targetMarkupRate: "0.30",
         targetMode: "MARKUP",
       }),
     ).toEqual({
+      effectiveMarkupRate: "0.285000",
       estimatedCostHt: "100000.0000",
-      expectedGrossProfit: "30000.0000",
-      expectedMarginRate: "0.230769",
-      expectedSellHt: "130000.0000",
-      targetMarkupRate: "0.300000",
+      expectedFreightSellHt: "11500.0000",
+      expectedGrossProfit: "28500.0000",
+      expectedMarginRate: "0.221790",
+      expectedProductSellHt: "117000.0000",
+      expectedSellHt: "128500.0000",
+      targetMarkupRate: "0.285000",
     });
   });
 

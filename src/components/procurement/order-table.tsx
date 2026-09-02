@@ -324,7 +324,7 @@ function OrderRow({
         ) : null}
       </td>
       <td className="financial-figure px-4 py-3 text-right font-medium">
-        {formatRate(cost.grossMarginRate)}
+        {formatRate(cost.markupRate)}
       </td>
       <td className="text-muted-foreground px-4 py-3 text-xs">
         {dateLabel(order.updatedAt)}
@@ -399,7 +399,7 @@ export function OrderTable({
                   <th className="px-4 py-3">Buildings</th>
                   <th className="px-4 py-3 text-right">Economic landed cost</th>
                   <th className="px-4 py-3 text-right">Selling revenue</th>
-                  <th className="px-4 py-3 text-right">Margin</th>
+                  <th className="px-4 py-3 text-right">Markup</th>
                   <th className="px-4 py-3">Updated</th>
                 </>
               ) : view === "financial" ? (

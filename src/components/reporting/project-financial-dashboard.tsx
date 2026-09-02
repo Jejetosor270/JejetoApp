@@ -145,10 +145,28 @@ export function ProjectFinancialDashboard({
                   targets.estimatedCostHt,
                   "money",
                 ],
-                ["Target markup", targets.targetMarkupRate, "rate"],
+                [
+                  "Expected Product Sell HT",
+                  targets.expectedProductSellHt,
+                  "money",
+                ],
+                [
+                  "Expected Freight Sell HT",
+                  targets.expectedFreightSellHt,
+                  "money",
+                ],
+                [
+                  "Effective target markup",
+                  targets.effectiveMarkupRate,
+                  "rate",
+                ],
                 ["Expected sell HT", targets.expectedSellHt, "money"],
                 ["Expected gross profit", targets.expectedGrossProfit, "money"],
-                ["Expected margin", targets.expectedMarginRate, "rate"],
+                [
+                  "Analytical expected margin",
+                  targets.expectedMarginRate,
+                  "rate",
+                ],
               ] as const
             ).map(([label, value, kind]) => (
               <div className="contents" key={label}>
@@ -198,10 +216,12 @@ export function ProjectFinancialDashboard({
                 </dd>
               </div>
             ))}
-            <dt className="text-muted-foreground">Actual markup / margin</dt>
+            <dt className="text-muted-foreground">Actual effective markup</dt>
             <dd className="financial-figure text-right font-semibold">
-              {formatRate(actualProfitability.markupRate)} /{" "}
-              {formatRate(actualProfitability.marginRate)}
+              {formatRate(actualProfitability.markupRate)}
+              <span className="text-muted-foreground block text-[0.6875rem]">
+                Analytical margin {formatRate(actualProfitability.marginRate)}
+              </span>
             </dd>
             <dt className="text-muted-foreground">
               Sell / cost / markup variance
@@ -263,9 +283,9 @@ export function ProjectFinancialDashboard({
             </dd>
           </div>
           <div className="bg-muted/25 rounded-md border p-3">
-            <dt className="text-muted-foreground text-xs">Gross margin</dt>
+            <dt className="text-muted-foreground text-xs">Effective markup</dt>
             <dd className="financial-figure mt-1 text-sm font-semibold">
-              {formatRate(report.financial.grossMarginRate)}
+              {formatRate(report.financial.markupRate)}
             </dd>
           </div>
           <div className="bg-muted/25 rounded-md border p-3">
@@ -350,10 +370,10 @@ export function ProjectFinancialDashboard({
             <dd className="financial-figure border-t pt-2 text-right font-semibold">
               {formatMoney(report.financial.grossProfit, currency)}
             </dd>
-            <dt>Gross margin / Markup</dt>
+            <dt>Markup / analytical margin</dt>
             <dd className="financial-figure text-right font-semibold">
-              {formatRate(report.financial.grossMarginRate)} /{" "}
-              {formatRate(report.financial.markupRate)}
+              {formatRate(report.financial.markupRate)} /{" "}
+              {formatRate(report.financial.grossMarginRate)}
             </dd>
           </dl>
         </article>
@@ -436,8 +456,8 @@ export function ProjectFinancialDashboard({
         <header className="border-b px-4 py-3">
           <h2 className="text-sm font-semibold">Order financial breakdown</h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            Comparable values are shown in {currency}; margin percentages are
-            calculated per Order, never averaged for the Project total.
+            Comparable values are shown in {currency}; effective markup is
+            calculated from monetary totals, never averaged.
           </p>
         </header>
         <div className="overflow-x-auto">
@@ -450,8 +470,8 @@ export function ProjectFinancialDashboard({
                 <th className="px-3 py-2 text-right">Landed</th>
                 <th className="px-3 py-2 text-right">Selling</th>
                 <th className="px-3 py-2 text-right">Gross profit</th>
-                <th className="px-3 py-2 text-right">Margin</th>
                 <th className="px-3 py-2 text-right">Markup</th>
+                <th className="px-3 py-2 text-right">Margin</th>
                 <th className="px-3 py-2 text-right">Supplier outstanding</th>
                 <th className="px-3 py-2 text-right">Client outstanding</th>
                 <th className="px-3 py-2">Status</th>
@@ -486,10 +506,10 @@ export function ProjectFinancialDashboard({
                     </td>
                   ))}
                   <td className="financial-figure px-3 py-2 text-right">
-                    {formatRate(order.grossMarginRate)}
+                    {formatRate(order.markupRate)}
                   </td>
                   <td className="financial-figure px-3 py-2 text-right">
-                    {formatRate(order.markupRate)}
+                    {formatRate(order.grossMarginRate)}
                   </td>
                   <td className="financial-figure px-3 py-2 text-right">
                     {formatMoney(order.supplierOutstanding, currency)}

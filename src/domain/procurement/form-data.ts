@@ -15,6 +15,10 @@ export function orderFormValues(formData: FormData) {
     expectedDeliveryDate: stringValue(formData, "expectedDeliveryDate"),
     expectedReadyDate: stringValue(formData, "expectedReadyDate"),
     freight: stringValue(formData, "freight"),
+    freightMarkupOverrideRate: stringValue(
+      formData,
+      "freightMarkupOverridePercent",
+    ),
     freightResaleAmount: stringValue(formData, "freightResaleAmount"),
     freightTreatment: stringValue(formData, "freightTreatment"),
     inputVatAmount: stringValue(formData, "inputVatAmount"),
@@ -28,6 +32,10 @@ export function orderFormValues(formData: FormData) {
     inputVatTaxableBase: stringValue(formData, "inputVatTaxableBase"),
     inputVatTreatment: stringValue(formData, "inputVatTreatment"),
     miscellaneous: stringValue(formData, "miscellaneous"),
+    otherCostMarkupOverrideRate: stringValue(
+      formData,
+      "otherCostMarkupOverridePercent",
+    ),
     leadTimeWeeks: stringValue(formData, "leadTimeWeeks"),
     notes: stringValue(formData, "notes"),
     orderCurrencyCode: stringValue(formData, "orderCurrencyCode"),
@@ -46,6 +54,10 @@ export function orderFormValues(formData: FormData) {
     pricingMode: stringValue(formData, "pricingMode"),
     projectId: stringValue(formData, "projectId"),
     purchaseCost: stringValue(formData, "purchaseCost"),
+    productMarkupOverrideRate: stringValue(
+      formData,
+      "productMarkupOverridePercent",
+    ),
     purchaseFxRate: stringValue(formData, "purchaseFxRate"),
     quoteDate: stringValue(formData, "quoteDate"),
     sellingCurrencyCode: stringValue(formData, "sellingCurrencyCode"),

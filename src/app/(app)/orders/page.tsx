@@ -93,7 +93,7 @@ export default async function OrdersPage({
             Procurement orders
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            Supplier-level packages, cost progression, and commercial margin.
+            Supplier-level packages, cost progression, and commercial markup.
           </p>
         </div>
         <ExportLink

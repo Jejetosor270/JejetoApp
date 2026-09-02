@@ -49,6 +49,8 @@ export default async function ProjectPage({
   if (!result || !reporting) notFound();
   const { buildings, project } = result;
   const targets = calculateProjectTargets({
+    defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
+    defaultProductMarkupRate: project.defaultProductMarkupRate.toString(),
     estimatedFreightCostHt: project.estimatedFreightCostHt?.toString() ?? null,
     estimatedPurchaseCostHt:
       project.estimatedPurchaseCostHt?.toString() ?? null,
@@ -155,6 +157,10 @@ export default async function ProjectPage({
       project={{
         ...project,
         clientBudgetTargetHt: project.clientBudgetTargetHt?.toString() ?? null,
+        defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
+        defaultOtherCostMarkupRate:
+          project.defaultOtherCostMarkupRate.toString(),
+        defaultProductMarkupRate: project.defaultProductMarkupRate.toString(),
         expectedCompletionDate:
           project.expectedCompletionDate?.toISOString() ?? null,
         freightEstimateRate: project.freightEstimateRate?.toString() ?? null,

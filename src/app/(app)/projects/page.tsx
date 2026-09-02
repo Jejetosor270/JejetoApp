@@ -175,10 +175,22 @@ export default async function ProjectsPage({
         managers={options.managers}
         projects={result.items.map((project) => ({
           ...project,
+          clientBudgetTargetHt:
+            project.clientBudgetTargetHt?.toString() ?? null,
+          defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
+          defaultOtherCostMarkupRate:
+            project.defaultOtherCostMarkupRate.toString(),
+          defaultProductMarkupRate: project.defaultProductMarkupRate.toString(),
+          estimatedFreightCostHt:
+            project.estimatedFreightCostHt?.toString() ?? null,
+          estimatedPurchaseCostHt:
+            project.estimatedPurchaseCostHt?.toString() ?? null,
+          expectedSellHt: project.expectedSellHt?.toString() ?? null,
           expectedCompletionDate:
             project.expectedCompletionDate?.toISOString().slice(0, 10) ?? null,
           freightEstimateRate: project.freightEstimateRate?.toString() ?? null,
           startDate: project.startDate?.toISOString().slice(0, 10) ?? null,
+          targetMarkupRate: project.targetMarkupRate?.toString() ?? null,
         }))}
         statuses={options.statuses}
       />

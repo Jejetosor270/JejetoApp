@@ -53,17 +53,23 @@ function sellingOrder(
     expectedDeliveryDate: null,
     expectedReadyDate: null,
     freightResaleAmount: new Decimal("5000"),
+    freightMarkupOverrideRate: null,
     freightTreatment: FreightTreatment.RECHARGED_SEPARATELY,
     id: "e12b6b9b-10e9-4e42-b93f-38796de4f65a",
     leadTimeWeeks: null,
     notes: null,
+    otherCostMarkupOverrideRate: null,
     orderCurrencyCode: "EUR",
     orderDate: null,
     orderNumber: "PO-001",
     packageName: "Example",
     paymentInstallments: [],
     pricingMode: PricingMode.SELLING_PRICE,
+    productMarkupOverrideRate: null,
     project: {
+      defaultFreightMarkupRate: new Decimal(0),
+      defaultOtherCostMarkupRate: new Decimal(0),
+      defaultProductMarkupRate: new Decimal(0),
       id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
       name: "Example Project",
       reportingCurrencyCode: "EUR",
@@ -189,6 +195,56 @@ describe("single order cost write", () => {
 
     expect(summary.totalSellingRevenue).toBe("95000");
     expect(summary.totalSellingAmountIncludingVat).toBe("95000");
+  });
+
+  it("derives Product and Freight selling independently from inherited markups", () => {
+    const order = sellingOrder("0", VatTreatment.OUT_OF_SCOPE);
+    const summary = summarizeOrder({
+      ...order,
+      freightResaleAmount: null,
+      freightTreatment: FreightTreatment.INCLUDED_IN_PACKAGE_PRICE,
+      pricingMode: PricingMode.COMPONENT_MARKUP,
+      project: {
+        ...order.project,
+        defaultFreightMarkupRate: new Decimal("0.15"),
+        defaultProductMarkupRate: new Decimal("0.30"),
+      },
+      sellingPriceAmount: null,
+      costLines: [
+        {
+          category: ProcurementCostCategory.SUPPLIER_PURCHASE,
+          createdAt: timestamp,
+          createdById: null,
+          description: null,
+          id: "c12b6b9b-10e9-4e42-b93f-38796de4f65a",
+          originalAmount: new Decimal("100"),
+          orderId: order.id,
+          updatedAt: timestamp,
+          updatedById: null,
+        },
+        {
+          category: ProcurementCostCategory.FREIGHT,
+          createdAt: timestamp,
+          createdById: null,
+          description: null,
+          id: "d12b6b9b-10e9-4e42-b93f-38796de4f65a",
+          originalAmount: new Decimal("10"),
+          orderId: order.id,
+          updatedAt: timestamp,
+          updatedById: null,
+        },
+      ],
+    });
+    expect(summary.componentPricing).toMatchObject({
+      effectiveMarkupRate: "0.286364",
+      freightMarkupSource: "PROJECT_DEFAULT",
+      freightSellReporting: "11.5000",
+      productMarkupSource: "PROJECT_DEFAULT",
+      productSellReporting: "130.0000",
+      totalSellReporting: "141.5000",
+    });
+    expect(summary.totalSellingRevenue).toBe("141.5");
+    expect(summary.costs.grossProfit).toBe("31.5");
   });
 
   it("derives Order profitability from comparable Invoice allocations", () => {

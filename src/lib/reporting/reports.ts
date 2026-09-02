@@ -168,6 +168,7 @@ export interface PortfolioProjectRow {
   financialComplete: boolean;
   grossMarginRate: string | null;
   grossProfit: string | null;
+  markupRate: string | null;
   id: string;
   name: string;
   reportingCurrencyCode: string;
@@ -632,6 +633,7 @@ export async function getPortfolioReportingSnapshot(
         financialComplete: snapshot.financial.complete,
         grossMarginRate: snapshot.financial.grossMarginRate,
         grossProfit: snapshot.financial.grossProfit,
+        markupRate: snapshot.financial.markupRate,
         id: project.id,
         name: project.name,
         reportingCurrencyCode: project.reportingCurrencyCode,

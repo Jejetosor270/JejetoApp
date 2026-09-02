@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { updateItemAction } from "@/app/(app)/items/actions";
 import { ItemForm } from "@/components/items/item-form";
+import { DetailEditShell } from "@/components/inline-editing/detail-edit-shell";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { getItem, listItemOptions } from "@/lib/items/items";
@@ -26,50 +27,53 @@ export default async function ItemPage({
   const currency = item.purchaseCurrencyCode ?? "—";
   return (
     <div className="space-y-5">
-      <header>
-        <p className="text-primary text-xs font-medium uppercase">
-          Item detail
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold">
-          {item.itemReference ? `${item.itemReference} · ` : ""}
-          {item.name}
-        </h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          {item.project.name}
-          {item.building ? ` · ${item.building.name}` : " · Unallocated"}
-          {item.room ? ` · ${item.room.name}` : ""}
-        </p>
-      </header>
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          ["Purchase HT", formatMoney(item.totalPurchasePriceHt, currency)],
-          ["Budget HT", formatMoney(item.totalSellingPriceHt, currency)],
-          ["Markup", formatRate(item.financial.markupRate)],
-          [
-            "Purchase variance",
-            item.variance
-              ? `${formatMoney(item.variance.amount, currency)} ${item.variance.status
-                  .replace("_BUDGET", "")
-                  .toLowerCase()} budget`
-              : "No budget purchase baseline",
-          ],
-        ].map(([label, value]) => (
-          <div className="rounded-lg border p-3" key={label}>
-            <p className="text-muted-foreground text-xs">{label}</p>
-            <p className="financial-figure mt-1 font-semibold">{value}</p>
+      <DetailEditShell
+        canEdit={canEditMasterData(user.role)}
+        editor={
+          <ItemForm action={updateItemAction} item={item} options={options} />
+        }
+        label="Edit item"
+      >
+        <header>
+          <p className="text-primary text-xs font-medium uppercase">
+            Item detail
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold">
+            {item.itemReference ? `${item.itemReference} · ` : ""}
+            {item.name}
+          </h1>
+          <p className="text-muted-foreground mt-2 text-sm">
+            {item.project.name}
+            {item.building ? ` · ${item.building.name}` : " · Unallocated"}
+            {item.room ? ` · ${item.room.name}` : ""}
+          </p>
+        </header>
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            ["Purchase HT", formatMoney(item.totalPurchasePriceHt, currency)],
+            ["Budget HT", formatMoney(item.totalSellingPriceHt, currency)],
+            ["Markup", formatRate(item.financial.markupRate)],
+            [
+              "Purchase variance",
+              item.variance
+                ? `${formatMoney(item.variance.amount, currency)} ${item.variance.status
+                    .replace("_BUDGET", "")
+                    .toLowerCase()} budget`
+                : "No budget purchase baseline",
+            ],
+          ].map(([label, value]) => (
+            <div className="rounded-lg border p-3" key={label}>
+              <p className="text-muted-foreground text-xs">{label}</p>
+              <p className="financial-figure mt-1 font-semibold">{value}</p>
+            </div>
+          ))}
+        </section>
+        {item.financial.warnings.length ? (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+            {item.financial.warnings.join(" ")}
           </div>
-        ))}
-      </section>
-      {item.financial.warnings.length ? (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-          {item.financial.warnings.join(" ")}
-        </div>
-      ) : null}
-      {canEditMasterData(user.role) ? (
-        <ItemForm action={updateItemAction} item={item} options={options} />
-      ) : (
-        <p className="text-muted-foreground text-sm">Read-only access.</p>
-      )}
+        ) : null}
+      </DetailEditShell>
       <footer className="text-muted-foreground text-xs">
         Source: {item.sourceType.replaceAll("_", " ")}
         {item.itemImport ? ` · ${item.itemImport.originalFilename}` : ""} ·

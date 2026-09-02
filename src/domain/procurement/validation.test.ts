@@ -29,6 +29,18 @@ describe("single procurement order cost validation", () => {
     expect(value.purchaseCost).toBe("70000.0000");
     expect(value.purchaseFxRate).toBe("0.8575000000");
   });
+  it("accepts component markup overrides and keeps blank values as inheritance", () => {
+    const value = createOrderInputSchema.parse({
+      ...base,
+      freightMarkupOverrideRate: "15",
+      pricingMode: "COMPONENT_MARKUP",
+      productMarkupOverrideRate: "30",
+      sellingPriceAmount: undefined,
+    });
+    expect(value.productMarkupOverrideRate).toBe("0.300000");
+    expect(value.freightMarkupOverrideRate).toBe("0.150000");
+    expect(value.otherCostMarkupOverrideRate).toBeUndefined();
+  });
   it("validates independent VAT and non-recoverability", () => {
     const value = createOrderInputSchema.parse({
       ...base,

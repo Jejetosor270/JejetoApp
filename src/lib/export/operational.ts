@@ -80,6 +80,7 @@ async function ordersCsv(params: Params): Promise<string> {
       "Selling currency",
       "Selling revenue HT",
       "Gross profit",
+      "Effective markup rate",
       "Order date",
     ],
     items.map((item) => [
@@ -93,6 +94,7 @@ async function ordersCsv(params: Params): Promise<string> {
       trustedCsvValue(item.sellingCurrencyCode),
       money(item.totalSellingRevenue),
       money(item.costs.grossProfit),
+      item.costs.markupRate ? trustedCsvValue(item.costs.markupRate) : "",
       item.orderDate ? trustedCsvValue(item.orderDate) : "",
     ]),
   );
@@ -256,6 +258,9 @@ async function projectsCsv(params: Params): Promise<string> {
     select: {
       client: { select: { displayName: true } },
       clientBudgetTargetHt: true,
+      defaultFreightMarkupRate: true,
+      defaultOtherCostMarkupRate: true,
+      defaultProductMarkupRate: true,
       code: true,
       countryCode: true,
       expectedCompletionDate: true,
@@ -281,7 +286,10 @@ async function projectsCsv(params: Params): Promise<string> {
       "Client budget target HT",
       "Estimated purchase cost HT",
       "Estimated freight cost HT",
-      "Target markup rate",
+      "Default product markup rate",
+      "Default freight markup rate",
+      "Default other cost markup rate",
+      "Effective target markup rate",
       "Expected sell HT",
     ],
     items.map((item) => [
@@ -299,6 +307,9 @@ async function projectsCsv(params: Params): Promise<string> {
       money(item.clientBudgetTargetHt?.toString() ?? null),
       money(item.estimatedPurchaseCostHt?.toString() ?? null),
       money(item.estimatedFreightCostHt?.toString() ?? null),
+      trustedCsvValue(item.defaultProductMarkupRate.toString()),
+      trustedCsvValue(item.defaultFreightMarkupRate.toString()),
+      trustedCsvValue(item.defaultOtherCostMarkupRate.toString()),
       item.targetMarkupRate
         ? trustedCsvValue(item.targetMarkupRate.toString())
         : "",

@@ -2,7 +2,13 @@
 
 import Decimal from "decimal.js";
 import { Pencil, Plus } from "lucide-react";
-import { type ReactNode, useActionState, useState, useTransition } from "react";
+import {
+  type ReactNode,
+  useActionState,
+  useEffect,
+  useState,
+  useTransition,
+} from "react";
 
 import {
   createRoomAction,
@@ -41,6 +47,9 @@ interface ProjectView {
   clientBudgetTargetHt: { toString(): string } | string | null;
   client: { id: string; displayName: string };
   clientId: string;
+  defaultFreightMarkupRate: { toString(): string } | string;
+  defaultOtherCostMarkupRate: { toString(): string } | string;
+  defaultProductMarkupRate: { toString(): string } | string;
   code: string;
   countryCode: string | null;
   expectedCompletionDate: string | null;
@@ -240,43 +249,39 @@ function ProjectFields({
           name="estimatedFreightCostHt"
         />
       </Field>
-      <Field label="Target calculation">
-        <select
-          className={inputClassName}
-          defaultValue={project.targetMode}
-          name="targetMode"
-        >
-          <option value="MARKUP">Derive sell from target markup</option>
-          <option value="EXPECTED_SELL">
-            Derive markup from expected sell
-          </option>
-        </select>
-      </Field>
-      <Field label="Target markup %">
+      <Field label="Default Product Markup %">
         <input
           className={inputClassName}
-          defaultValue={
-            project.targetMarkupRate
-              ? new Decimal(project.targetMarkupRate.toString())
-                  .times(100)
-                  .toString()
-              : ""
-          }
+          defaultValue={new Decimal(project.defaultProductMarkupRate.toString())
+            .times(100)
+            .toString()}
           inputMode="decimal"
-          name="targetMarkupRate"
+          name="defaultProductMarkupRate"
         />
       </Field>
-      <Field label="Expected Sell HT">
+      <Field label="Default Freight Markup %">
         <input
           className={inputClassName}
-          defaultValue={project.expectedSellHt?.toString() ?? ""}
+          defaultValue={new Decimal(project.defaultFreightMarkupRate.toString())
+            .times(100)
+            .toString()}
           inputMode="decimal"
-          name="expectedSellHt"
+          name="defaultFreightMarkupRate"
         />
-        <span className="text-muted-foreground text-xs font-normal">
-          In markup mode this is recalculated when you save.
-        </span>
       </Field>
+      <Field label="Default Other Cost Markup %">
+        <input
+          className={inputClassName}
+          defaultValue={new Decimal(
+            project.defaultOtherCostMarkupRate.toString(),
+          )
+            .times(100)
+            .toString()}
+          inputMode="decimal"
+          name="defaultOtherCostMarkupRate"
+        />
+      </Field>
+      <input name="targetMode" type="hidden" value="MARKUP" />
       <Field label="Freight estimate notes">
         <input
           className={inputClassName}
@@ -327,6 +332,9 @@ function EditProject({
     updateProjectAction,
     initialMasterDataActionState,
   );
+  useEffect(() => {
+    if (state.status === "success") onClose();
+  }, [onClose, state.status]);
   return (
     <section className="bg-card rounded-lg border p-4">
       <div className="mb-4 flex justify-between">
@@ -624,38 +632,39 @@ export function ProjectDetail({
           project={project}
           statuses={statuses}
         />
-      ) : null}
-      <section className="bg-card rounded-lg border p-5">
-        <div className="flex flex-col justify-between gap-3 sm:flex-row">
-          <div>
-            <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-              {project.code}
-            </p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-              {project.name}
-            </h1>
-            <p className="text-muted-foreground mt-2 text-sm">
-              {project.client.displayName} · {project.reportingCurrencyCode} ·{" "}
-              {statusLabels[project.status] ?? project.status}
-            </p>
+      ) : (
+        <section className="bg-card rounded-lg border p-5">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row">
+            <div>
+              <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
+                {project.code}
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+                {project.name}
+              </h1>
+              <p className="text-muted-foreground mt-2 text-sm">
+                {project.client.displayName} · {project.reportingCurrencyCode} ·{" "}
+                {statusLabels[project.status] ?? project.status}
+              </p>
+            </div>
+            {canEdit ? (
+              <Button
+                onClick={() => setEditingProject(true)}
+                type="button"
+                variant="outline"
+              >
+                <Pencil data-icon="inline-start" />
+                Edit project
+              </Button>
+            ) : null}
           </div>
-          {canEdit ? (
-            <Button
-              onClick={() => setEditingProject(true)}
-              type="button"
-              variant="outline"
-            >
-              <Pencil data-icon="inline-start" />
-              Edit project
-            </Button>
+          {project.notes ? (
+            <p className="text-muted-foreground mt-5 border-t pt-4 text-sm leading-6">
+              {project.notes}
+            </p>
           ) : null}
-        </div>
-        {project.notes ? (
-          <p className="text-muted-foreground mt-5 border-t pt-4 text-sm leading-6">
-            {project.notes}
-          </p>
-        ) : null}
-      </section>
+        </section>
+      )}
       {financialDashboard}
       {canEdit && addingBuilding ? (
         <BuildingForm

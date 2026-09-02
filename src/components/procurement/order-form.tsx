@@ -1,5 +1,6 @@
 "use client";
 
+import Decimal from "decimal.js";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 
@@ -19,6 +20,10 @@ import { countries } from "@/config/countries";
 import { rateToPercentInput } from "@/domain/procurement/presentation";
 import { addWeeksToDateOnly } from "@/domain/payments/dates";
 import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
+import {
+  calculateComponentMarkup,
+  markupFromSelling,
+} from "@/domain/finance/component-markup";
 
 interface BuildingOption {
   id: string;
@@ -31,6 +36,9 @@ interface ProjectOption {
   client: { defaultCurrencyCode: string };
   id: string;
   name: string;
+  defaultFreightMarkupRate: string;
+  defaultOtherCostMarkupRate: string;
+  defaultProductMarkupRate: string;
   reportingCurrencyCode: string;
 }
 interface SupplierOption {
@@ -79,15 +87,18 @@ export interface EditableOrder {
   expectedReadyDate: string | null;
   freightResaleAmount: string | null;
   freightTreatment: string;
+  freightMarkupOverrideRate: string | null;
   id: string;
   leadTimeWeeks: number | null;
   notes: string | null;
+  otherCostMarkupOverrideRate: string | null;
   orderCurrencyCode: string;
   orderNumber: string;
   orderDate: string | null;
   packageName: string;
   packageSellingPrice: string | null;
   pricingMode: string;
+  productMarkupOverrideRate: string | null;
   project: { id: string; name: string };
   quoteDate: string | null;
   sellingCurrencyCode: string;
@@ -110,6 +121,7 @@ const labels: Record<string, string> = {
   RECHARGED_SEPARATELY: "Recharged separately",
   SELLING_PRICE: "Enter selling price",
   TARGET_MARGIN: "Calculate from target margin",
+  COMPONENT_MARKUP: "Product and freight markup",
   RECOVERABLE: "Recoverable",
   NON_RECOVERABLE: "Non-recoverable",
 };
@@ -249,10 +261,12 @@ function VatFields({
 }
 export function OrderForm({
   onCancel,
+  onSaved,
   options,
   order,
 }: {
   onCancel?: () => void;
+  onSaved?: () => void;
   options: OrderFormOptions;
   order?: EditableOrder;
 }) {
@@ -284,7 +298,7 @@ export function OrderForm({
       "EUR",
   );
   const [pricingMode, setPricingMode] = useState(
-    order?.pricingMode ?? "SELLING_PRICE",
+    order?.pricingMode ?? "COMPONENT_MARKUP",
   );
   const [freightTreatment, setFreightTreatment] = useState(
     order?.freightTreatment ?? "NOT_APPLICABLE",
@@ -298,6 +312,53 @@ export function OrderForm({
   const [expectedReadyDate, setExpectedReadyDate] = useState(
     order?.expectedReadyDate ?? "",
   );
+  const [purchaseCost, setPurchaseCost] = useState(
+    order?.costs.purchaseCost ?? "",
+  );
+  const [freightCost, setFreightCost] = useState(order?.costs.freight ?? "");
+  const [customsCost, setCustomsCost] = useState(
+    order?.costs.customsDuties ?? "",
+  );
+  const [miscellaneousCost, setMiscellaneousCost] = useState(
+    order?.costs.miscellaneous ?? "",
+  );
+  const [productMarkupOverride, setProductMarkupOverride] = useState(
+    rateToPercentInput(order?.productMarkupOverrideRate ?? null),
+  );
+  const [freightMarkupOverride, setFreightMarkupOverride] = useState(
+    rateToPercentInput(order?.freightMarkupOverrideRate ?? null),
+  );
+  const [otherMarkupOverride, setOtherMarkupOverride] = useState(
+    rateToPercentInput(order?.otherCostMarkupOverrideRate ?? null),
+  );
+  const toRate = (percent: string, inherited: string) =>
+    percent.trim() ? new Decimal(percent).dividedBy(100).toString() : inherited;
+  let livePricing: ReturnType<typeof calculateComponentMarkup> | null = null;
+  try {
+    if (project) {
+      livePricing = calculateComponentMarkup({
+        freightCost: freightCost || "0",
+        freightMarkupRate: toRate(
+          freightMarkupOverride,
+          project.defaultFreightMarkupRate,
+        ),
+        otherCost: new Decimal(customsCost || 0)
+          .plus(miscellaneousCost || 0)
+          .toString(),
+        otherMarkupRate: toRate(
+          otherMarkupOverride,
+          project.defaultOtherCostMarkupRate,
+        ),
+        productCost: purchaseCost || "0",
+        productMarkupRate: toRate(
+          productMarkupOverride,
+          project.defaultProductMarkupRate,
+        ),
+      });
+    }
+  } catch {
+    livePricing = null;
+  }
   function refreshExpectedReady(nextDate: string, nextWeeks: string) {
     const weeks = Number(nextWeeks);
     setExpectedReadyDate(
@@ -310,7 +371,8 @@ export function OrderForm({
     if (state.status === "success" && state.orderId && !isEditing) {
       router.push(`/orders/${state.orderId}`);
     }
-  }, [isEditing, router, state.orderId, state.status]);
+    if (state.status === "success" && isEditing) onSaved?.();
+  }, [isEditing, onSaved, router, state.orderId, state.status]);
   return (
     <section className="bg-card rounded-lg border p-4 sm:p-5">
       <div className="mb-5 flex items-center justify-between gap-3">
@@ -589,26 +651,34 @@ export function OrderForm({
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Money
-              defaultValue={order?.costs.purchaseCost}
-              label="Purchase cost HT"
-              name="purchaseCost"
-            />
-            <Money
-              defaultValue={order?.costs.freight}
-              label="Freight cost"
-              name="freight"
-            />
-            <Money
-              defaultValue={order?.costs.customsDuties}
-              label="Customs / duties"
-              name="customsDuties"
-            />
-            <Money
-              defaultValue={order?.costs.miscellaneous}
-              label="Miscellaneous"
-              name="miscellaneous"
-            />
+            <Field label="Product / supplier cost HT">
+              <MoneyInput
+                name="purchaseCost"
+                onValueChange={setPurchaseCost}
+                value={purchaseCost}
+              />
+            </Field>
+            <Field label="Freight cost HT">
+              <MoneyInput
+                name="freight"
+                onValueChange={setFreightCost}
+                value={freightCost}
+              />
+            </Field>
+            <Field label="Customs / duties HT">
+              <MoneyInput
+                name="customsDuties"
+                onValueChange={setCustomsCost}
+                value={customsCost}
+              />
+            </Field>
+            <Field label="Miscellaneous HT">
+              <MoneyInput
+                name="miscellaneous"
+                onValueChange={setMiscellaneousCost}
+                value={miscellaneousCost}
+              />
+            </Field>
             <Field
               label={`Purchase FX (${purchaseCurrency} → ${project?.reportingCurrencyCode ?? "reporting"})`}
             >
@@ -671,34 +741,43 @@ export function OrderForm({
                 onChange={(event) => setPricingMode(event.target.value)}
                 value={pricingMode}
               >
-                {options.pricingModes.map((item) => (
-                  <option key={item} value={item}>
-                    {label(item)}
-                  </option>
-                ))}
+                {options.pricingModes
+                  .filter(
+                    (item) =>
+                      item !== "TARGET_MARGIN" ||
+                      order?.pricingMode === "TARGET_MARGIN",
+                  )
+                  .map((item) => (
+                    <option key={item} value={item}>
+                      {label(item)}
+                    </option>
+                  ))}
               </select>
             </Field>
-            <Money
-              defaultValue={
-                pricingMode === "SELLING_PRICE"
-                  ? order?.packageSellingPrice
-                  : ""
-              }
-              label="Package selling price HT"
-              name="sellingPriceAmount"
-            />
-            <Field label="Target gross margin %">
-              <input
-                className={inputClassName}
-                defaultValue={rateToPercentInput(
-                  order?.targetMarginRate ?? null,
-                )}
-                disabled={pricingMode === "SELLING_PRICE"}
-                inputMode="decimal"
-                name="targetMarginPercent"
-                placeholder="30.00"
+            {pricingMode === "SELLING_PRICE" ? (
+              <Money
+                defaultValue={order?.packageSellingPrice}
+                label="Package selling price HT"
+                name="sellingPriceAmount"
               />
-            </Field>
+            ) : (
+              <input name="sellingPriceAmount" type="hidden" value="" />
+            )}
+            {pricingMode === "TARGET_MARGIN" ? (
+              <Field label="Legacy target gross margin %">
+                <input
+                  className={inputClassName}
+                  defaultValue={rateToPercentInput(
+                    order?.targetMarginRate ?? null,
+                  )}
+                  inputMode="decimal"
+                  name="targetMarginPercent"
+                  placeholder="30.00"
+                />
+              </Field>
+            ) : (
+              <input name="targetMarginPercent" type="hidden" value="" />
+            )}
             <Field label="Freight treatment">
               <select
                 className={inputClassName}
@@ -713,12 +792,136 @@ export function OrderForm({
                 ))}
               </select>
             </Field>
-            <Money
-              defaultValue={order?.freightResaleAmount}
-              label="Separate freight resale HT"
-              name="freightResaleAmount"
-            />
+            {pricingMode === "COMPONENT_MARKUP" ? (
+              <input name="freightResaleAmount" type="hidden" value="" />
+            ) : (
+              <Money
+                defaultValue={order?.freightResaleAmount}
+                label="Separate freight resale HT"
+                name="freightResaleAmount"
+              />
+            )}
           </div>
+          {pricingMode === "COMPONENT_MARKUP" && project ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <Field label="Product markup override %">
+                <input
+                  className={inputClassName}
+                  inputMode="decimal"
+                  name="productMarkupOverridePercent"
+                  onChange={(event) =>
+                    setProductMarkupOverride(event.target.value)
+                  }
+                  placeholder={`${new Decimal(project.defaultProductMarkupRate).times(100).toString()} · Project default`}
+                  value={productMarkupOverride}
+                />
+              </Field>
+              <Field label="Freight markup override %">
+                <input
+                  className={inputClassName}
+                  inputMode="decimal"
+                  name="freightMarkupOverridePercent"
+                  onChange={(event) =>
+                    setFreightMarkupOverride(event.target.value)
+                  }
+                  placeholder={`${new Decimal(project.defaultFreightMarkupRate).times(100).toString()} · Project default`}
+                  value={freightMarkupOverride}
+                />
+              </Field>
+              <Field label="Other cost markup override %">
+                <input
+                  className={inputClassName}
+                  inputMode="decimal"
+                  name="otherCostMarkupOverridePercent"
+                  onChange={(event) =>
+                    setOtherMarkupOverride(event.target.value)
+                  }
+                  placeholder={`${new Decimal(project.defaultOtherCostMarkupRate).times(100).toString()} · Project default`}
+                  value={otherMarkupOverride}
+                />
+              </Field>
+              <p className="text-muted-foreground text-xs md:col-span-3">
+                Leave an override blank to inherit the Project default. Clearing
+                it returns this Order to inheritance.
+              </p>
+              <div className="rounded-md border p-3 text-sm">
+                <p className="text-muted-foreground text-xs">Product Sell HT</p>
+                {purchaseCurrency === sellingCurrency ? (
+                  <input
+                    aria-label="Product selling HT"
+                    className={`${inputClassName} mt-1`}
+                    inputMode="decimal"
+                    onChange={(event) => {
+                      const rate = markupFromSelling(
+                        purchaseCost || "0",
+                        event.target.value || "0",
+                      );
+                      if (rate && !rate.isNegative())
+                        setProductMarkupOverride(rate.times(100).toString());
+                    }}
+                    value={livePricing?.productSell ?? ""}
+                  />
+                ) : (
+                  <p className="financial-figure mt-1">
+                    Calculated after Save using authoritative FX
+                  </p>
+                )}
+              </div>
+              <div className="rounded-md border p-3 text-sm">
+                <p className="text-muted-foreground text-xs">Freight Sell HT</p>
+                {purchaseCurrency === sellingCurrency ? (
+                  <input
+                    aria-label="Freight selling HT"
+                    className={`${inputClassName} mt-1`}
+                    inputMode="decimal"
+                    onChange={(event) => {
+                      const rate = markupFromSelling(
+                        freightCost || "0",
+                        event.target.value || "0",
+                      );
+                      if (rate && !rate.isNegative())
+                        setFreightMarkupOverride(rate.times(100).toString());
+                    }}
+                    value={livePricing?.freightSell ?? ""}
+                  />
+                ) : (
+                  <p className="financial-figure mt-1">
+                    Calculated after Save using authoritative FX
+                  </p>
+                )}
+              </div>
+              <div className="rounded-md border p-3 text-sm">
+                <p className="text-muted-foreground text-xs">
+                  Total Sell / Profit / Effective Markup
+                </p>
+                <p className="financial-figure mt-1">
+                  {purchaseCurrency !== sellingCurrency
+                    ? "Reporting totals calculated on Save using FX"
+                    : livePricing
+                      ? `${livePricing.totalSell} / ${livePricing.grossProfit} / ${new Decimal(livePricing.effectiveMarkupRate ?? 0).times(100).toFixed(2)}%`
+                      : "Check entered amounts"}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <input
+                name="productMarkupOverridePercent"
+                type="hidden"
+                value=""
+              />
+              <input
+                name="freightMarkupOverridePercent"
+                type="hidden"
+                value=""
+              />
+              <input
+                name="otherCostMarkupOverridePercent"
+                type="hidden"
+                value=""
+              />
+            </>
+          )}
         </section>
         <div className="flex items-center gap-3">
           <SubmitButton pending={pending}>

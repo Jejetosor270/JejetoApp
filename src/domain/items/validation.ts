@@ -94,7 +94,7 @@ const itemFields = {
   markupRate: optionalRate("Markup"),
   name: z.string().trim().min(1, "Description is required.").max(240),
   notes: optionalText(4000),
-  pricingMode: z.enum(PricingMode),
+  pricingMode: z.enum([PricingMode.SELLING_PRICE, PricingMode.TARGET_MARGIN]),
   procurementOrderId: optionalUuid,
   projectId: z.uuid("Choose a valid project."),
   purchaseCurrencyCode: z.preprocess(

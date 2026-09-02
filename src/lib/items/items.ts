@@ -89,6 +89,11 @@ function serializeItem(
   item: Prisma.ItemGetPayload<{ include: typeof itemInclude }>,
 ) {
   const { procurementOrder, project, ...baseItem } = item;
+  if (item.pricingMode === PricingMode.COMPONENT_MARKUP) {
+    throw new ItemValidationError(
+      "Component markup pricing belongs to Procurement Orders, not Items.",
+    );
+  }
   const financial = calculateItemFinancials({
     pricingMode: item.pricingMode,
     quantity: item.quantity.toString(),
