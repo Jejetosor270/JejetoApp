@@ -1,19 +1,24 @@
 "use client";
 
-import { useActionState } from "react";
-
 import { createLocationAction } from "@/app/(app)/items/actions";
+import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import { countries } from "@/config/countries";
 
 const control = "border-input bg-background h-9 rounded-lg border px-3 text-sm";
 
 export function LocationForm() {
-  const [state, action, pending] = useActionState(createLocationAction, {
-    message: "",
-    status: "idle" as const,
-  });
+  const { state, onSubmit, pending } = usePersistentActionState(
+    createLocationAction,
+    {
+      message: "",
+      status: "idle" as const,
+    },
+  );
   return (
-    <form action={action} className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <form
+      className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+      onSubmit={onSubmit}
+    >
       <input
         className={control}
         name="name"
@@ -52,13 +57,24 @@ export function LocationForm() {
           {pending ? "Creating…" : "Create Location"}
         </button>
         {state.message ? (
-          <p
-            className={
-              state.status === "error" ? "text-destructive text-sm" : "text-sm"
-            }
-          >
-            {state.message}
-          </p>
+          <div>
+            <p
+              className={
+                state.status === "error"
+                  ? "text-destructive text-sm"
+                  : "text-sm"
+              }
+            >
+              {state.message}
+            </p>
+            {state.fieldErrors ? (
+              <ul className="text-destructive list-disc pl-4 text-xs">
+                {Object.entries(state.fieldErrors).map(([field, message]) => (
+                  <li key={field}>{message}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </form>

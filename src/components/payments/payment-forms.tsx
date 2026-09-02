@@ -19,6 +19,11 @@ import {
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
+import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
+import {
+  amountFromPercentage,
+  percentageFromAmount,
+} from "@/domain/billing/calculations";
 import {
   initialPaymentActionState,
   type PaymentActionState,
@@ -38,20 +43,29 @@ type PaymentAction = (
 function Feedback({ state }: { state: PaymentActionState }) {
   if (!state.message) return null;
   return (
-    <p
-      className={
-        state.status === "error"
-          ? "text-destructive text-xs"
-          : "text-positive text-xs"
-      }
-      role={state.status === "error" ? "alert" : "status"}
-    >
-      {state.message}
-    </p>
+    <div role={state.status === "error" ? "alert" : "status"}>
+      <p
+        className={
+          state.status === "error"
+            ? "text-destructive text-xs"
+            : "text-positive text-xs"
+        }
+      >
+        {state.message}
+      </p>
+      {state.fieldErrors ? (
+        <ul className="text-destructive list-disc pl-4 text-xs">
+          {Object.entries(state.fieldErrors).map(([field, message]) => (
+            <li key={field}>{message}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
 export function InstallmentForm({
+  baseAmount,
   currencies,
   defaultCurrencyCode,
   direction,
@@ -59,6 +73,7 @@ export function InstallmentForm({
   orderId,
   reportingCurrencyCode,
 }: {
+  baseAmount: string;
   currencies: readonly { code: string }[];
   defaultCurrencyCode: string;
   direction: "SUPPLIER_PAYMENT" | "CLIENT_RECEIPT";
@@ -69,7 +84,7 @@ export function InstallmentForm({
   const serverAction = installment
     ? updateInstallmentAction
     : createInstallmentAction;
-  const [state, action, pending] = useActionState(
+  const { state, onSubmit, pending } = usePersistentActionState(
     serverAction,
     initialPaymentActionState,
   );
@@ -77,59 +92,82 @@ export function InstallmentForm({
   const [currencyCode, setCurrencyCode] = useState(
     installment?.currencyCode ?? defaultCurrencyCode,
   );
+  const [label, setLabel] = useState(installment?.label ?? "");
+  const [percentage, setPercentage] = useState(
+    rateToPercentInput(
+      installment?.percentageRate ?? installment?.impliedPercentageRate ?? null,
+    ),
+  );
+  const [amount, setAmount] = useState(installment?.scheduledAmount ?? "");
+  const [dueDate, setDueDate] = useState(installment?.dueDate ?? "");
+  const [expectedFxRate, setExpectedFxRate] = useState(
+    installment?.expectedFxRate ?? "",
+  );
+  const [notes, setNotes] = useState(installment?.notes ?? "");
+  const fieldErrors = state.fieldErrors ?? {};
   return (
     <form
-      action={action}
       className="grid gap-3 rounded-lg border p-3 md:grid-cols-2 xl:grid-cols-4"
+      onSubmit={onSubmit}
     >
       <input name="direction" type="hidden" value={direction} />
       <input name="orderId" type="hidden" value={orderId} />
+      <input name="basis" type="hidden" value={basis} />
+      <input
+        name="percentageRate"
+        type="hidden"
+        value={basis === "PERCENTAGE" ? percentage : ""}
+      />
+      <input
+        name="fixedAmount"
+        type="hidden"
+        value={basis === "FIXED_AMOUNT" ? amount : ""}
+      />
       {installment ? (
         <input name="id" type="hidden" value={installment.id} />
       ) : null}
-      <Field label="Label">
+      <Field error={fieldErrors.label} label="Label" required>
         <input
           className={inputClassName}
-          defaultValue={installment?.label ?? ""}
           name="label"
-          placeholder="Deposit"
+          onChange={(event) => setLabel(event.target.value)}
           required
+          value={label}
         />
       </Field>
-      <Field label="Entry basis">
-        <select
-          className={inputClassName}
-          name="basis"
-          onChange={(event) =>
-            setBasis(event.target.value as "PERCENTAGE" | "FIXED_AMOUNT")
-          }
-          value={basis}
-        >
-          <option value="PERCENTAGE">Percentage</option>
-          <option value="FIXED_AMOUNT">Fixed amount</option>
-        </select>
-      </Field>
-      <Field label="Percentage %">
+      <Field error={fieldErrors.percentageRate} label="Installment %" required>
         <input
           className={inputClassName}
-          defaultValue={rateToPercentInput(installment?.percentageRate ?? null)}
-          disabled={basis !== "PERCENTAGE"}
           inputMode="decimal"
-          name="percentageRate"
-          placeholder="30"
+          onChange={(event) => {
+            const next = event.target.value;
+            setBasis("PERCENTAGE");
+            setPercentage(next);
+            const derived = amountFromPercentage(baseAmount, next);
+            if (derived !== null) setAmount(derived);
+          }}
+          required
+          value={percentage}
         />
       </Field>
-      <Field label="Fixed amount">
+      <Field
+        error={fieldErrors.fixedAmount}
+        label="Installment amount"
+        required
+      >
         <MoneyInput
-          defaultValue={
-            basis === "FIXED_AMOUNT" ? installment?.scheduledAmount : ""
-          }
-          disabled={basis !== "FIXED_AMOUNT"}
-          name="fixedAmount"
-          placeholder="25000.00"
+          name="amountDisplay"
+          onValueChange={(next) => {
+            setBasis("FIXED_AMOUNT");
+            setAmount(next);
+            const derived = percentageFromAmount(baseAmount, next);
+            if (derived !== null) setPercentage(derived);
+          }}
+          required
+          value={amount}
         />
       </Field>
-      <Field label="Currency">
+      <Field error={fieldErrors.currencyCode} label="Currency" required>
         <select
           className={inputClassName}
           name="currencyCode"
@@ -143,34 +181,41 @@ export function InstallmentForm({
           ))}
         </select>
       </Field>
-      <Field label="Due date">
+      <Field error={fieldErrors.dueDate} label="Due date" required>
         <input
           className={inputClassName}
-          defaultValue={installment?.dueDate ?? ""}
           name="dueDate"
+          onChange={(event) => setDueDate(event.target.value)}
           required
           type="date"
+          value={dueDate}
         />
       </Field>
-      <Field label={`Expected FX to ${reportingCurrencyCode}`}>
+      <Field
+        error={fieldErrors.expectedFxRate}
+        label={`Expected FX to ${reportingCurrencyCode}`}
+        required={currencyCode !== reportingCurrencyCode}
+      >
         <input
           className={inputClassName}
-          defaultValue={installment?.expectedFxRate ?? ""}
           disabled={currencyCode === reportingCurrencyCode}
           inputMode="decimal"
           name="expectedFxRate"
+          onChange={(event) => setExpectedFxRate(event.target.value)}
           placeholder={
             currencyCode === reportingCurrencyCode
               ? "1 (automatic)"
               : "0.860000"
           }
+          value={expectedFxRate}
         />
       </Field>
-      <Field label="Notes">
+      <Field error={fieldErrors.notes} label="Notes">
         <input
           className={inputClassName}
-          defaultValue={installment?.notes ?? ""}
           name="notes"
+          onChange={(event) => setNotes(event.target.value)}
+          value={notes}
         />
       </Field>
       <div className="flex items-end gap-2 md:col-span-2 xl:col-span-4">
@@ -190,14 +235,14 @@ export function PresetForm({
   direction: "SUPPLIER_PAYMENT" | "CLIENT_RECEIPT";
   orderId: string;
 }) {
-  const [state, action, pending] = useActionState(
+  const { state, onSubmit, pending } = usePersistentActionState(
     applyPaymentPresetAction,
     initialPaymentActionState,
   );
   return (
     <form
-      action={action}
       className="flex flex-wrap items-end gap-2 rounded-lg border p-3"
+      onSubmit={onSubmit}
     >
       <input name="direction" type="hidden" value={direction} />
       <input name="orderId" type="hidden" value={orderId} />
@@ -231,35 +276,53 @@ export function SettlementForm({
   installment: PaymentInstallmentView;
   today: string;
 }) {
-  const [state, action, pending] = useActionState(
+  const { state, onSubmit, pending } = usePersistentActionState(
     recordSettlementAction,
     initialPaymentActionState,
   );
   const wording =
     installment.direction === "SUPPLIER_PAYMENT" ? "payment" : "receipt";
+  const [amount, setAmount] = useState(installment.outstandingAmount);
+  const [settledAt, setSettledAt] = useState(today);
+  const [fxRate, setFxRate] = useState("");
+  const [reference, setReference] = useState("");
+  const [notes, setNotes] = useState("");
+  const fieldErrors = state.fieldErrors ?? {};
   return (
     <form
-      action={action}
       className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2 lg:grid-cols-4"
+      onSubmit={onSubmit}
     >
       <input name="installmentId" type="hidden" value={installment.id} />
-      <Field label={`${wording === "payment" ? "Paid" : "Received"} amount`}>
+      <Field
+        error={fieldErrors.amount}
+        label={`${wording === "payment" ? "Paid" : "Received"} amount`}
+        required
+      >
         <MoneyInput
-          defaultValue={installment.outstandingAmount}
           name="amount"
+          onValueChange={setAmount}
           required
+          value={amount}
         />
       </Field>
-      <Field label="Actual date">
+      <Field error={fieldErrors.settledAt} label="Actual payment date" required>
         <input
           className={inputClassName}
-          defaultValue={today}
           name="settledAt"
+          onChange={(event) => setSettledAt(event.target.value)}
           required
           type="date"
+          value={settledAt}
         />
       </Field>
-      <Field label={`Actual FX to ${installment.reportingCurrencyCode}`}>
+      <Field
+        error={fieldErrors.fxRate}
+        label={`Actual FX to ${installment.reportingCurrencyCode}`}
+        required={
+          installment.currencyCode !== installment.reportingCurrencyCode
+        }
+      >
         <input
           className={inputClassName}
           disabled={
@@ -267,10 +330,25 @@ export function SettlementForm({
           }
           inputMode="decimal"
           name="fxRate"
+          onChange={(event) => setFxRate(event.target.value)}
+          value={fxRate}
         />
       </Field>
-      <Field label="Reference">
-        <input className={inputClassName} name="reference" />
+      <Field error={fieldErrors.reference} label="Payment reference">
+        <input
+          className={inputClassName}
+          name="reference"
+          onChange={(event) => setReference(event.target.value)}
+          value={reference}
+        />
+      </Field>
+      <Field error={fieldErrors.notes} label="Notes">
+        <input
+          className={inputClassName}
+          name="notes"
+          onChange={(event) => setNotes(event.target.value)}
+          value={notes}
+        />
       </Field>
       <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
         <SubmitButton pending={pending}>Record {wording}</SubmitButton>

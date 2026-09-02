@@ -78,6 +78,8 @@ export async function confirmClientDocumentAction(
   if (!input.success) {
     return {
       fieldErrors: fieldErrorMap(input.error.issues),
+      formError:
+        input.error.issues[0]?.message ?? "Review the Client billing values.",
       message:
         input.error.issues[0]?.message ?? "Review the Client billing values.",
       status: "error",
@@ -101,10 +103,16 @@ export async function confirmClientDocumentAction(
     };
   } catch (error) {
     if (error instanceof ClientBillingValidationError) {
-      return { message: error.message, status: "error" };
+      return {
+        formError: error.message,
+        message: error.message,
+        status: "error",
+      };
     }
     if (error instanceof Error && "code" in error && error.code === "P2002") {
       return {
+        formError:
+          "A Client document already uses this type and reference. Choose explicit update or change the reference.",
         message:
           "A Client document already uses this type and reference. Choose explicit update or change the reference.",
         status: "error",
@@ -112,6 +120,7 @@ export async function confirmClientDocumentAction(
     }
     console.error("Unable to confirm Client billing document.", error);
     return {
+      formError: "The reviewed Client billing document could not be saved.",
       message: "The reviewed Client billing document could not be saved.",
       status: "error",
     };
@@ -127,6 +136,7 @@ export async function recordClientReceiptAction(
   if (!input.success)
     return {
       fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the receipt.",
       message: input.error.issues[0]?.message ?? "Check the receipt.",
       status: "error",
     };
@@ -141,9 +151,14 @@ export async function recordClientReceiptAction(
       error instanceof ClientBillingValidationError ||
       error instanceof ClientBillingNotFoundError
     )
-      return { message: error.message, status: "error" };
+      return {
+        formError: error.message,
+        message: error.message,
+        status: "error",
+      };
     console.error("Unable to record Client receipt.", error);
     return {
+      formError: "The Client receipt could not be recorded.",
       message: "The Client receipt could not be recorded.",
       status: "error",
     };

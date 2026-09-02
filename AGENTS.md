@@ -126,6 +126,9 @@ Do not introduce a reusable product/SKU catalog, inventory, warehouse management
 - Client billing may remain Project-level or allocate HT across one or many Orders. Allocations are Decimal-safe commercial attribution, cannot exceed document HT, and never overwrite authoritative Order prices or become accounting journal entries.
 - Client receipt transactions are the authoritative actual Client cash-in records. Derive paid, outstanding, overdue, and Project cash position from schedules and receipts; keep these distinct from HT profitability.
 - Order and Project profitability aggregate comparable reporting-currency HT revenue and economic Order cost before deriving markup or margin. Missing required FX makes the result incomplete.
+- Expected validation and business-rule failures must preserve the employee's complete create/edit draft. Major editors use controlled state or the shared persistent-action form pattern and return field-specific errors plus a form-level error.
+- Project Freight Estimate % is a Client commercial allowance applied to Product Sell HT; it is not freight cost or freight markup. Orders inherit an AUTO allowance unless a nullable manual amount override is set.
+- Order freight cost and Project-level freight expenses are distinct actual-cost sources. Freight reconciliation aggregates both, applies inherited or explicit freight markup, and remains incomplete when required manual FX is missing.
 
 ## Database conventions
 

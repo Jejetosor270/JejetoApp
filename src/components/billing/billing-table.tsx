@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import {
   recordClientReceiptAction,
@@ -13,6 +13,8 @@ import {
   InlineTextInput,
 } from "@/components/inline-editing/inline-edit";
 import { inputClassName, SubmitButton } from "@/components/master-data/form-ui";
+import { Field } from "@/components/master-data/form-ui";
+import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney } from "@/domain/procurement/presentation";
 import type { ClientBillingView } from "@/lib/billing/billing";
@@ -26,44 +28,75 @@ function ReceiptForm({
   currencyCode: string;
   installmentId: string;
 }) {
-  const [state, action, pending] = useActionState(
+  const { state, onSubmit, pending } = usePersistentActionState(
     recordClientReceiptAction,
     initialState,
   );
+  const [amount, setAmount] = useState("");
+  const [receivedAt, setReceivedAt] = useState("");
+  const [reference, setReference] = useState("");
+  const [fxRate, setFxRate] = useState("");
+  const [notes, setNotes] = useState("");
+  const fieldErrors = state.fieldErrors ?? {};
   return (
     <form
-      action={action}
-      className="mt-2 grid gap-2 rounded-md border p-2 sm:grid-cols-5"
+      className="mt-2 grid gap-2 rounded-md border p-2 sm:grid-cols-2 xl:grid-cols-5"
+      onSubmit={onSubmit}
     >
       <input name="installmentId" type="hidden" value={installmentId} />
-      <input
-        aria-label={`Receipt amount ${currencyCode}`}
-        className={inputClassName}
-        inputMode="decimal"
-        name="amount"
-        placeholder={`Amount ${currencyCode}`}
+      <Field
+        error={fieldErrors.amount}
+        label={`Receipt amount (${currencyCode})`}
         required
-      />
-      <input
-        aria-label="Receipt date"
-        className={inputClassName}
-        name="receivedAt"
+      >
+        <input
+          className={inputClassName}
+          inputMode="decimal"
+          name="amount"
+          onChange={(event) => setAmount(event.target.value)}
+          required
+          value={amount}
+        />
+      </Field>
+      <Field
+        error={fieldErrors.receivedAt}
+        label="Actual payment date"
         required
-        type="date"
-      />
-      <input
-        aria-label="Payment reference"
-        className={inputClassName}
-        name="reference"
-        placeholder="Reference"
-      />
-      <input
-        aria-label="Actual receipt FX"
-        className={inputClassName}
-        inputMode="decimal"
-        name="fxRate"
-        placeholder="Actual FX if required"
-      />
+      >
+        <input
+          className={inputClassName}
+          name="receivedAt"
+          onChange={(event) => setReceivedAt(event.target.value)}
+          required
+          type="date"
+          value={receivedAt}
+        />
+      </Field>
+      <Field error={fieldErrors.reference} label="Payment reference">
+        <input
+          className={inputClassName}
+          name="reference"
+          onChange={(event) => setReference(event.target.value)}
+          value={reference}
+        />
+      </Field>
+      <Field error={fieldErrors.fxRate} label="Actual receipt FX">
+        <input
+          className={inputClassName}
+          inputMode="decimal"
+          name="fxRate"
+          onChange={(event) => setFxRate(event.target.value)}
+          value={fxRate}
+        />
+      </Field>
+      <Field error={fieldErrors.notes} label="Notes">
+        <input
+          className={inputClassName}
+          name="notes"
+          onChange={(event) => setNotes(event.target.value)}
+          value={notes}
+        />
+      </Field>
       <SubmitButton pending={pending}>Record receipt</SubmitButton>
       {state.message ? (
         <p

@@ -2,13 +2,7 @@
 
 import Decimal from "decimal.js";
 import { Pencil, Plus } from "lucide-react";
-import {
-  type ReactNode,
-  useActionState,
-  useEffect,
-  useState,
-  useTransition,
-} from "react";
+import { type ReactNode, useEffect, useState, useTransition } from "react";
 
 import {
   createRoomAction,
@@ -20,6 +14,7 @@ import {
   updateProjectAction,
 } from "@/app/(app)/projects/[projectId]/actions";
 import { initialMasterDataActionState } from "@/components/master-data/action-state";
+import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import {
   ActionFeedback,
   Field,
@@ -211,7 +206,7 @@ function ProjectFields({
           type="date"
         />
       </Field>
-      <Field label="Estimated freight %">
+      <Field label="Client Freight Allowance % of Product Sell HT">
         <input
           className={inputClassName}
           defaultValue={
@@ -282,7 +277,7 @@ function ProjectFields({
         />
       </Field>
       <input name="targetMode" type="hidden" value="MARKUP" />
-      <Field label="Freight estimate notes">
+      <Field label="Client freight allowance notes">
         <input
           className={inputClassName}
           defaultValue={project.freightEstimateNotes ?? ""}
@@ -328,7 +323,7 @@ function EditProject({
   project: ProjectView;
   statuses: string[];
 }) {
-  const [state, action, pending] = useActionState(
+  const { state, onSubmit, pending } = usePersistentActionState(
     updateProjectAction,
     initialMasterDataActionState,
   );
@@ -344,7 +339,7 @@ function EditProject({
         </Button>
       </div>
       <form
-        action={action}
+        onSubmit={onSubmit}
         className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
       >
         <input name="id" type="hidden" value={project.id} />
@@ -372,18 +367,18 @@ function BuildingForm({
   projectId: string;
   onClose?: () => void;
 }) {
-  const [createState, createAction, createPending] = useActionState(
+  const create = usePersistentActionState(
     createBuildingAction,
     initialMasterDataActionState,
   );
-  const [updateState, updateAction, updatePending] = useActionState(
+  const update = usePersistentActionState(
     updateBuildingAction,
     initialMasterDataActionState,
   );
   const isEdit = Boolean(building);
-  const state = isEdit ? updateState : createState;
-  const action = isEdit ? updateAction : createAction;
-  const pending = isEdit ? updatePending : createPending;
+  const state = isEdit ? update.state : create.state;
+  const onSubmit = isEdit ? update.onSubmit : create.onSubmit;
+  const pending = isEdit ? update.pending : create.pending;
   return (
     <section className="bg-card rounded-lg border p-4">
       <div className="mb-4 flex justify-between">
@@ -397,7 +392,7 @@ function BuildingForm({
         ) : null}
       </div>
       <form
-        action={action}
+        onSubmit={onSubmit}
         className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
       >
         <input name="projectId" type="hidden" value={projectId} />
@@ -457,10 +452,13 @@ function RoomForm({
   buildingId: string;
   onClose: () => void;
 }) {
-  const [state, action, pending] = useActionState(createRoomAction, {
-    message: "",
-    status: "idle" as const,
-  });
+  const { state, onSubmit, pending } = usePersistentActionState(
+    createRoomAction,
+    {
+      message: "",
+      status: "idle" as const,
+    },
+  );
   return (
     <section className="bg-card rounded-lg border p-4">
       <div className="mb-3 flex justify-between">
@@ -469,7 +467,7 @@ function RoomForm({
           Close
         </Button>
       </div>
-      <form action={action} className="grid gap-3 md:grid-cols-3">
+      <form className="grid gap-3 md:grid-cols-3" onSubmit={onSubmit}>
         <input name="buildingId" type="hidden" value={buildingId} />
         <Field label="Room name">
           <input className={inputClassName} name="name" required />
@@ -482,17 +480,7 @@ function RoomForm({
         </Field>
         <div className="flex items-center gap-3 md:col-span-3">
           <SubmitButton pending={pending}>Create Room</SubmitButton>
-          {state.message ? (
-            <p
-              className={
-                state.status === "error"
-                  ? "text-destructive text-sm"
-                  : "text-sm"
-              }
-            >
-              {state.message}
-            </p>
-          ) : null}
+          <ActionFeedback state={state} />
         </div>
       </form>
     </section>

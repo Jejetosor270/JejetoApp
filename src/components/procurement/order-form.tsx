@@ -38,6 +38,10 @@ import {
   updateOrderDraftField,
 } from "@/domain/procurement/order-draft";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
+import {
+  freightRecoveryTarget,
+  resolveOrderFreightAllowance,
+} from "@/domain/freight/calculations";
 
 interface BuildingOption {
   id: string;
@@ -53,6 +57,7 @@ interface ProjectOption {
   defaultFreightMarkupRate: string;
   defaultOtherCostMarkupRate: string;
   defaultProductMarkupRate: string;
+  freightEstimateRate: string | null;
   reportingCurrencyCode: string;
 }
 interface SupplierOption {
@@ -100,6 +105,7 @@ export interface EditableOrder {
   expectedDeliveryDate: string | null;
   expectedReadyDate: string | null;
   freightResaleAmount: string | null;
+  freightAllowanceOverrideAmount: string | null;
   freightTreatment: string;
   freightMarkupOverrideRate: string | null;
   id: string;
@@ -377,6 +383,12 @@ export function OrderForm({
     expectedDeliveryDate: order?.expectedDeliveryDate ?? "",
     expectedReadyDate: order?.expectedReadyDate ?? "",
     freight: order?.costs.freight ?? "",
+    freightAllowanceMode:
+      order?.freightAllowanceOverrideAmount === null ||
+      order?.freightAllowanceOverrideAmount === undefined
+        ? "AUTO"
+        : "MANUAL",
+    freightAllowanceOverrideAmount: order?.freightAllowanceOverrideAmount ?? "",
     freightMarkupOverridePercent: rateToPercentInput(
       order?.freightMarkupOverrideRate ?? null,
     ),
@@ -459,6 +471,7 @@ export function OrderForm({
   const expectedReadyDate = draft.expectedReadyDate;
   const purchaseCost = draft.purchaseCost;
   const freightCost = draft.freight;
+  const freightAllowanceIsManual = draft.freightAllowanceMode === "MANUAL";
   const customsCost = draft.customsDuties;
   const miscellaneousCost = draft.miscellaneous;
   const productMarkupOverride = draft.productMarkupOverridePercent;
@@ -508,6 +521,45 @@ export function OrderForm({
     livePricing = null;
   }
   const automaticOutputVatBase = livePricing?.totalSell ?? null;
+  let automaticFreightAllowance: string | null = null;
+  let effectiveFreightAllowance: string | null = null;
+  let freightRecovery: string | null = null;
+  let freightProfit: string | null = null;
+  try {
+    if (project?.freightEstimateRate && livePricing?.productSell) {
+      automaticFreightAllowance = resolveOrderFreightAllowance({
+        productSellHt: livePricing.productSell,
+        projectFreightEstimateRate: project.freightEstimateRate,
+      }).amount.toFixed(4);
+    }
+    effectiveFreightAllowance = freightAllowanceIsManual
+      ? new Decimal(draft.freightAllowanceOverrideAmount || "0").toFixed(4)
+      : automaticFreightAllowance;
+    const purchaseRate =
+      purchaseCurrency === project?.reportingCurrencyCode
+        ? new Decimal(1)
+        : new Decimal(purchaseFxRate || "0");
+    const reportingCost = new Decimal(freightCost || "0").times(purchaseRate);
+    const effectiveMarkup =
+      pricingMode === "ORDER_MARKUP"
+        ? toRate(
+            freightMarkupOverride,
+            project?.defaultFreightMarkupRate ?? "0",
+          )
+        : (project?.defaultFreightMarkupRate ?? "0");
+    freightRecovery = freightRecoveryTarget(
+      reportingCost.toString(),
+      effectiveMarkup,
+    ).toFixed(4);
+    freightProfit = new Decimal(freightRecovery)
+      .minus(reportingCost)
+      .toFixed(4);
+  } catch {
+    automaticFreightAllowance = null;
+    effectiveFreightAllowance = null;
+    freightRecovery = null;
+    freightProfit = null;
+  }
   const outputVatBase = effectiveVatBase(
     automaticOutputVatBase,
     outputVatBaseIsManual ? manualOutputVatBase || "0" : null,
@@ -1047,6 +1099,100 @@ export function OrderForm({
             FX convention: 1 transaction-currency unit = X
             project-reporting-currency units.
           </p>
+          <section className="bg-background/60 rounded-md border p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-semibold">
+                  Freight reconciliation
+                </h4>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Cost, Client commercial allowance, and markup recovery remain
+                  separate.
+                </p>
+              </div>
+              <span className="rounded-md border px-2 py-1 text-xs font-medium">
+                {freightAllowanceIsManual
+                  ? "MANUAL"
+                  : "AUTO · PROJECT ESTIMATE"}
+              </span>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <Field label={`Actual freight cost HT (${purchaseCurrency})`}>
+                <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                  {freightCost || "0.0000"}
+                </p>
+              </Field>
+              <Field
+                error={fieldErrors.freightAllowanceOverrideAmount}
+                label={`Client freight allowance HT (${sellingCurrency})`}
+              >
+                {freightAllowanceIsManual ? (
+                  <MoneyInput
+                    invalid={Boolean(
+                      fieldErrors.freightAllowanceOverrideAmount,
+                    )}
+                    name="freightAllowanceOverrideAmount"
+                    onValueChange={(value) =>
+                      changeDraft("freightAllowanceOverrideAmount", value)
+                    }
+                    value={draft.freightAllowanceOverrideAmount}
+                  />
+                ) : (
+                  <>
+                    <input
+                      name="freightAllowanceOverrideAmount"
+                      type="hidden"
+                      value=""
+                    />
+                    <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                      {automaticFreightAllowance ?? "Incomplete"}
+                    </p>
+                  </>
+                )}
+              </Field>
+              <Field label="Freight estimate %">
+                <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                  {project?.freightEstimateRate
+                    ? `${new Decimal(project.freightEstimateRate).times(100).toFixed(2)}%`
+                    : "Not set"}
+                </p>
+              </Field>
+              <Field
+                label={`Freight recovery target HT (${project?.reportingCurrencyCode ?? "reporting"})`}
+              >
+                <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                  {freightRecovery ?? "Incomplete"}
+                </p>
+              </Field>
+              <Field
+                label={`Freight profit HT (${project?.reportingCurrencyCode ?? "reporting"})`}
+              >
+                <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                  {freightProfit ?? "Incomplete"}
+                </p>
+              </Field>
+            </div>
+            <button
+              className="text-primary mt-3 text-sm font-medium"
+              onClick={() => {
+                if (freightAllowanceIsManual) {
+                  changeDraft("freightAllowanceOverrideAmount", "");
+                  changeDraft("freightAllowanceMode", "AUTO");
+                } else {
+                  changeDraft(
+                    "freightAllowanceOverrideAmount",
+                    effectiveFreightAllowance ?? "0",
+                  );
+                  changeDraft("freightAllowanceMode", "MANUAL");
+                }
+              }}
+              type="button"
+            >
+              {freightAllowanceIsManual
+                ? "Use Project freight estimate"
+                : "Override freight allowance"}
+            </button>
+          </section>
           <div className="grid gap-3 xl:grid-cols-2">
             <InputVatFields
               currency={purchaseCurrency}

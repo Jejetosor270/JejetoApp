@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   allocationReconciliation,
+  amountFromPercentage,
   calculateClientBillingAmounts,
+  percentageFromAmount,
+  scheduleReconciliation,
 } from "./calculations";
 
 describe("client billing calculations", () => {
@@ -39,6 +42,17 @@ describe("client billing calculations", () => {
       allocated: "150000.0000",
       overallocated: "0.0000",
       remaining: "0.0000",
+    });
+  });
+
+  it("links human percentages and amounts in both directions", () => {
+    expect(amountFromPercentage("100000", "30%")).toBe("30000.0000");
+    expect(amountFromPercentage("100000", "30,5")).toBe("30500.0000");
+    expect(percentageFromAmount("100000", "35000")).toBe("35");
+    expect(scheduleReconciliation("100000", ["30000", "60000"])).toEqual({
+      allocated: "90000.0000",
+      overallocated: "0.0000",
+      remaining: "10000.0000",
     });
   });
 

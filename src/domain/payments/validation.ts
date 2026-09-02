@@ -5,6 +5,7 @@ import { InstallmentBasis, PaymentDirection } from "@/generated/prisma/client";
 import { isDateOnly } from "@/domain/payments/dates";
 import { paymentSchedulePresets } from "@/domain/payments/presets";
 import { optionalPercentageFraction } from "@/domain/validation/percentage";
+import { requiredUuid } from "@/domain/validation/uuid";
 
 const optionalText = (maximum: number) =>
   z.preprocess(
@@ -70,7 +71,7 @@ const installmentFields = {
   fixedAmount: optionalPositiveMoney("Fixed amount"),
   label: z.string().trim().min(1).max(200),
   notes: optionalText(4000),
-  orderId: z.uuid("Invalid procurement order."),
+  orderId: requiredUuid("Select a valid Order."),
   percentageRate: percentage,
 };
 const baseInstallmentSchema = z.object(installmentFields);
@@ -110,7 +111,7 @@ export const inlineInstallmentSchema = z.object({
 export const settlementSchema = z.object({
   amount: money("Settlement amount", false),
   fxRate: optionalFxRate,
-  installmentId: z.uuid("Invalid installment."),
+  installmentId: requiredUuid("Select a valid installment."),
   notes: optionalText(4000),
   reference: optionalText(120),
   settledAt: dateOnly,

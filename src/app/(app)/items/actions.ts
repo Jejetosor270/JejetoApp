@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { optionalPercentageFraction } from "@/domain/validation/percentage";
+import { fieldErrorMap } from "@/domain/validation/issues";
 
 import type { BulkActionState } from "@/domain/deletion/action-state";
 import type { ItemActionState } from "@/domain/items/action-state";
@@ -46,9 +47,14 @@ function formValues(formData: FormData) {
 
 function errorState(error: unknown): ItemActionState {
   if (error instanceof ItemValidationError)
-    return { message: error.message, status: "error" };
+    return {
+      formError: error.message,
+      message: error.message,
+      status: "error",
+    };
   console.error("Unable to save Item data.", error);
   return {
+    formError: "The Item could not be saved. Please try again.",
     message: "The Item could not be saved. Please try again.",
     status: "error",
   };
@@ -71,6 +77,8 @@ export async function createItemAction(
   const input = createItemInputSchema.safeParse(formValues(formData));
   if (!input.success)
     return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the Item.",
       message: input.error.issues[0]?.message ?? "Check the Item.",
       status: "error",
     };
@@ -91,6 +99,8 @@ export async function updateItemAction(
   const input = updateItemInputSchema.safeParse(formValues(formData));
   if (!input.success)
     return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the Item.",
       message: input.error.issues[0]?.message ?? "Check the Item.",
       status: "error",
     };
@@ -197,6 +207,8 @@ export async function createRoomAction(
   const input = createRoomInputSchema.safeParse(formValues(formData));
   if (!input.success)
     return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the Room.",
       message: input.error.issues[0]?.message ?? "Check the Room.",
       status: "error",
     };
@@ -222,6 +234,8 @@ export async function createLocationAction(
   const input = createLocationInputSchema.safeParse(formValues(formData));
   if (!input.success)
     return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the Location.",
       message: input.error.issues[0]?.message ?? "Check the Location.",
       status: "error",
     };

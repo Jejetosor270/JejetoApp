@@ -13,6 +13,11 @@ import { projectFreightEstimate } from "@/domain/items/calculations";
 import { getProjectReportingSnapshot } from "@/lib/reporting/reports";
 import { getApplicationSettings } from "@/lib/settings/application-settings";
 import { getProjectClientBillingSummary } from "@/lib/billing/billing";
+import { ProjectFreightExpenses } from "@/components/freight/project-freight-expenses";
+import {
+  getProjectFreightReconciliation,
+  listProjectFreightExpenses,
+} from "@/lib/freight/expenses";
 import {
   calculateProjectActualProfitability,
   calculateProjectTargets,
@@ -35,17 +40,27 @@ export default async function ProjectPage({
     ? requestedHorizon
     : "12m";
   const settings = await getApplicationSettings();
-  const [user, options, result, reporting, itemSummary, billing] =
-    await Promise.all([
-      requireUser(),
-      listProjectFormOptions(),
-      getProject(projectId),
-      getProjectReportingSnapshot(projectId, { horizon }),
-      settings.itemManagementEnabled
-        ? projectItemSummary(projectId)
-        : Promise.resolve(null),
-      getProjectClientBillingSummary(projectId),
-    ]);
+  const [
+    user,
+    options,
+    result,
+    reporting,
+    itemSummary,
+    billing,
+    freight,
+    freightExpenses,
+  ] = await Promise.all([
+    requireUser(),
+    listProjectFormOptions(),
+    getProject(projectId),
+    getProjectReportingSnapshot(projectId, { horizon }),
+    settings.itemManagementEnabled
+      ? projectItemSummary(projectId)
+      : Promise.resolve(null),
+    getProjectClientBillingSummary(projectId),
+    getProjectFreightReconciliation(projectId),
+    listProjectFreightExpenses(projectId),
+  ]);
   if (!result || !reporting) notFound();
   const { buildings, project } = result;
   const targets = calculateProjectTargets({
@@ -86,9 +101,9 @@ export default async function ProjectPage({
       project.clientBudgetTargetHt?.toString() ?? targets.expectedSellHt,
     ),
   };
-  const estimatedFreight = itemSummary?.purchase
+  const estimatedFreight = itemSummary?.selling
     ? projectFreightEstimate(
-        itemSummary.purchase,
+        itemSummary.selling,
         project.freightEstimateRate?.toString() ?? null,
       )
     : null;
@@ -130,7 +145,7 @@ export default async function ProjectPage({
               </div>
               <div className="rounded-lg border p-3">
                 <p className="text-muted-foreground text-xs">
-                  Estimated Project freight
+                  Client freight allowance (Items plan)
                 </p>
                 <p className="financial-figure mt-1 font-semibold">
                   {formatMoney(estimatedFreight, project.reportingCurrencyCode)}
@@ -144,12 +159,21 @@ export default async function ProjectPage({
             clientBudgetTargetHt={
               project.clientBudgetTargetHt?.toString() ?? null
             }
+            freight={freight}
             horizon={horizon}
             phase11CashPosition={phase11CashPosition}
             projectId={projectId}
             report={reporting}
             targets={targets}
             variances={targetVariances}
+          />
+          <ProjectFreightExpenses
+            canEdit={canEditMasterData(user.role)}
+            currencies={options.currencies}
+            expenses={freightExpenses}
+            projectId={projectId}
+            reportingCurrencyCode={project.reportingCurrencyCode}
+            suppliers={options.suppliers}
           />
         </>
       }

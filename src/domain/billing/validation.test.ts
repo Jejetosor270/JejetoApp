@@ -76,4 +76,29 @@ describe("Client billing confirmation", () => {
     form.set("action", "UPDATE");
     expect(parseClientBillingConfirmation(form).success).toBe(false);
   });
+
+  it("normalizes blank optional billing links to null", () => {
+    const form = baseForm();
+    form.set("existingDocumentId", "");
+    form.set("matchedInstallmentId", "");
+    const result = parseClientBillingConfirmation(form);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.existingDocumentId).toBeNull();
+    expect(result.data.matchedInstallmentId).toBeNull();
+  });
+
+  it("returns a friendly error for a non-empty invalid Order ID", () => {
+    const form = baseForm();
+    form.set(
+      "allocations",
+      JSON.stringify([
+        { allocatedAmount: "10", basis: "FIXED_AMOUNT", orderId: "none" },
+      ]),
+    );
+    const result = parseClientBillingConfirmation(form);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues[0]?.message).toBe("Select a valid Order.");
+  });
 });

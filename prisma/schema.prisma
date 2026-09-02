@@ -211,6 +211,8 @@ model User {
   createdClientBillingAllocations  ClientBillingAllocation[]  @relation("ClientBillingAllocationCreatedBy")
   updatedClientBillingAllocations  ClientBillingAllocation[]  @relation("ClientBillingAllocationUpdatedBy")
   processedClientDocuments         ClientDocumentImport[]     @relation("ClientDocumentImportProcessedBy")
+  createdProjectFreightExpenses    ProjectFreightExpense[]    @relation("ProjectFreightExpenseCreatedBy")
+  updatedProjectFreightExpenses    ProjectFreightExpense[]    @relation("ProjectFreightExpenseUpdatedBy")
 
   @@index([isActive])
   @@map("users")
@@ -235,6 +237,7 @@ model Currency {
   items                     Item[]
   clientBillingDocuments    ClientBillingDocument[]
   clientPaymentInstallments ClientPaymentInstallment[]
+  projectFreightExpenses    ProjectFreightExpense[]
 
   @@index([isActive])
   @@map("currencies")
@@ -307,6 +310,7 @@ model Supplier {
   quoteImports    SupplierQuoteImport[]
   items           Item[]
   itemImports     ItemImport[]
+  freightExpenses ProjectFreightExpense[]
 
   @@index([displayName])
   @@index([isActive])
@@ -356,6 +360,7 @@ model Project {
   itemImports       ItemImport[]
   billingDocuments  ClientBillingDocument[]
   documentImports   ClientDocumentImport[]
+  freightExpenses   ProjectFreightExpense[]
 
   @@index([clientId])
   @@index([projectManagerId])
@@ -411,6 +416,7 @@ model ProcurementOrder {
   targetMarginRate                   Decimal?               @db.Decimal(9, 6)
   productMarkupOverrideRate          Decimal?               @db.Decimal(9, 6)
   freightMarkupOverrideRate          Decimal?               @db.Decimal(9, 6)
+  freightAllowanceOverrideAmount     Decimal?               @db.Decimal(19, 4)
   otherCostMarkupOverrideRate        Decimal?               @db.Decimal(9, 6)
   outputVatTaxableBaseOverride       Decimal?               @db.Decimal(19, 4)
   quoteDate                          DateTime?              @db.Date
@@ -454,6 +460,35 @@ model ProcurementOrder {
   @@index([updatedAt])
   @@index([expectedDeliveryDate], map: "procurement_orders_estimatedDeliveryAt_idx")
   @@map("procurement_orders")
+}
+
+model ProjectFreightExpense {
+  id                         String   @id @default(uuid()) @db.Uuid
+  projectId                  String   @db.Uuid
+  supplierId                 String?  @db.Uuid
+  reference                  String?  @db.VarChar(120)
+  description                String   @db.VarChar(200)
+  expenseDate                DateTime @db.Date
+  currencyCode               String   @db.Char(3)
+  fxRateToReporting          Decimal? @db.Decimal(20, 10)
+  costAmountHt               Decimal  @db.Decimal(19, 4)
+  freightMarkupOverrideRate  Decimal? @db.Decimal(9, 6)
+  notes                      String?  @db.Text
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  createdById                String?  @db.Uuid
+  updatedById                String?  @db.Uuid
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  supplier  Supplier? @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  currency  Currency @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
+  createdBy User?    @relation("ProjectFreightExpenseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?    @relation("ProjectFreightExpenseUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, expenseDate])
+  @@index([supplierId])
+  @@index([currencyCode])
+  @@map("project_freight_expenses")
 }
 
 model ProcurementOrderBuilding {

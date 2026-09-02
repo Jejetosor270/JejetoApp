@@ -27,5 +27,6 @@ export const auditEntityTypes = [
   "LOGISTICS_LOCATION",
   "BILLING_DOCUMENT",
   "CLIENT_RECEIPT",
+  "FREIGHT_EXPENSE",
 ] as const;
 export type AuditEntityType = (typeof auditEntityTypes)[number];

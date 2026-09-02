@@ -75,3 +75,47 @@ export function allocationReconciliation(
     remaining: Decimal.max(total.minus(allocated), 0).toFixed(4),
   };
 }
+
+export function amountFromPercentage(
+  baseAmount: string,
+  humanPercentage: string,
+): string | null {
+  const normalized = humanPercentage.trim().replace(/%$/, "").replace(",", ".");
+  if (!normalized) return null;
+  try {
+    const percentage = new Decimal(normalized);
+    if (!percentage.isFinite()) return null;
+    return new Decimal(baseAmount)
+      .times(percentage.dividedBy(100))
+      .toDecimalPlaces(4, Decimal.ROUND_HALF_UP)
+      .toFixed(4);
+  } catch {
+    return null;
+  }
+}
+
+export function percentageFromAmount(
+  baseAmount: string,
+  amount: string,
+): string | null {
+  try {
+    const base = new Decimal(baseAmount || 0);
+    if (base.isZero()) return null;
+    const value = new Decimal(amount || 0);
+    if (!value.isFinite()) return null;
+    return value
+      .dividedBy(base)
+      .times(100)
+      .toDecimalPlaces(4, Decimal.ROUND_HALF_UP)
+      .toString();
+  } catch {
+    return null;
+  }
+}
+
+export function scheduleReconciliation(
+  totalTtc: string,
+  scheduledAmounts: readonly string[],
+) {
+  return allocationReconciliation(totalTtc, scheduledAmounts);
+}

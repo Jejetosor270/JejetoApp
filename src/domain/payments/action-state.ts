@@ -1,4 +1,6 @@
 export interface PaymentActionState {
+  fieldErrors?: Record<string, string> | undefined;
+  formError?: string | undefined;
   message: string;
   status: "idle" | "success" | "error";
 }

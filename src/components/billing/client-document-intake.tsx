@@ -19,6 +19,13 @@ import {
 import { inputClassName, SubmitButton } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
 import type { ProcessedClientDocumentReview } from "@/lib/billing/process";
+import {
+  allocationReconciliation,
+  amountFromPercentage,
+  percentageFromAmount,
+  scheduleReconciliation,
+} from "@/domain/billing/calculations";
+import { humanPercentageToFraction } from "@/domain/validation/percentage";
 
 interface BillingOptions {
   clients: { displayName: string; id: string }[];
@@ -64,13 +71,35 @@ type ScheduleRow = {
 };
 
 type AllocationRow = { amount: string; orderId: string };
+type AllocationDraftRow = AllocationRow & {
+  basis: "PERCENTAGE" | "FIXED_AMOUNT";
+  percentage: string;
+};
+
+function fixedDecimal(value: string): string {
+  try {
+    return new Decimal(value).toFixed(4);
+  } catch {
+    return value;
+  }
+}
+
+function calculationDecimal(value: string): string {
+  try {
+    return new Decimal(value || 0).toFixed(4);
+  } catch {
+    return "0.0000";
+  }
+}
 
 function ReviewField({
   children,
+  error,
   label,
   required = false,
 }: {
   children: React.ReactNode;
+  error?: string | undefined;
   label: string;
   required?: boolean;
 }) {
@@ -81,6 +110,11 @@ function ReviewField({
         {required ? <span className="text-destructive"> *</span> : null}
       </span>
       {children}
+      {error ? (
+        <span className="text-destructive text-xs" role="alert">
+          {error}
+        </span>
+      ) : null}
     </label>
   );
 }
@@ -91,7 +125,15 @@ function scheduleFromReview(
   return review.proposal.installments.map((item) => ({
     basis: item.basis === "PERCENTAGE" ? "PERCENTAGE" : "FIXED_AMOUNT",
     dueDate: item.dueDate ?? "",
-    fixedAmount: item.fixedAmount ?? "",
+    fixedAmount:
+      item.fixedAmount ??
+      amountFromPercentage(
+        review.proposal.totalTtc ?? "0",
+        item.percentageRate
+          ? new Decimal(item.percentageRate).times(100).toString()
+          : "",
+      ) ??
+      "",
     label: item.label,
     notes: item.timingDescription ?? "",
     percentage: item.percentageRate
@@ -130,9 +172,13 @@ function ClientDocumentReview({
   const [totalTtc, setTotalTtc] = useState(proposal.totalTtc ?? "");
   const [notes, setNotes] = useState(proposal.notes ?? "");
   const [schedule, setSchedule] = useState(() => scheduleFromReview(review));
-  const [allocations, setAllocations] = useState<AllocationRow[]>([]);
+  const [allocations, setAllocations] = useState<AllocationDraftRow[]>([]);
   const [existingDocumentId, setExistingDocumentId] = useState("");
   const [matchedInstallmentId, setMatchedInstallmentId] = useState("");
+  const [vatTreatment, setVatTreatment] = useState("");
+  const [replaceSchedule, setReplaceSchedule] = useState(false);
+  const [isProjectRemainderApproved, setProjectRemainderApproved] =
+    useState(false);
   const project = options.projects.find((item) => item.id === projectId);
   const projects = options.projects.filter(
     (item) => item.clientId === clientId,
@@ -143,21 +189,22 @@ function ClientDocumentReview({
       item.billingDocument.clientId === clientId &&
       item.billingDocument.projectId === projectId,
   );
-  const allocationTotal = useMemo(
+  const allocation = useMemo(
     () =>
-      allocations.reduce(
-        (sum, item) =>
-          item.amount && new Decimal(item.amount || 0).isFinite()
-            ? sum.plus(item.amount)
-            : sum,
-        new Decimal(0),
+      allocationReconciliation(
+        calculationDecimal(totalHt),
+        allocations.map((item) => calculationDecimal(item.amount)),
       ),
-    [allocations],
+    [allocations, totalHt],
   );
-  const allocationRemaining =
-    totalHt && new Decimal(totalHt || 0).isFinite()
-      ? new Decimal(totalHt).minus(allocationTotal)
-      : null;
+  const scheduled = useMemo(
+    () =>
+      scheduleReconciliation(
+        calculationDecimal(totalTtc),
+        schedule.map((item) => calculationDecimal(item.fixedAmount)),
+      ),
+    [schedule, totalTtc],
+  );
   const serializedSchedule = (matchedInstallmentId ? [] : schedule).map(
     (item) => ({
       basis: item.basis,
@@ -167,17 +214,25 @@ function ClientDocumentReview({
       notes: item.notes || undefined,
       percentageRate:
         item.basis === "PERCENTAGE" && item.percentage
-          ? new Decimal(item.percentage).dividedBy(100).toFixed(6)
+          ? (humanPercentageToFraction(item.percentage) ?? item.percentage)
           : undefined,
     }),
   );
-  const serializedAllocations = allocations
-    .filter((item) => item.orderId && item.amount)
-    .map((item) => ({
-      allocatedAmount: new Decimal(item.amount).toFixed(4),
-      basis: "FIXED_AMOUNT" as const,
-      orderId: item.orderId,
-    }));
+  const serializedAllocations = allocations.map((item) => ({
+    allocatedAmount: fixedDecimal(item.amount),
+    basis: item.basis,
+    orderId: item.orderId,
+    percentageRate:
+      item.basis === "PERCENTAGE"
+        ? (humanPercentageToFraction(item.percentage) ?? item.percentage)
+        : undefined,
+  }));
+  const scheduleOverallocated = new Decimal(
+    scheduled.overallocated,
+  ).greaterThan(0);
+  const allocationOverallocated = new Decimal(
+    allocation.overallocated,
+  ).greaterThan(0);
 
   if (state.status === "success" && state.recordId) {
     return (
@@ -287,7 +342,10 @@ function ClientDocumentReview({
           </p>
           <select
             className={`${inputClassName} mt-3 max-w-xl`}
-            onChange={(event) => setExistingDocumentId(event.target.value)}
+            onChange={(event) => {
+              setExistingDocumentId(event.target.value);
+              if (!event.target.value) setReplaceSchedule(false);
+            }}
             value={existingDocumentId}
           >
             <option value="">Create a new billing document</option>
@@ -301,7 +359,12 @@ function ClientDocumentReview({
           </select>
           {existingDocumentId ? (
             <label className="mt-3 flex items-center gap-2 text-xs font-medium">
-              <input name="replaceSchedule" type="checkbox" />
+              <input
+                checked={replaceSchedule}
+                name="replaceSchedule"
+                onChange={(event) => setReplaceSchedule(event.target.checked)}
+                type="checkbox"
+              />
               Replace the existing proposed schedule with the reviewed schedule
             </label>
           ) : null}
@@ -315,13 +378,21 @@ function ClientDocumentReview({
           review.
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <ReviewField label="Client" required>
+          <ReviewField
+            error={state.fieldErrors?.clientId}
+            label="Client"
+            required
+          >
             <select
               className={inputClassName}
               name="clientId"
               onChange={(event) => {
                 setClientId(event.target.value);
                 setProjectId("");
+                setAllocations([]);
+                setExistingDocumentId("");
+                setMatchedInstallmentId("");
+                setReplaceSchedule(false);
               }}
               required
               value={clientId}
@@ -334,11 +405,21 @@ function ClientDocumentReview({
               ))}
             </select>
           </ReviewField>
-          <ReviewField label="Project" required>
+          <ReviewField
+            error={state.fieldErrors?.projectId}
+            label="Project"
+            required
+          >
             <select
               className={inputClassName}
               name="projectId"
-              onChange={(event) => setProjectId(event.target.value)}
+              onChange={(event) => {
+                setProjectId(event.target.value);
+                setAllocations([]);
+                setExistingDocumentId("");
+                setMatchedInstallmentId("");
+                setReplaceSchedule(false);
+              }}
               required
               value={projectId}
             >
@@ -350,20 +431,30 @@ function ClientDocumentReview({
               ))}
             </select>
           </ReviewField>
-          <ReviewField label="Document type" required>
+          <ReviewField
+            error={state.fieldErrors?.documentType}
+            label="Document type"
+            required
+          >
             <select
               className={inputClassName}
               name="documentType"
-              onChange={(event) =>
-                setDocumentType(event.target.value as "QUOTE" | "INVOICE")
-              }
+              onChange={(event) => {
+                const next = event.target.value as "QUOTE" | "INVOICE";
+                setDocumentType(next);
+                if (next !== "INVOICE") setMatchedInstallmentId("");
+              }}
               value={documentType}
             >
               <option value="QUOTE">Quote / Devis</option>
               <option value="INVOICE">Invoice</option>
             </select>
           </ReviewField>
-          <ReviewField label="Reference / document number" required>
+          <ReviewField
+            error={state.fieldErrors?.reference}
+            label="Reference / document number"
+            required
+          >
             <input
               className={inputClassName}
               name="reference"
@@ -372,7 +463,11 @@ function ClientDocumentReview({
               value={reference}
             />
           </ReviewField>
-          <ReviewField label="Document date" required>
+          <ReviewField
+            error={state.fieldErrors?.documentDate}
+            label="Document date"
+            required
+          >
             <input
               className={inputClassName}
               name="documentDate"
@@ -382,7 +477,7 @@ function ClientDocumentReview({
               value={documentDate}
             />
           </ReviewField>
-          <ReviewField label="Due date">
+          <ReviewField error={state.fieldErrors?.dueDate} label="Due date">
             <input
               className={inputClassName}
               name="dueDate"
@@ -391,7 +486,11 @@ function ClientDocumentReview({
               value={dueDate}
             />
           </ReviewField>
-          <ReviewField label="Currency" required>
+          <ReviewField
+            error={state.fieldErrors?.currencyCode}
+            label="Currency"
+            required
+          >
             <select
               className={inputClassName}
               name="currencyCode"
@@ -408,6 +507,7 @@ function ClientDocumentReview({
             </select>
           </ReviewField>
           <ReviewField
+            error={state.fieldErrors?.fxRate}
             label={`FX: 1 ${currencyCode || "transaction currency"} = Project currency`}
             required={Boolean(
               project &&
@@ -423,21 +523,49 @@ function ClientDocumentReview({
               value={fxRate}
             />
           </ReviewField>
-          <ReviewField label="Total HT" required>
+          <ReviewField
+            error={state.fieldErrors?.totalHt}
+            label="Total HT"
+            required
+          >
             <input
               className={inputClassName}
               inputMode="decimal"
               name="totalHt"
-              onChange={(event) => setTotalHt(event.target.value)}
+              onChange={(event) => {
+                const next = event.target.value;
+                setTotalHt(next);
+                setAllocations((current) =>
+                  current.map((row) =>
+                    row.basis === "PERCENTAGE"
+                      ? {
+                          ...row,
+                          amount:
+                            amountFromPercentage(next || "0", row.percentage) ??
+                            row.amount,
+                        }
+                      : {
+                          ...row,
+                          percentage:
+                            percentageFromAmount(next || "0", row.amount) ??
+                            row.percentage,
+                        },
+                  ),
+                );
+              }}
               required
               value={totalHt}
             />
           </ReviewField>
-          <ReviewField label="VAT treatment">
+          <ReviewField
+            error={state.fieldErrors?.vatTreatment}
+            label="VAT treatment"
+          >
             <select
               className={inputClassName}
               name="vatTreatment"
-              defaultValue=""
+              onChange={(event) => setVatTreatment(event.target.value)}
+              value={vatTreatment}
             >
               <option value="">Confirm separately</option>
               {[
@@ -455,7 +583,7 @@ function ClientDocumentReview({
               ))}
             </select>
           </ReviewField>
-          <ReviewField label="VAT rate %">
+          <ReviewField error={state.fieldErrors?.vatRate} label="VAT rate %">
             <input
               className={inputClassName}
               inputMode="decimal"
@@ -467,11 +595,15 @@ function ClientDocumentReview({
               name="vatRate"
               type="hidden"
               value={
-                vatRate ? new Decimal(vatRate).dividedBy(100).toFixed(6) : ""
+                vatRate ? (humanPercentageToFraction(vatRate) ?? vatRate) : ""
               }
             />
           </ReviewField>
-          <ReviewField label="VAT amount" required>
+          <ReviewField
+            error={state.fieldErrors?.vatAmount}
+            label="VAT amount"
+            required
+          >
             <input
               className={inputClassName}
               inputMode="decimal"
@@ -481,17 +613,43 @@ function ClientDocumentReview({
               value={vatAmount}
             />
           </ReviewField>
-          <ReviewField label="Total TTC" required>
+          <ReviewField
+            error={state.fieldErrors?.totalTtc}
+            label="Total TTC"
+            required
+          >
             <input
               className={inputClassName}
               inputMode="decimal"
               name="totalTtc"
-              onChange={(event) => setTotalTtc(event.target.value)}
+              onChange={(event) => {
+                const next = event.target.value;
+                setTotalTtc(next);
+                setSchedule((current) =>
+                  current.map((row) =>
+                    row.basis === "PERCENTAGE"
+                      ? {
+                          ...row,
+                          fixedAmount:
+                            amountFromPercentage(next || "0", row.percentage) ??
+                            row.fixedAmount,
+                        }
+                      : {
+                          ...row,
+                          percentage:
+                            percentageFromAmount(
+                              next || "0",
+                              row.fixedAmount,
+                            ) ?? row.percentage,
+                        },
+                  ),
+                );
+              }}
               required
               value={totalTtc}
             />
           </ReviewField>
-          <ReviewField label="Notes">
+          <ReviewField error={state.fieldErrors?.notes} label="Notes">
             <input
               className={inputClassName}
               name="notes"
@@ -509,19 +667,28 @@ function ClientDocumentReview({
             Choose explicitly whether this Invoice links to a planned Client
             payment. Leaving it blank creates a new billing event.
           </p>
-          <select
-            className={`${inputClassName} mt-3 max-w-2xl`}
-            onChange={(event) => setMatchedInstallmentId(event.target.value)}
-            value={matchedInstallmentId}
-          >
-            <option value="">Create as a new billing event / no match</option>
-            {matchable.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.billingDocument.reference} · {item.label} ·{" "}
-                {item.scheduledAmount} {item.currencyCode} · due {item.dueDate}
-              </option>
-            ))}
-          </select>
+          <div className="mt-3 max-w-2xl">
+            <ReviewField label="Planned Client payment">
+              <select
+                className={inputClassName}
+                onChange={(event) =>
+                  setMatchedInstallmentId(event.target.value)
+                }
+                value={matchedInstallmentId}
+              >
+                <option value="">
+                  Create as a new billing event / no match
+                </option>
+                {matchable.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.billingDocument.reference} · {item.label} ·{" "}
+                    {item.scheduledAmount} {item.currencyCode} · due{" "}
+                    {item.dueDate}
+                  </option>
+                ))}
+              </select>
+            </ReviewField>
+          </div>
         </section>
       ) : null}
 
@@ -569,97 +736,127 @@ function ClientDocumentReview({
           <div className="mt-3 space-y-2">
             {schedule.map((item, index) => (
               <div
-                className="grid gap-2 rounded-md border p-3 md:grid-cols-6"
-                key={`${index}-${item.label}`}
+                className="grid gap-2 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-6"
+                key={index}
               >
-                <input
-                  aria-label="Installment label"
-                  className={inputClassName}
-                  onChange={(event) =>
-                    setSchedule((current) =>
-                      current.map((row, rowIndex) =>
-                        rowIndex === index
-                          ? { ...row, label: event.target.value }
-                          : row,
-                      ),
-                    )
-                  }
-                  value={item.label}
-                />
-                <select
-                  className={inputClassName}
-                  onChange={(event) =>
-                    setSchedule((current) =>
-                      current.map((row, rowIndex) =>
-                        rowIndex === index
-                          ? {
-                              ...row,
-                              basis: event.target.value as ScheduleRow["basis"],
-                            }
-                          : row,
-                      ),
-                    )
-                  }
-                  value={item.basis}
+                <ReviewField
+                  error={state.fieldErrors?.[`installments.${index}.label`]}
+                  label="Installment label"
+                  required
                 >
-                  <option value="PERCENTAGE">Percentage</option>
-                  <option value="FIXED_AMOUNT">Fixed TTC</option>
-                </select>
-                <input
-                  aria-label={
-                    item.basis === "PERCENTAGE" ? "Percentage" : "Fixed amount"
+                  <input
+                    className={inputClassName}
+                    onChange={(event) =>
+                      setSchedule((current) =>
+                        current.map((row, rowIndex) =>
+                          rowIndex === index
+                            ? { ...row, label: event.target.value }
+                            : row,
+                        ),
+                      )
+                    }
+                    value={item.label}
+                  />
+                </ReviewField>
+                <ReviewField
+                  error={
+                    state.fieldErrors?.[`installments.${index}.percentageRate`]
                   }
-                  className={inputClassName}
-                  inputMode="decimal"
-                  onChange={(event) =>
-                    setSchedule((current) =>
-                      current.map((row, rowIndex) =>
-                        rowIndex === index
-                          ? {
-                              ...row,
-                              [item.basis === "PERCENTAGE"
-                                ? "percentage"
-                                : "fixedAmount"]: event.target.value,
-                            }
-                          : row,
-                      ),
-                    )
+                  label="Installment %"
+                  required
+                >
+                  <input
+                    className={inputClassName}
+                    inputMode="decimal"
+                    onChange={(event) => {
+                      const percentage = event.target.value;
+                      setSchedule((current) =>
+                        current.map((row, rowIndex) =>
+                          rowIndex === index
+                            ? {
+                                ...row,
+                                basis: "PERCENTAGE",
+                                fixedAmount:
+                                  amountFromPercentage(
+                                    totalTtc || "0",
+                                    percentage,
+                                  ) ?? row.fixedAmount,
+                                percentage,
+                              }
+                            : row,
+                        ),
+                      );
+                    }}
+                    value={item.percentage}
+                  />
+                </ReviewField>
+                <ReviewField
+                  error={
+                    state.fieldErrors?.[`installments.${index}.fixedAmount`]
                   }
-                  value={
-                    item.basis === "PERCENTAGE"
-                      ? item.percentage
-                      : item.fixedAmount
-                  }
-                />
-                <input
-                  aria-label="Installment due date"
-                  className={inputClassName}
-                  onChange={(event) =>
-                    setSchedule((current) =>
-                      current.map((row, rowIndex) =>
-                        rowIndex === index
-                          ? { ...row, dueDate: event.target.value }
-                          : row,
-                      ),
-                    )
-                  }
-                  type="date"
-                  value={item.dueDate}
-                />
-                <input
-                  aria-label="Installment notes"
-                  className={inputClassName}
-                  onChange={(event) =>
-                    setSchedule((current) =>
-                      current.map((row, rowIndex) =>
-                        rowIndex === index
-                          ? { ...row, notes: event.target.value }
-                          : row,
-                      ),
-                    )
-                  }
-                  value={item.notes}
-                />
+                  label={`Installment amount (${currencyCode || "currency"})`}
+                  required
+                >
+                  <input
+                    className={inputClassName}
+                    inputMode="decimal"
+                    onChange={(event) => {
+                      const fixedAmount = event.target.value;
+                      setSchedule((current) =>
+                        current.map((row, rowIndex) =>
+                          rowIndex === index
+                            ? {
+                                ...row,
+                                basis: "FIXED_AMOUNT",
+                                fixedAmount,
+                                percentage:
+                                  percentageFromAmount(
+                                    totalTtc || "0",
+                                    fixedAmount,
+                                  ) ?? row.percentage,
+                              }
+                            : row,
+                        ),
+                      );
+                    }}
+                    value={item.fixedAmount}
+                  />
+                </ReviewField>
+                <ReviewField
+                  error={state.fieldErrors?.[`installments.${index}.dueDate`]}
+                  label="Due date"
+                  required
+                >
+                  <input
+                    className={inputClassName}
+                    onChange={(event) =>
+                      setSchedule((current) =>
+                        current.map((row, rowIndex) =>
+                          rowIndex === index
+                            ? { ...row, dueDate: event.target.value }
+                            : row,
+                        ),
+                      )
+                    }
+                    type="date"
+                    value={item.dueDate}
+                  />
+                </ReviewField>
+                <ReviewField label="Notes">
+                  <input
+                    className={inputClassName}
+                    onChange={(event) =>
+                      setSchedule((current) =>
+                        current.map((row, rowIndex) =>
+                          rowIndex === index
+                            ? { ...row, notes: event.target.value }
+                            : row,
+                        ),
+                      )
+                    }
+                    value={item.notes}
+                  />
+                </ReviewField>
                 <Button
                   type="button"
                   variant="ghost"
@@ -677,6 +874,22 @@ function ClientDocumentReview({
               <p className="text-muted-foreground text-xs">
                 No schedule will be created unless you add one.
               </p>
+            ) : null}
+            {schedule.length ? (
+              <div className="rounded-md border p-3 text-xs">
+                <p>
+                  Document TTC: {totalTtc || "—"} {currencyCode}
+                </p>
+                <p>
+                  Scheduled TTC: {scheduled.allocated} {currencyCode}
+                </p>
+                <p>
+                  {scheduleOverallocated
+                    ? `Over-allocated: ${scheduled.overallocated}`
+                    : `Remaining TTC: ${scheduled.remaining}`}{" "}
+                  {currencyCode}
+                </p>
+              </div>
             ) : null}
           </div>
         </section>
@@ -701,7 +914,12 @@ function ClientDocumentReview({
             onClick={() =>
               setAllocations((current) => [
                 ...current,
-                { amount: "", orderId: "" },
+                {
+                  amount: "",
+                  basis: "FIXED_AMOUNT",
+                  orderId: "",
+                  percentage: "",
+                },
               ])
             }
           >
@@ -711,44 +929,97 @@ function ClientDocumentReview({
         <div className="mt-3 space-y-2">
           {allocations.map((item, index) => (
             <div
-              className="grid gap-2 rounded-md border p-3 md:grid-cols-3"
+              className="grid gap-2 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-4"
               key={index}
             >
-              <select
-                className={inputClassName}
-                onChange={(event) =>
-                  setAllocations((current) =>
-                    current.map((row, rowIndex) =>
-                      rowIndex === index
-                        ? { ...row, orderId: event.target.value }
-                        : row,
-                    ),
-                  )
-                }
-                value={item.orderId}
+              <ReviewField
+                error={state.fieldErrors?.[`allocations.${index}.orderId`]}
+                label="Project Order"
+                required
               >
-                <option value="">Choose Project Order</option>
-                {orders.map((order) => (
-                  <option key={order.id} value={order.id}>
-                    {order.orderNumber}
-                  </option>
-                ))}
-              </select>
-              <input
-                aria-label="Allocated HT"
-                className={inputClassName}
-                inputMode="decimal"
-                onChange={(event) =>
-                  setAllocations((current) =>
-                    current.map((row, rowIndex) =>
-                      rowIndex === index
-                        ? { ...row, amount: event.target.value }
-                        : row,
-                    ),
-                  )
+                <select
+                  className={inputClassName}
+                  onChange={(event) =>
+                    setAllocations((current) =>
+                      current.map((row, rowIndex) =>
+                        rowIndex === index
+                          ? { ...row, orderId: event.target.value }
+                          : row,
+                      ),
+                    )
+                  }
+                  value={item.orderId}
+                >
+                  <option value="">Choose Project Order</option>
+                  {orders.map((order) => (
+                    <option key={order.id} value={order.id}>
+                      {order.orderNumber}
+                    </option>
+                  ))}
+                </select>
+              </ReviewField>
+              <ReviewField
+                error={
+                  state.fieldErrors?.[`allocations.${index}.percentageRate`]
                 }
-                value={item.amount}
-              />
+                label="Order allocation %"
+                required
+              >
+                <input
+                  className={inputClassName}
+                  inputMode="decimal"
+                  onChange={(event) => {
+                    const percentage = event.target.value;
+                    setAllocations((current) =>
+                      current.map((row, rowIndex) =>
+                        rowIndex === index
+                          ? {
+                              ...row,
+                              amount:
+                                amountFromPercentage(
+                                  totalHt || "0",
+                                  percentage,
+                                ) ?? row.amount,
+                              basis: "PERCENTAGE",
+                              percentage,
+                            }
+                          : row,
+                      ),
+                    );
+                  }}
+                  value={item.percentage}
+                />
+              </ReviewField>
+              <ReviewField
+                error={
+                  state.fieldErrors?.[`allocations.${index}.allocatedAmount`]
+                }
+                label={`Order allocation HT (${currencyCode || "currency"})`}
+                required
+              >
+                <input
+                  className={inputClassName}
+                  inputMode="decimal"
+                  onChange={(event) => {
+                    const amount = event.target.value;
+                    setAllocations((current) =>
+                      current.map((row, rowIndex) =>
+                        rowIndex === index
+                          ? {
+                              ...row,
+                              amount,
+                              basis: "FIXED_AMOUNT",
+                              percentage:
+                                percentageFromAmount(totalHt || "0", amount) ??
+                                row.percentage,
+                            }
+                          : row,
+                      ),
+                    );
+                  }}
+                  value={item.amount}
+                />
+              </ReviewField>
               <Button
                 type="button"
                 variant="ghost"
@@ -766,15 +1037,22 @@ function ClientDocumentReview({
         {allocations.length ? (
           <div className="mt-3 rounded-md border p-3 text-xs">
             <p>Document HT: {totalHt || "—"}</p>
-            <p>Allocated: {allocationTotal.toFixed(4)}</p>
+            <p>Allocated HT: {allocation.allocated}</p>
             <p>
-              {allocationRemaining && allocationRemaining.isNegative()
-                ? `Over-allocated: ${allocationRemaining.abs().toFixed(4)}`
-                : `Remaining: ${allocationRemaining?.toFixed(4) ?? "—"}`}
+              {allocationOverallocated
+                ? `Over-allocated: ${allocation.overallocated}`
+                : `Project-level remainder: ${allocation.remaining}`}
             </p>
-            {allocationRemaining && allocationRemaining.greaterThan(0) ? (
+            {new Decimal(allocation.remaining).greaterThan(0) ? (
               <label className="mt-2 flex items-center gap-2 font-medium">
-                <input name="isProjectRemainderApproved" type="checkbox" />
+                <input
+                  checked={isProjectRemainderApproved}
+                  name="isProjectRemainderApproved"
+                  onChange={(event) =>
+                    setProjectRemainderApproved(event.target.checked)
+                  }
+                  type="checkbox"
+                />
                 Leave this remainder unallocated at Project level
               </label>
             ) : null}
@@ -783,7 +1061,10 @@ function ClientDocumentReview({
       </section>
 
       <div className="flex items-center gap-3">
-        <SubmitButton pending={pending}>
+        <SubmitButton
+          disabled={scheduleOverallocated || allocationOverallocated}
+          pending={pending}
+        >
           Confirm and save Client billing
         </SubmitButton>
         {state.message ? (

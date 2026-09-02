@@ -2,7 +2,7 @@
 
 import { Pencil, Plus } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import {
   createClientAction,
@@ -22,6 +22,7 @@ import {
   InlineTextInput,
 } from "@/components/inline-editing/inline-edit";
 import { initialMasterDataActionState } from "@/components/master-data/action-state";
+import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import {
   ActionFeedback,
   Field,
@@ -178,7 +179,7 @@ function ClientFields({
 }
 
 function CreateClientForm({ currencies }: { currencies: CurrencyOption[] }) {
-  const [state, action, pending] = useActionState(
+  const { state, onSubmit, pending } = usePersistentActionState(
     createClientAction,
     initialMasterDataActionState,
   );
@@ -190,7 +191,7 @@ function CreateClientForm({ currencies }: { currencies: CurrencyOption[] }) {
         </span>
       </summary>
       <form
-        action={action}
+        onSubmit={onSubmit}
         className="grid gap-3 border-t p-4 md:grid-cols-2 xl:grid-cols-4"
       >
         <ClientFields currencies={currencies} />
@@ -212,7 +213,7 @@ function EditClientForm({
   currencies: CurrencyOption[];
   onClose: () => void;
 }) {
-  const [state, action, pending] = useActionState(
+  const { state, onSubmit, pending } = usePersistentActionState(
     updateClientAction,
     initialMasterDataActionState,
   );
@@ -225,7 +226,7 @@ function EditClientForm({
         </Button>
       </div>
       <form
-        action={action}
+        onSubmit={onSubmit}
         className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
       >
         <input name="id" type="hidden" value={client.id} />

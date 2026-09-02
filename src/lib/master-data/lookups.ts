@@ -13,7 +13,7 @@ export async function listActiveCurrencies() {
 
 export async function listProjectFormOptions() {
   const database = getDatabase();
-  const [clients, currencies, managers] = await Promise.all([
+  const [clients, currencies, managers, suppliers] = await Promise.all([
     database.client.findMany({
       where: { isActive: true },
       orderBy: { displayName: "asc" },
@@ -25,12 +25,18 @@ export async function listProjectFormOptions() {
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
+    database.supplier.findMany({
+      where: { isActive: true },
+      orderBy: { displayName: "asc" },
+      select: { displayName: true, id: true },
+    }),
   ]);
 
   return {
     clients,
     currencies,
     managers,
+    suppliers,
     statuses: Object.values(ProjectStatus),
   };
 }

@@ -1,6 +1,8 @@
 export interface MasterDataActionState {
+  fieldErrors?: Record<string, string> | undefined;
+  formError?: string | undefined;
   message?: string;
-  status?: "error" | "success";
+  status?: "idle" | "error" | "success";
 }
 
 export const initialMasterDataActionState: MasterDataActionState = {};

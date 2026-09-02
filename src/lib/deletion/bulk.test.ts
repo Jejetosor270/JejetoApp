@@ -22,6 +22,7 @@ const transaction = vi.hoisted(() => ({
   procurementOrderCostLine: { deleteMany: vi.fn() },
   procurementOrderVatEntry: { deleteMany: vi.fn() },
   project: { deleteMany: vi.fn(), findMany: vi.fn() },
+  projectFreightExpense: { deleteMany: vi.fn(), updateMany: vi.fn() },
   supplier: { deleteMany: vi.fn(), findMany: vi.fn() },
   supplierQuoteImport: { deleteMany: vi.fn() },
 }));
@@ -132,6 +133,10 @@ describe("transactional populated-hierarchy deletion", () => {
     expect(transaction.supplierQuoteImport.deleteMany).toHaveBeenCalledWith({
       where: { supplierId: { in: [firstId] } },
     });
+    expect(transaction.projectFreightExpense.updateMany).toHaveBeenCalledWith({
+      data: { supplierId: null },
+      where: { supplierId: { in: [firstId] } },
+    });
     expectOrderHierarchyDeleted([orderId, secondOrderId]);
     expect(transaction.supplier.deleteMany).toHaveBeenCalledWith({
       where: { id: { in: [firstId] } },
@@ -153,6 +158,9 @@ describe("transactional populated-hierarchy deletion", () => {
       where: { projectId: { in: [firstId] } },
     });
     expectOrderHierarchyDeleted([orderId]);
+    expect(transaction.projectFreightExpense.deleteMany).toHaveBeenCalledWith({
+      where: { projectId: { in: [firstId] } },
+    });
     expect(transaction.building.deleteMany).toHaveBeenCalledWith({
       where: { projectId: { in: [firstId] } },
     });

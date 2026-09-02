@@ -155,6 +155,7 @@ export function PaymentSchedule({
                       <div className="mt-3 w-[min(78vw,58rem)] space-y-3">
                         <InstallmentActions installment={installment} />
                         <InstallmentForm
+                          baseAmount={summary.baseAmount}
                           currencies={currencies}
                           defaultCurrencyCode={summary.baseCurrencyCode}
                           direction={direction}
@@ -222,6 +223,7 @@ export function PaymentSchedule({
             </summary>
             <div className="mt-3">
               <InstallmentForm
+                baseAmount={summary.baseAmount}
                 currencies={currencies}
                 defaultCurrencyCode={summary.baseCurrencyCode}
                 direction={direction}

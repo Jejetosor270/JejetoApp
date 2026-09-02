@@ -22,6 +22,7 @@ import {
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import { BulkDeletionError, deleteInstallments } from "@/lib/deletion/bulk";
 import { isExpectedPaymentError } from "@/lib/payments/errors";
+import { fieldErrorMap } from "@/domain/validation/issues";
 import {
   applyPaymentPreset,
   cancelInstallment,
@@ -43,10 +44,15 @@ function refreshPaymentViews(): void {
 
 function errorState(error: unknown): PaymentActionState {
   if (isExpectedPaymentError(error)) {
-    return { message: error.message, status: "error" };
+    return {
+      formError: error.message,
+      message: error.message,
+      status: "error",
+    };
   }
   console.error("Unable to update payment data.", error);
   return {
+    formError: "We could not save the payment change. Please try again.",
     message: "We could not save the payment change. Please try again.",
     status: "error",
   };
@@ -62,6 +68,8 @@ export async function createInstallmentAction(
   );
   if (!input.success)
     return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the installment.",
       message: input.error.issues[0]?.message ?? "Check the installment.",
       status: "error",
     };
@@ -84,6 +92,8 @@ export async function updateInstallmentAction(
   );
   if (!input.success)
     return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the installment.",
       message: input.error.issues[0]?.message ?? "Check the installment.",
       status: "error",
     };
@@ -101,6 +111,8 @@ export async function updateInstallmentInlineAction(formData: FormData) {
   const input = inlineInstallmentSchema.safeParse(Object.fromEntries(formData));
   if (!input.success)
     return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the settlement.",
       message: input.error.issues[0]?.message ?? "Check the installment.",
       status: "error" as const,
     };
@@ -126,6 +138,8 @@ export async function recordSettlementAction(
   const input = settlementSchema.safeParse(settlementFormValues(formData));
   if (!input.success)
     return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the schedule preset.",
       message: input.error.issues[0]?.message ?? "Check the settlement.",
       status: "error",
     };

@@ -183,6 +183,10 @@ export async function deleteSuppliers(
     await transaction.supplierQuoteImport.deleteMany({
       where: { supplierId: { in: ids } },
     });
+    await transaction.projectFreightExpense.updateMany({
+      where: { supplierId: { in: ids } },
+      data: { supplierId: null },
+    });
     await deleteOrderHierarchy(
       transaction,
       orders.map((order) => order.id),
@@ -227,6 +231,9 @@ export async function deleteProjects(
     );
     await transaction.item.deleteMany({ where: { projectId: { in: ids } } });
     await transaction.itemImport.deleteMany({
+      where: { projectId: { in: ids } },
+    });
+    await transaction.projectFreightExpense.deleteMany({
       where: { projectId: { in: ids } },
     });
     await transaction.room.deleteMany({
@@ -283,6 +290,9 @@ export async function deleteClients(
       where: { projectId: { in: projectIds } },
     });
     await transaction.itemImport.deleteMany({
+      where: { projectId: { in: projectIds } },
+    });
+    await transaction.projectFreightExpense.deleteMany({
       where: { projectId: { in: projectIds } },
     });
     await transaction.room.deleteMany({

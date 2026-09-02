@@ -27,6 +27,17 @@ interface ActualProfitability {
   markupRate: string | null;
 }
 
+interface FreightReconciliationView {
+  actualCostHt: string | null;
+  allowanceHt: string | null;
+  complete: boolean;
+  defaultFreightMarkupRate: string;
+  freightEstimateRate: string | null;
+  freightGrossProfitHt: string | null;
+  headroomHt: string | null;
+  recoveryTargetHt: string | null;
+}
+
 function AggregateMoney({
   aggregate,
   currencyCode,
@@ -102,6 +113,7 @@ export function ProjectFinancialDashboard({
   actualProfitability,
   billing,
   clientBudgetTargetHt,
+  freight,
   horizon,
   phase11CashPosition,
   projectId,
@@ -112,6 +124,7 @@ export function ProjectFinancialDashboard({
   actualProfitability: ActualProfitability;
   billing: Phase11BillingSummary | null;
   clientBudgetTargetHt: string | null;
+  freight: FreightReconciliationView | null;
   horizon: CashFlowHorizon;
   phase11CashPosition: string | null;
   projectId: string;
@@ -239,6 +252,70 @@ export function ProjectFinancialDashboard({
             </p>
           ) : null}
         </article>
+      </section>
+      <section className="bg-card rounded-lg border p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Freight reconciliation</h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Client commercial allowance versus actual Order and Project-level
+              freight costs.
+            </p>
+          </div>
+          <Badge variant={freight?.complete ? "outline" : "destructive"}>
+            {freight?.complete ? "Complete" : "Incomplete · check FX / pricing"}
+          </Badge>
+        </div>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          {(
+            [
+              [
+                "Freight Estimate %",
+                freight?.freightEstimateRate ?? null,
+                "rate",
+              ],
+              [
+                "Client Freight Allowance HT",
+                freight?.allowanceHt ?? null,
+                "money",
+              ],
+              [
+                "Actual Freight Cost HT",
+                freight?.actualCostHt ?? null,
+                "money",
+              ],
+              [
+                "Freight Recovery Target HT",
+                freight?.recoveryTargetHt ?? null,
+                "money",
+              ],
+              [
+                "Freight Gross Profit HT",
+                freight?.freightGrossProfitHt ?? null,
+                "money",
+              ],
+              [
+                "Freight Variance / Headroom",
+                freight?.headroomHt ?? null,
+                "money",
+              ],
+            ] as const
+          ).map(([label, value, kind]) => (
+            <div className="bg-muted/25 rounded-md border p-3" key={label}>
+              <dt className="text-muted-foreground text-xs">{label}</dt>
+              <dd className="financial-figure mt-1 text-sm font-semibold">
+                {kind === "rate"
+                  ? formatRate(value)
+                  : formatMoney(value, currency)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <p className="text-muted-foreground mt-3 text-xs">
+          Default Freight Markup:{" "}
+          {formatRate(freight?.defaultFreightMarkupRate ?? null)}. Cash timing
+          remains in Supplier Payments.
+        </p>
       </section>
       <section className="bg-card rounded-lg border p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">

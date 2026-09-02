@@ -88,6 +88,13 @@ describe("single procurement order cost validation", () => {
     });
     expect(value.outputVatTaxableBaseOverride).toBeUndefined();
   });
+  it("accepts a manual Client freight allowance override", () => {
+    const value = createOrderInputSchema.parse({
+      ...base,
+      freightAllowanceOverrideAmount: "12000",
+    });
+    expect(value.freightAllowanceOverrideAmount).toBe("12000.0000");
+  });
   it("validates independent VAT and non-recoverability", () => {
     const value = createOrderInputSchema.parse({
       ...base,

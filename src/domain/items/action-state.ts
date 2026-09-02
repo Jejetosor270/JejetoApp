@@ -1,6 +1,8 @@
 import type { BudgetField, BudgetReviewRow } from "@/domain/items/import";
 
 export interface ItemActionState {
+  fieldErrors?: Record<string, string> | undefined;
+  formError?: string | undefined;
   itemId?: string;
   message: string;
   room?: { buildingId: string; id: string; name: string };

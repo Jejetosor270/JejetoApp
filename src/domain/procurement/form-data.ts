@@ -15,6 +15,10 @@ export function orderFormValues(formData: FormData) {
     expectedDeliveryDate: stringValue(formData, "expectedDeliveryDate"),
     expectedReadyDate: stringValue(formData, "expectedReadyDate"),
     freight: stringValue(formData, "freight"),
+    freightAllowanceOverrideAmount: stringValue(
+      formData,
+      "freightAllowanceOverrideAmount",
+    ),
     freightMarkupOverrideRate: stringValue(
       formData,
       "freightMarkupOverridePercent",

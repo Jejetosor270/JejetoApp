@@ -8,6 +8,7 @@ import {
   VatTreatment,
 } from "@/generated/prisma/client";
 import { isDateOnly } from "@/domain/payments/dates";
+import { optionalUuid, requiredUuid } from "@/domain/validation/uuid";
 
 const optionalText = (maximum: number) =>
   z.preprocess(
@@ -18,7 +19,10 @@ const optionalText = (maximum: number) =>
 const money = z
   .string()
   .trim()
-  .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
+  .regex(
+    /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/,
+    "Enter a non-negative amount with up to 4 decimals.",
+  )
   .transform((value) => new Decimal(value).toFixed(4));
 const positiveMoney = money.refine(
   (value) => new Decimal(value).greaterThan(0),
@@ -26,8 +30,11 @@ const positiveMoney = money.refine(
 );
 const fraction = z
   .string()
-  .regex(/^(?:0|1|0?\.\d{1,6})$/)
-  .refine((value) => new Decimal(value).greaterThan(0))
+  .regex(/^(?:0|1|0?\.\d{1,6})$/, "Enter a percentage between 0 and 100.")
+  .refine(
+    (value) => new Decimal(value).greaterThan(0),
+    "Percentage must be greater than zero.",
+  )
   .transform((value) => new Decimal(value).toFixed(6));
 const optionalFraction = z.preprocess(
   (value) => (value === "" || value === null ? undefined : value),
@@ -52,7 +59,7 @@ const optionalDate = z.preprocess(
 
 const allocationSchema = z
   .object({
-    orderId: z.uuid(),
+    orderId: requiredUuid("Select a valid Order."),
     basis: z.enum(ClientBillingAllocationBasis),
     allocatedAmount: positiveMoney,
     percentageRate: optionalFraction,
@@ -97,21 +104,21 @@ export const clientBillingConfirmationSchema = z
   .object({
     action: z.enum(["CREATE", "UPDATE"]),
     allocations: z.array(allocationSchema).max(100),
-    clientId: z.uuid("Choose a Client."),
+    clientId: requiredUuid("Select a Client."),
     documentDate: dateOnly,
     documentType: z.enum(ClientBillingDocumentType),
     dueDate: optionalDate,
     duplicateWarning: z.boolean(),
-    existingDocumentId: z.uuid().optional(),
+    existingDocumentId: optionalUuid("Select a valid billing document."),
     fxRate: optionalFx,
     installments: z.array(installmentSchema).max(12),
     isCancelled: z.boolean(),
     isProjectRemainderApproved: z.boolean(),
-    matchedInstallmentId: z.uuid().optional(),
+    matchedInstallmentId: optionalUuid("Select a valid payment schedule."),
     notes: optionalText(4000),
     originalFilename: z.string().trim().min(1).max(255),
     paymentTermsRaw: optionalText(4000),
-    projectId: z.uuid("Choose a Project."),
+    projectId: requiredUuid("Select a Project."),
     provider: z.string().trim().min(1).max(50),
     model: z.string().trim().min(1).max(120),
     reference: z.string().trim().min(1).max(120),
@@ -175,7 +182,7 @@ export function parseClientBillingConfirmation(formData: FormData) {
 export const clientReceiptSchema = z.object({
   amount: positiveMoney,
   fxRate: optionalFx,
-  installmentId: z.uuid(),
+  installmentId: requiredUuid("Select a valid billing installment."),
   notes: optionalText(4000),
   receivedAt: dateOnly,
   reference: optionalText(120),

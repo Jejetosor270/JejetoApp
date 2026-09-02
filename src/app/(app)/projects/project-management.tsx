@@ -2,7 +2,7 @@
 
 import { Plus } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { updateProjectAction } from "@/app/(app)/projects/[projectId]/actions";
 import {
@@ -22,6 +22,7 @@ import {
   InlineTextInput,
 } from "@/components/inline-editing/inline-edit";
 import { initialMasterDataActionState } from "@/components/master-data/action-state";
+import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import {
   ActionFeedback,
   Field,
@@ -99,7 +100,7 @@ function CreateProjectForm({
   managers: ManagerOption[];
   statuses: string[];
 }) {
-  const [state, action, pending] = useActionState(
+  const { state, onSubmit, pending } = usePersistentActionState(
     createProjectAction,
     initialMasterDataActionState,
   );
@@ -111,7 +112,7 @@ function CreateProjectForm({
         </span>
       </summary>
       <form
-        action={action}
+        onSubmit={onSubmit}
         className="grid gap-3 border-t p-4 md:grid-cols-2 xl:grid-cols-4"
       >
         <Field label="Project name">
@@ -365,7 +366,7 @@ function ProjectInlineRow({
       <td className="px-4 py-3">
         {editing ? (
           <InlinePercentInput
-            ariaLabel="Project freight estimate percentage"
+            ariaLabel="Client freight allowance percentage"
             onChange={(value) => set("freightEstimateRate", value)}
             value={draft.freightEstimateRate}
           />
@@ -466,7 +467,7 @@ export function ProjectManagement({
                 <th className="px-4 py-3">Project manager</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Expected completion</th>
-                <th className="px-4 py-3">Freight estimate</th>
+                <th className="px-4 py-3">Client freight allowance %</th>
                 {canEdit ? (
                   <th className="px-4 py-3 text-right">Edit</th>
                 ) : null}

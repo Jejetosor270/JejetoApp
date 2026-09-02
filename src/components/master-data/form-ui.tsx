@@ -101,28 +101,38 @@ export function MoneyInput({
 export function ActionFeedback({ state }: { state: MasterDataActionState }) {
   if (!state.message || !state.status) return null;
   return (
-    <p
-      className={
-        state.status === "error"
-          ? "text-destructive text-sm"
-          : "text-positive text-sm"
-      }
-      role={state.status === "error" ? "alert" : "status"}
-    >
-      {state.message}
-    </p>
+    <div role={state.status === "error" ? "alert" : "status"}>
+      <p
+        className={
+          state.status === "error"
+            ? "text-destructive text-sm"
+            : "text-positive text-sm"
+        }
+      >
+        {state.message}
+      </p>
+      {state.status === "error" && state.fieldErrors ? (
+        <ul className="text-destructive mt-1 list-disc pl-4 text-xs">
+          {Object.entries(state.fieldErrors).map(([field, message]) => (
+            <li key={field}>{message}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
 export function SubmitButton({
   children,
+  disabled = false,
   pending,
 }: {
   children: ReactNode;
+  disabled?: boolean | undefined;
   pending: boolean;
 }) {
   return (
-    <Button disabled={pending} type="submit">
+    <Button disabled={disabled || pending} type="submit">
       {pending ? (
         <LoaderCircle
           aria-hidden="true"

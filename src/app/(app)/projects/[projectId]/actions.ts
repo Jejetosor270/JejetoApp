@@ -10,6 +10,16 @@ import {
 } from "@/domain/master-data/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import {
+  projectFreightExpenseIdSchema,
+  projectFreightExpenseSchema,
+} from "@/domain/freight/validation";
+import { fieldErrorMap } from "@/domain/validation/issues";
+import {
+  createProjectFreightExpense,
+  deleteProjectFreightExpense,
+  ProjectFreightExpenseError,
+} from "@/lib/freight/expenses";
+import {
   unexpectedActionError,
   validationActionError,
 } from "@/lib/master-data/action-helpers";
@@ -26,6 +36,64 @@ import {
 function revalidateProject(projectId: string): void {
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
+}
+
+export async function createProjectFreightExpenseAction(
+  _: MasterDataActionState,
+  formData: FormData,
+): Promise<MasterDataActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = projectFreightExpenseSchema.safeParse(
+    Object.fromEntries(formData),
+  );
+  if (!input.success) return validationActionError(input.error);
+  try {
+    await createProjectFreightExpense(actor.id, input.data);
+    revalidateProject(input.data.projectId);
+    return { message: "Project freight expense added.", status: "success" };
+  } catch (error) {
+    if (error instanceof ProjectFreightExpenseError)
+      return {
+        formError: error.message,
+        message: error.message,
+        status: "error",
+      };
+    console.error("Unable to create Project freight expense.", error);
+    return unexpectedActionError("Project freight expense");
+  }
+}
+
+export async function deleteProjectFreightExpenseAction(
+  _: MasterDataActionState,
+  formData: FormData,
+): Promise<MasterDataActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = projectFreightExpenseIdSchema.safeParse(
+    Object.fromEntries(formData),
+  );
+  if (!input.success)
+    return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      message: input.error.issues[0]?.message ?? "Select a freight expense.",
+      status: "error",
+    };
+  try {
+    const projectId = await deleteProjectFreightExpense(
+      actor.id,
+      input.data.id,
+    );
+    revalidateProject(projectId);
+    return { message: "Project freight expense deleted.", status: "success" };
+  } catch (error) {
+    if (error instanceof ProjectFreightExpenseError)
+      return {
+        formError: error.message,
+        message: error.message,
+        status: "error",
+      };
+    console.error("Unable to delete Project freight expense.", error);
+    return unexpectedActionError("Project freight expense");
+  }
 }
 
 export async function updateProjectAction(

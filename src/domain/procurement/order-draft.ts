@@ -9,6 +9,8 @@ export interface OrderDraft {
   expectedDeliveryDate: string;
   expectedReadyDate: string;
   freight: string;
+  freightAllowanceMode: "AUTO" | "MANUAL";
+  freightAllowanceOverrideAmount: string;
   freightMarkupOverridePercent: string;
   freightResaleAmount: string;
   freightTreatment: string;

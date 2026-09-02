@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil, Plus } from "lucide-react";
-import { useActionState, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import {
   createSupplierAction,
@@ -21,6 +21,7 @@ import {
   InlineTextInput,
 } from "@/components/inline-editing/inline-edit";
 import { initialMasterDataActionState } from "@/components/master-data/action-state";
+import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import {
   ActionFeedback,
   Field,
@@ -206,7 +207,7 @@ function SupplierFields({
 }
 
 function CreateSupplierForm({ currencies }: { currencies: CurrencyOption[] }) {
-  const [state, action, pending] = useActionState(
+  const { state, onSubmit, pending } = usePersistentActionState(
     createSupplierAction,
     initialMasterDataActionState,
   );
@@ -218,7 +219,7 @@ function CreateSupplierForm({ currencies }: { currencies: CurrencyOption[] }) {
         </span>
       </summary>
       <form
-        action={action}
+        onSubmit={onSubmit}
         className="grid gap-3 border-t p-4 md:grid-cols-2 xl:grid-cols-4"
       >
         <SupplierFields currencies={currencies} />
@@ -239,7 +240,7 @@ function EditSupplierForm({
   onClose: () => void;
   supplier: SupplierView;
 }) {
-  const [state, action, pending] = useActionState(
+  const { state, onSubmit, pending } = usePersistentActionState(
     updateSupplierAction,
     initialMasterDataActionState,
   );
@@ -252,7 +253,7 @@ function EditSupplierForm({
         </Button>
       </div>
       <form
-        action={action}
+        onSubmit={onSubmit}
         className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
       >
         <input name="id" type="hidden" value={supplier.id} />

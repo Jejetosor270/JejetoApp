@@ -90,6 +90,7 @@ const orderFields = {
   customsDuties: optionalMoney("Customs and duties"),
   description: optionalText(4000),
   freight: optionalMoney("Freight"),
+  freightAllowanceOverrideAmount: optionalMoney("Freight allowance override"),
   freightMarkupOverrideRate: optionalMarkupRate,
   freightResaleAmount: optionalMoney("Freight resale"),
   freightTreatment: z.enum(FreightTreatment),

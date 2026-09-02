@@ -2,6 +2,7 @@ import type { ProcessedClientDocumentReview } from "@/lib/billing/process";
 
 export interface BillingActionState {
   fieldErrors?: Record<string, string> | undefined;
+  formError?: string | undefined;
   message: string;
   recordId?: string | undefined;
   status: "idle" | "error" | "success";
