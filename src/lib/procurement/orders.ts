@@ -1049,40 +1049,59 @@ async function replaceOrderFinancialData(
 }
 export async function listOrderOptions() {
   const database = getDatabase();
-  const [projects, suppliers, currencies] = await Promise.all([
-    database.project.findMany({
-      orderBy: [{ status: "asc" }, { name: "asc" }],
-      select: {
-        buildings: {
-          orderBy: { name: "asc" },
-          select: { id: true, isActive: true, name: true, shortCode: true },
+  const [billingDocuments, projects, suppliers, currencies] = await Promise.all(
+    [
+      database.clientBillingDocument.findMany({
+        where: { isCancelled: false },
+        orderBy: [{ documentDate: "desc" }, { reference: "asc" }],
+        select: {
+          currencyCode: true,
+          documentType: true,
+          id: true,
+          isProjectRemainderApproved: true,
+          projectId: true,
+          reference: true,
+          totalHt: true,
         },
-        client: { select: { defaultCurrencyCode: true } },
-        id: true,
-        name: true,
-        defaultFreightMarkupRate: true,
-        defaultOtherCostMarkupRate: true,
-        defaultProductMarkupRate: true,
-        freightEstimateRate: true,
-        reportingCurrencyCode: true,
-      },
-    }),
-    database.supplier.findMany({
-      orderBy: [{ isActive: "desc" }, { displayName: "asc" }],
-      select: {
-        defaultCurrencyCode: true,
-        defaultLeadTimeWeeks: true,
-        displayName: true,
-        id: true,
-      },
-    }),
-    database.currency.findMany({
-      orderBy: { code: "asc" },
-      where: { isActive: true },
-      select: { code: true, name: true },
-    }),
-  ]);
+      }),
+      database.project.findMany({
+        orderBy: [{ status: "asc" }, { name: "asc" }],
+        select: {
+          buildings: {
+            orderBy: { name: "asc" },
+            select: { id: true, isActive: true, name: true, shortCode: true },
+          },
+          client: { select: { defaultCurrencyCode: true } },
+          id: true,
+          name: true,
+          defaultFreightMarkupRate: true,
+          defaultOtherCostMarkupRate: true,
+          defaultProductMarkupRate: true,
+          freightEstimateRate: true,
+          reportingCurrencyCode: true,
+        },
+      }),
+      database.supplier.findMany({
+        orderBy: [{ isActive: "desc" }, { displayName: "asc" }],
+        select: {
+          defaultCurrencyCode: true,
+          defaultLeadTimeWeeks: true,
+          displayName: true,
+          id: true,
+        },
+      }),
+      database.currency.findMany({
+        orderBy: { code: "asc" },
+        where: { isActive: true },
+        select: { code: true, name: true },
+      }),
+    ],
+  );
   return {
+    billingDocuments: billingDocuments.map((document) => ({
+      ...document,
+      totalHt: document.totalHt.toString(),
+    })),
     currencies,
     freightTreatments: Object.values(FreightTreatment),
     pricingModes: [...orderPricingMethods],

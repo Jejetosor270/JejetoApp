@@ -30,6 +30,7 @@ import {
   type OrderSummary,
   updateOrderInTransaction,
 } from "@/lib/procurement/orders";
+import { updateOrderBillingLinkInTransaction } from "@/lib/billing/billing";
 
 export class QuoteConfirmationError extends Error {}
 
@@ -519,6 +520,22 @@ export async function confirmSupplierQuote(
       } else {
         orderId = await createOrderInTransaction(transaction, actorId, values);
       }
+      if (
+        input.billingDocumentId &&
+        input.billingAllocationBasis &&
+        input.billingAllocatedAmount
+      )
+        await updateOrderBillingLinkInTransaction(transaction, actorId, {
+          allocatedAmount: input.billingAllocatedAmount,
+          basis: input.billingAllocationBasis,
+          billingDocumentId: input.billingDocumentId,
+          isProjectRemainderApproved: input.billingRemainderApproved,
+          orderId,
+          ...(input.billingPercentageRate
+            ? { percentageRate: input.billingPercentageRate }
+            : {}),
+          remove: false,
+        });
       await createApprovedSchedule(
         transaction,
         actorId,

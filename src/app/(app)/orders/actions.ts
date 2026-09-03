@@ -11,6 +11,7 @@ import {
   inlineOrderInputSchema,
   updateOrderInputSchema,
 } from "@/domain/procurement/validation";
+import { parseOrderCreationBillingLink } from "@/domain/billing/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import { BulkDeletionError, deleteOrders } from "@/lib/deletion/bulk";
 import {
@@ -19,10 +20,18 @@ import {
 } from "@/lib/procurement/errors";
 import {
   createOrder,
+  createOrderInTransaction,
   updateOrder,
   updateOrderInline,
 } from "@/lib/procurement/orders";
 import { orderFieldErrors } from "@/domain/procurement/action-errors";
+import {
+  ClientBillingNotFoundError,
+  ClientBillingValidationError,
+  updateOrderBillingLinkInTransaction,
+} from "@/lib/billing/billing";
+import { getDatabase } from "@/lib/db";
+import { Prisma } from "@/generated/prisma/client";
 
 function errorState(error: unknown): OrderActionState {
   if (isDuplicateOrderReferenceError(error)) {
@@ -38,6 +47,16 @@ function errorState(error: unknown): OrderActionState {
     return {
       formError: error.message,
       message: error.message,
+      status: "error",
+    };
+  if (
+    error instanceof ClientBillingValidationError ||
+    error instanceof ClientBillingNotFoundError
+  )
+    return {
+      formError:
+        error.message || "The selected Billing Event no longer exists.",
+      message: error.message || "The selected Billing Event no longer exists.",
       status: "error",
     };
   console.error("Unable to save procurement order.", error);
@@ -61,8 +80,42 @@ export async function createOrderAction(
       message: "Review the highlighted fields and try again.",
       status: "error",
     };
+  const billingLink = parseOrderCreationBillingLink(formData);
+  if (!billingLink.success)
+    return {
+      fieldErrors: Object.fromEntries(
+        billingLink.error.issues.map((issue) => [
+          issue.path[0] === "allocatedAmount"
+            ? "billingAllocatedAmount"
+            : issue.path[0] === "percentageRate"
+              ? "billingPercentageRate"
+              : String(issue.path[0] ?? "billingDocumentId"),
+          issue.message,
+        ]),
+      ),
+      formError: "Check the optional Client Billing allocation.",
+      message: "Check the optional Client Billing allocation.",
+      status: "error",
+    };
   try {
-    const orderId = await createOrder(actor.id, input.data);
+    const orderId = billingLink.data
+      ? await getDatabase().$transaction(
+          async (transaction) => {
+            const createdOrderId = await createOrderInTransaction(
+              transaction,
+              actor.id,
+              input.data,
+            );
+            await updateOrderBillingLinkInTransaction(transaction, actor.id, {
+              ...billingLink.data,
+              orderId: createdOrderId,
+              remove: false,
+            });
+            return createdOrderId;
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        )
+      : await createOrder(actor.id, input.data);
     revalidatePath("/orders");
     revalidatePath("/calendar");
     revalidatePath(`/projects/${input.data.projectId}`);

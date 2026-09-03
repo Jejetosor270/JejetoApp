@@ -1,17 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
-import {
-  recordClientReceiptAction,
-  updateClientBillingInlineAction,
-} from "@/app/(app)/billing/actions";
+import { recordClientReceiptAction } from "@/app/(app)/billing/actions";
 import type { BillingActionState } from "@/domain/billing/action-state";
-import {
-  InlineDateInput,
-  InlineEditActions,
-  InlineTextInput,
-} from "@/components/inline-editing/inline-edit";
 import { inputClassName, SubmitButton } from "@/components/master-data/form-ui";
 import { Field } from "@/components/master-data/form-ui";
 import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
@@ -120,68 +114,40 @@ function BillingRow({
   canEdit: boolean;
   document: ClientBillingView;
 }) {
-  const initial = {
-    dueDate: document.dueDate ?? "",
-    isCancelled: document.isCancelled,
-    notes: document.notes ?? "",
-    reference: document.reference,
-  };
-  const [saved, setSaved] = useState(initial);
-  const [draft, setDraft] = useState(initial);
-  const [editing, setEditing] = useState(false);
-  const [feedback, setFeedback] = useState("");
-  const [pending, startTransition] = useTransition();
-  const save = () => {
-    const data = new FormData();
-    data.set("id", document.id);
-    data.set("reference", draft.reference);
-    data.set("dueDate", draft.dueDate);
-    data.set("isCancelled", String(draft.isCancelled));
-    data.set("notes", draft.notes);
-    startTransition(async () => {
-      const result = await updateClientBillingInlineAction(data);
-      setFeedback(result.message);
-      if (result.status === "success") {
-        setSaved(draft);
-        setEditing(false);
-      }
-    });
-  };
+  const router = useRouter();
+  const href = `/billing/${document.id}`;
   return (
     <>
-      <tr className="align-top">
+      <tr
+        className="hover:bg-muted/30 cursor-pointer align-top"
+        onClick={(event) => {
+          const target = event.target as HTMLElement;
+          if (target.closest("a, button, input, select, textarea, form"))
+            return;
+          router.push(href);
+        }}
+        onKeyDown={(event) => {
+          const target = event.target as HTMLElement;
+          if (
+            event.key === "Enter" &&
+            !target.closest("a, button, input, select, textarea, form")
+          )
+            router.push(href);
+        }}
+        tabIndex={0}
+      >
         <td className="px-3 py-3 font-medium">{document.client.displayName}</td>
         <td className="px-3 py-3">{document.project.name}</td>
         <td className="px-3 py-3">
           {document.documentType === "QUOTE" ? "Quote / Devis" : "Invoice"}
         </td>
         <td className="px-3 py-3 font-mono text-xs">
-          {editing ? (
-            <InlineTextInput
-              ariaLabel="Billing reference"
-              onChange={(reference) =>
-                setDraft((current) => ({ ...current, reference }))
-              }
-              value={draft.reference}
-            />
-          ) : (
-            saved.reference
-          )}
+          <Link className="underline-offset-2 hover:underline" href={href}>
+            {document.reference}
+          </Link>
         </td>
         <td className="px-3 py-3">{formatDateOnly(document.documentDate)}</td>
-        <td className="px-3 py-3">
-          {editing ? (
-            <InlineDateInput
-              ariaLabel="Billing due date"
-              onChange={(dueDate) =>
-                setDraft((current) => ({ ...current, dueDate }))
-              }
-              value={draft.dueDate}
-            />
-          ) : (
-            formatDateOnly(saved.dueDate)
-          )}
-        </td>
+        <td className="px-3 py-3">{formatDateOnly(document.dueDate)}</td>
         <td className="financial-figure px-3 py-3 text-right">
           {formatMoney(document.totalHt, document.currencyCode)}
         </td>
@@ -200,55 +166,25 @@ function BillingRow({
         <td className="px-3 py-3">{document.status.replaceAll("_", " ")}</td>
         <td className="px-3 py-3 text-center">{document.allocations.length}</td>
         {canEdit ? (
-          <td className="px-3 py-3">
-            <InlineEditActions
-              editing={editing}
-              feedback={feedback}
-              onCancel={() => {
-                setDraft(saved);
-                setFeedback("");
-                setEditing(false);
-              }}
-              onEdit={() => setEditing(true)}
-              onSave={save}
-              pending={pending}
-            />
+          <td className="px-3 py-3 whitespace-nowrap">
+            <Link
+              className="text-primary mr-3 text-xs font-medium underline"
+              href={href}
+            >
+              View
+            </Link>
+            <Link
+              className="text-primary text-xs font-medium underline"
+              href={`${href}?edit=1`}
+            >
+              Edit
+            </Link>
           </td>
         ) : null}
       </tr>
-      {document.paymentInstallments.length > 0 || editing ? (
+      {document.paymentInstallments.length > 0 ? (
         <tr className="bg-muted/15">
           <td className="px-3 py-3" colSpan={canEdit ? 14 : 13}>
-            {editing ? (
-              <div className="flex max-w-3xl flex-wrap items-end gap-4">
-                <label className="grid min-w-80 flex-1 gap-1 text-xs font-medium">
-                  Notes
-                  <input
-                    className={inputClassName}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        notes: event.target.value,
-                      }))
-                    }
-                    value={draft.notes}
-                  />
-                </label>
-                <label className="flex items-center gap-2 pb-2 text-xs font-medium">
-                  <input
-                    checked={draft.isCancelled}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        isCancelled: event.target.checked,
-                      }))
-                    }
-                    type="checkbox"
-                  />
-                  Cancelled
-                </label>
-              </div>
-            ) : null}
             {document.paymentInstallments.length ? (
               <div className="mt-2 grid gap-2 lg:grid-cols-2">
                 {document.paymentInstallments.map((installment) => (

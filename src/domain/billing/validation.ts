@@ -57,7 +57,7 @@ const optionalDate = z.preprocess(
   dateOnly.optional(),
 );
 
-const allocationSchema = z
+export const billingAllocationSchema = z
   .object({
     orderId: requiredUuid("Select a valid Order."),
     basis: z.enum(ClientBillingAllocationBasis),
@@ -103,7 +103,7 @@ const installmentSchema = z
 export const clientBillingConfirmationSchema = z
   .object({
     action: z.enum(["CREATE", "UPDATE"]),
-    allocations: z.array(allocationSchema).max(100),
+    allocations: z.array(billingAllocationSchema).max(100),
     clientId: requiredUuid("Select a Client."),
     documentDate: dateOnly,
     documentType: z.enum(ClientBillingDocumentType),
@@ -196,10 +196,177 @@ export const inlineClientBillingSchema = z.object({
   reference: z.string().trim().min(1).max(120),
 });
 
+const billingEditFields = z.object({
+  allocations: z.array(billingAllocationSchema).max(100),
+  clientId: requiredUuid("Select a Client."),
+  currencyCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/, "Select a valid currency."),
+  documentDate: dateOnly,
+  documentType: z.enum(ClientBillingDocumentType),
+  dueDate: optionalDate,
+  fxRate: optionalFx,
+  id: requiredUuid("Select a valid billing document."),
+  isCancelled: z.boolean(),
+  isProjectRemainderApproved: z.boolean(),
+  notes: optionalText(4000),
+  projectId: requiredUuid("Select a Project."),
+  reference: z.string().trim().min(1).max(120),
+  totalHt: money,
+  totalTtc: money,
+  vatAmount: money,
+  vatRate: optionalFraction,
+  vatTreatment: z.enum(VatTreatment).optional(),
+});
+
+export const billingDocumentEditSchema = billingEditFields.superRefine(
+  (value, context) => {
+    if (
+      !new Decimal(value.totalHt).plus(value.vatAmount).equals(value.totalTtc)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "TTC must equal HT plus VAT.",
+        path: ["totalTtc"],
+      });
+    }
+  },
+);
+
+export const billingAllocationsEditSchema = z.object({
+  allocations: z.array(billingAllocationSchema).max(100),
+  billingDocumentId: requiredUuid("Select a valid billing document."),
+  isProjectRemainderApproved: z.boolean(),
+});
+
+export const orderBillingLinkSchema = z
+  .object({
+    allocatedAmount: positiveMoney.optional(),
+    basis: z.enum(ClientBillingAllocationBasis).optional(),
+    billingDocumentId: requiredUuid("Select a valid billing document."),
+    isProjectRemainderApproved: z.boolean(),
+    orderId: requiredUuid("Select a valid Order."),
+    percentageRate: optionalFraction,
+    remove: z.boolean(),
+  })
+  .superRefine((value, context) => {
+    if (value.remove) return;
+    if (!value.basis || !value.allocatedAmount) {
+      context.addIssue({
+        code: "custom",
+        message: "Choose an allocation basis and enter an amount.",
+        path: ["allocatedAmount"],
+      });
+      return;
+    }
+    if (
+      (value.basis === ClientBillingAllocationBasis.PERCENTAGE) !==
+      Boolean(value.percentageRate)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Percentage allocations require a rate.",
+        path: ["percentageRate"],
+      });
+    }
+  });
+
+export const orderCreationBillingLinkSchema = z
+  .object({
+    allocatedAmount: positiveMoney,
+    basis: z.enum(ClientBillingAllocationBasis),
+    billingDocumentId: requiredUuid("Select a valid billing document."),
+    isProjectRemainderApproved: z.boolean(),
+    percentageRate: optionalFraction,
+  })
+  .superRefine((value, context) => {
+    if (
+      (value.basis === ClientBillingAllocationBasis.PERCENTAGE) !==
+      Boolean(value.percentageRate)
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Percentage allocations require a rate.",
+        path: ["percentageRate"],
+      });
+  });
+
+function parsedJsonArray(value: FormDataEntryValue | null): unknown {
+  if (typeof value !== "string") return undefined;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+export function parseBillingDocumentEdit(formData: FormData) {
+  const raw = Object.fromEntries(formData);
+  return billingDocumentEditSchema.safeParse({
+    ...raw,
+    allocations: parsedJsonArray(formData.get("allocations")),
+    isCancelled: formData.get("isCancelled") === "on",
+    isProjectRemainderApproved:
+      formData.get("isProjectRemainderApproved") === "on",
+    vatRate: raw.vatRate || undefined,
+    vatTreatment: raw.vatTreatment || undefined,
+  });
+}
+
+export function parseBillingAllocationsEdit(formData: FormData) {
+  return billingAllocationsEditSchema.safeParse({
+    allocations: parsedJsonArray(formData.get("allocations")),
+    billingDocumentId: formData.get("billingDocumentId"),
+    isProjectRemainderApproved:
+      formData.get("isProjectRemainderApproved") === "on",
+  });
+}
+
+export function parseOrderBillingLink(formData: FormData) {
+  const raw = Object.fromEntries(formData);
+  return orderBillingLinkSchema.safeParse({
+    ...raw,
+    allocatedAmount: raw.allocatedAmount || undefined,
+    basis: raw.basis || undefined,
+    isProjectRemainderApproved:
+      formData.get("isProjectRemainderApproved") === "on",
+    percentageRate: raw.percentageRate || undefined,
+    remove: formData.get("remove") === "true",
+  });
+}
+
+export function parseOrderCreationBillingLink(formData: FormData) {
+  const billingDocumentId = formData.get("billingDocumentId");
+  if (typeof billingDocumentId !== "string" || !billingDocumentId)
+    return { success: true as const, data: null };
+  const raw = Object.fromEntries(formData);
+  return orderCreationBillingLinkSchema.safeParse({
+    allocatedAmount: raw.billingAllocatedAmount,
+    basis: raw.billingAllocationBasis,
+    billingDocumentId,
+    isProjectRemainderApproved:
+      formData.get("billingRemainderApproved") === "on",
+    percentageRate: raw.billingPercentageRate || undefined,
+  });
+}
+
 export type ClientBillingConfirmation = z.infer<
   typeof clientBillingConfirmationSchema
 >;
 export type ClientReceiptInput = z.infer<typeof clientReceiptSchema>;
 export type InlineClientBillingInput = z.infer<
   typeof inlineClientBillingSchema
+>;
+export type BillingAllocationInput = z.infer<typeof billingAllocationSchema>;
+export type BillingDocumentEditInput = z.infer<
+  typeof billingDocumentEditSchema
+>;
+export type BillingAllocationsEditInput = z.infer<
+  typeof billingAllocationsEditSchema
+>;
+export type OrderBillingLinkInput = z.infer<typeof orderBillingLinkSchema>;
+export type OrderCreationBillingLinkInput = z.infer<
+  typeof orderCreationBillingLinkSchema
 >;

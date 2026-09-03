@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { parseClientBillingConfirmation } from "./validation";
+import {
+  parseBillingDocumentEdit,
+  parseClientBillingConfirmation,
+} from "./validation";
 
 const clientId = "a12b6b9b-10e9-4e42-b93f-38796de4f65a";
 const projectId = "b12b6b9b-10e9-4e42-b93f-38796de4f65a";
@@ -100,5 +103,27 @@ describe("Client billing confirmation", () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error.issues[0]?.message).toBe("Select a valid Order.");
+  });
+
+  it("keeps allocation issue paths specific during a full Billing edit", () => {
+    const form = baseForm();
+    form.set("id", "f12b6b9b-10e9-4e42-b93f-38796de4f65a");
+    form.set(
+      "allocations",
+      JSON.stringify([
+        {
+          allocatedAmount: "40",
+          basis: "PERCENTAGE",
+          orderId,
+          percentageRate: "",
+        },
+      ]),
+    );
+    const result = parseBillingDocumentEdit(form);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues.map((issue) => issue.path.join("."))).toContain(
+      "allocations.0.percentageRate",
+    );
   });
 });

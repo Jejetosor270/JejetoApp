@@ -302,7 +302,7 @@ describe("single order cost write", () => {
       ...order,
       clientBillingAllocations: [
         {
-          allocatedAmount: new Decimal("100000"),
+          allocatedAmount: new Decimal("30000"),
           basis: "FIXED_AMOUNT",
           billingDocument: {
             currencyCode: "EUR",
@@ -313,6 +313,23 @@ describe("single order cost write", () => {
           createdAt: timestamp,
           createdById: null,
           id: "b22b6b9b-10e9-4e42-b93f-38796de4f65a",
+          orderId: order.id,
+          percentageRate: null,
+          updatedAt: timestamp,
+          updatedById: null,
+        },
+        {
+          allocatedAmount: new Decimal("70000"),
+          basis: "FIXED_AMOUNT",
+          billingDocument: {
+            currencyCode: "EUR",
+            documentType: "INVOICE",
+            fxRateToReporting: null,
+          },
+          billingDocumentId: "d22b6b9b-10e9-4e42-b93f-38796de4f65a",
+          createdAt: timestamp,
+          createdById: null,
+          id: "e22b6b9b-10e9-4e42-b93f-38796de4f65a",
           orderId: order.id,
           percentageRate: null,
           updatedAt: timestamp,

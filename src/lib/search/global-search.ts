@@ -168,7 +168,7 @@ export async function globalSearch(
     })),
     ...billing.map((document) => ({
       context: `${document.client.displayName} · ${document.project.name} · ${document.documentType}`,
-      href: `/billing?query=${encodeURIComponent(document.reference)}`,
+      href: `/billing/${document.id}`,
       id: document.id,
       label: document.reference,
       type: "Billing" as const,

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import Decimal from "decimal.js";
 
 import {
   ClientBillingAllocationBasis,
@@ -8,7 +9,11 @@ import {
 import { clientBillingConfirmationSchema } from "@/domain/billing/validation";
 
 const transaction = vi.hoisted(() => ({
-  clientBillingAllocation: { createMany: vi.fn(), deleteMany: vi.fn() },
+  clientBillingAllocation: {
+    createMany: vi.fn(),
+    deleteMany: vi.fn(),
+    update: vi.fn(),
+  },
   clientBillingDocument: {
     create: vi.fn(),
     findUnique: vi.fn(),
@@ -21,6 +26,9 @@ const transaction = vi.hoisted(() => ({
     deleteMany: vi.fn(),
   },
   clientReceipt: { create: vi.fn() },
+  currency: { findFirst: vi.fn() },
+  procurementOrder: { count: vi.fn() },
+  project: { findFirst: vi.fn() },
 }));
 const database = vi.hoisted(() => ({
   $transaction: vi.fn(
@@ -32,16 +40,20 @@ const database = vi.hoisted(() => ({
   procurementOrder: { findMany: vi.fn() },
   project: { findFirst: vi.fn() },
 }));
+const audit = vi.hoisted(() => ({ writeAuditEvent: vi.fn() }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/audit/events", () => ({ writeAuditEvent: vi.fn() }));
+vi.mock("@/lib/audit/events", () => audit);
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
 
 import {
   ClientBillingValidationError,
   confirmClientBillingDocument,
   recordClientReceipt,
+  updateClientBillingAllocations,
+  updateClientBillingDocument,
   updateClientBillingInline,
+  updateOrderBillingLink,
 } from "./billing";
 
 const clientId = "a12b6b9b-10e9-4e42-b93f-38796de4f65a";
@@ -91,6 +103,12 @@ describe("Client billing persistence", () => {
     transaction.clientBillingDocument.findUnique.mockResolvedValue(null);
     transaction.clientPaymentInstallment.count.mockResolvedValue(0);
     transaction.clientReceipt.create.mockResolvedValue({ id: "receipt-1" });
+    transaction.currency.findFirst.mockResolvedValue({ code: "EUR" });
+    transaction.procurementOrder.count.mockResolvedValue(0);
+    transaction.project.findFirst.mockResolvedValue({
+      id: projectId,
+      reportingCurrencyCode: "EUR",
+    });
   });
 
   it("creates a Quote schedule from approved TTC terms", async () => {
@@ -267,5 +285,183 @@ describe("Client billing persistence", () => {
       }),
     ).rejects.toThrow("recorded Client receipts");
     expect(transaction.clientBillingDocument.update).not.toHaveBeenCalled();
+  });
+
+  it("adds, changes, and removes post-creation allocations in one authoritative reconciliation", async () => {
+    transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      allocations: [
+        {
+          allocatedAmount: new Decimal("60"),
+          basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+          id: "allocation-a",
+          orderId: firstOrderId,
+          percentageRate: null,
+        },
+        {
+          allocatedAmount: new Decimal("20"),
+          basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+          id: "allocation-b",
+          orderId: secondOrderId,
+          percentageRate: null,
+        },
+      ],
+      id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      isProjectRemainderApproved: false,
+      projectId,
+      reference: "INV-1",
+      totalHt: new Decimal("100"),
+    });
+    transaction.procurementOrder.count.mockResolvedValue(2);
+    const thirdOrderId = "a22b6b9b-10e9-4e42-b93f-38796de4f65a";
+
+    await updateClientBillingAllocations("actor-1", {
+      allocations: [
+        {
+          allocatedAmount: "30.0000",
+          basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+          orderId: secondOrderId,
+        },
+        {
+          allocatedAmount: "20.0000",
+          basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+          orderId: thirdOrderId,
+        },
+      ],
+      billingDocumentId: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      isProjectRemainderApproved: true,
+    });
+
+    expect(transaction.clientBillingAllocation.deleteMany).toHaveBeenCalledWith(
+      { where: { id: { in: ["allocation-a"] } } },
+    );
+    expect(transaction.clientBillingAllocation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "allocation-b" } }),
+    );
+    expect(transaction.clientBillingAllocation.createMany).toHaveBeenCalledWith(
+      {
+        data: [expect.objectContaining({ orderId: thirdOrderId })],
+      },
+    );
+    expect(audit.writeAuditEvent).toHaveBeenCalledWith(
+      transaction,
+      "actor-1",
+      expect.objectContaining({
+        entityType: "BILLING_DOCUMENT",
+        metadata: expect.objectContaining({
+          allocationAddedOrderIds: [thirdOrderId],
+          allocationChangedOrderIds: [secondOrderId],
+          allocationRemovedOrderIds: [firstOrderId],
+        }),
+      }),
+    );
+  });
+
+  it("uses the same reconciliation when an Order links and removes Billing", async () => {
+    transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      allocations: [],
+      id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      isProjectRemainderApproved: false,
+      projectId,
+      reference: "INV-1",
+      totalHt: new Decimal("100"),
+    });
+    transaction.procurementOrder.count.mockResolvedValue(1);
+    await updateOrderBillingLink("actor-1", {
+      allocatedAmount: "40.0000",
+      basis: ClientBillingAllocationBasis.PERCENTAGE,
+      billingDocumentId: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      isProjectRemainderApproved: true,
+      orderId: firstOrderId,
+      percentageRate: "0.400000",
+      remove: false,
+    });
+    expect(transaction.clientBillingAllocation.createMany).toHaveBeenCalledWith(
+      {
+        data: [expect.objectContaining({ orderId: firstOrderId })],
+      },
+    );
+
+    transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      allocations: [
+        {
+          allocatedAmount: new Decimal("40"),
+          basis: ClientBillingAllocationBasis.PERCENTAGE,
+          id: "allocation-a",
+          orderId: firstOrderId,
+          percentageRate: new Decimal("0.4"),
+        },
+      ],
+      id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      isProjectRemainderApproved: true,
+      projectId,
+      reference: "INV-1",
+      totalHt: new Decimal("100"),
+    });
+    transaction.procurementOrder.count.mockResolvedValue(0);
+    await updateOrderBillingLink("actor-1", {
+      billingDocumentId: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      isProjectRemainderApproved: true,
+      orderId: firstOrderId,
+      remove: true,
+    });
+    expect(transaction.clientBillingAllocation.deleteMany).toHaveBeenCalledWith(
+      { where: { id: { in: ["allocation-a"] } } },
+    );
+  });
+
+  it("rejects cross-Project allocations and unsafe Billing Project changes", async () => {
+    transaction.clientBillingDocument.findUnique.mockResolvedValueOnce({
+      allocations: [],
+      id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      isProjectRemainderApproved: false,
+      projectId,
+      reference: "INV-1",
+      totalHt: new Decimal("100"),
+    });
+    transaction.procurementOrder.count.mockResolvedValue(0);
+    await expect(
+      updateClientBillingAllocations("actor-1", {
+        allocations: [
+          {
+            allocatedAmount: "100.0000",
+            basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+            orderId: firstOrderId,
+          },
+        ],
+        billingDocumentId: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+        isProjectRemainderApproved: false,
+      }),
+    ).rejects.toThrow("Billing Event Project");
+
+    transaction.clientBillingDocument.findUnique.mockResolvedValueOnce({
+      allocations: [{ orderId: firstOrderId }],
+      clientId,
+      currencyCode: "EUR",
+      id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      isCancelled: false,
+      isProjectRemainderApproved: false,
+      matchedInstallment: null,
+      matchedInstallmentId: null,
+      paymentInstallments: [],
+      projectId,
+      reference: "INV-1",
+    });
+    await expect(
+      updateClientBillingDocument("actor-1", {
+        allocations: [],
+        clientId,
+        currencyCode: "EUR",
+        documentDate: "2026-09-01",
+        documentType: ClientBillingDocumentType.INVOICE,
+        id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+        isCancelled: false,
+        isProjectRemainderApproved: true,
+        projectId: "a32b6b9b-10e9-4e42-b93f-38796de4f65a",
+        reference: "INV-1",
+        totalHt: "100.0000",
+        totalTtc: "120.0000",
+        vatAmount: "20.0000",
+      }),
+    ).rejects.toThrow("Reconcile Order allocations");
   });
 });

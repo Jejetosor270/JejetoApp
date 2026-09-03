@@ -25,6 +25,10 @@ import {
   confirmSupplierQuote,
   QuoteConfirmationError,
 } from "@/lib/quote-intake/confirmation";
+import {
+  ClientBillingNotFoundError,
+  ClientBillingValidationError,
+} from "@/lib/billing/billing";
 import { QuoteFileValidationError } from "@/lib/quote-intake/files";
 import { getQuoteExtractionProvider } from "@/lib/quote-intake/extractor";
 import { QuoteExtractionProviderError } from "@/lib/quote-intake/openai-provider";
@@ -172,7 +176,11 @@ export async function confirmSupplierQuoteAction(
         status: "error",
       };
     }
-    if (error instanceof QuoteConfirmationError) {
+    if (
+      error instanceof QuoteConfirmationError ||
+      error instanceof ClientBillingValidationError ||
+      error instanceof ClientBillingNotFoundError
+    ) {
       return { message: error.message, status: "error" };
     }
     console.error("Unable to confirm supplier quote.", error);

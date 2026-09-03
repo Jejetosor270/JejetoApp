@@ -42,6 +42,10 @@ import {
   freightRecoveryTarget,
   resolveOrderFreightAllowance,
 } from "@/domain/freight/calculations";
+import {
+  amountFromPercentage,
+  percentageFromAmount,
+} from "@/domain/billing/calculations";
 
 interface BuildingOption {
   id: string;
@@ -87,6 +91,15 @@ interface CostView {
   sellingFxRate: string | null;
 }
 export interface OrderFormOptions {
+  billingDocuments: {
+    currencyCode: string;
+    documentType: string;
+    id: string;
+    isProjectRemainderApproved: boolean;
+    projectId: string;
+    reference: string;
+    totalHt: string;
+  }[];
   currencies: { code: string; name: string }[];
   freightTreatments: string[];
   pricingModes: string[];
@@ -453,6 +466,14 @@ export function OrderForm({
       order?.supplierOrderConfirmationReference ?? "",
     supplierQuoteReference: order?.supplierQuoteReference ?? "",
   }));
+  const [billingDocumentId, setBillingDocumentId] = useState("");
+  const [billingAllocationBasis, setBillingAllocationBasis] = useState<
+    "FIXED_AMOUNT" | "PERCENTAGE"
+  >("FIXED_AMOUNT");
+  const [billingAllocatedAmount, setBillingAllocatedAmount] = useState("");
+  const [billingPercentage, setBillingPercentage] = useState("");
+  const [billingRemainderApproved, setBillingRemainderApproved] =
+    useState(false);
   function changeDraft<K extends keyof OrderDraft>(
     field: K,
     value: OrderDraft[K],
@@ -462,6 +483,12 @@ export function OrderForm({
   const projectId = draft.projectId;
   const supplierId = draft.supplierId;
   const project = options.projects.find((item) => item.id === projectId);
+  const availableBillingDocuments = options.billingDocuments.filter(
+    (document) => document.projectId === projectId,
+  );
+  const selectedBillingDocument = options.billingDocuments.find(
+    (document) => document.id === billingDocumentId,
+  );
   const purchaseCurrency = draft.orderCurrencyCode;
   const sellingCurrency = draft.sellingCurrencyCode;
   const pricingMode = draft.pricingMode;
@@ -739,6 +766,9 @@ export function OrderForm({
                   (item) => item.id === event.target.value,
                 );
                 changeDraft("projectId", event.target.value);
+                setBillingDocumentId("");
+                setBillingAllocatedAmount("");
+                setBillingPercentage("");
                 if (!isEditing && next)
                   changeDraft(
                     "sellingCurrencyCode",
@@ -1621,6 +1651,127 @@ export function OrderForm({
             </div>
           </div>
         </section>
+        {!isEditing && availableBillingDocuments.length ? (
+          <section className="bg-muted/20 rounded-lg border p-4">
+            <h3 className="text-sm font-semibold">
+              Optional Client Billing link
+            </h3>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Link this new Order to an existing Billing Event from the same
+              Project. You can also reconcile it later from either detail page.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Field label="Client Billing Event">
+                <select
+                  className={inputClassName}
+                  name="billingDocumentId"
+                  onChange={(event) => {
+                    const selected = options.billingDocuments.find(
+                      (document) => document.id === event.target.value,
+                    );
+                    setBillingDocumentId(event.target.value);
+                    setBillingAllocatedAmount("");
+                    setBillingPercentage("");
+                    setBillingRemainderApproved(
+                      selected?.isProjectRemainderApproved ?? false,
+                    );
+                  }}
+                  value={billingDocumentId}
+                >
+                  <option value="">Skip for now</option>
+                  {availableBillingDocuments.map((document) => (
+                    <option key={document.id} value={document.id}>
+                      {document.reference} · {document.documentType} ·{" "}
+                      {document.totalHt} {document.currencyCode}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {selectedBillingDocument ? (
+                <>
+                  <Field label="Allocation basis">
+                    <select
+                      className={inputClassName}
+                      name="billingAllocationBasis"
+                      onChange={(event) =>
+                        setBillingAllocationBasis(
+                          event.target.value as "FIXED_AMOUNT" | "PERCENTAGE",
+                        )
+                      }
+                      value={billingAllocationBasis}
+                    >
+                      <option value="FIXED_AMOUNT">Amount</option>
+                      <option value="PERCENTAGE">Percentage</option>
+                    </select>
+                  </Field>
+                  <Field
+                    error={fieldErrors.billingPercentageRate}
+                    label="Allocation %"
+                  >
+                    <input
+                      className={inputClassName}
+                      disabled={billingAllocationBasis !== "PERCENTAGE"}
+                      inputMode="decimal"
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setBillingPercentage(next);
+                        setBillingAllocatedAmount(
+                          amountFromPercentage(
+                            selectedBillingDocument.totalHt,
+                            next,
+                          ) ?? "",
+                        );
+                      }}
+                      value={billingPercentage}
+                    />
+                    <input
+                      name="billingPercentageRate"
+                      type="hidden"
+                      value={
+                        billingAllocationBasis === "PERCENTAGE"
+                          ? (humanPercentageToFraction(billingPercentage) ??
+                            billingPercentage)
+                          : ""
+                      }
+                    />
+                  </Field>
+                  <Field
+                    error={fieldErrors.billingAllocatedAmount}
+                    label={`Allocation HT (${selectedBillingDocument.currencyCode})`}
+                  >
+                    <input
+                      className={inputClassName}
+                      inputMode="decimal"
+                      name="billingAllocatedAmount"
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setBillingAllocatedAmount(next);
+                        setBillingPercentage(
+                          percentageFromAmount(
+                            selectedBillingDocument.totalHt,
+                            next,
+                          ) ?? "",
+                        );
+                      }}
+                      value={billingAllocatedAmount}
+                    />
+                  </Field>
+                  <label className="flex items-center gap-2 text-xs sm:col-span-2 xl:col-span-4">
+                    <input
+                      checked={billingRemainderApproved}
+                      name="billingRemainderApproved"
+                      onChange={(event) =>
+                        setBillingRemainderApproved(event.target.checked)
+                      }
+                      type="checkbox"
+                    />
+                    Approve any remaining Billing HT at Project level
+                  </label>
+                </>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
         <div className="flex items-center gap-3">
           <SubmitButton pending={pending}>
             {isEditing ? "Save order" : "Create order"}

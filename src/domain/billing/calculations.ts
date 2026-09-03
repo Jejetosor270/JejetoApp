@@ -113,9 +113,31 @@ export function percentageFromAmount(
   }
 }
 
+export function addAllocationAmount(amount: string, additional: string) {
+  try {
+    return new Decimal(amount || 0).plus(additional || 0).toFixed(4);
+  } catch {
+    return amount;
+  }
+}
+
 export function scheduleReconciliation(
   totalTtc: string,
   scheduledAmounts: readonly string[],
 ) {
   return allocationReconciliation(totalTtc, scheduledAmounts);
+}
+
+export function orderBillingDifference(
+  plannedSellHt: string | null,
+  invoicedAllocatedHt: string | null,
+) {
+  if (plannedSellHt === null || invoicedAllocatedHt === null) return null;
+  const difference = new Decimal(plannedSellHt).minus(invoicedAllocatedHt);
+  return {
+    amount: difference.abs().toFixed(4),
+    state: difference.isNegative()
+      ? ("OVERBILLED" as const)
+      : ("UNBILLED" as const),
+  };
 }

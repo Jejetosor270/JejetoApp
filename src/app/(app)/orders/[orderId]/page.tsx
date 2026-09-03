@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { OrderDetailShell } from "@/components/procurement/order-detail-shell";
+import { OrderBillingReconciliation } from "@/components/billing/order-billing-reconciliation";
 import { PaymentSchedule } from "@/components/payments/payment-schedule";
 import {
   BUSINESS_TIME_ZONE,
@@ -13,6 +14,8 @@ import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { getOrder, listOrderOptions } from "@/lib/procurement/orders";
 import { getOrderPaymentSummary } from "@/lib/payments/payments";
 import { listOrderQuoteImports } from "@/lib/quote-intake/history";
+import { getOrderBillingReconciliation } from "@/lib/billing/billing";
+import { orderBillingDifference } from "@/domain/billing/calculations";
 
 export const metadata: Metadata = { title: "Procurement order" };
 export default async function OrderPage({
@@ -27,7 +30,8 @@ export default async function OrderPage({
     getOrder(orderId),
   ]);
   if (!order) notFound();
-  const [paymentSummary, quoteImports] = await Promise.all([
+  const [billingDocuments, paymentSummary, quoteImports] = await Promise.all([
+    getOrderBillingReconciliation(orderId),
     getOrderPaymentSummary(orderId),
     listOrderQuoteImports(orderId),
   ]);
@@ -260,6 +264,19 @@ export default async function OrderPage({
             ) : null}
           </article>
         </section>
+        <OrderBillingReconciliation
+          canEdit={canEditMasterData(user.role)}
+          difference={orderBillingDifference(
+            order.costs.reportingSellingRevenue,
+            order.billing.invoicedAllocated,
+          )}
+          documents={billingDocuments ?? []}
+          invoicedAllocated={order.billing.invoicedAllocated}
+          orderId={order.id}
+          plannedSell={order.costs.reportingSellingRevenue}
+          quotedAllocated={order.billing.quotedAllocated}
+          reportingCurrencyCode={order.project.reportingCurrencyCode}
+        />
         <section className="bg-card rounded-lg border p-4">
           <h2 className="text-sm font-semibold">Procurement timing</h2>
           <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-6">

@@ -128,6 +128,15 @@ const confirmationSchema = z
     buildingIds: z
       .array(z.uuid())
       .refine((ids) => new Set(ids).size === ids.length),
+    billingAllocatedAmount: optionalMoney,
+    billingAllocationBasis: z.enum(["PERCENTAGE", "FIXED_AMOUNT"]).optional(),
+    billingDocumentId: z.preprocess(
+      (value) =>
+        typeof value === "string" && value.trim() === "" ? undefined : value,
+      z.uuid().optional(),
+    ),
+    billingPercentageRate: optionalPercent,
+    billingRemainderApproved: z.boolean(),
     freight: optionalMoney,
     freightResaleAmount: optionalMoney,
     freightTreatment: z.enum([
@@ -191,6 +200,23 @@ const confirmationSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.billingDocumentId) {
+      if (!value.billingAllocationBasis || !value.billingAllocatedAmount)
+        context.addIssue({
+          code: "custom",
+          message: "Enter the approved Client Billing allocation.",
+          path: ["billingAllocatedAmount"],
+        });
+      if (
+        value.billingAllocationBasis === "PERCENTAGE" &&
+        !value.billingPercentageRate
+      )
+        context.addIssue({
+          code: "custom",
+          message: "Enter the Client Billing allocation percentage.",
+          path: ["billingPercentageRate"],
+        });
+    }
     if (value.action === "CREATE") {
       if (!value.orderNumber) {
         context.addIssue({
@@ -388,6 +414,11 @@ export function quoteConfirmationValues(formData: FormData): unknown {
     buildingIds: formData
       .getAll("buildingIds")
       .filter((value): value is string => typeof value === "string"),
+    billingAllocatedAmount: stringValue(formData, "billingAllocatedAmount"),
+    billingAllocationBasis: stringValue(formData, "billingAllocationBasis"),
+    billingDocumentId: stringValue(formData, "billingDocumentId"),
+    billingPercentageRate: stringValue(formData, "billingPercentageRate"),
+    billingRemainderApproved: formData.get("billingRemainderApproved") === "on",
     freight: stringValue(formData, "freight"),
     freightResaleAmount: stringValue(formData, "freightResaleAmount"),
     freightTreatment: stringValue(formData, "freightTreatment"),

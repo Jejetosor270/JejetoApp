@@ -5,7 +5,10 @@ import { revalidatePath } from "next/cache";
 import {
   clientReceiptSchema,
   inlineClientBillingSchema,
+  parseBillingAllocationsEdit,
+  parseBillingDocumentEdit,
   parseClientBillingConfirmation,
+  parseOrderBillingLink,
 } from "@/domain/billing/validation";
 import type {
   BillingActionState,
@@ -17,7 +20,10 @@ import {
   ClientBillingValidationError,
   confirmClientBillingDocument,
   recordClientReceipt,
+  updateClientBillingAllocations,
+  updateClientBillingDocument,
   updateClientBillingInline,
+  updateOrderBillingLink,
 } from "@/lib/billing/billing";
 import { ClientDocumentFileValidationError } from "@/lib/billing/files";
 import {
@@ -195,6 +201,129 @@ export async function updateClientBillingInlineAction(
     console.error("Unable to update Client billing row.", error);
     return {
       message: "The billing row could not be updated.",
+      status: "error",
+    };
+  }
+}
+
+function expectedBillingError(error: unknown): BillingActionState | null {
+  if (
+    error instanceof ClientBillingValidationError ||
+    error instanceof ClientBillingNotFoundError
+  )
+    return {
+      formError: error.message || "Billing Event not found.",
+      message: error.message || "Billing Event not found.",
+      status: "error",
+    };
+  if (error instanceof Error && "code" in error && error.code === "P2002")
+    return {
+      formError: "A Client Billing Event already uses this type and reference.",
+      message: "A Client Billing Event already uses this type and reference.",
+      status: "error",
+    };
+  return null;
+}
+
+export async function updateClientBillingDocumentAction(
+  _: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = parseBillingDocumentEdit(formData);
+  if (!input.success)
+    return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the Billing Event.",
+      message: input.error.issues[0]?.message ?? "Check the Billing Event.",
+      status: "error",
+    };
+  try {
+    await updateClientBillingDocument(actor.id, input.data);
+    revalidatePath("/billing");
+    revalidatePath(`/billing/${input.data.id}`);
+    revalidatePath(`/projects/${input.data.projectId}`);
+    revalidatePath("/orders", "layout");
+    revalidatePath("/reports");
+    return { message: "Billing Event updated.", status: "success" };
+  } catch (error) {
+    const expected = expectedBillingError(error);
+    if (expected) return expected;
+    console.error("Unable to update Client Billing Event.", error);
+    return {
+      formError: "The Billing Event could not be updated.",
+      message: "The Billing Event could not be updated.",
+      status: "error",
+    };
+  }
+}
+
+export async function updateClientBillingAllocationsAction(
+  _: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = parseBillingAllocationsEdit(formData);
+  if (!input.success)
+    return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the allocations.",
+      message: input.error.issues[0]?.message ?? "Check the allocations.",
+      status: "error",
+    };
+  try {
+    await updateClientBillingAllocations(actor.id, input.data);
+    revalidatePath("/billing");
+    revalidatePath(`/billing/${input.data.billingDocumentId}`);
+    revalidatePath("/orders", "layout");
+    revalidatePath("/projects", "layout");
+    revalidatePath("/reports");
+    return { message: "Order reconciliation updated.", status: "success" };
+  } catch (error) {
+    const expected = expectedBillingError(error);
+    if (expected) return expected;
+    console.error("Unable to update Client Billing allocations.", error);
+    return {
+      formError: "The Order reconciliation could not be updated.",
+      message: "The Order reconciliation could not be updated.",
+      status: "error",
+    };
+  }
+}
+
+export async function updateOrderBillingLinkAction(
+  _: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = parseOrderBillingLink(formData);
+  if (!input.success)
+    return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the allocation.",
+      message: input.error.issues[0]?.message ?? "Check the allocation.",
+      status: "error",
+    };
+  try {
+    await updateOrderBillingLink(actor.id, input.data);
+    revalidatePath("/billing");
+    revalidatePath(`/billing/${input.data.billingDocumentId}`);
+    revalidatePath(`/orders/${input.data.orderId}`);
+    revalidatePath(`/projects`, "layout");
+    revalidatePath("/reports");
+    return {
+      message: input.data.remove
+        ? "Billing allocation removed."
+        : "Billing allocation saved.",
+      status: "success",
+    };
+  } catch (error) {
+    const expected = expectedBillingError(error);
+    if (expected) return expected;
+    console.error("Unable to update the Order Billing link.", error);
+    return {
+      formError: "The Billing allocation could not be saved.",
+      message: "The Billing allocation could not be saved.",
       status: "error",
     };
   }

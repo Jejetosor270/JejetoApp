@@ -29,10 +29,14 @@ const orderMocks = vi.hoisted(() => ({
   getOrderInTransaction: vi.fn(),
   updateOrderInTransaction: vi.fn(),
 }));
+const billingMocks = vi.hoisted(() => ({
+  updateOrderBillingLinkInTransaction: vi.fn(),
+}));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
 vi.mock("@/lib/audit/events", () => ({ writeAuditEvent: vi.fn() }));
+vi.mock("@/lib/billing/billing", () => billingMocks);
 vi.mock("@/lib/procurement/orders", async (importOriginal) => {
   const original =
     await importOriginal<typeof import("@/lib/procurement/orders")>();
@@ -275,6 +279,11 @@ describe("reviewed quote confirmation persistence", () => {
     form.set("payment.0.dueDate", "30/09/2026");
     form.set("payment.0.label", "Deposit");
     form.set("payment.0.percentageRate", "30");
+    form.set("billingDocumentId", "e12b6b9b-10e9-4e42-b93f-38796de4f65a");
+    form.set("billingAllocationBasis", "PERCENTAGE");
+    form.set("billingAllocatedAmount", "40000");
+    form.set("billingPercentageRate", "40");
+    form.set("billingRemainderApproved", "on");
     orderMocks.getOrderInTransaction.mockResolvedValue(null);
     orderMocks.createOrderInTransaction.mockResolvedValue(orderId);
 
@@ -310,6 +319,17 @@ describe("reviewed quote confirmation persistence", () => {
       ],
     });
     expect(transaction.supplierQuoteImport.create).toHaveBeenCalledTimes(1);
+    expect(
+      billingMocks.updateOrderBillingLinkInTransaction,
+    ).toHaveBeenCalledWith(
+      transaction,
+      "actor-1",
+      expect.objectContaining({
+        allocatedAmount: "40000.0000",
+        orderId,
+        percentageRate: "0.400000",
+      }),
+    );
     expect(database.$transaction).toHaveBeenCalledTimes(1);
   });
 

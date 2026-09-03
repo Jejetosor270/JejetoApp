@@ -1,14 +1,30 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addAllocationAmount,
   allocationReconciliation,
   amountFromPercentage,
   calculateClientBillingAmounts,
   percentageFromAmount,
+  orderBillingDifference,
   scheduleReconciliation,
 } from "./calculations";
 
 describe("client billing calculations", () => {
+  it("adds a Project remainder to an allocation Decimal-safely", () => {
+    expect(addAllocationAmount("40.1234", "59.8766")).toBe("100.0000");
+  });
+  it("derives unbilled and overbilled Order differences without changing revenue", () => {
+    expect(orderBillingDifference("100.0000", "70.0000")).toEqual({
+      amount: "30.0000",
+      state: "UNBILLED",
+    });
+    expect(orderBillingDifference("100.0000", "125.0000")).toEqual({
+      amount: "25.0000",
+      state: "OVERBILLED",
+    });
+    expect(orderBillingDifference("100.0000", null)).toBeNull();
+  });
   it("derives partial, paid and overdue states", () => {
     const partial = calculateClientBillingAmounts({
       documentType: "INVOICE",

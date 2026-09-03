@@ -37,6 +37,10 @@ import type { QuoteIntakeOptions } from "@/lib/quote-intake/options";
 import { PaymentScheduleEditor } from "@/components/quote-intake/payment-schedule-editor";
 import { QuoteSupplierCreationForm } from "@/components/quote-intake/supplier-creation-form";
 import { QuoteItemReview } from "@/components/quote-intake/quote-item-review";
+import {
+  amountFromPercentage,
+  percentageFromAmount,
+} from "@/domain/billing/calculations";
 
 function statusLabel(status: ExtractionStatus): string {
   return status.toLowerCase().replace(/^./, (value) => value.toUpperCase());
@@ -150,6 +154,12 @@ function QuoteReview({
     initialQuoteConfirmationState,
   );
   const project = options.projects.find((item) => item.id === review.projectId);
+  const billingDocuments = options.billingDocuments.filter(
+    (document) => document.projectId === review.projectId,
+  );
+  const selectedBillingDocument = options.billingDocuments.find(
+    (document) => document.id === billingDocumentId,
+  );
   const suggestedSupplier = review.supplierMatch.suggestedSupplierId ?? "";
   const financial = review.proposal.financial;
   const extraction = review.extraction;
@@ -160,6 +170,14 @@ function QuoteReview({
     id: string;
   } | null>(null);
   const [orderNumber, setOrderNumber] = useState("");
+  const [billingDocumentId, setBillingDocumentId] = useState("");
+  const [billingAllocationBasis, setBillingAllocationBasis] = useState<
+    "FIXED_AMOUNT" | "PERCENTAGE"
+  >("FIXED_AMOUNT");
+  const [billingAllocatedAmount, setBillingAllocatedAmount] = useState("");
+  const [billingPercentage, setBillingPercentage] = useState("");
+  const [billingRemainderApproved, setBillingRemainderApproved] =
+    useState(false);
   const [orderCurrencyCode, setOrderCurrencyCode] = useState(
     financial.currencyCode ?? "",
   );
@@ -192,7 +210,7 @@ function QuoteReview({
       setCreatedSupplier(supplier);
       setSelectedSupplierId(supplier.id);
     },
-    [],
+    [setCreatedSupplier, setSelectedSupplierId],
   );
   const selectableSuppliers = createdSupplier
     ? [
@@ -877,6 +895,117 @@ function QuoteReview({
             </div>
           </div>
         </section>
+
+        {billingDocuments.length ? (
+          <section className="bg-card rounded-lg border p-4 sm:p-5">
+            <h2 className="text-sm font-semibold">
+              Optional Client Billing reconciliation
+            </h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Link the reviewed Order to an existing Billing Event from this
+              Project, or skip and reconcile later.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Field label="Client Billing Event">
+                <select
+                  className={inputClassName}
+                  name="billingDocumentId"
+                  onChange={(event) => {
+                    const selected = options.billingDocuments.find(
+                      (document) => document.id === event.target.value,
+                    );
+                    setBillingDocumentId(event.target.value);
+                    setBillingAllocatedAmount("");
+                    setBillingPercentage("");
+                    setBillingRemainderApproved(
+                      selected?.isProjectRemainderApproved ?? false,
+                    );
+                  }}
+                  value={billingDocumentId}
+                >
+                  <option value="">Skip for now</option>
+                  {billingDocuments.map((document) => (
+                    <option key={document.id} value={document.id}>
+                      {document.reference} · {document.documentType} ·{" "}
+                      {document.totalHt} {document.currencyCode}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {selectedBillingDocument ? (
+                <>
+                  <Field label="Allocation basis">
+                    <select
+                      className={inputClassName}
+                      name="billingAllocationBasis"
+                      onChange={(event) =>
+                        setBillingAllocationBasis(
+                          event.target.value as "FIXED_AMOUNT" | "PERCENTAGE",
+                        )
+                      }
+                      value={billingAllocationBasis}
+                    >
+                      <option value="FIXED_AMOUNT">Amount</option>
+                      <option value="PERCENTAGE">Percentage</option>
+                    </select>
+                  </Field>
+                  <Field
+                    error={fieldErrors.billingPercentageRate}
+                    label="Allocation %"
+                  >
+                    <input
+                      className={inputClassName}
+                      disabled={billingAllocationBasis !== "PERCENTAGE"}
+                      inputMode="decimal"
+                      name="billingPercentageRate"
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setBillingPercentage(next);
+                        setBillingAllocatedAmount(
+                          amountFromPercentage(
+                            selectedBillingDocument.totalHt,
+                            next,
+                          ) ?? "",
+                        );
+                      }}
+                      value={billingPercentage}
+                    />
+                  </Field>
+                  <Field
+                    error={fieldErrors.billingAllocatedAmount}
+                    label={`Allocation HT (${selectedBillingDocument.currencyCode})`}
+                  >
+                    <MoneyInput
+                      invalid={Boolean(fieldErrors.billingAllocatedAmount)}
+                      name="billingAllocatedAmount"
+                      onValueChange={(next) => {
+                        setBillingAllocatedAmount(next);
+                        setBillingPercentage(
+                          percentageFromAmount(
+                            selectedBillingDocument.totalHt,
+                            next,
+                          ) ?? "",
+                        );
+                      }}
+                      value={billingAllocatedAmount}
+                    />
+                  </Field>
+                  <label className="flex items-center gap-2 text-xs sm:col-span-2 xl:col-span-4">
+                    <input
+                      checked={billingRemainderApproved}
+                      name="billingRemainderApproved"
+                      onChange={(event) =>
+                        setBillingRemainderApproved(event.target.checked)
+                      }
+                      type="checkbox"
+                    />
+                    Approve any remaining Billing HT at Project level
+                  </label>
+                </>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         {review.itemReview ? (
           <QuoteItemReview options={options} review={review.itemReview} />

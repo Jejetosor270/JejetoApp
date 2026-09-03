@@ -14,9 +14,13 @@ import {
   calculateClientBillingAmounts,
 } from "@/domain/billing/calculations";
 import type {
+  BillingAllocationInput,
+  BillingAllocationsEditInput,
+  BillingDocumentEditInput,
   ClientBillingConfirmation,
   ClientReceiptInput,
   InlineClientBillingInput,
+  OrderBillingLinkInput,
 } from "@/domain/billing/validation";
 import { reportingAmount } from "@/domain/finance/calculations";
 import {
@@ -38,7 +42,14 @@ export class ClientBillingNotFoundError extends Error {}
 
 const billingInclude = {
   allocations: {
-    include: { order: { select: { orderNumber: true } } },
+    include: {
+      order: {
+        select: {
+          orderNumber: true,
+          supplier: { select: { displayName: true } },
+        },
+      },
+    },
     orderBy: { createdAt: "asc" },
   },
   client: { select: { displayName: true, id: true } },
@@ -51,6 +62,12 @@ const billingInclude = {
   },
   project: {
     select: { id: true, name: true, reportingCurrencyCode: true },
+  },
+  imports: {
+    include: {
+      processedBy: { select: { name: true } },
+    },
+    orderBy: { processedAt: "desc" },
   },
 } satisfies Prisma.ClientBillingDocumentInclude;
 
@@ -96,6 +113,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
       id: allocation.id,
       orderId: allocation.orderId,
       orderNumber: allocation.order.orderNumber,
+      supplierName: allocation.order.supplier.displayName,
       percentageRate: allocation.percentageRate?.toString() ?? null,
     })),
     allocationReconciliation: reconciliation,
@@ -109,6 +127,16 @@ function billingView(record: BillingRecord, today = businessToday()) {
     id: record.id,
     isCancelled: record.isCancelled,
     isProjectRemainderApproved: record.isProjectRemainderApproved,
+    imports: record.imports.map((item) => ({
+      action: item.action,
+      duplicateWarning: item.duplicateWarning,
+      extractionModel: item.extractionModel,
+      extractionProvider: item.extractionProvider,
+      id: item.id,
+      originalFilename: item.originalFilename,
+      processedAt: item.processedAt.toISOString(),
+      processedByName: item.processedBy?.name ?? null,
+    })),
     matchedInstallmentId: record.matchedInstallmentId,
     notes: record.notes,
     outstanding: calculated.outstanding,
@@ -200,6 +228,14 @@ export async function listClientBillingPage(filters: BillingPageFilters) {
   return { items: records.map((record) => billingView(record)), total };
 }
 
+export async function getClientBillingDocument(documentId: string) {
+  const record = await getDatabase().clientBillingDocument.findUnique({
+    where: { id: documentId },
+    include: billingInclude,
+  });
+  return record ? billingView(record) : null;
+}
+
 export async function listClientBillingOptions() {
   const database = getDatabase();
   const [clients, projects, currencies, orders, installments] =
@@ -228,7 +264,12 @@ export async function listClientBillingOptions() {
       database.procurementOrder.findMany({
         where: { status: { not: "CANCELLED" } },
         orderBy: { orderNumber: "asc" },
-        select: { id: true, orderNumber: true, projectId: true },
+        select: {
+          id: true,
+          orderNumber: true,
+          projectId: true,
+          supplier: { select: { displayName: true } },
+        },
       }),
       database.clientPaymentInstallment.findMany({
         where: {
@@ -657,6 +698,443 @@ export async function updateClientBillingInline(
   });
 }
 
+interface AllocationDocumentContext {
+  id: string;
+  isProjectRemainderApproved: boolean;
+  projectId: string;
+  reference: string;
+  totalHt: string;
+}
+
+interface ExistingAllocationRecord {
+  allocatedAmount: { toString(): string };
+  basis: ClientBillingAllocationBasis;
+  id: string;
+  orderId: string;
+  percentageRate: { toString(): string } | null;
+}
+
+async function validateBillingAllocations(
+  transaction: Prisma.TransactionClient,
+  document: AllocationDocumentContext,
+  allocations: readonly BillingAllocationInput[],
+  isProjectRemainderApproved: boolean,
+) {
+  if (
+    new Set(allocations.map((item) => item.orderId)).size !== allocations.length
+  )
+    throw new ClientBillingValidationError(
+      "Each Order can appear only once in a Billing Event.",
+    );
+  const matchingOrders = await transaction.procurementOrder.count({
+    where: {
+      id: { in: allocations.map((item) => item.orderId) },
+      projectId: document.projectId,
+    },
+  });
+  if (matchingOrders !== allocations.length)
+    throw new ClientBillingValidationError(
+      "Every allocation must reference an Order in the Billing Event Project.",
+    );
+  for (const allocation of allocations) {
+    if (
+      allocation.basis === ClientBillingAllocationBasis.PERCENTAGE &&
+      allocation.percentageRate
+    ) {
+      const expected = scheduledAmountFromPercentage(
+        document.totalHt,
+        allocation.percentageRate,
+      ).toFixed(4);
+      if (!new Decimal(expected).equals(allocation.allocatedAmount))
+        throw new ClientBillingValidationError(
+          "A percentage allocation amount must match the Billing HT percentage.",
+        );
+    }
+  }
+  const reconciliation = allocationReconciliation(
+    document.totalHt,
+    allocations.map((item) => item.allocatedAmount),
+  );
+  if (!new Decimal(reconciliation.overallocated).isZero())
+    throw new ClientBillingValidationError(
+      "Order allocations cannot exceed the Billing Event total HT.",
+    );
+  if (
+    !new Decimal(reconciliation.remaining).isZero() &&
+    !isProjectRemainderApproved
+  )
+    throw new ClientBillingValidationError(
+      "Confirm that the unallocated remainder should remain at Project level.",
+    );
+  return reconciliation;
+}
+
+async function reconcileBillingAllocationsInTransaction(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  document: AllocationDocumentContext,
+  existing: readonly ExistingAllocationRecord[],
+  input: BillingAllocationsEditInput,
+) {
+  await validateBillingAllocations(
+    transaction,
+    document,
+    input.allocations,
+    input.isProjectRemainderApproved,
+  );
+  const currentByOrder = new Map(existing.map((item) => [item.orderId, item]));
+  const nextByOrder = new Map(
+    input.allocations.map((item) => [item.orderId, item]),
+  );
+  const removed = existing.filter((item) => !nextByOrder.has(item.orderId));
+  const added = input.allocations.filter(
+    (item) => !currentByOrder.has(item.orderId),
+  );
+  const changed = input.allocations.filter((item) => {
+    const current = currentByOrder.get(item.orderId);
+    return (
+      current !== undefined &&
+      (current.basis !== item.basis ||
+        !new Decimal(current.allocatedAmount.toString()).equals(
+          item.allocatedAmount,
+        ) ||
+        (current.percentageRate?.toString() ?? null) !==
+          (item.percentageRate ?? null))
+    );
+  });
+  if (removed.length)
+    await transaction.clientBillingAllocation.deleteMany({
+      where: { id: { in: removed.map((item) => item.id) } },
+    });
+  for (const allocation of changed) {
+    const current = currentByOrder.get(allocation.orderId);
+    if (!current) continue;
+    await transaction.clientBillingAllocation.update({
+      where: { id: current.id },
+      data: {
+        allocatedAmount: allocation.allocatedAmount,
+        basis: allocation.basis,
+        percentageRate:
+          allocation.basis === ClientBillingAllocationBasis.PERCENTAGE
+            ? (allocation.percentageRate ?? null)
+            : null,
+        updatedById: actorId,
+      },
+    });
+  }
+  if (added.length)
+    await transaction.clientBillingAllocation.createMany({
+      data: added.map((allocation) => ({
+        allocatedAmount: allocation.allocatedAmount,
+        basis: allocation.basis,
+        billingDocumentId: document.id,
+        createdById: actorId,
+        orderId: allocation.orderId,
+        percentageRate:
+          allocation.basis === ClientBillingAllocationBasis.PERCENTAGE
+            ? (allocation.percentageRate ?? null)
+            : null,
+        updatedById: actorId,
+      })),
+    });
+  const remainderApprovalChanged =
+    document.isProjectRemainderApproved !== input.isProjectRemainderApproved;
+  if (remainderApprovalChanged)
+    await transaction.clientBillingDocument.update({
+      where: { id: document.id },
+      data: {
+        isProjectRemainderApproved: input.isProjectRemainderApproved,
+        updatedById: actorId,
+      },
+    });
+  if (
+    added.length ||
+    changed.length ||
+    removed.length ||
+    remainderApprovalChanged
+  )
+    await writeAuditEvent(transaction, actorId, {
+      action: "UPDATED",
+      entityId: document.id,
+      entityReference: document.reference,
+      entityType: "BILLING_DOCUMENT",
+      metadata: {
+        allocationAddedOrderIds: added.map((item) => item.orderId),
+        allocationChangedOrderIds: changed.map((item) => item.orderId),
+        allocationRemovedOrderIds: removed.map((item) => item.orderId),
+        projectRemainderApproved: input.isProjectRemainderApproved,
+        projectRemainderApprovalChanged: remainderApprovalChanged,
+      },
+      summary: "Reconciled Client Billing allocations with Procurement Orders.",
+    });
+}
+
+export async function updateClientBillingAllocations(
+  actorId: string,
+  input: BillingAllocationsEditInput,
+) {
+  return getDatabase().$transaction(
+    async (transaction) => {
+      const document = await transaction.clientBillingDocument.findUnique({
+        where: { id: input.billingDocumentId },
+        select: {
+          allocations: true,
+          id: true,
+          isProjectRemainderApproved: true,
+          projectId: true,
+          reference: true,
+          totalHt: true,
+        },
+      });
+      if (!document) throw new ClientBillingNotFoundError();
+      await reconcileBillingAllocationsInTransaction(
+        transaction,
+        actorId,
+        { ...document, totalHt: document.totalHt.toString() },
+        document.allocations,
+        input,
+      );
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
+export async function updateOrderBillingLinkInTransaction(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  input: OrderBillingLinkInput,
+) {
+  const document = await transaction.clientBillingDocument.findUnique({
+    where: { id: input.billingDocumentId },
+    select: {
+      allocations: true,
+      id: true,
+      isCancelled: true,
+      isProjectRemainderApproved: true,
+      projectId: true,
+      reference: true,
+      totalHt: true,
+    },
+  });
+  if (!document) throw new ClientBillingNotFoundError();
+  if (!input.remove && document.isCancelled)
+    throw new ClientBillingValidationError(
+      "A cancelled Billing Event cannot receive a new Order allocation.",
+    );
+  const allocations: BillingAllocationInput[] = document.allocations
+    .filter((item) => item.orderId !== input.orderId)
+    .map((item) => ({
+      allocatedAmount: item.allocatedAmount.toString(),
+      basis: item.basis,
+      orderId: item.orderId,
+      ...(item.percentageRate
+        ? { percentageRate: item.percentageRate.toString() }
+        : {}),
+    }));
+  if (!input.remove && input.basis && input.allocatedAmount)
+    allocations.push({
+      allocatedAmount: input.allocatedAmount,
+      basis: input.basis,
+      orderId: input.orderId,
+      ...(input.percentageRate ? { percentageRate: input.percentageRate } : {}),
+    });
+  await reconcileBillingAllocationsInTransaction(
+    transaction,
+    actorId,
+    { ...document, totalHt: document.totalHt.toString() },
+    document.allocations,
+    {
+      allocations,
+      billingDocumentId: document.id,
+      isProjectRemainderApproved: input.isProjectRemainderApproved,
+    },
+  );
+}
+
+export async function updateOrderBillingLink(
+  actorId: string,
+  input: OrderBillingLinkInput,
+) {
+  return getDatabase().$transaction(
+    (transaction) =>
+      updateOrderBillingLinkInTransaction(transaction, actorId, input),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
+export async function updateClientBillingDocument(
+  actorId: string,
+  input: BillingDocumentEditInput,
+) {
+  return getDatabase().$transaction(
+    async (transaction) => {
+      const existing = await transaction.clientBillingDocument.findUnique({
+        where: { id: input.id },
+        select: {
+          allocations: true,
+          clientId: true,
+          currencyCode: true,
+          id: true,
+          isCancelled: true,
+          isProjectRemainderApproved: true,
+          matchedInstallment: {
+            select: { receipts: { select: { amount: true } } },
+          },
+          matchedInstallmentId: true,
+          paymentInstallments: {
+            select: {
+              scheduledAmount: true,
+              receipts: { select: { amount: true } },
+            },
+          },
+          projectId: true,
+          reference: true,
+        },
+      });
+      if (!existing) throw new ClientBillingNotFoundError();
+      const [project, currency] = await Promise.all([
+        transaction.project.findFirst({
+          where: { clientId: input.clientId, id: input.projectId },
+          select: { id: true, reportingCurrencyCode: true },
+        }),
+        transaction.currency.findFirst({
+          where: { code: input.currencyCode, isActive: true },
+          select: { code: true },
+        }),
+      ]);
+      if (!project || !currency)
+        throw new ClientBillingValidationError(
+          "Choose a Client, one of that Client's Projects, and an active currency.",
+        );
+      const receipts = [
+        ...existing.paymentInstallments.flatMap(
+          (installment) => installment.receipts,
+        ),
+        ...(existing.matchedInstallment?.receipts ?? []),
+      ];
+      const relationshipChanged =
+        existing.clientId !== input.clientId ||
+        existing.projectId !== input.projectId;
+      if (
+        relationshipChanged &&
+        (existing.allocations.length > 0 ||
+          existing.paymentInstallments.length > 0 ||
+          existing.matchedInstallmentId !== null ||
+          receipts.length > 0)
+      )
+        throw new ClientBillingValidationError(
+          "Reconcile Order allocations and payment activity before changing the Billing Client or Project.",
+        );
+      if (
+        existing.currencyCode !== input.currencyCode &&
+        (existing.paymentInstallments.length > 0 ||
+          existing.matchedInstallmentId !== null)
+      )
+        throw new ClientBillingValidationError(
+          "A Billing currency cannot change while a payment schedule is attached.",
+        );
+      if (input.currencyCode !== project.reportingCurrencyCode && !input.fxRate)
+        throw new ClientBillingValidationError(
+          "Enter the manual FX rate to the Project reporting currency.",
+        );
+      if (!existing.isCancelled && input.isCancelled && receipts.length > 0)
+        throw new ClientBillingValidationError(
+          "A Billing Event with recorded Client receipts cannot be cancelled.",
+        );
+      const paid = receipts.reduce(
+        (total, receipt) => total.plus(receipt.amount),
+        new Decimal(0),
+      );
+      if (paid.greaterThan(input.totalTtc))
+        throw new ClientBillingValidationError(
+          "Billing TTC cannot be reduced below the Client receipts already recorded.",
+        );
+      const scheduled = existing.paymentInstallments.reduce(
+        (total, installment) => total.plus(installment.scheduledAmount),
+        new Decimal(0),
+      );
+      if (scheduled.greaterThan(input.totalTtc))
+        throw new ClientBillingValidationError(
+          "The current payment schedule exceeds the edited Billing TTC.",
+        );
+      const allocationInput: BillingAllocationsEditInput = {
+        allocations: input.allocations,
+        billingDocumentId: input.id,
+        isProjectRemainderApproved: input.isProjectRemainderApproved,
+      };
+      const allocationDocument = {
+        id: existing.id,
+        isProjectRemainderApproved: existing.isProjectRemainderApproved,
+        projectId: input.projectId,
+        reference: input.reference,
+        totalHt: input.totalHt,
+      };
+      await validateBillingAllocations(
+        transaction,
+        allocationDocument,
+        input.allocations,
+        input.isProjectRemainderApproved,
+      );
+      await transaction.clientBillingDocument.update({
+        where: { id: input.id },
+        data: {
+          clientId: input.clientId,
+          currencyCode: input.currencyCode,
+          documentDate: dateOnlyToDate(input.documentDate),
+          documentType: input.documentType,
+          dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
+          fxRateToReporting:
+            input.currencyCode === project.reportingCurrencyCode
+              ? null
+              : (input.fxRate ?? null),
+          isCancelled: input.isCancelled,
+          notes: input.notes ?? null,
+          projectId: input.projectId,
+          reference: input.reference,
+          totalHt: input.totalHt,
+          totalTtc: input.totalTtc,
+          updatedById: actorId,
+          vatAmount: input.vatAmount,
+          vatRate: input.vatRate ?? null,
+          vatTreatment: input.vatTreatment ?? null,
+        },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: input.id,
+        entityReference: input.reference,
+        entityType: "BILLING_DOCUMENT",
+        metadata: {
+          changedFields: [
+            "client",
+            "project",
+            "documentType",
+            "reference",
+            "documentDate",
+            "dueDate",
+            "currency",
+            "fxRate",
+            "totalHt",
+            "vat",
+            "totalTtc",
+            "notes",
+            "isCancelled",
+          ],
+        },
+        summary: "Updated the Client Billing Event.",
+      });
+      await reconcileBillingAllocationsInTransaction(
+        transaction,
+        actorId,
+        allocationDocument,
+        existing.allocations,
+        allocationInput,
+      );
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
 function converted(
   amount: string,
   currencyCode: string,
@@ -866,4 +1344,46 @@ export async function getOrderBillingAllocations(orderIds: readonly string[]) {
       { invoiced: value.invoiced.toFixed(4), quoted: value.quoted.toFixed(4) },
     ]),
   );
+}
+
+export async function getOrderBillingReconciliation(orderId: string) {
+  const database = getDatabase();
+  const order = await database.procurementOrder.findUnique({
+    where: { id: orderId },
+    select: { projectId: true },
+  });
+  if (!order) return null;
+  const records = await database.clientBillingDocument.findMany({
+    where: {
+      projectId: order.projectId,
+      OR: [{ isCancelled: false }, { allocations: { some: { orderId } } }],
+    },
+    include: billingInclude,
+    orderBy: [{ documentDate: "desc" }, { reference: "asc" }],
+  });
+  return records.map((record) => {
+    const view = billingView(record);
+    const allocation = view.allocations.find(
+      (item) => item.orderId === orderId,
+    );
+    return {
+      allocation: allocation
+        ? {
+            allocatedAmount: allocation.allocatedAmount,
+            basis: allocation.basis,
+            percentageRate: allocation.percentageRate,
+          }
+        : null,
+      currencyCode: view.currencyCode,
+      documentDate: view.documentDate,
+      documentType: view.documentType,
+      id: view.id,
+      isCancelled: view.isCancelled,
+      isProjectRemainderApproved: view.isProjectRemainderApproved,
+      projectRemainder: view.allocationReconciliation.remaining,
+      reference: view.reference,
+      status: view.status,
+      totalHt: view.totalHt,
+    };
+  });
 }
