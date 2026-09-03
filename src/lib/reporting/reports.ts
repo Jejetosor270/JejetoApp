@@ -1,5 +1,7 @@
 import "server-only";
 
+import Decimal from "decimal.js";
+
 import { COMPANY_REPORTING_CURRENCY_CODE } from "@/config/reporting";
 import {
   buildMonthlyCashFlow,
@@ -24,6 +26,7 @@ import {
   type ProcurementOrderStatus,
 } from "@/generated/prisma/client";
 import { getDatabase } from "@/lib/db";
+import { getProjectsClientBillingSummaries } from "@/lib/billing/billing";
 import {
   listPaymentInstallments,
   type PaymentInstallmentView,
@@ -160,6 +163,7 @@ export interface ProjectReportingSnapshot {
 }
 
 export interface PortfolioProjectRow {
+  clientBillingComplete: boolean;
   cashPosition: string | null;
   clientName: string;
   clientOutstanding: string | null;
@@ -181,6 +185,13 @@ export interface PortfolioReportingSnapshot {
   activeProjectCount: number;
   cashFlow: SerializedCashFlow;
   cashPosition: string | null;
+  clientBilling: {
+    complete: boolean;
+    invoicedHt: string;
+    outstandingTtc: string;
+    overdueTtc: string;
+    paidTtc: string;
+  };
   companyCurrencyCode: string;
   excludedCurrencyProjects: {
     id: string;
@@ -530,37 +541,43 @@ export async function getPortfolioReportingSnapshot(
   rangeInput: ReportingRangeInput,
 ): Promise<PortfolioReportingSnapshot> {
   const database = getDatabase();
-  const [projects, orders, installments] = await Promise.all([
-    database.project.findMany({
-      where: {
-        ...(filters.clientId ? { clientId: filters.clientId } : {}),
-        ...(filters.projectId ? { id: filters.projectId } : {}),
-        ...(filters.projectStatus ? { status: filters.projectStatus } : {}),
-        ...(filters.supplierId
-          ? { orders: { some: { supplierId: filters.supplierId } } }
-          : {}),
-      },
-      orderBy: [{ status: "asc" }, { name: "asc" }],
-      select: {
-        client: { select: { displayName: true } },
-        code: true,
-        id: true,
-        name: true,
-        reportingCurrencyCode: true,
-        status: true,
-      },
-    }),
-    listOrders({
-      projectId: filters.projectId,
-      query: "",
-      supplierId: filters.supplierId,
-    }),
-    listPaymentInstallments({
-      clientId: filters.clientId,
-      projectId: filters.projectId,
-      supplierId: filters.supplierId,
-    }),
-  ]);
+  const projectsPromise = database.project.findMany({
+    where: {
+      ...(filters.clientId ? { clientId: filters.clientId } : {}),
+      ...(filters.projectId ? { id: filters.projectId } : {}),
+      ...(filters.projectStatus ? { status: filters.projectStatus } : {}),
+      ...(filters.supplierId
+        ? { orders: { some: { supplierId: filters.supplierId } } }
+        : {}),
+    },
+    orderBy: [{ status: "asc" }, { name: "asc" }],
+    select: {
+      client: { select: { displayName: true } },
+      code: true,
+      id: true,
+      name: true,
+      reportingCurrencyCode: true,
+      status: true,
+    },
+  });
+  const clientBillingPromise = projectsPromise.then((projects) =>
+    getProjectsClientBillingSummaries(projects),
+  );
+  const [projects, orders, installments, clientBillingByProject] =
+    await Promise.all([
+      projectsPromise,
+      listOrders({
+        projectId: filters.projectId,
+        query: "",
+        supplierId: filters.supplierId,
+      }),
+      listPaymentInstallments({
+        clientId: filters.clientId,
+        projectId: filters.projectId,
+        supplierId: filters.supplierId,
+      }),
+      clientBillingPromise,
+    ]);
   const projectIds = new Set(projects.map((project) => project.id));
   const scopedOrders = orders.filter((order) =>
     projectIds.has(order.project.id),
@@ -599,12 +616,45 @@ export async function getPortfolioReportingSnapshot(
     range,
     reportingCurrencyCode: COMPANY_REPORTING_CURRENCY_CODE,
   });
+  const companyBilling = companyProjects.reduce(
+    (total, project) => {
+      const summary = clientBillingByProject.get(project.id);
+      if (!summary) return { ...total, complete: false };
+      return {
+        complete: total.complete && summary.complete,
+        invoicedHt: total.invoicedHt.plus(summary.invoicedHt),
+        outstandingTtc: total.outstandingTtc.plus(summary.outstandingTtc),
+        overdueTtc: total.overdueTtc.plus(summary.overdueTtc),
+        paidTtc: total.paidTtc.plus(summary.paidTtc),
+      };
+    },
+    {
+      complete: true,
+      invoicedHt: new Decimal(0),
+      outstandingTtc: new Decimal(0),
+      overdueTtc: new Decimal(0),
+      paidTtc: new Decimal(0),
+    },
+  );
+  const companyCashPosition =
+    companyBilling.complete && companySnapshot.payments.supplier.paid.complete
+      ? companyBilling.paidTtc.minus(
+          companySnapshot.payments.supplier.paid.value,
+        )
+      : null;
   return {
     activeProjectCount: projects.filter(
       (project) => project.status === ProjectStatus.ACTIVE,
     ).length,
     cashFlow: companySnapshot.cashFlow,
-    cashPosition: companySnapshot.cashPosition,
+    cashPosition: companyCashPosition?.toString() ?? null,
+    clientBilling: {
+      complete: companyBilling.complete,
+      invoicedHt: companyBilling.invoicedHt.toString(),
+      outstandingTtc: companyBilling.outstandingTtc.toString(),
+      overdueTtc: companyBilling.overdueTtc.toString(),
+      paidTtc: companyBilling.paidTtc.toString(),
+    },
     companyCurrencyCode: COMPANY_REPORTING_CURRENCY_CODE,
     excludedCurrencyProjects: projects
       .filter(
@@ -624,10 +674,22 @@ export async function getPortfolioReportingSnapshot(
     projects: projects.map((project) => {
       const snapshot = projectSnapshots.get(project.id);
       if (!snapshot) throw new Error("Project reporting snapshot is missing.");
+      const clientBilling = clientBillingByProject.get(project.id);
+      if (!clientBilling)
+        throw new Error("Project Client Billing summary is missing.");
+      const cashPosition =
+        clientBilling.complete && snapshot.payments.supplier.paid.complete
+          ? new Decimal(clientBilling.paidTtc).minus(
+              snapshot.payments.supplier.paid.value,
+            )
+          : null;
       return {
-        cashPosition: snapshot.cashPosition,
+        cashPosition: cashPosition?.toString() ?? null,
+        clientBillingComplete: clientBilling.complete,
         clientName: project.client.displayName,
-        clientOutstanding: snapshot.payments.client.totalRemaining,
+        clientOutstanding: clientBilling.complete
+          ? clientBilling.outstandingTtc
+          : null,
         code: project.code,
         economicLandedCost: snapshot.financial.totals.economicLandedCost.value,
         financialComplete: snapshot.financial.complete,

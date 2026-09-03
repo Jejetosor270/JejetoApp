@@ -35,6 +35,7 @@ interface FreightReconciliationView {
   freightEstimateRate: string | null;
   freightGrossProfitHt: string | null;
   headroomHt: string | null;
+  productSellHt: string | null;
   recoveryTargetHt: string | null;
 }
 
@@ -69,28 +70,37 @@ function PaymentDirectionSummary({
   summary: SerializedDirectionPaymentSummary;
 }) {
   const supplier = direction === "supplier";
+  const rows = supplier
+    ? ([
+        ["Supplier payable", summary.base],
+        ["Scheduled", summary.scheduled],
+        ["Paid", summary.paid],
+        ["Scheduled outstanding", summary.scheduledOutstanding],
+        ["Unscheduled", summary.unscheduled],
+        ["Total remaining", summary.totalRemaining],
+        ["Overdue", summary.overdue],
+      ] as const)
+    : ([
+        ["Order receivable plan", summary.base],
+        ["Scheduled", summary.scheduled],
+        ["Received on Order schedules", summary.paid],
+        ["Scheduled remaining", summary.scheduledOutstanding],
+        ["Unscheduled", summary.unscheduled],
+        ["Plan remaining", summary.totalRemaining],
+        ["Overdue", summary.overdue],
+      ] as const);
   return (
     <article className="overflow-hidden rounded-lg border">
       <header className="bg-muted/25 border-b px-3 py-2.5">
         <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
-          {supplier ? "Cash out" : "Cash in"}
+          {supplier ? "Cash out" : "Legacy planning"}
         </p>
         <h3 className="mt-0.5 text-sm font-semibold">
-          {supplier ? "Supplier payments" : "Client receipts"}
+          {supplier ? "Supplier payments" : "Order client schedules"}
         </h3>
       </header>
       <dl className="grid grid-cols-2 gap-x-3 gap-y-3 p-3 text-xs xl:grid-cols-4">
-        {(
-          [
-            [supplier ? "Supplier payable" : "Client receivable", summary.base],
-            ["Scheduled", summary.scheduled],
-            [supplier ? "Paid" : "Received", summary.paid],
-            ["Scheduled outstanding", summary.scheduledOutstanding],
-            ["Unscheduled", summary.unscheduled],
-            ["Total remaining", summary.totalRemaining],
-            ["Overdue", summary.overdue],
-          ] as const
-        ).map(([label, value]) => (
+        {rows.map(([label, value]) => (
           <div key={label}>
             <dt className="text-muted-foreground">{label}</dt>
             <dd className="mt-1 font-semibold">
@@ -266,7 +276,7 @@ export function ProjectFinancialDashboard({
             {freight?.complete ? "Complete" : "Incomplete · check FX / pricing"}
           </Badge>
         </div>
-        <dl className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
           {(
             [
               [
@@ -274,6 +284,7 @@ export function ProjectFinancialDashboard({
                 freight?.freightEstimateRate ?? null,
                 "rate",
               ],
+              ["Product Sell HT", freight?.productSellHt ?? null, "money"],
               [
                 "Client Freight Allowance HT",
                 freight?.allowanceHt ?? null,
@@ -334,7 +345,9 @@ export function ProjectFinancialDashboard({
         </div>
         <dl className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
           <div className="bg-muted/25 rounded-md border p-3">
-            <dt className="text-muted-foreground text-xs">Sales HT</dt>
+            <dt className="text-muted-foreground text-xs">
+              Order planned sell HT
+            </dt>
             <dd className="mt-1 text-sm font-semibold">
               <AggregateMoney
                 aggregate={report.financial.totals.salesRevenue}
@@ -367,7 +380,7 @@ export function ProjectFinancialDashboard({
           </div>
           <div className="bg-muted/25 rounded-md border p-3">
             <dt className="text-muted-foreground text-xs">
-              Supplier outstanding
+              Supplier outstanding TTC
             </dt>
             <dd className="financial-figure mt-1 text-sm font-semibold">
               {formatMoney(report.payments.supplier.totalRemaining, currency)}
@@ -375,10 +388,13 @@ export function ProjectFinancialDashboard({
           </div>
           <div className="bg-muted/25 rounded-md border p-3">
             <dt className="text-muted-foreground text-xs">
-              Client outstanding
+              Client outstanding TTC
             </dt>
             <dd className="financial-figure mt-1 text-sm font-semibold">
-              {formatMoney(report.payments.client.totalRemaining, currency)}
+              {formatMoney(
+                billing?.complete ? billing.outstandingTtc : null,
+                currency,
+              )}
             </dd>
           </div>
         </dl>
@@ -550,7 +566,9 @@ export function ProjectFinancialDashboard({
                 <th className="px-3 py-2 text-right">Markup</th>
                 <th className="px-3 py-2 text-right">Margin</th>
                 <th className="px-3 py-2 text-right">Supplier outstanding</th>
-                <th className="px-3 py-2 text-right">Client outstanding</th>
+                <th className="px-3 py-2 text-right">
+                  Client schedule remaining
+                </th>
                 <th className="px-3 py-2">Status</th>
               </tr>
             </thead>

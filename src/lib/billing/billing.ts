@@ -12,6 +12,7 @@ import {
 import {
   allocationReconciliation,
   calculateClientBillingAmounts,
+  isRecognizedClientReceivable,
   orderSellingBasisInBillingCurrency,
 } from "@/domain/billing/calculations";
 import type {
@@ -1321,18 +1322,10 @@ function converted(
   });
 }
 
-export async function getProjectClientBillingSummary(projectId: string) {
-  const project = await getDatabase().project.findUnique({
-    where: { id: projectId },
-    select: {
-      billingDocuments: {
-        where: { isCancelled: false },
-        include: billingInclude,
-      },
-      reportingCurrencyCode: true,
-    },
-  });
-  if (!project) return null;
+function summarizeClientBillingRecords(
+  records: readonly BillingRecord[],
+  reportingCurrencyCode: string,
+) {
   let quoted = new Decimal(0);
   let invoiced = new Decimal(0);
   let invoiceOutstanding = new Decimal(0);
@@ -1343,11 +1336,11 @@ export async function getProjectClientBillingSummary(projectId: string) {
     string,
     ReturnType<typeof receiptRecords>[number] & { currencyCode: string }
   >();
-  for (const record of project.billingDocuments) {
+  for (const record of records) {
     const convertedHt = converted(
       record.totalHt.toString(),
       record.currencyCode,
-      project.reportingCurrencyCode,
+      reportingCurrencyCode,
       record.fxRateToReporting?.toString() ?? null,
     );
     if (convertedHt === null) missingIds.add(record.id);
@@ -1360,12 +1353,26 @@ export async function getProjectClientBillingSummary(projectId: string) {
         currencyCode: record.currencyCode,
       });
     }
-    if (record.documentType === ClientBillingDocumentType.INVOICE) {
-      const view = billingView(record);
+    if (
+      isRecognizedClientReceivable({
+        documentType: record.documentType,
+        isCancelled: record.isCancelled,
+      })
+    ) {
+      const view = calculateClientBillingAmounts({
+        documentType: record.documentType,
+        dueDate: record.dueDate ? dateToDateOnly(record.dueDate) : null,
+        isCancelled: record.isCancelled,
+        paidAmounts: receiptRecords(record).map((receipt) =>
+          receipt.amount.toString(),
+        ),
+        today: businessToday(),
+        totalTtc: record.totalTtc.toString(),
+      });
       const outstanding = converted(
         view.outstanding,
         record.currencyCode,
-        project.reportingCurrencyCode,
+        reportingCurrencyCode,
         record.fxRateToReporting?.toString() ?? null,
       );
       if (outstanding === null) missingIds.add(record.id);
@@ -1379,7 +1386,7 @@ export async function getProjectClientBillingSummary(projectId: string) {
     const convertedReceipt = converted(
       receipt.amount.toString(),
       receipt.currencyCode,
-      project.reportingCurrencyCode,
+      reportingCurrencyCode,
       receipt.fxRateToReporting?.toString() ?? null,
     );
     if (convertedReceipt === null) missingIds.add(receipt.id);
@@ -1393,8 +1400,56 @@ export async function getProjectClientBillingSummary(projectId: string) {
     overdueTtc: overdue.toFixed(4),
     paidTtc: paid.toFixed(4),
     quotedHt: quoted.toFixed(4),
-    reportingCurrencyCode: project.reportingCurrencyCode,
+    reportingCurrencyCode,
   };
+}
+
+export async function getProjectClientBillingSummary(projectId: string) {
+  const project = await getDatabase().project.findUnique({
+    where: { id: projectId },
+    select: {
+      billingDocuments: {
+        where: { isCancelled: false },
+        include: billingInclude,
+      },
+      reportingCurrencyCode: true,
+    },
+  });
+  return project
+    ? summarizeClientBillingRecords(
+        project.billingDocuments,
+        project.reportingCurrencyCode,
+      )
+    : null;
+}
+
+export async function getProjectsClientBillingSummaries(
+  projects: readonly { id: string; reportingCurrencyCode: string }[],
+) {
+  if (projects.length === 0)
+    return new Map<string, ReturnType<typeof summarizeClientBillingRecords>>();
+  const records = await getDatabase().clientBillingDocument.findMany({
+    where: {
+      isCancelled: false,
+      projectId: { in: projects.map((project) => project.id) },
+    },
+    include: billingInclude,
+  });
+  const recordsByProject = new Map<string, BillingRecord[]>();
+  for (const record of records) {
+    const projectRecords = recordsByProject.get(record.projectId) ?? [];
+    projectRecords.push(record);
+    recordsByProject.set(record.projectId, projectRecords);
+  }
+  return new Map(
+    projects.map((project) => [
+      project.id,
+      summarizeClientBillingRecords(
+        recordsByProject.get(project.id) ?? [],
+        project.reportingCurrencyCode,
+      ),
+    ]),
+  );
 }
 
 export async function getPortfolioClientBillingSummary() {
@@ -1408,65 +1463,17 @@ export async function getPortfolioClientBillingSummary() {
     },
     include: billingInclude,
   });
-  let invoiced = new Decimal(0);
-  let outstanding = new Decimal(0);
-  let overdue = new Decimal(0);
-  const receipts = new Map<
-    string,
-    ReturnType<typeof receiptRecords>[number] & {
-      currencyCode: string;
-      reportingCurrencyCode: string;
-    }
-  >();
-  const missingIds = new Set<string>();
-  for (const record of records) {
-    if (record.documentType === ClientBillingDocumentType.INVOICE) {
-      const ht = converted(
-        record.totalHt.toString(),
-        record.currencyCode,
-        record.project.reportingCurrencyCode,
-        record.fxRateToReporting?.toString() ?? null,
-      );
-      const view = billingView(record);
-      const remaining = converted(
-        view.outstanding,
-        record.currencyCode,
-        record.project.reportingCurrencyCode,
-        record.fxRateToReporting?.toString() ?? null,
-      );
-      if (ht === null || remaining === null) missingIds.add(record.id);
-      else {
-        invoiced = invoiced.plus(ht);
-        outstanding = outstanding.plus(remaining);
-        if (view.status === "OVERDUE") overdue = overdue.plus(remaining);
-      }
-    }
-    for (const receipt of receiptRecords(record)) {
-      receipts.set(receipt.id, {
-        ...receipt,
-        currencyCode: record.currencyCode,
-        reportingCurrencyCode: record.project.reportingCurrencyCode,
-      });
-    }
-  }
-  let paid = new Decimal(0);
-  for (const receipt of receipts.values()) {
-    const amount = converted(
-      receipt.amount.toString(),
-      receipt.currencyCode,
-      receipt.reportingCurrencyCode,
-      receipt.fxRateToReporting?.toString() ?? null,
-    );
-    if (amount === null) missingIds.add(receipt.id);
-    else paid = paid.plus(amount);
-  }
+  const summary = summarizeClientBillingRecords(
+    records,
+    COMPANY_REPORTING_CURRENCY_CODE,
+  );
   return {
-    complete: missingIds.size === 0,
+    complete: summary.complete,
     currencyCode: COMPANY_REPORTING_CURRENCY_CODE,
-    invoicedHt: invoiced.toFixed(4),
-    outstandingTtc: outstanding.toFixed(4),
-    overdueTtc: overdue.toFixed(4),
-    paidTtc: paid.toFixed(4),
+    invoicedHt: summary.invoicedHt,
+    outstandingTtc: summary.outstandingTtc,
+    overdueTtc: summary.overdueTtc,
+    paidTtc: summary.paidTtc,
   };
 }
 

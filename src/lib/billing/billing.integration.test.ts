@@ -38,10 +38,11 @@ const database = vi.hoisted(() => ({
     async (callback: (value: typeof transaction) => Promise<unknown>) =>
       callback(transaction),
   ),
+  clientBillingDocument: { findMany: vi.fn() },
   clientPaymentInstallment: { findFirst: vi.fn(), findUnique: vi.fn() },
   currency: { findFirst: vi.fn() },
   procurementOrder: { findMany: vi.fn() },
-  project: { findFirst: vi.fn() },
+  project: { findFirst: vi.fn(), findUnique: vi.fn() },
 }));
 const audit = vi.hoisted(() => ({ writeAuditEvent: vi.fn() }));
 const procurementOrders = vi.hoisted(() => ({
@@ -57,6 +58,7 @@ vi.mock("@/lib/procurement/orders", () => procurementOrders);
 import {
   ClientBillingValidationError,
   confirmClientBillingDocument,
+  getProjectsClientBillingSummaries,
   recordClientReceipt,
   updateClientBillingAllocations,
   updateClientBillingDocument,
@@ -124,6 +126,59 @@ describe("Client billing persistence", () => {
     procurementOrders.getOrderInTransaction.mockResolvedValue({
       costs: { reportingSellingRevenue: "80000" },
       project: { id: projectId, reportingCurrencyCode: "EUR" },
+    });
+  });
+
+  it("aggregates actual Invoice receipts instead of Order payment plans", async () => {
+    database.clientBillingDocument.findMany.mockResolvedValue([
+      {
+        currencyCode: "EUR",
+        documentType: ClientBillingDocumentType.INVOICE,
+        dueDate: new Date("2026-09-02T00:00:00.000Z"),
+        fxRateToReporting: null,
+        id: "invoice-1",
+        isCancelled: false,
+        matchedInstallment: null,
+        paymentInstallments: [
+          {
+            receipts: [
+              {
+                amount: new Decimal("84363.86"),
+                fxRateToReporting: null,
+                id: "receipt-1",
+              },
+            ],
+          },
+        ],
+        projectId,
+        totalHt: new Decimal("70303.22"),
+        totalTtc: new Decimal("84363.86"),
+      },
+      {
+        currencyCode: "EUR",
+        documentType: ClientBillingDocumentType.QUOTE,
+        dueDate: null,
+        fxRateToReporting: null,
+        id: "quote-1",
+        isCancelled: false,
+        matchedInstallment: null,
+        paymentInstallments: [],
+        projectId,
+        totalHt: new Decimal("100000"),
+        totalTtc: new Decimal("120000"),
+      },
+    ]);
+
+    const summaries = await getProjectsClientBillingSummaries([
+      { id: projectId, reportingCurrencyCode: "EUR" },
+    ]);
+
+    expect(summaries.get(projectId)).toMatchObject({
+      complete: true,
+      invoicedHt: "70303.2200",
+      outstandingTtc: "0.0000",
+      paidTtc: "84363.8600",
+      quotedHt: "100000.0000",
     });
   });
 

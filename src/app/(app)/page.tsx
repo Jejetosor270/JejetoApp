@@ -10,19 +10,18 @@ import { formatMoney } from "@/domain/procurement/presentation";
 import { ProjectStatus } from "@/generated/prisma/client";
 import { requireUser } from "@/lib/auth/current-user";
 import { getPortfolioReportingSnapshot } from "@/lib/reporting/reports";
-import { getPortfolioClientBillingSummary } from "@/lib/billing/billing";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
-  const [, report, billing] = await Promise.all([
+  const [, report] = await Promise.all([
     requireUser(),
     getPortfolioReportingSnapshot(
       { projectStatus: ProjectStatus.ACTIVE },
       { horizon: "30d" },
     ),
-    getPortfolioClientBillingSummary(),
   ]);
+  const billing = report.clientBilling;
   const currency = report.companyCurrencyCode;
 
   return (

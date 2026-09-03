@@ -41,6 +41,7 @@ import {
   withQuoteExtractionGuard,
 } from "@/lib/quote-intake/operational-guard";
 import { fieldErrorMap } from "@/domain/validation/issues";
+import { revalidateProjectFinancialViews } from "@/lib/reporting/revalidation";
 
 export async function processClientDocumentAction(
   _: ClientDocumentProcessingState,
@@ -102,8 +103,7 @@ export async function confirmClientDocumentAction(
     const recordId = await confirmClientBillingDocument(actor.id, input.data);
     revalidatePath("/billing");
     revalidatePath("/payments");
-    revalidatePath(`/projects/${input.data.projectId}`);
-    revalidatePath("/reports");
+    revalidateProjectFinancialViews(input.data.projectId);
     return {
       message: `Client ${input.data.documentType.toLowerCase()} saved after review.`,
       recordId,
@@ -152,7 +152,7 @@ export async function recordClientReceiptAction(
     await recordClientReceipt(actor.id, input.data);
     revalidatePath("/billing");
     revalidatePath("/payments");
-    revalidatePath("/projects", "layout");
+    revalidateProjectFinancialViews();
     return { message: "Client receipt recorded.", status: "success" };
   } catch (error) {
     if (
@@ -193,8 +193,7 @@ export async function updateClientBillingInstallmentAction(
     revalidatePath("/billing");
     revalidatePath(`/billing/${input.data.billingDocumentId}`);
     revalidatePath("/payments");
-    revalidatePath("/projects", "layout");
-    revalidatePath("/reports");
+    revalidateProjectFinancialViews();
     return {
       message: "Payment installment updated.",
       status: "success",
@@ -239,6 +238,7 @@ export async function updateClientBillingInlineAction(
   try {
     await updateClientBillingInline(actor.id, input.data);
     revalidatePath("/billing");
+    revalidateProjectFinancialViews();
     return { message: "Billing row updated.", status: "success" };
   } catch (error) {
     if (
@@ -294,9 +294,8 @@ export async function updateClientBillingDocumentAction(
     await updateClientBillingDocument(actor.id, input.data);
     revalidatePath("/billing");
     revalidatePath(`/billing/${input.data.id}`);
-    revalidatePath(`/projects/${input.data.projectId}`);
     revalidatePath("/orders", "layout");
-    revalidatePath("/reports");
+    revalidateProjectFinancialViews();
     return { message: "Billing Event updated.", status: "success" };
   } catch (error) {
     const expected = expectedBillingError(error);
@@ -328,8 +327,7 @@ export async function updateClientBillingAllocationsAction(
     revalidatePath("/billing");
     revalidatePath(`/billing/${input.data.billingDocumentId}`);
     revalidatePath("/orders", "layout");
-    revalidatePath("/projects", "layout");
-    revalidatePath("/reports");
+    revalidateProjectFinancialViews();
     return { message: "Order reconciliation updated.", status: "success" };
   } catch (error) {
     const expected = expectedBillingError(error);
@@ -361,8 +359,7 @@ export async function updateOrderBillingLinkAction(
     revalidatePath("/billing");
     revalidatePath(`/billing/${input.data.billingDocumentId}`);
     revalidatePath(`/orders/${input.data.orderId}`);
-    revalidatePath(`/projects`, "layout");
-    revalidatePath("/reports");
+    revalidateProjectFinancialViews();
     return {
       message: input.data.remove
         ? "Billing allocation removed."

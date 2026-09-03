@@ -6,6 +6,7 @@ import {
   amountFromPercentage,
   calculateClientBillingAmounts,
   fractionFromAmount,
+  isRecognizedClientReceivable,
   orderBillingCoverage,
   orderSellingBasisInBillingCurrency,
   percentageFromAmount,
@@ -52,6 +53,64 @@ describe("client billing calculations", () => {
         totalTtc: "100",
       }).status,
     ).toBe("OVERDUE");
+  });
+
+  it("reduces Invoice outstanding from authoritative receipts", () => {
+    expect(
+      calculateClientBillingAmounts({
+        documentType: "INVOICE",
+        dueDate: "2026-09-03",
+        isCancelled: false,
+        paidAmounts: ["100000"],
+        today: "2026-09-02",
+        totalTtc: "100000",
+      }),
+    ).toMatchObject({
+      outstanding: "0.0000",
+      paid: "100000.0000",
+      status: "PAID",
+    });
+    expect(
+      calculateClientBillingAmounts({
+        documentType: "INVOICE",
+        dueDate: "2026-09-03",
+        isCancelled: false,
+        paidAmounts: ["30000", "70000"],
+        today: "2026-09-02",
+        totalTtc: "100000",
+      }).outstanding,
+    ).toBe("0.0000");
+    expect(
+      calculateClientBillingAmounts({
+        documentType: "INVOICE",
+        dueDate: "2026-09-03",
+        isCancelled: false,
+        paidAmounts: ["40000"],
+        today: "2026-09-02",
+        totalTtc: "100000",
+      }).outstanding,
+    ).toBe("60000.0000");
+  });
+
+  it("recognizes active Invoices, not Quotes, as outstanding receivables", () => {
+    expect(
+      isRecognizedClientReceivable({
+        documentType: "INVOICE",
+        isCancelled: false,
+      }),
+    ).toBe(true);
+    expect(
+      isRecognizedClientReceivable({
+        documentType: "QUOTE",
+        isCancelled: false,
+      }),
+    ).toBe(false);
+    expect(
+      isRecognizedClientReceivable({
+        documentType: "INVOICE",
+        isCancelled: true,
+      }),
+    ).toBe(false);
   });
 
   it("reconciles Decimal allocations exactly", () => {

@@ -17,6 +17,13 @@ export interface ClientBillingAmounts {
     | "CANCELLED";
 }
 
+export function isRecognizedClientReceivable(input: {
+  documentType: "QUOTE" | "INVOICE";
+  isCancelled: boolean;
+}): boolean {
+  return input.documentType === "INVOICE" && !input.isCancelled;
+}
+
 export function calculateClientBillingAmounts(input: {
   documentType: "QUOTE" | "INVOICE";
   dueDate: string | null;

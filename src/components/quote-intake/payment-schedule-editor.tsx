@@ -16,7 +16,10 @@ import {
   type QuoteScheduleDraftLine,
 } from "@/domain/quote-intake/payment-schedule";
 import type { QuotePaymentProposal } from "@/domain/quote-intake/extraction";
-import { formatMoney } from "@/domain/procurement/presentation";
+import {
+  formatHumanPercentage,
+  formatMoney,
+} from "@/domain/procurement/presentation";
 import { dateOnlyToEuropeanInput } from "@/domain/payments/dates";
 
 interface EditablePayment extends QuoteScheduleDraftLine {
@@ -115,7 +118,7 @@ export function PaymentScheduleEditor({
           <p className="mt-1 font-medium tabular-nums">
             {summary.scheduledPercentage === null
               ? "—"
-              : `${summary.scheduledPercentage}%`}
+              : formatHumanPercentage(summary.scheduledPercentage)}
           </p>
         </div>
         <div>

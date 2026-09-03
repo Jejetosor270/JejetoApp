@@ -29,6 +29,7 @@ import {
   ClientBillingNotFoundError,
   ClientBillingValidationError,
 } from "@/lib/billing/billing";
+import { revalidateProjectFinancialViews } from "@/lib/reporting/revalidation";
 import { QuoteFileValidationError } from "@/lib/quote-intake/files";
 import { getQuoteExtractionProvider } from "@/lib/quote-intake/extractor";
 import { QuoteExtractionProviderError } from "@/lib/quote-intake/openai-provider";
@@ -157,10 +158,9 @@ export async function confirmSupplierQuoteAction(
     const orderId = await confirmSupplierQuote(actor.id, input.data);
     revalidatePath("/orders");
     revalidatePath(`/orders/${orderId}`);
-    revalidatePath(`/projects/${input.data.projectId}`);
+    revalidateProjectFinancialViews(input.data.projectId);
     revalidatePath("/payments");
     revalidatePath("/calendar");
-    revalidatePath("/reports");
     return {
       message:
         input.data.action === "CREATE"

@@ -34,12 +34,13 @@ import {
   updateInstallment,
   updateInstallmentInline,
 } from "@/lib/payments/payments";
+import { revalidateProjectFinancialViews } from "@/lib/reporting/revalidation";
 
 function refreshPaymentViews(): void {
   revalidatePath("/payments");
   revalidatePath("/calendar");
   revalidatePath("/orders/[orderId]", "page");
-  revalidatePath("/projects/[projectId]", "page");
+  revalidateProjectFinancialViews();
 }
 
 function errorState(error: unknown): PaymentActionState {
@@ -268,7 +269,6 @@ export async function deleteSelectedInstallmentsAction(
   try {
     await deleteInstallments(actor.id, input.data);
     refreshPaymentViews();
-    revalidatePath("/reports");
     return {
       message: `${input.data.length} installment${input.data.length === 1 ? "" : "s"} deleted.`,
       status: "success",

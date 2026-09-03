@@ -32,6 +32,7 @@ import {
 } from "@/lib/billing/billing";
 import { getDatabase } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
+import { revalidateProjectFinancialViews } from "@/lib/reporting/revalidation";
 
 function errorState(error: unknown): OrderActionState {
   if (isDuplicateOrderReferenceError(error)) {
@@ -118,7 +119,7 @@ export async function createOrderAction(
       : await createOrder(actor.id, input.data);
     revalidatePath("/orders");
     revalidatePath("/calendar");
-    revalidatePath(`/projects/${input.data.projectId}`);
+    revalidateProjectFinancialViews(input.data.projectId);
     return {
       message: "Procurement order created.",
       orderId,
@@ -152,7 +153,7 @@ export async function updateOrderAction(
     revalidatePath("/orders");
     revalidatePath("/calendar");
     revalidatePath(`/orders/${input.data.id}`);
-    revalidatePath(`/projects/${input.data.projectId}`);
+    revalidateProjectFinancialViews(input.data.projectId);
     return {
       message: "Procurement order updated.",
       orderId: input.data.id,
@@ -176,6 +177,7 @@ export async function updateOrderInlineAction(formData: FormData) {
     revalidatePath("/orders");
     revalidatePath("/calendar");
     revalidatePath(`/orders/${input.data.id}`);
+    revalidateProjectFinancialViews();
     return {
       message: "Order values saved.",
       status: "success" as const,
@@ -202,8 +204,7 @@ export async function deleteSelectedOrdersAction(
     await deleteOrders(actor.id, input.data);
     revalidatePath("/orders");
     revalidatePath("/calendar");
-    revalidatePath("/projects");
-    revalidatePath("/reports");
+    revalidateProjectFinancialViews();
     revalidatePath("/payments");
     return {
       message: `${input.data.length} Order${input.data.length === 1 ? "" : "s"} deleted.`,

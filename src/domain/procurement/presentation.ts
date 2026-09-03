@@ -60,9 +60,19 @@ export function formatMoney(amount: string | null, currency: string): string {
   return `${formatDecimal(amount)} ${currency}`;
 }
 
+function formatHumanPercentageValue(value: string): string {
+  return formatGroupedDecimal(value, 0, 2);
+}
+
+/** Formats a stored fractional rate: 0.155 means 15.5%. */
 export function formatPercentage(rate: string | null): string {
   if (rate === null) return "—";
-  return `${formatGroupedDecimal(new Decimal(rate).times(100).toString(), 0, 2)}%`;
+  return `${formatHumanPercentageValue(new Decimal(rate).times(100).toString())}%`;
+}
+
+/** Formats a value that is already expressed in human percentage points. */
+export function formatHumanPercentage(value: string | null): string {
+  return value === null ? "—" : `${formatHumanPercentageValue(value)}%`;
 }
 
 export function formatPercentageInput(value: string): string {
@@ -75,7 +85,7 @@ export function formatPercentageInput(value: string): string {
   });
   return normalized === null || normalized === ""
     ? value
-    : formatGroupedDecimal(normalized, 0, 2);
+    : formatHumanPercentageValue(normalized);
 }
 
 export function formatRate(rate: string | null): string {

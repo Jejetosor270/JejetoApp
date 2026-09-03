@@ -54,10 +54,10 @@ export function CompanyFinancialSummary({
       "/payments?direction=SUPPLIER_PAYMENT",
     ],
     [
-      "Client outstanding",
-      formatMoney(report.payments.client.totalRemaining, currency),
-      report.payments.client.totalRemaining === null,
-      "/payments?direction=CLIENT_RECEIPT",
+      "Client outstanding TTC",
+      formatMoney(report.clientBilling.outstandingTtc, currency),
+      !report.clientBilling.complete,
+      "/billing",
     ],
     [
       "Supplier overdue",
@@ -66,10 +66,10 @@ export function CompanyFinancialSummary({
       "/payments?direction=SUPPLIER_PAYMENT&status=OVERDUE",
     ],
     [
-      "Client overdue",
-      formatMoney(report.payments.client.overdue.value, currency),
-      !report.payments.client.overdue.complete,
-      "/payments?direction=CLIENT_RECEIPT&status=OVERDUE",
+      "Client overdue TTC",
+      formatMoney(report.clientBilling.overdueTtc, currency),
+      !report.clientBilling.complete,
+      "/billing",
     ],
   ] as const;
 
@@ -160,7 +160,7 @@ export function ProjectPortfolioTable({
               <th className="px-3 py-2 text-right">Markup</th>
               <th className="px-3 py-2 text-right">Margin</th>
               <th className="px-3 py-2 text-right">Supplier outstanding</th>
-              <th className="px-3 py-2 text-right">Client outstanding</th>
+              <th className="px-3 py-2 text-right">Client outstanding TTC</th>
               <th className="px-3 py-2 text-right">Cash position</th>
             </tr>
           </thead>
@@ -183,6 +183,11 @@ export function ProjectPortfolioTable({
                   {project.status.replaceAll("_", " ")}
                   {!project.financialComplete ? (
                     <span className="text-destructive block">Incomplete</span>
+                  ) : null}
+                  {!project.clientBillingComplete ? (
+                    <span className="text-destructive block">
+                      Billing FX incomplete
+                    </span>
                   ) : null}
                 </td>
                 <td className="px-3 py-2 font-mono">

@@ -32,10 +32,11 @@ import {
   updateBuilding,
   updateProject,
 } from "@/lib/master-data/projects";
+import { revalidateProjectFinancialViews } from "@/lib/reporting/revalidation";
 
 function revalidateProject(projectId: string): void {
   revalidatePath("/projects");
-  revalidatePath(`/projects/${projectId}`);
+  revalidateProjectFinancialViews(projectId);
 }
 
 export async function createProjectFreightExpenseAction(
