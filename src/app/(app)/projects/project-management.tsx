@@ -33,9 +33,11 @@ import {
 import { countries, countryLabel } from "@/config/countries";
 import {
   formatRate,
+  formatSignedMoney,
   rateToPercentInput,
 } from "@/domain/procurement/presentation";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
+import type { ProjectFundingCoverage } from "@/domain/billing/funding-coverage";
 
 interface ClientOption {
   displayName: string;
@@ -65,6 +67,7 @@ interface ProjectView {
   expectedCompletionDate: string | null;
   freightEstimateNotes: string | null;
   freightEstimateRate: string | null;
+  fundingCoverage: ProjectFundingCoverage;
   id: string;
   name: string;
   notes: string | null;
@@ -236,7 +239,9 @@ function ProjectInlineRow({
   const initial = () => ({
     code: project.code,
     countryCode: project.countryCode ?? "",
-    freightEstimateRate: rateToPercentInput(project.freightEstimateRate),
+    defaultProductMarkupRate: rateToPercentInput(
+      project.defaultProductMarkupRate,
+    ),
     name: project.name,
     status: project.status,
   });
@@ -260,15 +265,13 @@ function ProjectInlineRow({
       defaultOtherCostMarkupRate: rateToPercentInput(
         project.defaultOtherCostMarkupRate,
       ),
-      defaultProductMarkupRate: rateToPercentInput(
-        project.defaultProductMarkupRate,
-      ),
+      defaultProductMarkupRate: draft.defaultProductMarkupRate,
       estimatedFreightCostHt: project.estimatedFreightCostHt ?? "",
       estimatedPurchaseCostHt: project.estimatedPurchaseCostHt ?? "",
       expectedSellHt: project.expectedSellHt ?? "",
       expectedCompletionDate: project.expectedCompletionDate ?? "",
       freightEstimateNotes: project.freightEstimateNotes ?? "",
-      freightEstimateRate: draft.freightEstimateRate,
+      freightEstimateRate: rateToPercentInput(project.freightEstimateRate),
       id: project.id,
       name: draft.name,
       notes: project.notes ?? "",
@@ -369,14 +372,22 @@ function ProjectInlineRow({
       <td className="px-4 py-3">
         {editing ? (
           <InlinePercentInput
-            ariaLabel="Expected freight allowance percentage of expected Product Purchase Cost"
-            onChange={(value) => set("freightEstimateRate", value)}
-            value={draft.freightEstimateRate}
+            ariaLabel="Target Product markup percentage"
+            onChange={(value) => set("defaultProductMarkupRate", value)}
+            value={draft.defaultProductMarkupRate}
           />
-        ) : saved.freightEstimateRate ? (
-          formatRate(humanPercentageToFraction(saved.freightEstimateRate))
         ) : (
-          "—"
+          formatRate(humanPercentageToFraction(saved.defaultProductMarkupRate))
+        )}
+      </td>
+      <td className="financial-figure px-4 py-3 text-right">
+        {project.fundingCoverage.complete ? (
+          formatSignedMoney(
+            project.fundingCoverage.fundingCoverageHt,
+            project.reportingCurrencyCode,
+          )
+        ) : (
+          <span className="text-destructive">Incomplete</span>
         )}
       </td>
       {canEdit ? (
@@ -446,13 +457,13 @@ export function ProjectManagement({
             action={deleteSelectedProjectsAction}
             clearSelection={selection.clear}
             entityName="Project"
-            impactSummary={`${affectedBuildingCount} Building${affectedBuildingCount === 1 ? "" : "s"} and ${affectedOrderCount} Procurement Order${affectedOrderCount === 1 ? "" : "s"} will also be deleted.`}
-            scope="Deleting the selected Projects will also permanently delete their Buildings, Procurement Orders, payments, settlements, quote-import history, and financial records. Clients and Suppliers are preserved."
+            impactSummary={`${affectedBuildingCount} Building${affectedBuildingCount === 1 ? "" : "s"} and ${affectedOrderCount} Supplier Order${affectedOrderCount === 1 ? "" : "s"} will also be deleted.`}
+            scope="Deleting the selected Projects will also permanently delete their Buildings, Supplier Orders, payments, settlements, quote-import history, and financial records. Clients and Suppliers are preserved."
             selectedIds={selection.selectedIds}
           />
         ) : null}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[58rem] text-left text-sm">
+          <table className="w-full min-w-[66rem] text-left text-sm">
             <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
               <tr>
                 {canEdit ? (
@@ -470,7 +481,8 @@ export function ProjectManagement({
                 <th className="px-4 py-3">Project manager</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Expected completion</th>
-                <th className="px-4 py-3">Expected freight allowance %</th>
+                <th className="px-4 py-3">Target Markup</th>
+                <th className="px-4 py-3 text-right">Funding Coverage</th>
                 {canEdit ? (
                   <th className="px-4 py-3 text-right">Edit</th>
                 ) : null}

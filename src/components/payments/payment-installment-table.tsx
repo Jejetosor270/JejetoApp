@@ -254,7 +254,7 @@ export function PaymentInstallmentTable({
               <th className="px-3 py-2">Direction</th>
               <th className="px-3 py-2">Due</th>
               <th className="px-3 py-2">Actual</th>
-              <th className="px-3 py-2">Project / Order</th>
+              <th className="px-3 py-2">Project / Supplier Order</th>
               <th className="px-3 py-2">Party</th>
               <th className="px-3 py-2">Installment / notes</th>
               <th className="px-3 py-2 text-right">Scheduled</th>

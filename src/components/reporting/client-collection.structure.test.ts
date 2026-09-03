@@ -19,6 +19,6 @@ describe("Project Client collection presentation", () => {
     expect(dashboard).not.toContain("Order client schedules");
     expect(dashboard).not.toContain("Received on Order schedules");
     expect(dashboard).not.toContain("report.payments.client");
-    expect(dashboard).toContain("Legacy Order plan remaining");
+    expect(dashboard).toContain("Legacy Supplier Order plan remaining");
   });
 });

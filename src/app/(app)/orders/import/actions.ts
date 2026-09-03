@@ -164,15 +164,15 @@ export async function confirmSupplierQuoteAction(
     return {
       message:
         input.data.action === "CREATE"
-          ? "Draft Procurement Order created from the reviewed quote."
-          : "Procurement Order updated from the reviewed quote.",
+          ? "Draft Supplier Order created from the reviewed quote."
+          : "Supplier Order updated from the reviewed quote.",
       orderId,
       status: "success",
     };
   } catch (error) {
     if (isDuplicateOrderReferenceError(error)) {
       return {
-        message: "An Order already uses this internal reference.",
+        message: "A Supplier Order already uses this internal reference.",
         status: "error",
       };
     }

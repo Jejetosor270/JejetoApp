@@ -539,8 +539,8 @@ export function SupplierManagement({
               action={deleteSelectedSuppliersAction}
               clearSelection={selection.clear}
               entityName="Supplier"
-              impactSummary={`${affectedOrderCount} Procurement Order${affectedOrderCount === 1 ? "" : "s"} and all downstream records will also be deleted.`}
-              scope="Deleting the selected Suppliers will also permanently delete their Procurement Orders, payments, settlements, quote-import history, financial records, and Building links. Projects and Clients are preserved."
+              impactSummary={`${affectedOrderCount} Supplier Order${affectedOrderCount === 1 ? "" : "s"} and all downstream records will also be deleted.`}
+              scope="Deleting the selected Suppliers will also permanently delete their Supplier Orders, payments, settlements, quote-import history, financial records, and Building links. Projects and Clients are preserved."
               selectedIds={selection.selectedIds}
             />
           ) : null}

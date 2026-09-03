@@ -68,7 +68,7 @@ export default async function BillingPage({
           <h1 className="mt-2 text-2xl font-semibold">Client Billing</h1>
           <p className="text-muted-foreground mt-2 text-sm">
             Quotes, Invoices, planned payments, actual receipts, and
-            Project-level Order allocation.
+            Project-level Supplier Order allocation.
           </p>
         </div>
         <div className="flex gap-2">

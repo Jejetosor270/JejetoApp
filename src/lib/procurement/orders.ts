@@ -1163,6 +1163,7 @@ export interface OrderFilters {
   dateFrom?: string | undefined;
   dateTo?: string | undefined;
   projectId?: string | undefined;
+  projectIds?: readonly string[] | undefined;
   query: string;
   status?: ProcurementOrderStatus | undefined;
   supplierId?: string | undefined;
@@ -1194,6 +1195,9 @@ function orderWhere(filters: OrderFilters): Prisma.ProcurementOrderWhereInput {
         }
       : {}),
     ...(filters.projectId ? { projectId: filters.projectId } : {}),
+    ...(filters.projectIds
+      ? { projectId: { in: [...filters.projectIds] } }
+      : {}),
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.supplierId ? { supplierId: filters.supplierId } : {}),
     ...(filters.vatTreatment
@@ -1324,7 +1328,7 @@ async function createOrderRecord(
         "vatEntries",
       ],
     },
-    summary: "Created the Procurement Order.",
+    summary: "Created the Supplier Order.",
   });
   return order.id;
 }
@@ -1398,7 +1402,7 @@ export async function updateOrderInline(
           ],
         },
         summary:
-          "Updated routine Procurement Order fields from the Orders table.",
+          "Updated routine Supplier Order fields from the Supplier Orders table.",
       });
       return {
         ...order,
@@ -1485,7 +1489,7 @@ async function updateOrderRecord(
       ],
     },
     summary:
-      "Updated the Procurement Order and authoritative financial structure.",
+      "Updated the Supplier Order and authoritative financial structure.",
   });
 }
 

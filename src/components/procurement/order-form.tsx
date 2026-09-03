@@ -163,7 +163,7 @@ const labels: Record<string, string> = {
   NOT_APPLICABLE: "Not applicable",
   RECHARGED_SEPARATELY: "Recharged separately",
   PROJECT_MARKUP: "Project Markup",
-  ORDER_MARKUP: "Specific Order Markup",
+  ORDER_MARKUP: "Specific Supplier Order Markup",
   DIRECT_SELLING_PRICE: "Direct Selling Price",
   RECOVERABLE: "Recoverable",
   NON_RECOVERABLE: "Non-recoverable",
@@ -1000,10 +1000,10 @@ export function OrderForm({
           <h3 className="text-sm font-semibold">Procurement timing</h3>
           <p className="text-muted-foreground mt-1 text-xs">
             Business dates remain date-only. Expected ready is calculated from
-            order date and lead time, and remains editable.
+            Supplier Order date and lead time, and remains editable.
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <Field error={fieldErrors.orderDate} label="Order date">
+            <Field error={fieldErrors.orderDate} label="Supplier Order date">
               <input
                 aria-invalid={Boolean(fieldErrors.orderDate) || undefined}
                 className={errorClass("orderDate")}
@@ -1497,7 +1497,7 @@ export function OrderForm({
             {pricingMode === "PROJECT_MARKUP"
               ? "Uses this Project's default Product, Freight and Other Cost markup rates."
               : pricingMode === "ORDER_MARKUP"
-                ? "Uses explicit markup rates for this Order only."
+                ? "Uses explicit markup rates for this Supplier Order only."
                 : "Selling HT is entered directly; effective markup is calculated."}
           </p>
           {pricingMode === "ORDER_MARKUP" && project ? (
@@ -1710,8 +1710,9 @@ export function OrderForm({
               Optional Client Billing link
             </h3>
             <p className="text-muted-foreground mt-1 text-xs">
-              Link this new Order to an existing Billing Event from the same
-              Project. You can also reconcile it later from either detail page.
+              Link this new Supplier Order to an existing Billing Event from the
+              same Project. You can also reconcile it later from either detail
+              page.
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <Field label="Client Billing Event">
@@ -1759,7 +1760,7 @@ export function OrderForm({
                   </Field>
                   <Field
                     error={fieldErrors.billingPercentageRate}
-                    label="% of Order"
+                    label="% of Supplier Order"
                   >
                     <PercentageInput
                       className={inputClassName}
@@ -1810,7 +1811,7 @@ export function OrderForm({
                   </Field>
                   <div className="bg-background grid gap-2 rounded-md border p-3 text-xs sm:col-span-2 sm:grid-cols-4 xl:col-span-4">
                     <p>
-                      Order Sell HT:{" "}
+                      Supplier Order Sell HT:{" "}
                       {formatMoney(
                         selectedBillingOrderBasis,
                         selectedBillingDocument.currencyCode,
@@ -1856,7 +1857,7 @@ export function OrderForm({
         ) : null}
         <div className="flex items-center gap-3">
           <SubmitButton pending={pending}>
-            {isEditing ? "Save order" : "Create order"}
+            {isEditing ? "Save Supplier Order" : "Create Supplier Order"}
           </SubmitButton>
           <ActionFeedback state={state} />
         </div>

@@ -103,7 +103,7 @@ function OrderRow({
   const selectionCell = canEdit ? (
     <SelectionCell
       checked={isSelected}
-      label={`Order ${saved.orderNumber}`}
+      label={`Supplier Order ${saved.orderNumber}`}
       onChange={onSelect}
     />
   ) : null;
@@ -236,7 +236,7 @@ function OrderRow({
       {canEdit ? (
         <SelectionCell
           checked={isSelected}
-          label={`Order ${saved.orderNumber}`}
+          label={`Supplier Order ${saved.orderNumber}`}
           onChange={onSelect}
         />
       ) : null}
@@ -371,8 +371,8 @@ export function OrderTable({
         <BulkActionBar
           action={deleteSelectedOrdersAction}
           clearSelection={selection.clear}
-          entityName="Order"
-          scope="Deleting the selected Orders will also permanently delete all related Supplier Payment and Client Receipt schedules, settlements, quote-import history, VAT and cost records, Building links, and other Order-owned data. Suppliers, Projects, and Clients are preserved."
+          entityName="Supplier Order"
+          scope="Deleting the selected Supplier Orders will also permanently delete all related Supplier Payment and Client Receipt schedules, settlements, quote-import history, VAT and cost records, Building links, and other Supplier Order-owned data. Suppliers, Projects, and Clients are preserved."
           selectedIds={selection.selectedIds}
         />
       ) : null}
@@ -421,7 +421,7 @@ export function OrderTable({
               ) : view === "supplier-payment" ? (
                 <>
                   <th className="px-4 py-3">Supplier</th>
-                  <th className="px-4 py-3">Order reference</th>
+                  <th className="px-4 py-3">Supplier Order reference</th>
                   <th className="px-4 py-3">Project</th>
                   <th className="px-4 py-3 text-right">Payable</th>
                   <th className="px-4 py-3 text-right">Scheduled</th>

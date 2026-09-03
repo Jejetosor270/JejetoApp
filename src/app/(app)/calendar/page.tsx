@@ -100,7 +100,8 @@ export default async function CalendarPage({
             Procurement calendar
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            Derived automatically from payment due dates and Order timing.
+            Derived automatically from payment due dates and Supplier Order
+            timing.
           </p>
         </div>
         <div className="flex items-center gap-2">

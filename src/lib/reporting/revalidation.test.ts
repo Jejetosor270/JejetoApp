@@ -14,6 +14,7 @@ describe("Project financial view revalidation", () => {
     revalidateProjectFinancialViews("project-1");
 
     expect(cache.revalidatePath).toHaveBeenCalledWith("/projects/project-1");
+    expect(cache.revalidatePath).toHaveBeenCalledWith("/projects");
     expect(cache.revalidatePath).toHaveBeenCalledWith("/reports");
     expect(cache.revalidatePath).toHaveBeenCalledWith("/");
   });
@@ -25,6 +26,7 @@ describe("Project financial view revalidation", () => {
       "/projects/[projectId]",
       "page",
     );
+    expect(cache.revalidatePath).toHaveBeenCalledWith("/projects");
     expect(cache.revalidatePath).toHaveBeenCalledWith("/reports");
     expect(cache.revalidatePath).toHaveBeenCalledWith("/");
   });

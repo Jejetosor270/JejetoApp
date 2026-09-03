@@ -94,7 +94,7 @@ function serializeItem(
     item.pricingMode !== PricingMode.TARGET_MARGIN
   ) {
     throw new ItemValidationError(
-      "Component markup pricing belongs to Procurement Orders, not Items.",
+      "Component markup pricing belongs to Supplier Orders, not Items.",
     );
   }
   const financial = calculateItemFinancials({

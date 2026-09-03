@@ -60,7 +60,7 @@ export default async function SupplierDetailPage({
         supplier={supplier}
       />
       <section className="bg-card rounded-lg border p-4">
-        <h2 className="text-sm font-semibold">Orders</h2>
+        <h2 className="text-sm font-semibold">Supplier Orders</h2>
         <div className="mt-3 divide-y text-sm">
           {orders.map((order) => (
             <Link
@@ -77,7 +77,7 @@ export default async function SupplierDetailPage({
             </Link>
           ))}
           {orders.length === 0 ? (
-            <p className="text-muted-foreground py-4">No Orders.</p>
+            <p className="text-muted-foreground py-4">No Supplier Orders.</p>
           ) : null}
         </div>
       </section>

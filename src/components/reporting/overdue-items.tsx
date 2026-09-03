@@ -26,7 +26,7 @@ function OverdueTable({
           <table className="w-full min-w-[36rem] text-left text-xs">
             <thead className="text-muted-foreground border-b">
               <tr>
-                <th className="px-3 py-2">Project / Order</th>
+                <th className="px-3 py-2">Project / Supplier Order</th>
                 <th className="px-3 py-2">Party</th>
                 <th className="px-3 py-2">Installment</th>
                 <th className="px-3 py-2">Due</th>

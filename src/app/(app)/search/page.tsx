@@ -35,7 +35,7 @@ export default async function SearchPage({
           className="border-input bg-background h-9 min-w-0 flex-1 rounded-lg border px-3 text-sm"
           defaultValue={params.q ?? ""}
           name="q"
-          placeholder="Project, Building, Client, Supplier, or Order"
+          placeholder="Project, Building, Client, Supplier, or Supplier Order"
         />
         <button
           className="bg-primary text-primary-foreground inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium"

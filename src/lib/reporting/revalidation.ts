@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 export function revalidateProjectFinancialViews(projectId?: string): void {
   if (projectId) revalidatePath(`/projects/${projectId}`);
   else revalidatePath("/projects/[projectId]", "page");
+  revalidatePath("/projects");
   revalidatePath("/reports");
   revalidatePath("/");
 }

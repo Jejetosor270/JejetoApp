@@ -213,13 +213,13 @@ export function ItemForm({
             name="supplierSku"
           />
         </Field>
-        <Field label="Procurement Order">
+        <Field label="Supplier Order">
           <select
             className={input}
             defaultValue={value("procurementOrderId")}
             name="procurementOrderId"
           >
-            <option value="">No Order</option>
+            <option value="">No Supplier Order</option>
             {options.projects.flatMap((project) =>
               project.orders.map((order) => (
                 <option key={order.id} value={order.id}>

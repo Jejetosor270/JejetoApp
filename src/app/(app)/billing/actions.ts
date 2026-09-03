@@ -473,14 +473,17 @@ export async function updateClientBillingAllocationsAction(
     revalidatePath(`/billing/${input.data.billingDocumentId}`);
     revalidatePath("/orders", "layout");
     revalidateProjectFinancialViews();
-    return { message: "Order reconciliation updated.", status: "success" };
+    return {
+      message: "Supplier Order reconciliation updated.",
+      status: "success",
+    };
   } catch (error) {
     const expected = expectedBillingError(error);
     if (expected) return expected;
     console.error("Unable to update Client Billing allocations.", error);
     return {
-      formError: "The Order reconciliation could not be updated.",
-      message: "The Order reconciliation could not be updated.",
+      formError: "The Supplier Order reconciliation could not be updated.",
+      message: "The Supplier Order reconciliation could not be updated.",
       status: "error",
     };
   }

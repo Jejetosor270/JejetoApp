@@ -129,7 +129,7 @@ export function QuoteItemReview({
             {review.orderSubtotalHt
               ? formatMoney(review.orderSubtotalHt, currencyCode)
               : "missing"}
-            . Order financials remain authoritative.
+            . Supplier Order financials remain authoritative.
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm font-medium">
@@ -139,7 +139,7 @@ export function QuoteItemReview({
             onChange={(event) => setApproved(event.target.checked)}
             type="checkbox"
           />
-          Create/update reviewed Items with this Order
+          Create/update reviewed Items with this Supplier Order
         </label>
       </div>
       {extractionWarnings.length ? (
@@ -547,8 +547,8 @@ export function QuoteItemReview({
         </>
       ) : (
         <p className="text-muted-foreground mt-3 text-xs">
-          No Item records will be persisted. The aggregate Order review can
-          still be confirmed.
+          No Item records will be persisted. The aggregate Supplier Order review
+          can still be confirmed.
         </p>
       )}
     </section>

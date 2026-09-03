@@ -248,7 +248,7 @@ function QuoteReview({
         <h2 className="text-base font-semibold">Quote import saved</h2>
         <p className="text-muted-foreground mt-2 text-sm">{state.message}</p>
         <Button asChild className="mt-4">
-          <Link href={`/orders/${state.orderId}`}>Open Procurement Order</Link>
+          <Link href={`/orders/${state.orderId}`}>Open Supplier Order</Link>
         </Button>
       </section>
     );
@@ -459,7 +459,7 @@ function QuoteReview({
                 type="radio"
                 value="CREATE"
               />
-              Create Draft Order
+              Create Draft Supplier Order
             </label>
             <label className="flex items-center gap-2">
               <input
@@ -473,14 +473,14 @@ function QuoteReview({
                 type="radio"
                 value="UPDATE"
               />
-              Update existing Order
+              Update existing Supplier Order
             </label>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {actionType === "CREATE" ? (
               <Field
                 error={fieldErrors.orderNumber}
-                label="Internal Order reference"
+                label="Internal Supplier Order reference"
                 required
               >
                 <input
@@ -496,7 +496,7 @@ function QuoteReview({
               <div className="md:col-span-2">
                 <Field
                   error={fieldErrors.orderId}
-                  label="Existing Order in this Project"
+                  label="Existing Supplier Order in this Project"
                   required
                 >
                   <select
@@ -505,7 +505,7 @@ function QuoteReview({
                     name="orderId"
                     required
                   >
-                    <option value="">Choose Order</option>
+                    <option value="">Choose Supplier Order</option>
                     {review.orders.map((order) => (
                       <option key={order.id} value={order.id}>
                         {order.orderNumber} · {order.packageName}
@@ -574,7 +574,9 @@ function QuoteReview({
         </section>
 
         <section className="bg-card rounded-lg border p-4 sm:p-5">
-          <h2 className="text-sm font-semibold">Reviewed Order values</h2>
+          <h2 className="text-sm font-semibold">
+            Reviewed Supplier Order values
+          </h2>
           <p className="text-muted-foreground mt-1 text-xs">
             Unchecked fields are ignored. On update, ignored or missing fields
             preserve the existing authoritative value.
@@ -893,8 +895,8 @@ function QuoteReview({
               Optional Client Billing reconciliation
             </h2>
             <p className="text-muted-foreground mt-1 text-xs">
-              Link the reviewed Order to an existing Billing Event from this
-              Project, or skip and reconcile later.
+              Link the reviewed Supplier Order to an existing Billing Event from
+              this Project, or skip and reconcile later.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <Field label="Client Billing Event">
@@ -942,7 +944,7 @@ function QuoteReview({
                   </Field>
                   <Field
                     error={fieldErrors.billingPercentageRate}
-                    label="% of Order"
+                    label="% of Supplier Order"
                   >
                     <PercentageInput
                       className={inputClassName}
@@ -968,7 +970,7 @@ function QuoteReview({
                       }}
                       placeholder={
                         billingAllocationBasis === "PERCENTAGE"
-                          ? "Calculated from Order Sell HT on approval"
+                          ? "Calculated from Supplier Order Sell HT on approval"
                           : "0.00"
                       }
                       value={billingAllocatedAmount}
@@ -1003,9 +1005,9 @@ function QuoteReview({
                     </p>
                     {billingAllocationBasis === "PERCENTAGE" ? (
                       <p className="text-muted-foreground sm:col-span-3">
-                        The percentage is of the reviewed Order Sell HT. Its
-                        allocation amount is calculated again from authoritative
-                        Order pricing when you approve.
+                        The percentage is of the reviewed Supplier Order Sell
+                        HT. Its allocation amount is calculated again from
+                        authoritative Supplier Order pricing when you approve.
                       </p>
                     ) : null}
                   </div>

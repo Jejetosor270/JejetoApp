@@ -543,7 +543,7 @@ export function BillingDetail({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h2 className="text-sm font-semibold">
-                    Order Reconciliation
+                    Supplier Order Reconciliation
                   </h2>
                   <p className="text-muted-foreground mt-1 text-xs">
                     Attribute this Billing HT without creating additional
@@ -568,7 +568,7 @@ export function BillingDetail({
                   type="button"
                   variant="outline"
                 >
-                  Add Order
+                  Add Supplier Order
                 </Button>
               </div>
               <div className="mt-4 space-y-3">
@@ -579,7 +579,7 @@ export function BillingDetail({
                   >
                     <Field
                       error={fieldErrors[`allocations.${index}.orderId`]}
-                      label="Order"
+                      label="Supplier Order"
                     >
                       <select
                         className={inputClassName}
@@ -596,7 +596,7 @@ export function BillingDetail({
                         }
                         value={allocation.orderId}
                       >
-                        <option value="">Choose Order</option>
+                        <option value="">Choose Supplier Order</option>
                         {availableOrders.map((order) => (
                           <option key={order.id} value={order.id}>
                             {order.orderNumber} · {order.supplier.displayName}
@@ -749,7 +749,7 @@ export function BillingDetail({
                   type="button"
                   variant="outline"
                 >
-                  Allocate remaining to last Order
+                  Allocate remaining to last Supplier Order
                 </Button>
               ) : null}
               {new Decimal(reconciliation.remaining).greaterThan(0) ? (
@@ -885,12 +885,14 @@ export function BillingDetail({
               </article>
             </section>
             <section className="bg-card rounded-lg border p-4">
-              <h2 className="text-sm font-semibold">Order Reconciliation</h2>
+              <h2 className="text-sm font-semibold">
+                Supplier Order Reconciliation
+              </h2>
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full min-w-[760px] text-left text-sm">
                   <thead className="text-muted-foreground border-b text-xs">
                     <tr>
-                      <th className="py-2">Order</th>
+                      <th className="py-2">Supplier Order</th>
                       <th>Supplier</th>
                       <th className="text-right">Allocated HT</th>
                       <th className="text-right">% of Billing</th>

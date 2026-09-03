@@ -121,7 +121,7 @@ export async function createOrderAction(
     revalidatePath("/calendar");
     revalidateProjectFinancialViews(input.data.projectId);
     return {
-      message: "Procurement order created.",
+      message: "Supplier Order created.",
       orderId,
       status: "success",
     };
@@ -155,7 +155,7 @@ export async function updateOrderAction(
     revalidatePath(`/orders/${input.data.id}`);
     revalidateProjectFinancialViews(input.data.projectId);
     return {
-      message: "Procurement order updated.",
+      message: "Supplier Order updated.",
       orderId: input.data.id,
       status: "success",
     };
@@ -169,7 +169,8 @@ export async function updateOrderInlineAction(formData: FormData) {
   const input = inlineOrderInputSchema.safeParse(Object.fromEntries(formData));
   if (!input.success)
     return {
-      message: input.error.issues[0]?.message ?? "Check the Order values.",
+      message:
+        input.error.issues[0]?.message ?? "Check the Supplier Order values.",
       status: "error" as const,
     };
   try {
@@ -179,7 +180,7 @@ export async function updateOrderInlineAction(formData: FormData) {
     revalidatePath(`/orders/${input.data.id}`);
     revalidateProjectFinancialViews();
     return {
-      message: "Order values saved.",
+      message: "Supplier Order values saved.",
       status: "success" as const,
       values,
     };
@@ -196,7 +197,8 @@ export async function deleteSelectedOrdersAction(
   const input = selectedIdsSchema.safeParse(selectedIds(formData));
   if (!input.success) {
     return {
-      message: input.error.issues[0]?.message ?? "Check the selected Orders.",
+      message:
+        input.error.issues[0]?.message ?? "Check the selected Supplier Orders.",
       status: "error",
     };
   }
@@ -207,7 +209,7 @@ export async function deleteSelectedOrdersAction(
     revalidateProjectFinancialViews();
     revalidatePath("/payments");
     return {
-      message: `${input.data.length} Order${input.data.length === 1 ? "" : "s"} deleted.`,
+      message: `${input.data.length} Supplier Order${input.data.length === 1 ? "" : "s"} deleted.`,
       status: "success",
     };
   } catch (error) {
@@ -216,7 +218,7 @@ export async function deleteSelectedOrdersAction(
     }
     console.error("Unable to delete selected Orders.", error);
     return {
-      message: "The selected Orders could not be deleted.",
+      message: "The selected Supplier Orders could not be deleted.",
       status: "error",
     };
   }

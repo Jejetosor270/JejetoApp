@@ -16,6 +16,7 @@ import { ProjectStatus } from "@/generated/prisma/client";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listProjectFormOptions } from "@/lib/master-data/lookups";
 import { listProjects } from "@/lib/master-data/projects";
+import { getProjectsFundingCoverage } from "@/lib/reporting/funding-coverage";
 
 export const metadata: Metadata = { title: "Projects" };
 
@@ -55,6 +56,7 @@ export default async function ProjectsPage({
       ...pageInput,
     }),
   ]);
+  const fundingCoverage = await getProjectsFundingCoverage(result.items);
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -189,6 +191,14 @@ export default async function ProjectsPage({
           expectedCompletionDate:
             project.expectedCompletionDate?.toISOString().slice(0, 10) ?? null,
           freightEstimateRate: project.freightEstimateRate?.toString() ?? null,
+          fundingCoverage: fundingCoverage.get(project.id) ?? {
+            clientBillingCoverageHt: null,
+            complete: false,
+            fundingCoverageHt: null,
+            missingOrderIds: [],
+            status: null,
+            supplierOrderSellHt: null,
+          },
           startDate: project.startDate?.toISOString().slice(0, 10) ?? null,
           targetMarkupRate: project.targetMarkupRate?.toString() ?? null,
         }))}

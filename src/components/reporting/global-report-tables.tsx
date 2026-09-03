@@ -60,7 +60,7 @@ export function ActualCashReport({
               <th className="px-3 py-2">Date</th>
               <th className="px-3 py-2">Project</th>
               <th className="px-3 py-2">Party</th>
-              <th className="px-3 py-2">Billing / Order</th>
+              <th className="px-3 py-2">Billing / Supplier Order</th>
               <th className="px-3 py-2">Transaction reference</th>
               <th className="px-3 py-2 text-right">Original amount</th>
               <th className="px-3 py-2 text-right">Project reporting amount</th>

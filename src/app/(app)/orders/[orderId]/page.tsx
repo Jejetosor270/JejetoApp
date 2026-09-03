@@ -21,7 +21,7 @@ import { listOrderQuoteImports } from "@/lib/quote-intake/history";
 import { getOrderBillingReconciliation } from "@/lib/billing/billing";
 import { orderBillingDifference } from "@/domain/billing/calculations";
 
-export const metadata: Metadata = { title: "Procurement order" };
+export const metadata: Metadata = { title: "Supplier Order" };
 export default async function OrderPage({
   params,
 }: {
@@ -87,7 +87,7 @@ export default async function OrderPage({
                       {order.componentPricing.productMarkupSource ===
                       "PROJECT_DEFAULT"
                         ? "Project default"
-                        : "Order override"}
+                        : "Supplier Order override"}
                     </span>
                   </dd>
                   <dt>Product Sell HT (reporting)</dt>
@@ -104,7 +104,7 @@ export default async function OrderPage({
                       {order.componentPricing.freightMarkupSource ===
                       "PROJECT_DEFAULT"
                         ? "Project default"
-                        : "Order override"}
+                        : "Supplier Order override"}
                     </span>
                   </dd>
                   <dt>Freight Sell HT (reporting)</dt>
@@ -294,7 +294,9 @@ export default async function OrderPage({
               <dd className="mt-1">{formatDateOnly(order.quoteDate)}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground text-xs">Order date</dt>
+              <dt className="text-muted-foreground text-xs">
+                Supplier Order date
+              </dt>
               <dd className="mt-1">{formatDateOnly(order.orderDate)}</dd>
             </div>
             <div>

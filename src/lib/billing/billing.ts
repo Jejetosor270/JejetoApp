@@ -55,6 +55,7 @@ const billingInclude = {
       order: {
         select: {
           orderNumber: true,
+          status: true,
           supplier: { select: { displayName: true } },
         },
       },
@@ -1316,7 +1317,7 @@ async function reconcileBillingAllocationsInTransaction(
         projectRemainderApproved: input.isProjectRemainderApproved,
         projectRemainderApprovalChanged: remainderApprovalChanged,
       },
-      summary: "Reconciled Client Billing allocations with Procurement Orders.",
+      summary: "Reconciled Client Billing allocations with Supplier Orders.",
     });
 }
 
@@ -1660,6 +1661,7 @@ function summarizeClientBillingRecords(
   let invoiced = new Decimal(0);
   let invoicedTtc = new Decimal(0);
   let outputVat = new Decimal(0);
+  let coverage = new Decimal(0);
   let invoiceOutstanding = new Decimal(0);
   let paid = new Decimal(0);
   let overdue = new Decimal(0);
@@ -1670,6 +1672,7 @@ function summarizeClientBillingRecords(
   const missingIds = new Set<string>();
   const invoiceMissingIds = new Set<string>();
   const outputVatMissingIds = new Set<string>();
+  const coverageMissingIds = new Set<string>();
   const uniqueReceipts = new Map<
     string,
     ReturnType<typeof receiptRecords>[number] & { currencyCode: string }
@@ -1693,6 +1696,31 @@ function summarizeClientBillingRecords(
       quoted = quoted.plus(convertedHt);
     else invoiced = invoiced.plus(convertedHt);
     if (record.documentType === ClientBillingDocumentType.INVOICE) {
+      const allocatedHt = record.allocations
+        .filter((allocation) => allocation.order.status !== "CANCELLED")
+        .reduce(
+          (total, allocation) => total.plus(allocation.allocatedAmount),
+          new Decimal(0),
+        );
+      const remainingHt = allocationReconciliation(
+        record.totalHt.toString(),
+        record.allocations.map((allocation) =>
+          allocation.allocatedAmount.toString(),
+        ),
+      ).remaining;
+      const coverageOriginal = record.isProjectRemainderApproved
+        ? allocatedHt.plus(remainingHt)
+        : allocatedHt;
+      if (!coverageOriginal.isZero()) {
+        const convertedCoverage = converted(
+          coverageOriginal.toString(),
+          record.currencyCode,
+          reportingCurrencyCode,
+          record.fxRateToReporting?.toString() ?? null,
+        );
+        if (convertedCoverage === null) coverageMissingIds.add(record.id);
+        else coverage = coverage.plus(convertedCoverage);
+      }
       const convertedTtc = converted(
         record.totalTtc.toString(),
         record.currencyCode,
@@ -1787,6 +1815,9 @@ function summarizeClientBillingRecords(
   }
   return {
     complete: missingIds.size === 0,
+    coverageComplete: coverageMissingIds.size === 0,
+    coverageHt: coverage.toFixed(4),
+    coverageMissingIds: [...coverageMissingIds],
     invoiceMissingIds: [...invoiceMissingIds],
     invoicedComplete: invoiceMissingIds.size === 0,
     invoicedHt: invoiced.toFixed(4),

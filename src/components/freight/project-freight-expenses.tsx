@@ -193,7 +193,7 @@ export function ProjectFreightExpenses({
     <section className="bg-card rounded-lg border p-4">
       <h2 className="text-sm font-semibold">Project-level freight expenses</h2>
       <p className="text-muted-foreground mt-1 text-xs">
-        Use this only for freight not already recorded on an Order.
+        Use this only for freight not already recorded on a Supplier Order.
       </p>
       {canEdit ? (
         <form

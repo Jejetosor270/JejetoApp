@@ -43,6 +43,8 @@ describe("portfolio Client financial integrity", () => {
           "project-1",
           {
             complete: true,
+            coverageComplete: true,
+            coverageHt: "100000.0000",
             invoicedHt: "100000.0000",
             outstandingTtc: "0.0000",
             overdueTtc: "0.0000",
@@ -65,5 +67,86 @@ describe("portfolio Client financial integrity", () => {
       cashPosition: "120000",
       clientOutstanding: "0.0000",
     });
+  });
+
+  it("aggregates signed Funding Coverage and counts Project gaps", async () => {
+    const projects = [
+      { id: "project-a", name: "A", coverage: "130000", sell: "100000" },
+      { id: "project-b", name: "B", coverage: "70000", sell: "120000" },
+      { id: "project-c", name: "C", coverage: "50000", sell: "50000" },
+    ];
+    database.project.findMany.mockResolvedValue(
+      projects.map((project) => ({
+        client: { displayName: "Client" },
+        code: project.id,
+        id: project.id,
+        name: project.name,
+        reportingCurrencyCode: "EUR",
+        status: "ACTIVE",
+      })),
+    );
+    billing.getProjectsClientBillingSummaries.mockResolvedValue(
+      new Map(
+        projects.map((project) => [
+          project.id,
+          {
+            complete: true,
+            coverageComplete: true,
+            coverageHt: project.coverage,
+            invoicedHt: project.coverage,
+            outstandingTtc: "0",
+            overdueTtc: "0",
+            paidTtc: "0",
+          },
+        ]),
+      ),
+    );
+    orders.listOrders.mockResolvedValue(
+      projects.map((project) => ({
+        costs: {
+          customsDuties: "0",
+          economicLandedCost: "0",
+          freight: "0",
+          inputVat: null,
+          landedCost: "0",
+          miscellaneous: "0",
+          outputVat: null,
+          purchaseCost: "0",
+          purchaseFxRate: null,
+          reportingSellingRevenue: project.sell,
+          sellingFxRate: null,
+        },
+        freightResaleAmount: null,
+        freightTreatment: "NOT_APPLICABLE",
+        id: `order-${project.id}`,
+        orderCurrencyCode: "EUR",
+        orderNumber: `SO-${project.id}`,
+        packageName: "Package",
+        packageSellingPrice: project.sell,
+        project: {
+          id: project.id,
+          reportingCurrencyCode: "EUR",
+        },
+        sellingCurrencyCode: "EUR",
+        status: "CONFIRMED",
+        supplier: { displayName: "Supplier" },
+        totalSellingRevenue: project.sell,
+      })),
+    );
+
+    const report = await getPortfolioReportingSnapshot(
+      { projectStatus: "ACTIVE" },
+      { horizon: "30d" },
+    );
+
+    expect(report.fundingCoverage).toEqual({
+      complete: true,
+      fundingCoverageHt: "-20000",
+      gapProjectCount: 1,
+      status: "FUNDING_GAP",
+    });
+    expect(
+      report.projects.map((project) => project.fundingCoverage.status),
+    ).toEqual(["EXCESS_BILLING_COVERAGE", "FUNDING_GAP", "FULLY_COVERED"]);
   });
 });

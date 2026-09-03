@@ -916,11 +916,11 @@ function ClientDocumentReview({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold">
-              Optional Order allocation (HT)
+              Optional Supplier Order allocation (HT)
             </h2>
             <p className="text-muted-foreground mt-1 text-xs">
               Project-level billing is valid. Allocations never overwrite
-              planned Order selling prices.
+              planned Supplier Order selling prices.
             </p>
           </div>
           <Button
@@ -951,7 +951,7 @@ function ClientDocumentReview({
             >
               <ReviewField
                 error={state.fieldErrors?.[`allocations.${index}.orderId`]}
-                label="Project Order"
+                label="Project Supplier Order"
                 required
               >
                 <select
@@ -967,7 +967,7 @@ function ClientDocumentReview({
                   }
                   value={item.orderId}
                 >
-                  <option value="">Choose Project Order</option>
+                  <option value="">Choose Project Supplier Order</option>
                   {orders.map((order) => (
                     <option key={order.id} value={order.id}>
                       {order.orderNumber}
@@ -1009,7 +1009,7 @@ function ClientDocumentReview({
                 error={
                   state.fieldErrors?.[`allocations.${index}.allocatedAmount`]
                 }
-                label={`Order allocation HT (${currencyCode || "currency"})`}
+                label={`Supplier Order allocation HT (${currencyCode || "currency"})`}
                 required
               >
                 <input

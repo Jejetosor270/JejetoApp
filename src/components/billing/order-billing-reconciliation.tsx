@@ -111,7 +111,10 @@ function BillingLinkForm({
           <option value="PERCENTAGE">Percentage</option>
         </select>
       </Field>
-      <Field error={state.fieldErrors?.percentageRate} label="% of Order">
+      <Field
+        error={state.fieldErrors?.percentageRate}
+        label="% of Supplier Order"
+      >
         <PercentageInput
           className={inputClassName}
           disabled={basis !== "PERCENTAGE"}
@@ -151,21 +154,21 @@ function BillingLinkForm({
       </div>
       <div className="bg-muted/30 grid gap-2 rounded-md border p-3 text-xs sm:grid-cols-4 lg:col-span-4">
         <p>
-          Order Sell HT:{" "}
+          Supplier Order Sell HT:{" "}
           {formatMoney(document.orderSellingBasisHt, document.currencyCode)}
         </p>
         <p>
           Billing HT: {formatMoney(document.totalHt, document.currencyCode)}
         </p>
         <p>
-          Allocated to other Orders:{" "}
+          Allocated to other Supplier Orders:{" "}
           {formatMoney(
             document.allocatedToOtherOrdersHt,
             document.currencyCode,
           )}
         </p>
         <p>
-          Available for this Order:{" "}
+          Available for this Supplier Order:{" "}
           {formatMoney(document.availableForOrderHt, document.currencyCode)}
           {document.orderSellingBasisHt ? (
             <span className="text-muted-foreground block">
@@ -179,7 +182,7 @@ function BillingLinkForm({
                   ).toString(),
                 ),
               )}{" "}
-              of Order
+              of Supplier Order
             </span>
           ) : null}
         </p>
@@ -278,7 +281,7 @@ export function OrderBillingReconciliation({
         </div>
         <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-right text-xs sm:grid-cols-3 xl:grid-cols-6">
           <p>
-            Order Sell HT{" "}
+            Supplier Order Sell HT{" "}
             <span className="financial-figure block font-medium">
               {formatMoney(plannedSell, reportingCurrencyCode)}
             </span>
@@ -296,7 +299,7 @@ export function OrderBillingReconciliation({
             </span>
           </p>
           <p>
-            % of Order invoiced{" "}
+            % of Supplier Order invoiced{" "}
             <span className="financial-figure block font-medium">
               {formatRate(coverage?.coverageRate ?? null)}
             </span>
@@ -348,7 +351,7 @@ export function OrderBillingReconciliation({
               </p>
               <p className="financial-figure text-right">
                 <span className="text-muted-foreground block text-[0.6875rem]">
-                  % of Order
+                  % of Supplier Order
                 </span>
                 {document.allocation
                   ? formatRate(

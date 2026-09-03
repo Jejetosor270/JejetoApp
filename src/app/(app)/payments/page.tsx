@@ -106,7 +106,7 @@ export default async function PaymentsPage({
           defaultValue={text("orderId") ?? ""}
           name="orderId"
         >
-          <option value="">All Orders</option>
+          <option value="">All Supplier Orders</option>
           {options.orders.map((order) => (
             <option key={order.id} value={order.id}>
               {order.orderNumber}

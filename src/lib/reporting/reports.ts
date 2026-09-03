@@ -4,6 +4,10 @@ import Decimal from "decimal.js";
 
 import { COMPANY_REPORTING_CURRENCY_CODE } from "@/config/reporting";
 import {
+  calculateProjectFundingCoverage,
+  type ProjectFundingCoverage,
+} from "@/domain/billing/funding-coverage";
+import {
   buildMonthlyCashFlow,
   calculateCashPosition,
   calculateDirectionPaymentSummary,
@@ -182,6 +186,7 @@ export interface PortfolioProjectRow {
   code: string;
   economicLandedCost: string;
   financialComplete: boolean;
+  fundingCoverage: ProjectFundingCoverage;
   grossMarginRate: string | null;
   grossProfit: string | null;
   markupRate: string | null;
@@ -211,6 +216,12 @@ export interface PortfolioReportingSnapshot {
     reportingCurrencyCode: string;
   }[];
   financial: SerializedFinancialSummary;
+  fundingCoverage: {
+    complete: boolean;
+    fundingCoverageHt: string | null;
+    gapProjectCount: number;
+    status: ProjectFundingCoverage["status"];
+  };
   overdueItems: OverdueReportingItem[];
   payments: {
     client: SerializedDirectionPaymentSummary;
@@ -709,6 +720,26 @@ export async function getPortfolioReportingSnapshot(
       }),
     ]),
   );
+  const fundingCoverageByProject = new Map(
+    projects.map((project) => {
+      const billingSummary = clientBillingByProject.get(project.id);
+      return [
+        project.id,
+        calculateProjectFundingCoverage({
+          clientBillingCoverageComplete:
+            billingSummary?.coverageComplete ?? false,
+          clientBillingCoverageHt: billingSummary?.coverageHt ?? "0",
+          supplierOrders: scopedOrders
+            .filter((order) => order.project.id === project.id)
+            .map((order) => ({
+              id: order.id,
+              sellingHt: order.costs.reportingSellingRevenue,
+              status: order.status,
+            })),
+        }),
+      ];
+    }),
+  );
   const companyProjects = projects.filter(
     (project) =>
       project.reportingCurrencyCode === COMPANY_REPORTING_CURRENCY_CODE,
@@ -716,6 +747,25 @@ export async function getPortfolioReportingSnapshot(
   const companyProjectIds = new Set(
     companyProjects.map((project) => project.id),
   );
+  const companyFundingCoverage = companyProjects.reduce(
+    (total, project) => {
+      const coverage = fundingCoverageByProject.get(project.id);
+      if (!coverage?.complete || coverage.fundingCoverageHt === null)
+        return { ...total, complete: false };
+      return {
+        complete: total.complete,
+        value: total.value.plus(coverage.fundingCoverageHt),
+      };
+    },
+    { complete: true, value: new Decimal(0) },
+  );
+  const companyFundingStatus = companyFundingCoverage.complete
+    ? companyFundingCoverage.value.isZero()
+      ? "FULLY_COVERED"
+      : companyFundingCoverage.value.isPositive()
+        ? "EXCESS_BILLING_COVERAGE"
+        : "FUNDING_GAP"
+    : null;
   const companySnapshot = projectSnapshot({
     clientReceipts: scopedReceipts.filter((receipt) =>
       companyProjectIds.has(receipt.projectId),
@@ -780,6 +830,16 @@ export async function getPortfolioReportingSnapshot(
         reportingCurrencyCode: project.reportingCurrencyCode,
       })),
     financial: companySnapshot.financial,
+    fundingCoverage: {
+      complete: companyFundingCoverage.complete,
+      fundingCoverageHt: companyFundingCoverage.complete
+        ? companyFundingCoverage.value.toString()
+        : null,
+      gapProjectCount: [...fundingCoverageByProject.values()].filter(
+        (coverage) => coverage.status === "FUNDING_GAP",
+      ).length,
+      status: companyFundingStatus,
+    },
     overdueItems: Array.from(projectSnapshots.values()).flatMap(
       (snapshot) => snapshot.overdueItems,
     ),
@@ -790,6 +850,9 @@ export async function getPortfolioReportingSnapshot(
       const clientBilling = clientBillingByProject.get(project.id);
       if (!clientBilling)
         throw new Error("Project Client Billing summary is missing.");
+      const fundingCoverage = fundingCoverageByProject.get(project.id);
+      if (!fundingCoverage)
+        throw new Error("Project Funding Coverage is missing.");
       const cashPosition =
         clientBilling.complete && snapshot.payments.supplier.paid.complete
           ? new Decimal(clientBilling.paidTtc).minus(
@@ -806,6 +869,7 @@ export async function getPortfolioReportingSnapshot(
         code: project.code,
         economicLandedCost: snapshot.financial.totals.economicLandedCost.value,
         financialComplete: snapshot.financial.complete,
+        fundingCoverage,
         grossMarginRate: snapshot.financial.grossMarginRate,
         grossProfit: snapshot.financial.grossProfit,
         markupRate: snapshot.financial.markupRate,

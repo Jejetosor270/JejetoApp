@@ -172,7 +172,7 @@ function ProjectFields({
         </select>
         {project.reportingCurrencyLocked ? (
           <span className="text-muted-foreground text-xs leading-5 font-normal">
-            Locked after the first Procurement Order because historical FX and
+            Locked after the first Supplier Order because historical FX and
             reporting values depend on this currency.
           </span>
         ) : null}

@@ -1,7 +1,11 @@
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
-import { formatMoney, formatRate } from "@/domain/procurement/presentation";
+import {
+  formatMoney,
+  formatRate,
+  formatSignedMoney,
+} from "@/domain/procurement/presentation";
 import type { PortfolioReportingSnapshot } from "@/lib/reporting/reports";
 
 export function CompanyFinancialSummary({
@@ -10,6 +14,14 @@ export function CompanyFinancialSummary({
   report: PortfolioReportingSnapshot;
 }) {
   const currency = report.companyCurrencyCode;
+  const fundingStatusLabel =
+    report.fundingCoverage.status === "EXCESS_BILLING_COVERAGE"
+      ? "Excess Billing Coverage"
+      : report.fundingCoverage.status === "FUNDING_GAP"
+        ? "Funding Gap"
+        : report.fundingCoverage.status === "FULLY_COVERED"
+          ? "Fully Covered"
+          : "Incomplete";
   const kpis = [
     [
       "Active Projects",
@@ -71,6 +83,18 @@ export function CompanyFinancialSummary({
       !report.clientBilling.complete,
       "/billing",
     ],
+    [
+      "Total Funding Coverage",
+      formatSignedMoney(report.fundingCoverage.fundingCoverageHt, currency),
+      !report.fundingCoverage.complete,
+      "/projects",
+    ],
+    [
+      "Projects with Funding Gap",
+      report.fundingCoverage.gapProjectCount.toString(),
+      false,
+      "/projects",
+    ],
   ] as const;
 
   return (
@@ -86,7 +110,7 @@ export function CompanyFinancialSummary({
           {report.financial.complete ? "Complete" : "Incomplete"}
         </Badge>
       </div>
-      <dl className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5 xl:grid-cols-10">
+      <dl className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         {kpis.map(([label, value, incomplete, href]) => (
           <div className="bg-muted/25 rounded-md border p-3" key={label}>
             <dt className="text-muted-foreground text-xs">
@@ -107,6 +131,12 @@ export function CompanyFinancialSummary({
           </div>
         ))}
       </dl>
+      <p className="text-muted-foreground mt-3 text-xs">
+        Funding Coverage status:{" "}
+        <span className="text-foreground font-medium">
+          {fundingStatusLabel}
+        </span>
+      </p>
       {report.excludedCurrencyProjects.length ? (
         <div className="border-warning/30 bg-warning-muted mt-3 rounded-md border px-3 py-2 text-xs">
           <p className="font-medium">
@@ -147,7 +177,7 @@ export function ProjectPortfolioTable({
         </p>
       </header>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[82rem] text-left text-xs">
+        <table className="w-full min-w-[90rem] text-left text-xs">
           <thead className="bg-muted/40 text-muted-foreground">
             <tr>
               <th className="px-3 py-2">Project</th>
@@ -159,6 +189,7 @@ export function ProjectPortfolioTable({
               <th className="px-3 py-2 text-right">Gross profit</th>
               <th className="px-3 py-2 text-right">Markup</th>
               <th className="px-3 py-2 text-right">Margin</th>
+              <th className="px-3 py-2 text-right">Funding Coverage</th>
               <th className="px-3 py-2 text-right">Supplier outstanding</th>
               <th className="px-3 py-2 text-right">Client outstanding TTC</th>
               <th className="px-3 py-2 text-right">Cash position</th>
@@ -211,6 +242,16 @@ export function ProjectPortfolioTable({
                 <td className="financial-figure px-3 py-2 text-right">
                   {formatRate(project.grossMarginRate)}
                 </td>
+                <td className="financial-figure px-3 py-2 text-right">
+                  {project.fundingCoverage.complete ? (
+                    formatSignedMoney(
+                      project.fundingCoverage.fundingCoverageHt,
+                      project.reportingCurrencyCode,
+                    )
+                  ) : (
+                    <span className="text-destructive">Incomplete</span>
+                  )}
+                </td>
                 {[
                   project.supplierOutstanding,
                   project.clientOutstanding,
@@ -229,7 +270,7 @@ export function ProjectPortfolioTable({
               <tr>
                 <td
                   className="text-muted-foreground px-3 py-12 text-center text-sm"
-                  colSpan={11}
+                  colSpan={13}
                 >
                   No Projects match these filters.
                 </td>

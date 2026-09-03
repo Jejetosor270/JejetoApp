@@ -18,6 +18,7 @@ import type {
 } from "@/lib/reporting/reports";
 import type { ProjectFinancialPerformance } from "@/domain/projects/targets";
 import type { ProjectVatPosition } from "@/domain/vat/position";
+import type { ProjectFundingCoverage } from "@/domain/billing/funding-coverage";
 
 interface Phase11BillingSummary {
   complete: boolean;
@@ -165,8 +166,8 @@ function FinancialPerformanceTable({
       </div>
       {!complete ? (
         <p className="text-destructive border-t px-4 py-2 text-xs">
-          A required Project estimate, Invoice FX rate, Order FX rate, or
-          freight-expense FX rate is missing.
+          A required Project estimate, Invoice FX rate, Supplier Order FX rate,
+          or freight-expense FX rate is missing.
         </p>
       ) : null}
     </section>
@@ -191,6 +192,74 @@ function AggregateMoney({
         </span>
       ) : null}
     </>
+  );
+}
+
+function FundingCoverageSummary({
+  coverage,
+  currencyCode,
+}: {
+  coverage: ProjectFundingCoverage;
+  currencyCode: string;
+}) {
+  const statusLabel =
+    coverage.status === "EXCESS_BILLING_COVERAGE"
+      ? "Excess Billing Coverage"
+      : coverage.status === "FUNDING_GAP"
+        ? "Funding Gap"
+        : coverage.status === "FULLY_COVERED"
+          ? "Fully Covered"
+          : "Incomplete";
+  return (
+    <section className="bg-card rounded-lg border p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
+            Funding Coverage
+          </p>
+          <h2 className="mt-0.5 text-sm font-semibold">
+            Client Billing available for Supplier Orders
+          </h2>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Active Invoice allocations plus approved Project remainder, less
+            authoritative Supplier Order Sell HT. Cash and VAT are separate.
+          </p>
+        </div>
+        <Badge
+          variant={
+            coverage.complete && coverage.status !== "FUNDING_GAP"
+              ? "outline"
+              : "destructive"
+          }
+        >
+          {statusLabel}
+        </Badge>
+      </div>
+      <dl className="mt-4 grid gap-3 sm:grid-cols-3">
+        {(
+          [
+            ["Supplier Orders Sell HT", coverage.supplierOrderSellHt],
+            ["Client Billing Coverage HT", coverage.clientBillingCoverageHt],
+            ["Funding Coverage", coverage.fundingCoverageHt],
+          ] as const
+        ).map(([label, value], index) => (
+          <div className="bg-muted/25 rounded-md border p-3" key={label}>
+            <dt className="text-muted-foreground text-xs">{label}</dt>
+            <dd className="financial-figure mt-1 text-sm font-semibold">
+              {index === 2
+                ? formatSignedMoney(value, currencyCode)
+                : formatMoney(value, currencyCode)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {!coverage.complete ? (
+        <p className="text-destructive mt-3 text-xs">
+          Funding Coverage is incomplete because a required Invoice or Supplier
+          Order FX rate is missing.
+        </p>
+      ) : null}
+    </section>
   );
 }
 
@@ -303,6 +372,7 @@ export function ProjectFinancialDashboard({
   billing,
   financialPerformance,
   freight,
+  fundingCoverage,
   horizon,
   phase11CashPosition,
   projectId,
@@ -312,6 +382,7 @@ export function ProjectFinancialDashboard({
   billing: Phase11BillingSummary | null;
   financialPerformance: ProjectFinancialPerformance;
   freight: FreightReconciliationView | null;
+  fundingCoverage: ProjectFundingCoverage;
   horizon: CashFlowHorizon;
   phase11CashPosition: string | null;
   projectId: string;
@@ -332,13 +403,17 @@ export function ProjectFinancialDashboard({
         performance={financialPerformance}
         projectId={projectId}
       />
+      <FundingCoverageSummary
+        coverage={fundingCoverage}
+        currencyCode={currency}
+      />
       <section className="bg-card rounded-lg border p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold">Freight reconciliation</h2>
             <p className="text-muted-foreground mt-1 text-xs">
               Project planning allowance versus recovery required by actual
-              Order and Project-level freight costs.
+              Supplier Order and Project-level freight costs.
             </p>
           </div>
           <Badge variant={freight?.complete ? "outline" : "destructive"}>
@@ -411,9 +486,11 @@ export function ProjectFinancialDashboard({
       </section>
       <section className="grid gap-4 xl:grid-cols-3">
         <article className="bg-card rounded-lg border p-4">
-          <h2 className="text-sm font-semibold">Order commercial plan</h2>
+          <h2 className="text-sm font-semibold">
+            Supplier Order commercial plan
+          </h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            Procurement Order costs and planned selling values; Invoice billing
+            Supplier Order costs and planned selling values; Invoice billing
             remains the actual revenue source above.
           </p>
           <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
@@ -424,7 +501,7 @@ export function ProjectFinancialDashboard({
               ["Miscellaneous", report.financial.totals.miscellaneous],
               ["Landed cost HT", report.financial.totals.landedCost],
               [
-                "Order economic landed cost",
+                "Supplier Order economic landed cost",
                 report.financial.totals.economicLandedCost,
               ],
               [
@@ -435,7 +512,10 @@ export function ProjectFinancialDashboard({
                 "Separately recharged freight",
                 report.financial.totals.rechargedFreight,
               ],
-              ["Order planned sales HT", report.financial.totals.salesRevenue],
+              [
+                "Supplier Order planned sales HT",
+                report.financial.totals.salesRevenue,
+              ],
             ].map(([label, aggregate]) => (
               <div className="contents" key={label as string}>
                 <dt className="text-muted-foreground py-1">
@@ -450,7 +530,7 @@ export function ProjectFinancialDashboard({
               </div>
             ))}
             <dt className="border-t pt-2 font-medium">
-              Order planned gross profit
+              Supplier Order planned gross profit
             </dt>
             <dd className="financial-figure border-t pt-2 text-right font-semibold">
               {formatMoney(report.financial.grossProfit, currency)}
@@ -494,7 +574,7 @@ export function ProjectFinancialDashboard({
             <summary className="cursor-pointer font-medium">VAT detail</summary>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
               <dt className="text-muted-foreground">
-                Order deductible input VAT
+                Supplier Order deductible input VAT
               </dt>
               <dd className="text-right">
                 <AggregateMoney
@@ -516,7 +596,7 @@ export function ProjectFinancialDashboard({
                 )}
               </dd>
               <dt className="text-muted-foreground">
-                Order non-deductible input VAT
+                Supplier Order non-deductible input VAT
               </dt>
               <dd className="text-right">
                 <AggregateMoney
@@ -528,8 +608,8 @@ export function ProjectFinancialDashboard({
           </details>
           {!vatPosition.complete ? (
             <p className="text-destructive mt-3 text-xs">
-              VAT position is incomplete because a required Invoice, Order, or
-              freight-expense FX rate is missing.
+              VAT position is incomplete because a required Invoice, Supplier
+              Order, or freight-expense FX rate is missing.
             </p>
           ) : null}
         </article>
@@ -584,7 +664,9 @@ export function ProjectFinancialDashboard({
 
       <section className="bg-card overflow-hidden rounded-lg border">
         <header className="border-b px-4 py-3">
-          <h2 className="text-sm font-semibold">Order financial breakdown</h2>
+          <h2 className="text-sm font-semibold">
+            Supplier Order financial breakdown
+          </h2>
           <p className="text-muted-foreground mt-1 text-xs">
             Comparable values are shown in {currency}; effective markup is
             calculated from monetary totals, never averaged.
@@ -594,7 +676,7 @@ export function ProjectFinancialDashboard({
           <table className="w-full min-w-[78rem] text-left text-xs">
             <thead className="bg-muted/40 text-muted-foreground">
               <tr>
-                <th className="px-3 py-2">Order</th>
+                <th className="px-3 py-2">Supplier Order</th>
                 <th className="px-3 py-2">Supplier</th>
                 <th className="px-3 py-2 text-right">Purchase</th>
                 <th className="px-3 py-2 text-right">Landed</th>
@@ -604,7 +686,7 @@ export function ProjectFinancialDashboard({
                 <th className="px-3 py-2 text-right">Margin</th>
                 <th className="px-3 py-2 text-right">Supplier outstanding</th>
                 <th className="px-3 py-2 text-right">
-                  Legacy Order plan remaining
+                  Legacy Supplier Order plan remaining
                 </th>
                 <th className="px-3 py-2">Status</th>
               </tr>
@@ -662,7 +744,7 @@ export function ProjectFinancialDashboard({
         </div>
         {report.orderRows.length === 0 ? (
           <p className="text-muted-foreground px-4 py-8 text-center text-sm">
-            No Procurement Orders have been added to this Project.
+            No Supplier Orders have been added to this Project.
           </p>
         ) : null}
       </section>

@@ -17,7 +17,7 @@ export class InvalidMasterDataRelationError extends Error {
 export class ProjectReportingCurrencyLockedError extends Error {
   constructor() {
     super(
-      "Reporting currency cannot be changed after a Project has Procurement Orders because historical FX rates and reporting values depend on it.",
+      "Reporting currency cannot be changed after a Project has Supplier Orders because historical FX rates and reporting values depend on it.",
     );
     this.name = "ProjectReportingCurrencyLockedError";
   }

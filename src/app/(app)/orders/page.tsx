@@ -25,7 +25,7 @@ import {
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listOrderOptions, listOrdersPage } from "@/lib/procurement/orders";
 
-export const metadata: Metadata = { title: "Procurement orders" };
+export const metadata: Metadata = { title: "Supplier Orders" };
 
 function statusValue(
   value: string | undefined,
@@ -90,7 +90,7 @@ export default async function OrdersPage({
             Procurement
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            Procurement orders
+            Supplier Orders
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">
             Supplier-level packages, cost progression, and commercial markup.
@@ -101,7 +101,7 @@ export default async function OrdersPage({
           queryString={queryStringFromParams(params)}
         />
       </header>
-      <nav className="flex flex-wrap gap-2" aria-label="Order view">
+      <nav className="flex flex-wrap gap-2" aria-label="Supplier Order view">
         {(
           [
             ["general", "General"],
@@ -193,14 +193,14 @@ export default async function OrdersPage({
           ))}
         </select>
         <input
-          aria-label="Order date from"
+          aria-label="Supplier Order date from"
           className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
           defaultValue={dateFrom ?? ""}
           name="dateFrom"
           type="date"
         />
         <input
-          aria-label="Order date to"
+          aria-label="Supplier Order date to"
           className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
           defaultValue={dateTo ?? ""}
           name="dateTo"
@@ -213,7 +213,7 @@ export default async function OrdersPage({
         >
           <option value="updated">Updated date</option>
           <option value="reference">Reference</option>
-          <option value="orderDate">Order date</option>
+          <option value="orderDate">Supplier Order date</option>
           <option value="status">Status</option>
         </select>
         <select
@@ -248,7 +248,7 @@ export default async function OrdersPage({
         <div className="flex flex-wrap items-start gap-2">
           <details className="group">
             <summary className="bg-primary text-primary-foreground inline-flex h-9 cursor-pointer list-none items-center rounded-lg px-3 text-sm font-medium">
-              Create order
+              Create Supplier Order
             </summary>
             <div className="mt-4">
               <OrderForm options={options} />

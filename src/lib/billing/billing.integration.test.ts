@@ -110,6 +110,7 @@ function confirmation(overrides: Record<string, unknown> = {}) {
 }
 
 function summaryRecord(input: {
+  allocations?: readonly string[];
   documentType?: ClientBillingDocumentType;
   dueDate?: string | null;
   id: string;
@@ -118,6 +119,7 @@ function summaryRecord(input: {
     receiptAmounts?: readonly string[];
     scheduledAmount: string;
   }[];
+  isProjectRemainderApproved?: boolean;
   totalHt: string;
   totalTtc: string;
   vatAmount?: string;
@@ -142,12 +144,18 @@ function summaryRecord(input: {
     }),
   );
   return {
+    allocations: (input.allocations ?? []).map((amount, index) => ({
+      allocatedAmount: new Decimal(amount),
+      id: `${input.id}-allocation-${index}`,
+      order: { status: "CONFIRMED" },
+    })),
     currencyCode: "EUR",
     documentType: input.documentType ?? ClientBillingDocumentType.INVOICE,
     dueDate: input.dueDate ? new Date(`${input.dueDate}T00:00:00.000Z`) : null,
     fxRateToReporting: null,
     id: input.id,
     isCancelled: false,
+    isProjectRemainderApproved: input.isProjectRemainderApproved ?? false,
     matchedInstallment: null,
     paymentInstallments,
     projectId,
@@ -269,6 +277,88 @@ describe("Client billing persistence", () => {
       outputVat: "9500.0000",
       outputVatComplete: true,
       quotedHt: "100000.0000",
+    });
+  });
+
+  it("counts Invoice allocations plus an approved Project remainder exactly once", async () => {
+    database.clientBillingDocument.findMany.mockResolvedValue([
+      summaryRecord({
+        allocations: ["80000", "60000"],
+        id: "allocated-invoice",
+        totalHt: "200000",
+        totalTtc: "240000",
+      }),
+      summaryRecord({
+        allocations: ["25000"],
+        id: "project-funded-invoice",
+        isProjectRemainderApproved: true,
+        totalHt: "100000",
+        totalTtc: "120000",
+      }),
+      summaryRecord({
+        allocations: ["500000"],
+        documentType: ClientBillingDocumentType.QUOTE,
+        id: "quote",
+        isProjectRemainderApproved: true,
+        totalHt: "500000",
+        totalTtc: "600000",
+      }),
+    ]);
+
+    const summaries = await getProjectsClientBillingSummaries([
+      { id: projectId, reportingCurrencyCode: "EUR" },
+    ]);
+
+    expect(summaries.get(projectId)).toMatchObject({
+      coverageComplete: true,
+      coverageHt: "240000.0000",
+      coverageMissingIds: [],
+    });
+  });
+
+  it("excludes allocations attached to cancelled Supplier Orders", async () => {
+    const record = summaryRecord({
+      allocations: ["40", "20"],
+      id: "invoice",
+      isProjectRemainderApproved: true,
+      totalHt: "100",
+      totalTtc: "120",
+    });
+    const cancelledAllocation = record.allocations[1];
+    if (!cancelledAllocation) throw new Error("Fixture allocation is missing.");
+    cancelledAllocation.order.status = "CANCELLED";
+    database.clientBillingDocument.findMany.mockResolvedValue([record]);
+
+    const summaries = await getProjectsClientBillingSummaries([
+      { id: projectId, reportingCurrencyCode: "EUR" },
+    ]);
+
+    // Active allocation 40 + authoritative remaining 40; cancelled 20 is not
+    // reclassified as Project remainder.
+    expect(summaries.get(projectId)?.coverageHt).toBe("80.0000");
+  });
+
+  it("marks non-zero foreign Invoice coverage incomplete without saved FX", async () => {
+    database.clientBillingDocument.findMany.mockResolvedValue([
+      {
+        ...summaryRecord({
+          allocations: ["100"],
+          id: "foreign-invoice",
+          totalHt: "100",
+          totalTtc: "120",
+        }),
+        currencyCode: "USD",
+      },
+    ]);
+
+    const summaries = await getProjectsClientBillingSummaries([
+      { id: projectId, reportingCurrencyCode: "EUR" },
+    ]);
+
+    expect(summaries.get(projectId)).toMatchObject({
+      coverageComplete: false,
+      coverageHt: "0.0000",
+      coverageMissingIds: ["foreign-invoice"],
     });
   });
 

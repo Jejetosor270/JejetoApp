@@ -205,7 +205,7 @@ export default async function ItemsPage({
           defaultValue={filters.orderId ?? ""}
           name="orderId"
         >
-          <option value="">All Orders</option>
+          <option value="">All Supplier Orders</option>
           {options.projects.flatMap((p) =>
             p.orders.map((o) => (
               <option key={o.id} value={o.id}>

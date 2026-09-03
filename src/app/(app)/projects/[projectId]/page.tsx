@@ -24,6 +24,7 @@ import {
   sumComparableFinancialAmounts,
 } from "@/domain/projects/targets";
 import { calculateProjectVatPosition } from "@/domain/vat/position";
+import { calculateProjectFundingCoverage } from "@/domain/billing/funding-coverage";
 
 export const metadata: Metadata = { title: "Project" };
 
@@ -103,6 +104,15 @@ export default async function ProjectPage({
       ? reporting.payments.supplier.paid.value
       : null,
   );
+  const fundingCoverage = calculateProjectFundingCoverage({
+    clientBillingCoverageComplete: billing?.coverageComplete ?? false,
+    clientBillingCoverageHt: billing?.coverageHt ?? "0",
+    supplierOrders: reporting.orderRows.map((order) => ({
+      id: order.id,
+      sellingHt: order.salesRevenue,
+      status: order.status,
+    })),
+  });
   return (
     <ProjectDetail
       buildings={buildings}
@@ -145,6 +155,7 @@ export default async function ProjectPage({
             billing={billing}
             financialPerformance={financialPerformance}
             freight={freight}
+            fundingCoverage={fundingCoverage}
             horizon={horizon}
             phase11CashPosition={phase11CashPosition}
             projectId={projectId}

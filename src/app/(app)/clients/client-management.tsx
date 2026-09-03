@@ -482,7 +482,7 @@ export function ClientManagement({
               clearSelection={selection.clear}
               entityName="Client"
               impactSummary={`${affectedProjectCount} Project${affectedProjectCount === 1 ? "" : "s"} and the complete downstream hierarchy will also be deleted.`}
-              scope="Deleting the selected Clients will also permanently delete their Projects, Buildings, Procurement Orders, payments, settlements, quote-import history, and financial records. Suppliers are preserved."
+              scope="Deleting the selected Clients will also permanently delete their Projects, Buildings, Supplier Orders, payments, settlements, quote-import history, and financial records. Suppliers are preserved."
               selectedIds={selection.selectedIds}
             />
           ) : null}

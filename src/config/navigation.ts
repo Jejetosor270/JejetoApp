@@ -37,7 +37,12 @@ export const navigationGroups: readonly NavigationGroup[] = [
         isAvailable: true,
         label: "Dashboard",
       },
-      { href: "/orders", icon: Package, isAvailable: true, label: "Orders" },
+      {
+        href: "/orders",
+        icon: Package,
+        isAvailable: true,
+        label: "Supplier Orders",
+      },
       {
         href: "/items",
         icon: ListTree,
@@ -48,7 +53,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
         href: "/billing",
         icon: WalletCards,
         isAvailable: true,
-        label: "Payments / Billing",
+        label: "Client Billing",
       },
       {
         href: "/calendar",
