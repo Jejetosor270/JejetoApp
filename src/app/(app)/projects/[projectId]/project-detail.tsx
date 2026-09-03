@@ -207,7 +207,7 @@ function ProjectFields({
           type="date"
         />
       </Field>
-      <Field label="Client Freight Allowance % of Product Purchase Cost HT">
+      <Field label="Expected Freight Allowance % of Expected Product Purchase Cost HT">
         <PercentageInput
           className={inputClassName}
           defaultValue={
@@ -274,7 +274,7 @@ function ProjectFields({
         />
       </Field>
       <input name="targetMode" type="hidden" value="MARKUP" />
-      <Field label="Client freight allowance notes">
+      <Field label="Expected freight allowance notes">
         <input
           className={inputClassName}
           defaultValue={project.freightEstimateNotes ?? ""}

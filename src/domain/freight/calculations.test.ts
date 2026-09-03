@@ -2,14 +2,14 @@ import Decimal from "decimal.js";
 import { describe, expect, it } from "vitest";
 
 import {
-  clientFreightAllowance,
+  freightAllowanceFromPurchaseCost,
   reconcileProjectFreight,
   resolveOrderFreightAllowance,
 } from "@/domain/freight/calculations";
 
 describe("freight commercial allowance", () => {
   it("derives the allowance from Product Purchase Cost HT", () => {
-    expect(clientFreightAllowance("50000", "0.10").toFixed(4)).toBe(
+    expect(freightAllowanceFromPurchaseCost("50000", "0.10").toFixed(4)).toBe(
       "5000.0000",
     );
   });
@@ -17,7 +17,7 @@ describe("freight commercial allowance", () => {
   it("ignores Product Sell and applies the estimate only to Product Purchase Cost", () => {
     const clientBudgetHt = new Decimal("1000000");
     const productSellHt = new Decimal("68144.13");
-    const allowance = clientFreightAllowance("50000", "0.10");
+    const allowance = freightAllowanceFromPurchaseCost("50000", "0.10");
 
     expect(allowance.toFixed(4)).toBe("5000.0000");
     expect(allowance.equals(productSellHt.times("0.10"))).toBe(false);
@@ -48,7 +48,7 @@ describe("freight commercial allowance", () => {
 });
 
 describe("freight reconciliation", () => {
-  it("aggregates Order and Project freight before deriving recovery", () => {
+  it("uses Project expected purchase for planning and actual freight for recovery", () => {
     expect(
       reconcileProjectFreight({
         expenses: [{ costHt: "20000", markupRate: "0.15" }],
@@ -56,54 +56,41 @@ describe("freight reconciliation", () => {
           {
             freightCostHt: "40000",
             freightMarkupRate: "0.15",
-            productPurchaseCostHt: "500000",
           },
         ],
+        projectExpectedProductPurchaseCostHt: "500000",
         projectFreightEstimateRate: "0.15",
       }),
     ).toEqual({
+      actualComplete: true,
       actualCostHt: "60000.0000",
-      allowanceHt: "75000.0000",
       complete: true,
+      expectedFreightAllowanceHt: "75000.0000",
+      expectedProductPurchaseCostHt: "500000.0000",
       freightGrossProfitHt: "9000.0000",
       headroomHt: "6000.0000",
-      productPurchaseCostHt: "500000.0000",
+      planningComplete: true,
       recoveryTargetHt: "69000.0000",
     });
   });
 
-  it("updates AUTO allowance when another Order increases Product Purchase Cost", () => {
+  it("updates the planning allowance only when expected Project purchase changes", () => {
     const initial = reconcileProjectFreight({
       expenses: [],
-      orders: [
-        {
-          freightCostHt: "0",
-          freightMarkupRate: "0.15",
-          productPurchaseCostHt: "500000",
-        },
-      ],
+      orders: [{ freightCostHt: "0", freightMarkupRate: "0.15" }],
+      projectExpectedProductPurchaseCostHt: "500000",
       projectFreightEstimateRate: "0.15",
     });
     const updated = reconcileProjectFreight({
       expenses: [],
-      orders: [
-        {
-          freightCostHt: "0",
-          freightMarkupRate: "0.15",
-          productPurchaseCostHt: "500000",
-        },
-        {
-          freightCostHt: "0",
-          freightMarkupRate: "0.15",
-          productPurchaseCostHt: "100000",
-        },
-      ],
+      orders: [{ freightCostHt: "0", freightMarkupRate: "0.15" }],
+      projectExpectedProductPurchaseCostHt: "600000",
       projectFreightEstimateRate: "0.15",
     });
 
-    expect(initial.allowanceHt).toBe("75000.0000");
-    expect(updated.productPurchaseCostHt).toBe("600000.0000");
-    expect(updated.allowanceHt).toBe("90000.0000");
+    expect(initial.expectedFreightAllowanceHt).toBe("75000.0000");
+    expect(updated.expectedProductPurchaseCostHt).toBe("600000.0000");
+    expect(updated.expectedFreightAllowanceHt).toBe("90000.0000");
   });
 
   it("keeps Freight Estimate and Freight Markup separate when deriving headroom", () => {
@@ -114,14 +101,14 @@ describe("freight reconciliation", () => {
           {
             freightCostHt: "435",
             freightMarkupRate: "0.10",
-            productPurchaseCostHt: "50000",
           },
         ],
+        projectExpectedProductPurchaseCostHt: "50000",
         projectFreightEstimateRate: "0.10",
       }),
     ).toMatchObject({
       actualCostHt: "435.0000",
-      allowanceHt: "5000.0000",
+      expectedFreightAllowanceHt: "5000.0000",
       freightGrossProfitHt: "43.5000",
       headroomHt: "4521.5000",
       recoveryTargetHt: "478.5000",
@@ -133,8 +120,34 @@ describe("freight reconciliation", () => {
       reconcileProjectFreight({
         expenses: [{ costHt: null, markupRate: "0.15" }],
         orders: [],
+        projectExpectedProductPurchaseCostHt: "500000",
         projectFreightEstimateRate: "0.15",
-      }).complete,
-    ).toBe(false);
+      }),
+    ).toMatchObject({
+      actualComplete: false,
+      actualCostHt: null,
+      complete: false,
+      expectedFreightAllowanceHt: "75000.0000",
+      planningComplete: true,
+    });
+  });
+
+  it("keeps actual reconciliation visible when Project planning is incomplete", () => {
+    expect(
+      reconcileProjectFreight({
+        expenses: [],
+        orders: [{ freightCostHt: "435", freightMarkupRate: "0.10" }],
+        projectExpectedProductPurchaseCostHt: null,
+        projectFreightEstimateRate: "0.10",
+      }),
+    ).toMatchObject({
+      actualComplete: true,
+      actualCostHt: "435.0000",
+      complete: false,
+      expectedFreightAllowanceHt: null,
+      headroomHt: null,
+      planningComplete: false,
+      recoveryTargetHt: "478.5000",
+    });
   });
 });

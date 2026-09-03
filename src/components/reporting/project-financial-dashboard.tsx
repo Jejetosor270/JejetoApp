@@ -28,14 +28,16 @@ interface ActualProfitability {
 }
 
 interface FreightReconciliationView {
+  actualComplete: boolean;
   actualCostHt: string | null;
-  allowanceHt: string | null;
   complete: boolean;
   defaultFreightMarkupRate: string;
+  expectedFreightAllowanceHt: string | null;
+  expectedProductPurchaseCostHt: string | null;
   freightEstimateRate: string | null;
   freightGrossProfitHt: string | null;
   headroomHt: string | null;
-  productPurchaseCostHt: string | null;
+  planningComplete: boolean;
   recoveryTargetHt: string | null;
 }
 
@@ -268,50 +270,35 @@ export function ProjectFinancialDashboard({
           <div>
             <h2 className="text-sm font-semibold">Freight reconciliation</h2>
             <p className="text-muted-foreground mt-1 text-xs">
-              Client commercial allowance versus actual Order and Project-level
-              freight costs.
+              Project planning allowance versus recovery required by actual
+              Order and Project-level freight costs.
             </p>
           </div>
           <Badge variant={freight?.complete ? "outline" : "destructive"}>
-            {freight?.complete ? "Complete" : "Incomplete · check FX / pricing"}
+            {freight?.complete
+              ? "Complete"
+              : "Incomplete · check planning / FX"}
           </Badge>
         </div>
-        <dl className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+        <h3 className="text-muted-foreground mt-4 text-xs font-semibold tracking-wide uppercase">
+          Planning
+        </h3>
+        <dl className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {(
             [
+              [
+                "Expected Product Purchase Cost HT",
+                freight?.expectedProductPurchaseCostHt ?? null,
+                "money",
+              ],
               [
                 "Freight Estimate %",
                 freight?.freightEstimateRate ?? null,
                 "rate",
               ],
               [
-                "Product Purchase Cost HT",
-                freight?.productPurchaseCostHt ?? null,
-                "money",
-              ],
-              [
-                "Client Freight Allowance HT",
-                freight?.allowanceHt ?? null,
-                "money",
-              ],
-              [
-                "Actual Freight Cost HT",
-                freight?.actualCostHt ?? null,
-                "money",
-              ],
-              [
-                "Freight Recovery Target HT",
-                freight?.recoveryTargetHt ?? null,
-                "money",
-              ],
-              [
-                "Freight Gross Profit HT",
-                freight?.freightGrossProfitHt ?? null,
-                "money",
-              ],
-              [
-                "Freight Variance / Headroom",
-                freight?.headroomHt ?? null,
+                "Expected Freight Allowance HT",
+                freight?.expectedFreightAllowanceHt ?? null,
                 "money",
               ],
             ] as const
@@ -322,6 +309,29 @@ export function ProjectFinancialDashboard({
                 {kind === "rate"
                   ? formatRate(value)
                   : formatMoney(value, currency)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <h3 className="text-muted-foreground mt-4 text-xs font-semibold tracking-wide uppercase">
+          Actual
+        </h3>
+        <dl className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {(
+            [
+              ["Actual Freight Cost HT", freight?.actualCostHt ?? null],
+              ["Freight Recovery Target HT", freight?.recoveryTargetHt ?? null],
+              [
+                "Freight Gross Profit HT",
+                freight?.freightGrossProfitHt ?? null,
+              ],
+              ["Freight Variance / Headroom", freight?.headroomHt ?? null],
+            ] as const
+          ).map(([label, value]) => (
+            <div className="bg-muted/25 rounded-md border p-3" key={label}>
+              <dt className="text-muted-foreground text-xs">{label}</dt>
+              <dd className="financial-figure mt-1 text-sm font-semibold">
+                {formatMoney(value, currency)}
               </dd>
             </div>
           ))}

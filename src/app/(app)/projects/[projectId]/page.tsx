@@ -9,7 +9,6 @@ import { listProjectFormOptions } from "@/lib/master-data/lookups";
 import { getProject } from "@/lib/master-data/projects";
 import { projectItemSummary } from "@/lib/items/items";
 import { formatMoney } from "@/domain/procurement/presentation";
-import { projectFreightEstimate } from "@/domain/items/calculations";
 import { getProjectReportingSnapshot } from "@/lib/reporting/reports";
 import { getApplicationSettings } from "@/lib/settings/application-settings";
 import { getProjectClientBillingSummary } from "@/lib/billing/billing";
@@ -101,12 +100,6 @@ export default async function ProjectPage({
       project.clientBudgetTargetHt?.toString() ?? targets.expectedSellHt,
     ),
   };
-  const estimatedFreight = itemSummary?.purchase
-    ? projectFreightEstimate(
-        itemSummary.purchase,
-        project.freightEstimateRate?.toString() ?? null,
-      )
-    : null;
   return (
     <ProjectDetail
       buildings={buildings}
@@ -116,7 +109,7 @@ export default async function ProjectPage({
       financialDashboard={
         <>
           {itemSummary ? (
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border p-3">
                 <p className="text-muted-foreground text-xs">Items</p>
                 <p className="mt-1 text-xl font-semibold">
@@ -141,14 +134,6 @@ export default async function ProjectPage({
                     itemSummary.selling,
                     project.reportingCurrencyCode,
                   )}
-                </p>
-              </div>
-              <div className="rounded-lg border p-3">
-                <p className="text-muted-foreground text-xs">
-                  Client freight allowance (Item purchase plan)
-                </p>
-                <p className="financial-figure mt-1 font-semibold">
-                  {formatMoney(estimatedFreight, project.reportingCurrencyCode)}
                 </p>
               </div>
             </section>

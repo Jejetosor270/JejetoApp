@@ -155,6 +155,7 @@ export async function getProjectFreightReconciliation(projectId: string) {
       where: { id: projectId },
       select: {
         defaultFreightMarkupRate: true,
+        estimatedPurchaseCostHt: true,
         freightEstimateRate: true,
         reportingCurrencyCode: true,
       },
@@ -164,37 +165,17 @@ export async function getProjectFreightReconciliation(projectId: string) {
   ]);
   if (!project) return null;
   const activeOrders = orders.filter((order) => order.status !== "CANCELLED");
-  const convertedOrders = activeOrders.map((order) => {
-    const productPurchaseCost = order.costs.purchaseCost
+  const convertedOrders = activeOrders.map((order) => ({
+    freightCostHt: order.costs.freight
       ? convertedAmount({
-          amount: order.costs.purchaseCost,
+          amount: order.costs.freight,
           currencyCode: order.orderCurrencyCode,
           fxRate: order.costs.purchaseFxRate,
           reportingCurrencyCode: project.reportingCurrencyCode,
         })
-      : "0.0000";
-    const allowanceOverride = order.freightAllowanceOverrideAmount
-      ? convertedAmount({
-          amount: order.freightAllowanceOverrideAmount,
-          currencyCode: order.sellingCurrencyCode,
-          fxRate: order.costs.sellingFxRate,
-          reportingCurrencyCode: project.reportingCurrencyCode,
-        })
-      : null;
-    return {
-      allowanceOverrideHt: allowanceOverride,
-      freightCostHt: order.costs.freight
-        ? convertedAmount({
-            amount: order.costs.freight,
-            currencyCode: order.orderCurrencyCode,
-            fxRate: order.costs.purchaseFxRate,
-            reportingCurrencyCode: project.reportingCurrencyCode,
-          })
-        : "0.0000",
-      freightMarkupRate: order.componentPricing.freightMarkupRate,
-      productPurchaseCostHt: productPurchaseCost,
-    };
-  });
+      : "0.0000",
+    freightMarkupRate: order.componentPricing.freightMarkupRate,
+  }));
   const convertedExpenses = expenses.map((expense) => ({
     costHt: convertedAmount({
       amount: expense.costAmountHt.toString(),
@@ -210,6 +191,8 @@ export async function getProjectFreightReconciliation(projectId: string) {
     ...reconcileProjectFreight({
       expenses: convertedExpenses,
       orders: convertedOrders,
+      projectExpectedProductPurchaseCostHt:
+        project.estimatedPurchaseCostHt?.toString() ?? null,
       projectFreightEstimateRate:
         project.freightEstimateRate?.toString() ?? null,
     }),

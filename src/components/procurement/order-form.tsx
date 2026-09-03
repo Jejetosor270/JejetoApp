@@ -1188,9 +1188,7 @@ export function OrderForm({
                 </p>
               </div>
               <span className="rounded-md border px-2 py-1 text-xs font-medium">
-                {freightAllowanceIsManual
-                  ? "MANUAL"
-                  : "AUTO · PROJECT ESTIMATE"}
+                {freightAllowanceIsManual ? "MANUAL" : "AUTO · ORDER PURCHASE"}
               </span>
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
@@ -1232,7 +1230,7 @@ export function OrderForm({
                   </>
                 )}
               </Field>
-              <Field label="Freight estimate %">
+              <Field label="Project freight estimate %">
                 <p className="financial-figure bg-muted rounded-md border px-3 py-2">
                   {project?.freightEstimateRate
                     ? formatRate(project.freightEstimateRate)

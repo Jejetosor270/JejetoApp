@@ -43,6 +43,8 @@ describe("financial percentage presentation boundaries", () => {
       "src/components/reporting/project-financial-dashboard.tsx",
     );
     expect(dashboard).toContain('"Freight Estimate %"');
+    expect(dashboard).toContain('"Expected Product Purchase Cost HT"');
+    expect(dashboard).toContain('"Expected Freight Allowance HT"');
     expect(dashboard).toContain("? formatRate(value)");
     expect(dashboard).toContain(
       "formatRate(freight?.defaultFreightMarkupRate ?? null)",

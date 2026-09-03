@@ -6,21 +6,22 @@ export interface FreightReconciliationInput {
     markupRate: string;
   }[];
   orders: readonly {
-    allowanceOverrideHt?: string | null;
     freightCostHt: string | null;
     freightMarkupRate: string;
-    productPurchaseCostHt: string | null;
   }[];
+  projectExpectedProductPurchaseCostHt: string | null;
   projectFreightEstimateRate: string | null;
 }
 
 export interface FreightReconciliation {
+  actualComplete: boolean;
   actualCostHt: string | null;
-  allowanceHt: string | null;
   complete: boolean;
+  expectedFreightAllowanceHt: string | null;
+  expectedProductPurchaseCostHt: string | null;
   freightGrossProfitHt: string | null;
   headroomHt: string | null;
-  productPurchaseCostHt: string | null;
+  planningComplete: boolean;
   recoveryTargetHt: string | null;
 }
 
@@ -30,7 +31,7 @@ function nonNegative(value: string, label: string): Decimal {
   return amount;
 }
 
-export function clientFreightAllowance(
+export function freightAllowanceFromPurchaseCost(
   productPurchaseCostHt: string,
   freightEstimateRate: string,
 ): Decimal {
@@ -54,7 +55,7 @@ export function resolveOrderFreightAllowance(input: {
     };
   }
   return {
-    amount: clientFreightAllowance(
+    amount: freightAllowanceFromPurchaseCost(
       input.productPurchaseCostHt,
       input.projectFreightEstimateRate,
     ),
@@ -74,60 +75,54 @@ export function freightRecoveryTarget(
 export function reconcileProjectFreight(
   input: FreightReconciliationInput,
 ): FreightReconciliation {
-  const incomplete = (): FreightReconciliation => ({
-    actualCostHt: null,
-    allowanceHt: null,
-    complete: false,
-    freightGrossProfitHt: null,
-    headroomHt: null,
-    productPurchaseCostHt: null,
-    recoveryTargetHt: null,
-  });
-  if (
-    (input.projectFreightEstimateRate === null &&
-      input.orders.some(
-        (order) =>
-          order.allowanceOverrideHt === null ||
-          order.allowanceOverrideHt === undefined,
-      )) ||
-    input.orders.some(
-      (order) =>
-        order.productPurchaseCostHt === null || order.freightCostHt === null,
-    ) ||
-    input.expenses.some((expense) => expense.costHt === null)
-  ) {
-    return incomplete();
+  const planningComplete =
+    input.projectExpectedProductPurchaseCostHt !== null &&
+    input.projectFreightEstimateRate !== null;
+  const expectedProductPurchaseCost = planningComplete
+    ? nonNegative(
+        input.projectExpectedProductPurchaseCostHt ?? "0",
+        "Expected product purchase cost",
+      )
+    : null;
+  const expectedFreightAllowance =
+    expectedProductPurchaseCost !== null &&
+    input.projectFreightEstimateRate !== null
+      ? freightAllowanceFromPurchaseCost(
+          expectedProductPurchaseCost.toString(),
+          input.projectFreightEstimateRate,
+        )
+      : null;
+  const actualComplete =
+    input.orders.every((order) => order.freightCostHt !== null) &&
+    input.expenses.every((expense) => expense.costHt !== null);
+
+  if (!actualComplete) {
+    return {
+      actualComplete: false,
+      actualCostHt: null,
+      complete: false,
+      expectedFreightAllowanceHt: expectedFreightAllowance?.toFixed(4) ?? null,
+      expectedProductPurchaseCostHt:
+        expectedProductPurchaseCost?.toFixed(4) ?? null,
+      freightGrossProfitHt: null,
+      headroomHt: null,
+      planningComplete,
+      recoveryTargetHt: null,
+    };
   }
 
-  let productPurchaseCost = new Decimal(0);
-  let allowance = new Decimal(0);
   let actualCost = new Decimal(0);
   let recovery = new Decimal(0);
   for (const order of input.orders) {
-    if (order.productPurchaseCostHt === null || order.freightCostHt === null)
-      return incomplete();
-    const orderProductPurchaseCost = nonNegative(
-      order.productPurchaseCostHt,
-      "Product purchase cost",
-    );
+    if (order.freightCostHt === null) continue;
     const orderCost = nonNegative(order.freightCostHt, "Freight cost");
-    productPurchaseCost = productPurchaseCost.plus(orderProductPurchaseCost);
-    allowance = allowance.plus(
-      resolveOrderFreightAllowance({
-        ...(order.allowanceOverrideHt === undefined
-          ? {}
-          : { allowanceOverrideHt: order.allowanceOverrideHt }),
-        productPurchaseCostHt: orderProductPurchaseCost.toString(),
-        projectFreightEstimateRate: input.projectFreightEstimateRate ?? "0",
-      }).amount,
-    );
     actualCost = actualCost.plus(orderCost);
     recovery = recovery.plus(
       freightRecoveryTarget(orderCost.toString(), order.freightMarkupRate),
     );
   }
   for (const expense of input.expenses) {
-    if (expense.costHt === null) return incomplete();
+    if (expense.costHt === null) continue;
     const expenseCost = nonNegative(expense.costHt, "Freight expense");
     actualCost = actualCost.plus(expenseCost);
     recovery = recovery.plus(
@@ -135,12 +130,15 @@ export function reconcileProjectFreight(
     );
   }
   return {
+    actualComplete: true,
     actualCostHt: actualCost.toFixed(4),
-    allowanceHt: allowance.toFixed(4),
-    complete: true,
+    complete: planningComplete,
+    expectedFreightAllowanceHt: expectedFreightAllowance?.toFixed(4) ?? null,
+    expectedProductPurchaseCostHt:
+      expectedProductPurchaseCost?.toFixed(4) ?? null,
     freightGrossProfitHt: recovery.minus(actualCost).toFixed(4),
-    headroomHt: allowance.minus(recovery).toFixed(4),
-    productPurchaseCostHt: productPurchaseCost.toFixed(4),
+    headroomHt: expectedFreightAllowance?.minus(recovery).toFixed(4) ?? null,
+    planningComplete,
     recoveryTargetHt: recovery.toFixed(4),
   };
 }
