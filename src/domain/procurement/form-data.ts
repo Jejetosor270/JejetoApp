@@ -32,6 +32,10 @@ export function orderFormValues(formData: FormData) {
       "inputVatCustomTreatmentNote",
     ),
     inputVatRate: stringValue(formData, "inputVatRate"),
+    inputVatRecoverableRate: stringValue(
+      formData,
+      "inputVatRecoverablePercent",
+    ),
     inputVatRecoverability: stringValue(formData, "inputVatRecoverability"),
     inputVatTaxableBase: stringValue(formData, "inputVatTaxableBase"),
     inputVatTreatment: stringValue(formData, "inputVatTreatment"),

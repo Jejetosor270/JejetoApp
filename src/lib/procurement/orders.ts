@@ -47,6 +47,12 @@ import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
 import { paginationSkip, type PageInput } from "@/domain/listing/validation";
 import { supplierPayableBase } from "@/domain/payments/calculations";
+import {
+  inputVatRecoverabilityApplies,
+  recoverabilityFromRate,
+  resolveRecoverableRate,
+  vatEconomicCostContribution,
+} from "@/domain/vat/recoverability";
 
 import { ProcurementNotFoundError, ProcurementRelationError } from "./errors";
 
@@ -110,6 +116,7 @@ export interface VatSummary {
   customTreatmentNote: string | null;
   rate: string | null;
   recoverability: VatRecoverability | null;
+  recoverableRate: string | null;
   reportingAmount: string | null;
   taxableBase: string;
   taxableBaseIsManual: boolean;
@@ -270,6 +277,7 @@ function vatSummary(
     customTreatmentNote: entry.customTreatmentNote,
     rate: entry.vatRate?.toString() ?? null,
     recoverability: entry.recoverability,
+    recoverableRate: entry.recoverableRate?.toString() ?? null,
     reportingAmount: reporting?.toString() ?? null,
     taxableBase: (effectiveTaxableBase ?? entry.taxableBaseAmount).toString(),
     taxableBaseIsManual,
@@ -405,10 +413,13 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
   const landed = currentLandedCost(order);
   const input = vatEntry(order, VatDirection.INPUT);
   const output = vatEntry(order, VatDirection.OUTPUT);
-  const nonRecoverableInputVat =
-    input?.recoverability === VatRecoverability.NON_RECOVERABLE
-      ? new Decimal(input.vatAmount.toString())
-      : new Decimal(0);
+  const nonRecoverableInputVat = input
+    ? vatEconomicCostContribution({
+        recoverability: input.recoverability,
+        recoverableRate: input.recoverableRate,
+        vatAmount: input.vatAmount,
+      })
+    : new Decimal(0);
   const economic = landed
     ? economicLandedCost(landed, nonRecoverableInputVat)
     : null;
@@ -965,6 +976,14 @@ function vatEntries(
     inputPricing(input, project).totalSell,
     input.outputVatTaxableBaseOverride,
   );
+  const inputRecoverableRate = inputVatRecoverabilityApplies(
+    input.inputVatTreatment,
+  )
+    ? resolveRecoverableRate({
+        recoverability: input.inputVatRecoverability,
+        recoverableRate: input.inputVatRecoverableRate,
+      })
+    : null;
   const values = [
     {
       amount: input.inputVatAmount,
@@ -972,7 +991,10 @@ function vatEntries(
       customTreatmentNote: input.inputVatCustomTreatmentNote,
       direction: VatDirection.INPUT,
       rate: input.inputVatRate,
-      recoverability: input.inputVatRecoverability ?? null,
+      recoverability: inputRecoverableRate
+        ? recoverabilityFromRate(inputRecoverableRate)
+        : null,
+      recoverableRate: inputRecoverableRate?.toFixed(6) ?? null,
       taxableBase: input.inputVatTaxableBase,
       treatment: input.inputVatTreatment,
     },
@@ -983,6 +1005,7 @@ function vatEntries(
       direction: VatDirection.OUTPUT,
       rate: input.outputVatRate,
       recoverability: null,
+      recoverableRate: null,
       taxableBase: outputBase ?? undefined,
       treatment: input.outputVatTreatment,
     },
@@ -996,6 +1019,7 @@ function vatEntries(
             direction: entry.direction,
             isAmountOverride: Boolean(entry.amount),
             recoverability: entry.recoverability,
+            recoverableRate: entry.recoverableRate,
             taxableBaseAmount: entry.taxableBase,
             treatment: entry.treatment,
             vatAmount:

@@ -109,6 +109,16 @@ describe("single procurement order cost validation", () => {
     expect(value.inputVatRate).toBe("0.080000");
     expect(value.outputVatRate).toBe("0.200000");
   });
+  it("accepts partial input VAT recoverability as a percentage", () => {
+    const value = createOrderInputSchema.parse({
+      ...base,
+      inputVatRecoverableRate: "60",
+      inputVatTaxableBase: "50000",
+      inputVatRate: "20",
+      inputVatTreatment: "DOMESTIC",
+    });
+    expect(value.inputVatRecoverableRate).toBe("0.600000");
+  });
   it("rejects negative cost and invalid foreign FX", () => {
     expect(() =>
       createOrderInputSchema.parse({ ...base, purchaseCost: "-1" }),

@@ -9,7 +9,6 @@ import {
   ItemLogisticsStatus,
   LogisticsLocationType,
   PricingMode,
-  VatRecoverability,
   VatTreatment,
 } from "@/generated/prisma/client";
 import {
@@ -134,7 +133,10 @@ const itemFields = {
   unitSellingPriceHt: optionalDecimal("Unit selling price"),
   vatAmount: optionalDecimal("VAT amount"),
   vatRate: optionalRate("VAT rate"),
-  vatRecoverability: optionalEnum(VatRecoverability),
+  vatRecoverability: z.preprocess(
+    blankToUndefined,
+    z.enum(["RECOVERABLE", "NON_RECOVERABLE"]).optional(),
+  ),
   vatTreatment: optionalEnum(VatTreatment),
   volumeEach: optionalDecimal("Volume each"),
   totalVolume: optionalDecimal("Total volume"),
@@ -298,7 +300,7 @@ export const inlineItemFinancialInputSchema = z
     vatRecoverability: z.preprocess(
       (value) =>
         typeof value === "string" && value.trim() === "" ? null : value,
-      z.enum(VatRecoverability).nullable(),
+      z.enum(["RECOVERABLE", "NON_RECOVERABLE"]).nullable(),
     ),
     vatTreatment: z.preprocess(
       (value) =>

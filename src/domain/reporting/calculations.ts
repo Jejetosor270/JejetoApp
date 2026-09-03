@@ -15,6 +15,7 @@ import {
   dateOnlyToDate,
   dateToDateOnly,
 } from "@/domain/payments/dates";
+import { calculateInputVatRecovery } from "@/domain/vat/recoverability";
 
 const ZERO = new Decimal(0);
 const DAY_MILLISECONDS = 86_400_000;
@@ -43,6 +44,7 @@ export interface ReportingOrderInput {
   inputVat: {
     amount: string;
     recoverability: string | null;
+    recoverableRate?: string | null;
     treatment: string;
   } | null;
   orderCurrencyCode: string;
@@ -258,7 +260,19 @@ export function calculateReportingOrder(
           sellingPrice: salesRevenue,
         })
       : null;
-  const inputRecoverability = input.inputVat?.recoverability;
+  const inputRecovery =
+    inputVat !== null && input.inputVat
+      ? calculateInputVatRecovery({
+          recoverability:
+            input.inputVat.recoverability === "RECOVERABLE" ||
+            input.inputVat.recoverability === "NON_RECOVERABLE" ||
+            input.inputVat.recoverability === "PARTIALLY_RECOVERABLE"
+              ? input.inputVat.recoverability
+              : null,
+          recoverableRate: input.inputVat.recoverableRate,
+          vatAmount: inputVat,
+        })
+      : null;
   return {
     clientReceivable,
     customsDuties: orderCostAmount(input, input.cost.customsDuties),
@@ -272,20 +286,12 @@ export function calculateReportingOrder(
     markupRate: metrics?.markupRate ?? null,
     miscellaneous: orderCostAmount(input, input.cost.miscellaneous),
     nonRecoverableInputVat:
-      inputVat === null
-        ? null
-        : inputRecoverability === "NON_RECOVERABLE"
-          ? inputVat
-          : ZERO,
+      inputVat === null ? null : (inputRecovery?.nonDeductibleVat ?? ZERO),
     outputVat,
     packageSellingPrice: orderSellingAmount(input, input.packageSellingPrice),
     purchaseCost: orderCostAmount(input, input.cost.purchaseCost),
     recoverableInputVat:
-      inputVat === null
-        ? null
-        : inputRecoverability === "RECOVERABLE"
-          ? inputVat
-          : ZERO,
+      inputVat === null ? null : (inputRecovery?.deductibleVat ?? ZERO),
     rechargedFreight:
       input.freightTreatment === "RECHARGED_SEPARATELY"
         ? orderSellingAmount(input, input.freightResaleAmount)

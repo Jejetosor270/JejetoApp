@@ -297,6 +297,10 @@ async function main(): Promise<void> {
           direction: VatDirection.INPUT,
           countryCode: "CH",
           isAmountOverride: false,
+          recoverableRate:
+            item.input.recoverability === VatRecoverability.RECOVERABLE
+              ? "1.000000"
+              : "0.000000",
           createdById: admin.id,
           updatedById: admin.id,
           ...item.input,
@@ -307,6 +311,7 @@ async function main(): Promise<void> {
           countryCode: "BE",
           isAmountOverride: false,
           recoverability: null,
+          recoverableRate: null,
           createdById: admin.id,
           updatedById: admin.id,
           ...item.output,

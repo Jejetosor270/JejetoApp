@@ -3,15 +3,82 @@ import "server-only";
 import Decimal from "decimal.js";
 
 import { Prisma } from "@/generated/prisma/client";
-import { reportingAmount } from "@/domain/finance/calculations";
+import {
+  reportingAmount,
+  vatAmount as calculateVatAmount,
+} from "@/domain/finance/calculations";
 import { reconcileProjectFreight } from "@/domain/freight/calculations";
-import type { ProjectFreightExpenseInput } from "@/domain/freight/validation";
+import type {
+  ProjectFreightExpenseInput,
+  UpdateProjectFreightExpenseInput,
+} from "@/domain/freight/validation";
 import { dateOnlyToDate, dateToDateOnly } from "@/domain/payments/dates";
 import { writeAuditEvent } from "@/lib/audit/events";
 import { getDatabase } from "@/lib/db";
 import { listProjectOrders } from "@/lib/procurement/orders";
+import {
+  calculateInputVatRecovery,
+  inputVatRecoverabilityApplies,
+  recoverabilityFromRate,
+} from "@/domain/vat/recoverability";
 
 export class ProjectFreightExpenseError extends Error {}
+
+function freightVat(
+  input: Pick<
+    ProjectFreightExpenseInput,
+    | "costAmountHt"
+    | "vatAmount"
+    | "vatRate"
+    | "vatRecoverableRate"
+    | "vatTreatment"
+  >,
+) {
+  if (!input.vatTreatment)
+    return {
+      recoverability: null,
+      recoverableRate: null,
+      vatAmount: null,
+      vatAmountIsManual: false,
+      vatRate: null,
+      vatTreatment: null,
+    };
+  const recoverableRate = inputVatRecoverabilityApplies(input.vatTreatment)
+    ? (input.vatRecoverableRate ?? null)
+    : null;
+  const amount =
+    input.vatAmount ??
+    calculateVatAmount(input.costAmountHt, input.vatRate ?? "0").toFixed(4);
+  return {
+    recoverability:
+      recoverableRate === null ? null : recoverabilityFromRate(recoverableRate),
+    recoverableRate,
+    vatAmount: amount,
+    vatAmountIsManual: input.vatAmount !== undefined,
+    vatRate: input.vatRate ?? null,
+    vatTreatment: input.vatTreatment,
+  };
+}
+
+function freightExpenseEconomicCost(input: {
+  costAmountHt: { toString(): string };
+  recoverability: Parameters<
+    typeof calculateInputVatRecovery
+  >[0]["recoverability"];
+  recoverableRate: { toString(): string } | null;
+  vatAmount: { toString(): string } | null;
+}): string {
+  if (!input.vatAmount) return input.costAmountHt.toString();
+  return new Decimal(input.costAmountHt.toString())
+    .plus(
+      calculateInputVatRecovery({
+        recoverability: input.recoverability,
+        recoverableRate: input.recoverableRate?.toString() ?? null,
+        vatAmount: input.vatAmount.toString(),
+      }).nonDeductibleVat,
+    )
+    .toFixed(4);
+}
 
 function convertedAmount(input: {
   amount: string;
@@ -46,8 +113,15 @@ export async function listProjectFreightExpenses(projectId: string) {
     fxRate: expense.fxRateToReporting?.toString() ?? null,
     id: expense.id,
     notes: expense.notes,
+    recoverability: expense.recoverability,
+    recoverableRate: expense.recoverableRate?.toString() ?? null,
     reference: expense.reference,
+    supplierId: expense.supplierId,
     supplier: expense.supplier,
+    vatAmount: expense.vatAmount?.toString() ?? null,
+    vatAmountIsManual: expense.vatAmountIsManual,
+    vatRate: expense.vatRate?.toString() ?? null,
+    vatTreatment: expense.vatTreatment,
   }));
 }
 
@@ -80,6 +154,7 @@ export async function createProjectFreightExpense(
     throw new ProjectFreightExpenseError(
       "Enter the manual FX rate to the Project reporting currency.",
     );
+  const vat = freightVat(input);
   await database.$transaction(async (transaction) => {
     const expense = await transaction.projectFreightExpense.create({
       data: {
@@ -98,6 +173,7 @@ export async function createProjectFreightExpense(
         reference: input.reference ?? null,
         supplierId: input.supplierId,
         updatedById: actorId,
+        ...vat,
       },
       select: { id: true },
     });
@@ -112,9 +188,54 @@ export async function createProjectFreightExpense(
           "currencyCode",
           "fxRate",
           "freightMarkupOverrideRate",
+          "vatTreatment",
+          "vatRate",
+          "vatAmount",
+          "recoverableRate",
         ],
       },
       summary: "Created a Project-level freight expense.",
+    });
+  });
+}
+
+export async function updateProjectFreightExpense(
+  actorId: string,
+  input: UpdateProjectFreightExpenseInput,
+): Promise<void> {
+  const database = getDatabase();
+  const existing = await database.projectFreightExpense.findUnique({
+    where: { id: input.id },
+    select: {
+      costAmountHt: true,
+      description: true,
+      projectId: true,
+      reference: true,
+    },
+  });
+  if (!existing || existing.projectId !== input.projectId)
+    throw new ProjectFreightExpenseError("Freight expense not found.");
+  const vat = freightVat({
+    ...input,
+    costAmountHt: existing.costAmountHt.toString(),
+  });
+  await database.$transaction(async (transaction) => {
+    await transaction.projectFreightExpense.update({
+      where: { id: input.id },
+      data: {
+        updatedById: actorId,
+        ...vat,
+      },
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "UPDATED",
+      entityId: input.id,
+      entityReference: existing.reference ?? existing.description,
+      entityType: "FREIGHT_EXPENSE",
+      metadata: {
+        fields: ["vatTreatment", "vatRate", "vatAmount", "recoverableRate"],
+      },
+      summary: "Updated a Project-level freight expense.",
     });
   });
 }
@@ -178,7 +299,7 @@ export async function getProjectFreightReconciliation(projectId: string) {
   }));
   const convertedExpenses = expenses.map((expense) => ({
     costHt: convertedAmount({
-      amount: expense.costAmountHt.toString(),
+      amount: freightExpenseEconomicCost(expense),
       currencyCode: expense.currencyCode,
       fxRate: expense.fxRateToReporting?.toString() ?? null,
       reportingCurrencyCode: project.reportingCurrencyCode,

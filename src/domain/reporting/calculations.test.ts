@@ -19,6 +19,7 @@ function order(
     economicCost: string;
     inputVat?: string;
     inputVatRecoverability?: string;
+    inputVatRecoverableRate?: string;
     outputVat?: string;
     purchaseCost: string;
     sales: string;
@@ -44,6 +45,7 @@ function order(
       ? {
           amount: values.inputVat,
           recoverability: values.inputVatRecoverability ?? "RECOVERABLE",
+          recoverableRate: values.inputVatRecoverableRate ?? null,
           treatment: "DOMESTIC",
         }
       : null,
@@ -147,6 +149,22 @@ describe("project financial reporting", () => {
 
     expect(result.orders[0]?.nonRecoverableInputVat?.toString()).toBe("16");
     expect(result.grossProfit?.toString()).toBe("24");
+  });
+
+  it("aggregates only the deductible share of partial input VAT", () => {
+    const result = calculateProjectFinancialSummary([
+      order("a", {
+        economicCost: "84",
+        inputVat: "10",
+        inputVatRecoverability: "PARTIALLY_RECOVERABLE",
+        inputVatRecoverableRate: "0.60",
+        purchaseCost: "80",
+        sales: "100",
+      }),
+    ]);
+
+    expect(result.orders[0]?.recoverableInputVat?.toString()).toBe("6");
+    expect(result.orders[0]?.nonRecoverableInputVat?.toString()).toBe("4");
   });
 
   it("flags missing foreign-currency FX instead of adding unlike currencies", () => {

@@ -8,6 +8,7 @@ import {
   ProcurementCostCategory,
   ProcurementOrderStatus,
   VatDirection,
+  VatRecoverability,
   VatTreatment,
 } from "@/generated/prisma/client";
 
@@ -107,6 +108,7 @@ function sellingOrder(
         isAmountOverride: false,
         orderId: "e12b6b9b-10e9-4e42-b93f-38796de4f65a",
         recoverability: null,
+        recoverableRate: null,
         taxableBaseAmount: new Decimal("90000"),
         treatment,
         updatedAt: timestamp,
@@ -142,6 +144,7 @@ describe("single order cost write", () => {
       buildingIds: [],
       freightTreatment: "NOT_APPLICABLE",
       inputVatRecoverability: "NON_RECOVERABLE",
+      inputVatRecoverableRate: "0",
       inputVatRate: "20",
       inputVatTaxableBase: "65000",
       inputVatTreatment: "IMPORT",
@@ -179,6 +182,7 @@ describe("single order cost write", () => {
         data: expect.arrayContaining([
           expect.objectContaining({
             recoverability: "NON_RECOVERABLE",
+            recoverableRate: "0.000000",
             vatAmount: "13000.0000",
           }),
           expect.objectContaining({
@@ -209,6 +213,43 @@ describe("single order cost write", () => {
 
     expect(summary.totalSellingRevenue).toBe("95000");
     expect(summary.totalSellingAmountIncludingVat).toBe("95000");
+  });
+
+  it("adds only non-deductible partial input VAT to economic cost", () => {
+    const order = sellingOrder("0", VatTreatment.OUT_OF_SCOPE);
+    order.costLines = [
+      {
+        category: ProcurementCostCategory.SUPPLIER_PURCHASE,
+        createdAt: timestamp,
+        createdById: null,
+        description: null,
+        id: "c12b6b9b-10e9-4e42-b93f-38796de4f65a",
+        originalAmount: new Decimal("8000"),
+        orderId: order.id,
+        updatedAt: timestamp,
+        updatedById: null,
+      },
+    ];
+    order.vatEntries.unshift({
+      countryCode: "FR",
+      createdAt: timestamp,
+      createdById: null,
+      customTreatmentNote: null,
+      direction: VatDirection.INPUT,
+      id: "a22b6b9b-10e9-4e42-b93f-38796de4f65a",
+      isAmountOverride: true,
+      orderId: order.id,
+      recoverability: VatRecoverability.PARTIALLY_RECOVERABLE,
+      recoverableRate: new Decimal("0.60"),
+      taxableBaseAmount: new Decimal("50000"),
+      treatment: VatTreatment.DOMESTIC,
+      updatedAt: timestamp,
+      updatedById: null,
+      vatAmount: new Decimal("10000"),
+      vatRate: new Decimal("0.20"),
+    });
+
+    expect(summarizeOrder(order).costs.economicLandedCost).toBe("12000");
   });
 
   it("derives Product and Freight selling independently from inherited markups", () => {

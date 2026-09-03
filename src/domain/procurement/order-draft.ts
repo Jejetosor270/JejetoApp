@@ -18,7 +18,7 @@ export interface OrderDraft {
   inputVatCountryCode: string;
   inputVatCustomTreatmentNote: string;
   inputVatRate: string;
-  inputVatRecoverability: string;
+  inputVatRecoverablePercent: string;
   inputVatTaxableBase: string;
   inputVatTreatment: string;
   leadTimeWeeks: string;

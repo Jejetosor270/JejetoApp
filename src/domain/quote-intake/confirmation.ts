@@ -4,7 +4,10 @@ import { z } from "zod";
 import { isSupportedCountryCode } from "@/config/countries";
 import { europeanInputToDateOnly, isDateOnly } from "@/domain/payments/dates";
 import { VatRecoverability, VatTreatment } from "@/generated/prisma/client";
-import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
+import {
+  inputVatRecoverabilityApplies,
+  recoverabilityFromRate,
+} from "@/domain/vat/recoverability";
 import { optionalPercentageFraction } from "@/domain/validation/percentage";
 import { normalizeNumericText } from "@/domain/validation/numeric";
 
@@ -162,6 +165,7 @@ const confirmationSchema = z
     ),
     inputVatCustomTreatmentNote: optionalString(240),
     inputVatRate: optionalPercent,
+    inputVatRecoverableRate: optionalPercent,
     inputVatRecoverability: z.enum(VatRecoverability).optional(),
     inputVatTaxableBase: optionalMoney,
     inputVatTreatment: z.enum(VatTreatment).optional(),
@@ -305,6 +309,7 @@ const confirmationSchema = z
       if (
         !value.inputVatTreatment ||
         (inputVatRecoverabilityApplies(value.inputVatTreatment) &&
+          value.inputVatRecoverableRate === undefined &&
           !value.inputVatRecoverability)
       ) {
         context.addIssue({
@@ -322,6 +327,27 @@ const confirmationSchema = z
           code: "custom",
           message: "Recoverability does not apply to this VAT treatment.",
           path: ["inputVatRecoverability"],
+        });
+      if (
+        value.inputVatRecoverableRate !== undefined &&
+        value.inputVatRecoverability &&
+        recoverabilityFromRate(value.inputVatRecoverableRate) !==
+          value.inputVatRecoverability
+      )
+        context.addIssue({
+          code: "custom",
+          message: "Recoverability status and percentage do not match.",
+          path: ["inputVatRecoverableRate"],
+        });
+      if (
+        value.inputVatRecoverability ===
+          VatRecoverability.PARTIALLY_RECOVERABLE &&
+        value.inputVatRecoverableRate === undefined
+      )
+        context.addIssue({
+          code: "custom",
+          message: "Enter the partial recoverable percentage.",
+          path: ["inputVatRecoverableRate"],
         });
       if (!value.inputVatTaxableBase) {
         context.addIssue({
@@ -449,6 +475,10 @@ export function quoteConfirmationValues(formData: FormData): unknown {
       "inputVatCustomTreatmentNote",
     ),
     inputVatRate: stringValue(formData, "inputVatRate"),
+    inputVatRecoverableRate: stringValue(
+      formData,
+      "inputVatRecoverablePercent",
+    ),
     inputVatRecoverability: stringValue(formData, "inputVatRecoverability"),
     inputVatTaxableBase: stringValue(formData, "inputVatTaxableBase"),
     inputVatTreatment: stringValue(formData, "inputVatTreatment"),

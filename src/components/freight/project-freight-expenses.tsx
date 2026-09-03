@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 import {
   createProjectFreightExpenseAction,
   deleteProjectFreightExpenseAction,
+  updateProjectFreightExpenseAction,
 } from "@/app/(app)/projects/[projectId]/actions";
 import { initialMasterDataActionState } from "@/components/master-data/action-state";
 import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
@@ -17,7 +18,13 @@ import {
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
-import { formatMoney, formatRate } from "@/domain/procurement/presentation";
+import {
+  formatMoney,
+  formatRate,
+  rateToPercentInput,
+} from "@/domain/procurement/presentation";
+import { vatTreatments } from "@/config/vat";
+import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 
 interface ExpenseView {
   costAmountHt: string;
@@ -28,8 +35,83 @@ interface ExpenseView {
   fxRate: string | null;
   id: string;
   notes: string | null;
+  recoverability: string | null;
+  recoverableRate: string | null;
   reference: string | null;
+  supplierId: string | null;
   supplier: { displayName: string } | null;
+  vatAmount: string | null;
+  vatAmountIsManual: boolean;
+  vatRate: string | null;
+  vatTreatment: string | null;
+}
+
+function vatLabel(value: string): string {
+  return value
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function VatFields({
+  errors,
+  initial,
+  onTreatmentChange,
+  treatment,
+}: {
+  errors: Record<string, string>;
+  initial?: ExpenseView | undefined;
+  onTreatmentChange: (value: string) => void;
+  treatment: string;
+}) {
+  const recoverabilityApplies = inputVatRecoverabilityApplies(treatment);
+  return (
+    <>
+      <Field error={errors.vatTreatment} label="VAT treatment">
+        <select
+          className={inputClassName}
+          name="vatTreatment"
+          onChange={(event) => onTreatmentChange(event.target.value)}
+          value={treatment}
+        >
+          <option value="">No VAT recorded</option>
+          {vatTreatments.map((value) => (
+            <option key={value} value={value}>
+              {vatLabel(value)}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field error={errors.vatRate} label="VAT rate %">
+        <PercentageInput
+          defaultValue={rateToPercentInput(initial?.vatRate ?? null)}
+          disabled={!treatment}
+          name="vatRate"
+          placeholder="20.00"
+        />
+      </Field>
+      <Field error={errors.vatAmount} label="VAT amount override">
+        <MoneyInput
+          defaultValue={initial?.vatAmountIsManual ? initial.vatAmount : ""}
+          disabled={!treatment}
+          name="vatAmount"
+        />
+      </Field>
+      <Field
+        error={errors.vatRecoverableRate}
+        label="Recoverability %"
+        required={recoverabilityApplies}
+      >
+        <PercentageInput
+          defaultValue={rateToPercentInput(initial?.recoverableRate ?? null)}
+          disabled={!recoverabilityApplies}
+          name="vatRecoverableRate"
+          placeholder="100.00"
+          required={recoverabilityApplies}
+        />
+      </Field>
+    </>
+  );
 }
 
 function DeleteExpense({ id }: { id: string }) {
@@ -45,6 +127,43 @@ function DeleteExpense({ id }: { id: string }) {
       </Button>
       <ActionFeedback state={state} />
     </form>
+  );
+}
+
+function EditExpenseVat({
+  expense,
+  projectId,
+}: {
+  expense: ExpenseView;
+  projectId: string;
+}) {
+  const { state, onSubmit, pending } = usePersistentActionState(
+    updateProjectFreightExpenseAction,
+    initialMasterDataActionState,
+  );
+  const [treatment, setTreatment] = useState(expense.vatTreatment ?? "");
+  const fieldErrors = state.fieldErrors ?? {};
+  return (
+    <details>
+      <summary className="cursor-pointer text-xs font-medium">Edit VAT</summary>
+      <form
+        className="mt-3 grid min-w-[36rem] gap-3 sm:grid-cols-2"
+        onSubmit={onSubmit}
+      >
+        <input name="id" type="hidden" value={expense.id} />
+        <input name="projectId" type="hidden" value={projectId} />
+        <VatFields
+          errors={fieldErrors}
+          initial={expense}
+          onTreatmentChange={setTreatment}
+          treatment={treatment}
+        />
+        <div className="flex items-center gap-3 sm:col-span-2">
+          <SubmitButton pending={pending}>Save VAT</SubmitButton>
+          <ActionFeedback state={state} />
+        </div>
+      </form>
+    </details>
   );
 }
 
@@ -68,6 +187,7 @@ export function ProjectFreightExpenses({
     initialMasterDataActionState,
   );
   const [currencyCode, setCurrencyCode] = useState(reportingCurrencyCode);
+  const [vatTreatment, setVatTreatment] = useState("");
   const fieldErrors = state.fieldErrors ?? {};
   return (
     <section className="bg-card rounded-lg border p-4">
@@ -148,6 +268,11 @@ export function ProjectFreightExpenses({
               placeholder="Blank uses Project default"
             />
           </Field>
+          <VatFields
+            errors={fieldErrors}
+            onTreatmentChange={setVatTreatment}
+            treatment={vatTreatment}
+          />
           <Field error={fieldErrors.notes} label="Notes">
             <input className={inputClassName} name="notes" />
           </Field>
@@ -166,6 +291,7 @@ export function ProjectFreightExpenses({
               <th className="px-3 py-2">Supplier / reference</th>
               <th className="px-3 py-2 text-right">Cost HT</th>
               <th className="px-3 py-2 text-right">Markup</th>
+              <th className="px-3 py-2 text-right">Input VAT</th>
               {canEdit ? <th className="px-3 py-2">Action</th> : null}
             </tr>
           </thead>
@@ -186,8 +312,14 @@ export function ProjectFreightExpenses({
                     ? formatRate(expense.freightMarkupOverrideRate)
                     : "Project default"}
                 </td>
+                <td className="financial-figure px-3 py-2 text-right">
+                  {expense.vatAmount
+                    ? `${formatMoney(expense.vatAmount, expense.currencyCode)} · ${expense.recoverableRate ? `${formatRate(expense.recoverableRate)} recoverable` : "not deductible"}`
+                    : "—"}
+                </td>
                 {canEdit ? (
-                  <td className="px-3 py-2">
+                  <td className="flex items-start gap-3 px-3 py-2">
+                    <EditExpenseVat expense={expense} projectId={projectId} />
                     <DeleteExpense id={expense.id} />
                   </td>
                 ) : null}

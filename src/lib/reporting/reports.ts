@@ -248,6 +248,7 @@ function orderInput(order: OrderSummary): ReportingOrderInput {
       ? {
           amount: order.costs.inputVat.amount,
           recoverability: order.costs.inputVat.recoverability,
+          recoverableRate: order.costs.inputVat.recoverableRate,
           treatment: order.costs.inputVat.treatment,
         }
       : null,

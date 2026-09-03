@@ -205,7 +205,9 @@ export default async function OrderPage({
               </dd>
               <dt>Input VAT recovery</dt>
               <dd className="text-right text-xs">
-                {cost.inputVat?.recoverability?.replaceAll("_", " ") ?? "—"}
+                {cost.inputVat?.recoverableRate
+                  ? `${formatRate(cost.inputVat.recoverableRate)} · ${cost.inputVat.recoverability?.replaceAll("_", " ").toLowerCase()}`
+                  : "—"}
               </dd>
               <dt>Selling reporting</dt>
               <dd className="financial-figure text-right">

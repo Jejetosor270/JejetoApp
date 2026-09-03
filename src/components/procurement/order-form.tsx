@@ -84,6 +84,7 @@ interface VatView {
   customTreatmentNote: string | null;
   rate: string | null;
   recoverability: string | null;
+  recoverableRate: string | null;
   taxableBase: string;
   treatment: string;
 }
@@ -260,7 +261,7 @@ function InputVatFields({
               const nextTreatment = event.target.value;
               onChange("inputVatTreatment", nextTreatment);
               if (!inputVatRecoverabilityApplies(nextTreatment))
-                onChange("inputVatRecoverability", "");
+                onChange("inputVatRecoverablePercent", "");
             }}
             value={draft.inputVatTreatment}
           >
@@ -274,30 +275,22 @@ function InputVatFields({
         </Field>
         {showRecoverability ? (
           <Field
-            error={fieldErrors.inputVatRecoverability}
-            label="Recoverability"
+            error={fieldErrors.inputVatRecoverableRate}
+            label="Recoverability %"
           >
-            <select
-              aria-invalid={
-                Boolean(fieldErrors.inputVatRecoverability) || undefined
+            <PercentageInput
+              className={errorClass("inputVatRecoverableRate")}
+              invalid={Boolean(fieldErrors.inputVatRecoverableRate)}
+              name="inputVatRecoverablePercent"
+              onValueChange={(value) =>
+                onChange("inputVatRecoverablePercent", value)
               }
-              className={errorClass("inputVatRecoverability")}
-              name="inputVatRecoverability"
-              onChange={(event) =>
-                onChange("inputVatRecoverability", event.target.value)
-              }
-              value={draft.inputVatRecoverability}
-            >
-              <option value="">Choose</option>
-              {options.vatRecoverabilities.map((item) => (
-                <option key={item} value={item}>
-                  {label(item)}
-                </option>
-              ))}
-            </select>
+              placeholder="100.00"
+              value={draft.inputVatRecoverablePercent}
+            />
           </Field>
         ) : (
-          <input name="inputVatRecoverability" type="hidden" value="" />
+          <input name="inputVatRecoverablePercent" type="hidden" value="" />
         )}
         <Money
           error={fieldErrors.inputVatTaxableBase}
@@ -431,7 +424,14 @@ export function OrderForm({
     inputVatCustomTreatmentNote:
       order?.costs.inputVat?.customTreatmentNote ?? "",
     inputVatRate: rateToPercentInput(order?.costs.inputVat?.rate ?? null),
-    inputVatRecoverability: order?.costs.inputVat?.recoverability ?? "",
+    inputVatRecoverablePercent: rateToPercentInput(
+      order?.costs.inputVat?.recoverableRate ??
+        (order?.costs.inputVat?.recoverability === "RECOVERABLE"
+          ? "1"
+          : order?.costs.inputVat?.recoverability === "NON_RECOVERABLE"
+            ? "0"
+            : null),
+    ),
     inputVatTaxableBase: order?.costs.inputVat?.taxableBase ?? "",
     inputVatTreatment: order?.costs.inputVat?.treatment ?? "",
     leadTimeWeeks:

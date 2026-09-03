@@ -61,6 +61,9 @@ function currentOrderValues(order: OrderSummary): CreateOrderInput {
     inputVatCustomTreatmentNote:
       order.costs.inputVat?.customTreatmentNote ?? undefined,
     inputVatRate: percent(order.costs.inputVat?.rate ?? null),
+    inputVatRecoverableRate: percent(
+      order.costs.inputVat?.recoverableRate ?? null,
+    ),
     inputVatRecoverability: order.costs.inputVat?.recoverability ?? undefined,
     inputVatTaxableBase: order.costs.inputVat?.taxableBase ?? undefined,
     inputVatTreatment: order.costs.inputVat?.treatment ?? undefined,
@@ -176,6 +179,13 @@ function reviewedOrderValues(
     inputVatRecoverability: input.applyInputVat
       ? input.inputVatRecoverability
       : current?.inputVatRecoverability,
+    inputVatRecoverableRate: input.applyInputVat
+      ? input.inputVatRecoverableRate
+        ? new Decimal(input.inputVatRecoverableRate).times(100).toString()
+        : undefined
+      : current?.inputVatRecoverableRate
+        ? new Decimal(current.inputVatRecoverableRate).times(100).toString()
+        : undefined,
     inputVatTaxableBase: input.applyInputVat
       ? input.inputVatTaxableBase
       : current?.inputVatTaxableBase,

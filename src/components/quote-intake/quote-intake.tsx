@@ -186,7 +186,8 @@ function QuoteReview({
     financial.inputVatAmount !== null || financial.inputVatRate !== null,
   );
   const [inputVatTreatment, setInputVatTreatment] = useState("");
-  const [inputVatRecoverability, setInputVatRecoverability] = useState("");
+  const [inputVatRecoverablePercent, setInputVatRecoverablePercent] =
+    useState("");
   const showInputVatRecoverability =
     inputVatRecoverabilityApplies(inputVatTreatment);
   const [financialValues, setFinancialValues] = useState({
@@ -775,7 +776,7 @@ function QuoteReview({
                     const treatment = event.target.value;
                     setInputVatTreatment(treatment);
                     if (!inputVatRecoverabilityApplies(treatment))
-                      setInputVatRecoverability("");
+                      setInputVatRecoverablePercent("");
                   }}
                   required={applyInputVat}
                   value={inputVatTreatment}
@@ -790,32 +791,26 @@ function QuoteReview({
               </Field>
               {showInputVatRecoverability ? (
                 <Field
-                  error={fieldErrors.inputVatRecoverability}
-                  label="Recoverability"
+                  error={fieldErrors.inputVatRecoverableRate}
+                  label="Recoverability %"
                   required={applyInputVat}
                 >
-                  <select
-                    aria-invalid={
-                      Boolean(fieldErrors.inputVatRecoverability) || undefined
-                    }
-                    className={inputWithError("inputVatRecoverability")}
-                    name="inputVatRecoverability"
-                    onChange={(event) =>
-                      setInputVatRecoverability(event.target.value)
-                    }
+                  <PercentageInput
+                    className={inputWithError("inputVatRecoverableRate")}
+                    invalid={Boolean(fieldErrors.inputVatRecoverableRate)}
+                    name="inputVatRecoverablePercent"
+                    onValueChange={setInputVatRecoverablePercent}
+                    placeholder="100.00"
                     required={applyInputVat}
-                    value={inputVatRecoverability}
-                  >
-                    <option value="">Choose</option>
-                    {options.vatRecoverabilities.map((item) => (
-                      <option key={item} value={item}>
-                        {item.replaceAll("_", " ").toLowerCase()}
-                      </option>
-                    ))}
-                  </select>
+                    value={inputVatRecoverablePercent}
+                  />
                 </Field>
               ) : (
-                <input name="inputVatRecoverability" type="hidden" value="" />
+                <input
+                  name="inputVatRecoverablePercent"
+                  type="hidden"
+                  value=""
+                />
               )}
               <Field
                 error={fieldErrors.inputVatTaxableBase}

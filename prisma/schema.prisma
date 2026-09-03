@@ -79,6 +79,7 @@ enum VatDirection {
 
 enum VatRecoverability {
   RECOVERABLE
+  PARTIALLY_RECOVERABLE
   NON_RECOVERABLE
 }
 
@@ -472,6 +473,12 @@ model ProjectFreightExpense {
   currencyCode               String   @db.Char(3)
   fxRateToReporting          Decimal? @db.Decimal(20, 10)
   costAmountHt               Decimal  @db.Decimal(19, 4)
+  vatTreatment               VatTreatment?
+  vatRate                    Decimal? @db.Decimal(9, 6)
+  vatAmount                  Decimal? @db.Decimal(19, 4)
+  vatAmountIsManual          Boolean  @default(false)
+  recoverability             VatRecoverability?
+  recoverableRate            Decimal? @db.Decimal(9, 6)
   freightMarkupOverrideRate  Decimal? @db.Decimal(9, 6)
   notes                      String?  @db.Text
   createdAt                  DateTime @default(now())
@@ -531,6 +538,7 @@ model ProcurementOrderVatEntry {
   direction           VatDirection
   treatment           VatTreatment
   recoverability      VatRecoverability?
+  recoverableRate     Decimal?           @db.Decimal(9, 6)
   countryCode         String?            @db.Char(2)
   customTreatmentNote String?            @db.VarChar(240)
   taxableBaseAmount   Decimal            @db.Decimal(19, 4)

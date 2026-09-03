@@ -1,6 +1,9 @@
 import Decimal from "decimal.js";
 import { z } from "zod";
-import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
+import {
+  inputVatRecoverabilityApplies,
+  recoverabilityFromRate,
+} from "@/domain/vat/recoverability";
 
 import {
   FreightTreatment,
@@ -111,6 +114,10 @@ const orderFields = {
   inputVatCountryCode: optionalCountryCode,
   inputVatCustomTreatmentNote: optionalText(240),
   inputVatRate: optionalVatRate,
+  inputVatRecoverableRate: optionalPercentageFraction({
+    label: "Recoverability",
+    maximumPercent: "100",
+  }),
   inputVatRecoverability: optionalEnum(VatRecoverability),
   inputVatTaxableBase: optionalMoney("Input VAT taxable base"),
   inputVatTreatment: optionalEnum(VatTreatment),
@@ -160,6 +167,7 @@ type VatValidationInput = Pick<
   | "inputVatCountryCode"
   | "inputVatCustomTreatmentNote"
   | "inputVatRecoverability"
+  | "inputVatRecoverableRate"
   | "inputVatRate"
   | "inputVatTaxableBase"
   | "inputVatTreatment"
@@ -185,6 +193,7 @@ function validVat(
       ? value.inputVatTaxableBase
       : value.outputVatTaxableBaseOverride,
     direction === "input" ? value.inputVatRecoverability : undefined,
+    direction === "input" ? value.inputVatRecoverableRate : undefined,
   ].some(Boolean);
   if (!treatment) {
     if (hasVatValues) {
@@ -275,22 +284,44 @@ function validOrder(
   validVat(value, "output", context);
   if (
     inputVatRecoverabilityApplies(value.inputVatTreatment) &&
+    value.inputVatRecoverableRate === undefined &&
     !value.inputVatRecoverability
   ) {
     context.addIssue({
       code: "custom",
-      path: ["inputVatRecoverability"],
-      message: "Choose whether input VAT is recoverable.",
+      path: ["inputVatRecoverableRate"],
+      message: "Enter the recoverable percentage.",
     });
   }
   if (
-    value.inputVatRecoverability &&
+    (value.inputVatRecoverability ||
+      value.inputVatRecoverableRate !== undefined) &&
     !inputVatRecoverabilityApplies(value.inputVatTreatment)
   )
     context.addIssue({
       code: "custom",
-      path: ["inputVatRecoverability"],
+      path: ["inputVatRecoverableRate"],
       message: "Recoverability does not apply to this VAT treatment.",
+    });
+  if (
+    value.inputVatRecoverableRate !== undefined &&
+    value.inputVatRecoverability &&
+    recoverabilityFromRate(value.inputVatRecoverableRate) !==
+      value.inputVatRecoverability
+  )
+    context.addIssue({
+      code: "custom",
+      path: ["inputVatRecoverableRate"],
+      message: "Recoverability status and percentage do not match.",
+    });
+  if (
+    value.inputVatRecoverability === VatRecoverability.PARTIALLY_RECOVERABLE &&
+    value.inputVatRecoverableRate === undefined
+  )
+    context.addIssue({
+      code: "custom",
+      path: ["inputVatRecoverableRate"],
+      message: "Enter the partial recoverable percentage.",
     });
 }
 

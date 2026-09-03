@@ -12,12 +12,14 @@ import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import {
   projectFreightExpenseIdSchema,
   projectFreightExpenseSchema,
+  updateProjectFreightExpenseSchema,
 } from "@/domain/freight/validation";
 import { fieldErrorMap } from "@/domain/validation/issues";
 import {
   createProjectFreightExpense,
   deleteProjectFreightExpense,
   ProjectFreightExpenseError,
+  updateProjectFreightExpense,
 } from "@/lib/freight/expenses";
 import {
   unexpectedActionError,
@@ -37,6 +39,31 @@ import { revalidateProjectFinancialViews } from "@/lib/reporting/revalidation";
 function revalidateProject(projectId: string): void {
   revalidatePath("/projects");
   revalidateProjectFinancialViews(projectId);
+}
+
+export async function updateProjectFreightExpenseAction(
+  _: MasterDataActionState,
+  formData: FormData,
+): Promise<MasterDataActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = updateProjectFreightExpenseSchema.safeParse(
+    Object.fromEntries(formData),
+  );
+  if (!input.success) return validationActionError(input.error);
+  try {
+    await updateProjectFreightExpense(actor.id, input.data);
+    revalidateProject(input.data.projectId);
+    return { message: "Project freight expense updated.", status: "success" };
+  } catch (error) {
+    if (error instanceof ProjectFreightExpenseError)
+      return {
+        formError: error.message,
+        message: error.message,
+        status: "error",
+      };
+    console.error("Unable to update Project freight expense.", error);
+    return unexpectedActionError("Project freight expense");
+  }
 }
 
 export async function createProjectFreightExpenseAction(

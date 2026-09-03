@@ -1,16 +1,35 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const transaction = vi.hoisted(() => ({
+  projectFreightExpense: { create: vi.fn(), update: vi.fn() },
+}));
 const database = vi.hoisted(() => ({
+  $transaction: vi.fn(
+    async (callback: (value: typeof transaction) => Promise<unknown>) =>
+      callback(transaction),
+  ),
+  currency: { findFirst: vi.fn() },
   project: { findUnique: vi.fn() },
-  projectFreightExpense: { findMany: vi.fn() },
+  projectFreightExpense: { findMany: vi.fn(), findUnique: vi.fn() },
+  supplier: { findUnique: vi.fn() },
 }));
 const orders = vi.hoisted(() => ({ listProjectOrders: vi.fn() }));
+const audit = vi.hoisted(() => ({ writeAuditEvent: vi.fn() }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
 vi.mock("@/lib/procurement/orders", () => orders);
+vi.mock("@/lib/audit/events", () => audit);
 
-import { getProjectFreightReconciliation } from "./expenses";
+import {
+  projectFreightExpenseSchema,
+  updateProjectFreightExpenseSchema,
+} from "@/domain/freight/validation";
+import {
+  createProjectFreightExpense,
+  getProjectFreightReconciliation,
+  updateProjectFreightExpense,
+} from "./expenses";
 
 describe("Project freight reconciliation", () => {
   beforeEach(() => {
@@ -22,6 +41,17 @@ describe("Project freight reconciliation", () => {
       reportingCurrencyCode: "EUR",
     });
     database.projectFreightExpense.findMany.mockResolvedValue([]);
+    database.currency.findFirst.mockResolvedValue({ code: "EUR" });
+    database.supplier.findUnique.mockResolvedValue(null);
+    transaction.projectFreightExpense.create.mockResolvedValue({
+      id: "b12b6b9b-10e9-4e42-b93f-38796de4f65a",
+    });
+    database.projectFreightExpense.findUnique.mockResolvedValue({
+      costAmountHt: "10000",
+      description: "Road freight",
+      projectId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      reference: null,
+    });
   });
 
   it("uses Project expected purchase for planning and actual costs for recovery", async () => {
@@ -67,5 +97,88 @@ describe("Project freight reconciliation", () => {
       planningComplete: true,
       recoveryTargetHt: "478.5000",
     });
+  });
+
+  it("includes only non-deductible freight VAT in economic freight cost", async () => {
+    orders.listProjectOrders.mockResolvedValue([]);
+    database.projectFreightExpense.findMany.mockResolvedValue([
+      {
+        costAmountHt: "10000",
+        currencyCode: "EUR",
+        freightMarkupOverrideRate: null,
+        fxRateToReporting: null,
+        recoverability: "PARTIALLY_RECOVERABLE",
+        recoverableRate: "0.50",
+        vatAmount: "2000",
+      },
+    ]);
+
+    await expect(
+      getProjectFreightReconciliation("project-with-partial-vat"),
+    ).resolves.toMatchObject({
+      actualCostHt: "11000.0000",
+      freightGrossProfitHt: "1100.0000",
+      recoveryTargetHt: "12100.0000",
+    });
+  });
+
+  it("persists derived partial VAT and audit attribution", async () => {
+    const input = projectFreightExpenseSchema.parse({
+      costAmountHt: "10000",
+      currencyCode: "EUR",
+      description: "Road freight",
+      expenseDate: "2026-09-03",
+      projectId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      vatRate: "20",
+      vatRecoverableRate: "50",
+      vatTreatment: "DOMESTIC",
+    });
+    await createProjectFreightExpense(
+      "c12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      input,
+    );
+
+    expect(transaction.projectFreightExpense.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recoverability: "PARTIALLY_RECOVERABLE",
+          recoverableRate: "0.500000",
+          vatAmount: "2000.0000",
+          vatAmountIsManual: false,
+          vatRate: "0.200000",
+        }),
+      }),
+    );
+    expect(audit.writeAuditEvent).toHaveBeenCalledOnce();
+  });
+
+  it("updates freight VAT transactionally with an audit event", async () => {
+    const input = updateProjectFreightExpenseSchema.parse({
+      id: "b12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      projectId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      vatAmount: "2000",
+      vatRecoverableRate: "50",
+      vatTreatment: "DOMESTIC",
+    });
+    await updateProjectFreightExpense(
+      "c12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      input,
+    );
+
+    expect(transaction.projectFreightExpense.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recoverability: "PARTIALLY_RECOVERABLE",
+          recoverableRate: "0.500000",
+          vatAmount: "2000.0000",
+          vatAmountIsManual: true,
+        }),
+      }),
+    );
+    expect(audit.writeAuditEvent).toHaveBeenCalledWith(
+      transaction,
+      expect.any(String),
+      expect.objectContaining({ action: "UPDATED" }),
+    );
   });
 });
