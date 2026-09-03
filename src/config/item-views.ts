@@ -12,7 +12,7 @@ export const itemViewColumns = {
     "Recoverability",
     "Variance",
     "Variance comment",
-    "Shipping allowance",
+    "Purchase-based freight allowance",
   ],
   general: [
     "Reference / description",

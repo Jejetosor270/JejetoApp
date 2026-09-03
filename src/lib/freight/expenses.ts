@@ -165,20 +165,14 @@ export async function getProjectFreightReconciliation(projectId: string) {
   if (!project) return null;
   const activeOrders = orders.filter((order) => order.status !== "CANCELLED");
   const convertedOrders = activeOrders.map((order) => {
-    const productSellOriginal =
-      order.componentPricing.productSellReporting !== null
-        ? order.componentPricing.productSellReporting
-        : order.packageSellingPrice;
-    const productSell =
-      order.componentPricing.productSellReporting ??
-      (productSellOriginal
-        ? convertedAmount({
-            amount: productSellOriginal,
-            currencyCode: order.sellingCurrencyCode,
-            fxRate: order.costs.sellingFxRate,
-            reportingCurrencyCode: project.reportingCurrencyCode,
-          })
-        : null);
+    const productPurchaseCost = order.costs.purchaseCost
+      ? convertedAmount({
+          amount: order.costs.purchaseCost,
+          currencyCode: order.orderCurrencyCode,
+          fxRate: order.costs.purchaseFxRate,
+          reportingCurrencyCode: project.reportingCurrencyCode,
+        })
+      : "0.0000";
     const allowanceOverride = order.freightAllowanceOverrideAmount
       ? convertedAmount({
           amount: order.freightAllowanceOverrideAmount,
@@ -198,7 +192,7 @@ export async function getProjectFreightReconciliation(projectId: string) {
           })
         : "0.0000",
       freightMarkupRate: order.componentPricing.freightMarkupRate,
-      productSellHt: productSell,
+      productPurchaseCostHt: productPurchaseCost,
     };
   });
   const convertedExpenses = expenses.map((expense) => ({

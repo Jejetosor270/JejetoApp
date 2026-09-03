@@ -591,9 +591,12 @@ export function OrderForm({
   let freightRecovery: string | null = null;
   let freightProfit: string | null = null;
   try {
-    if (project?.freightEstimateRate && livePricing?.productSell) {
+    if (
+      project?.freightEstimateRate &&
+      livePricing?.productPurchaseCostSelling
+    ) {
       automaticFreightAllowance = resolveOrderFreightAllowance({
-        productSellHt: livePricing.productSell,
+        productPurchaseCostHt: livePricing.productPurchaseCostSelling,
         projectFreightEstimateRate: project.freightEstimateRate,
       }).amount.toFixed(4);
     }
@@ -1190,7 +1193,7 @@ export function OrderForm({
                   : "AUTO · PROJECT ESTIMATE"}
               </span>
             </div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
               <Field label={`Actual freight cost HT (${purchaseCurrency})`}>
                 <p className="financial-figure bg-muted rounded-md border px-3 py-2">
                   {formatMoney(freightCost || "0", purchaseCurrency)}
@@ -1234,6 +1237,16 @@ export function OrderForm({
                   {project?.freightEstimateRate
                     ? formatRate(project.freightEstimateRate)
                     : "Not set"}
+                </p>
+              </Field>
+              <Field label={`Product purchase cost HT (${sellingCurrency})`}>
+                <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                  {livePricing?.productPurchaseCostSelling
+                    ? formatMoney(
+                        livePricing.productPurchaseCostSelling,
+                        sellingCurrency,
+                      )
+                    : "Incomplete"}
                 </p>
               </Field>
               <Field

@@ -70,7 +70,7 @@ describe("Item Decimal-safe financials", () => {
     expect(quantityTimesUnitMatchesTotal("3", "10", "30.02")).toBe(true);
   });
 
-  it("derives target-margin selling price and Project freight separately", () => {
+  it("derives target-margin selling price and purchase-based Project freight separately", () => {
     const result = calculateItemFinancials({
       pricingMode: "TARGET_MARGIN",
       quantity: "2",
@@ -78,7 +78,7 @@ describe("Item Decimal-safe financials", () => {
       totalPurchasePriceHt: "70",
     });
     expect(result.totalSellingPriceHt).toBe("100.0000");
-    expect(projectFreightEstimate("100000", "0.08")).toBe("8000.0000");
+    expect(projectFreightEstimate("70000", "0.08")).toBe("5600.0000");
   });
 
   it("uses markup, not margin, to derive and explain Item budget values", () => {

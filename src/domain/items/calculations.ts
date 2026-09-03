@@ -218,12 +218,12 @@ export function calculateItemFinancials(
 }
 
 export function projectFreightEstimate(
-  productSellHt: string,
+  productPurchaseCostHt: string,
   freightEstimateRate: string | null,
 ): string | null {
   return freightEstimateRate === null
     ? null
-    : new Decimal(productSellHt).times(freightEstimateRate).toFixed(4);
+    : new Decimal(productPurchaseCostHt).times(freightEstimateRate).toFixed(4);
 }
 
 export function budgetPriceFromMarkup(

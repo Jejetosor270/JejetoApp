@@ -9,10 +9,20 @@ function formatGroupedDecimal(
 ): string {
   const normalized = normalizeDecimalInput(amount, {
     allowNegative: true,
-    maximumDecimalPlaces: 10,
+    // Calculated ratios can legitimately exceed persisted Decimal scale.
+    // Presentation must still round them instead of returning raw precision.
+    maximumDecimalPlaces: 100,
   });
-  if (normalized === null || normalized === "") return amount;
-  const decimal = new Decimal(normalized).toDecimalPlaces(
+  if (normalized === "") return amount;
+  let parsed: Decimal;
+  try {
+    // Decimal calculations can serialize in exponent notation, which is not a
+    // human input format but still needs safe presentation rounding.
+    parsed = new Decimal(normalized ?? amount);
+  } catch {
+    return amount;
+  }
+  const decimal = parsed.toDecimalPlaces(
     maximumDecimalPlaces,
     Decimal.ROUND_HALF_UP,
   );

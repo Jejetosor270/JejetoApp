@@ -9,7 +9,7 @@ export interface FreightReconciliationInput {
     allowanceOverrideHt?: string | null;
     freightCostHt: string | null;
     freightMarkupRate: string;
-    productSellHt: string | null;
+    productPurchaseCostHt: string | null;
   }[];
   projectFreightEstimateRate: string | null;
 }
@@ -20,7 +20,7 @@ export interface FreightReconciliation {
   complete: boolean;
   freightGrossProfitHt: string | null;
   headroomHt: string | null;
-  productSellHt: string | null;
+  productPurchaseCostHt: string | null;
   recoveryTargetHt: string | null;
 }
 
@@ -31,17 +31,17 @@ function nonNegative(value: string, label: string): Decimal {
 }
 
 export function clientFreightAllowance(
-  productSellHt: string,
+  productPurchaseCostHt: string,
   freightEstimateRate: string,
 ): Decimal {
-  return nonNegative(productSellHt, "Product sell").times(
+  return nonNegative(productPurchaseCostHt, "Product purchase cost").times(
     nonNegative(freightEstimateRate, "Freight estimate rate"),
   );
 }
 
 export function resolveOrderFreightAllowance(input: {
   allowanceOverrideHt?: string | null;
-  productSellHt: string;
+  productPurchaseCostHt: string;
   projectFreightEstimateRate: string;
 }): { amount: Decimal; source: "MANUAL" | "PROJECT_ESTIMATE" } {
   if (
@@ -55,7 +55,7 @@ export function resolveOrderFreightAllowance(input: {
   }
   return {
     amount: clientFreightAllowance(
-      input.productSellHt,
+      input.productPurchaseCostHt,
       input.projectFreightEstimateRate,
     ),
     source: "PROJECT_ESTIMATE",
@@ -80,7 +80,7 @@ export function reconcileProjectFreight(
     complete: false,
     freightGrossProfitHt: null,
     headroomHt: null,
-    productSellHt: null,
+    productPurchaseCostHt: null,
     recoveryTargetHt: null,
   });
   if (
@@ -91,29 +91,33 @@ export function reconcileProjectFreight(
           order.allowanceOverrideHt === undefined,
       )) ||
     input.orders.some(
-      (order) => order.productSellHt === null || order.freightCostHt === null,
+      (order) =>
+        order.productPurchaseCostHt === null || order.freightCostHt === null,
     ) ||
     input.expenses.some((expense) => expense.costHt === null)
   ) {
     return incomplete();
   }
 
-  let productSell = new Decimal(0);
+  let productPurchaseCost = new Decimal(0);
   let allowance = new Decimal(0);
   let actualCost = new Decimal(0);
   let recovery = new Decimal(0);
   for (const order of input.orders) {
-    if (order.productSellHt === null || order.freightCostHt === null)
+    if (order.productPurchaseCostHt === null || order.freightCostHt === null)
       return incomplete();
-    const orderProductSell = nonNegative(order.productSellHt, "Product sell");
+    const orderProductPurchaseCost = nonNegative(
+      order.productPurchaseCostHt,
+      "Product purchase cost",
+    );
     const orderCost = nonNegative(order.freightCostHt, "Freight cost");
-    productSell = productSell.plus(orderProductSell);
+    productPurchaseCost = productPurchaseCost.plus(orderProductPurchaseCost);
     allowance = allowance.plus(
       resolveOrderFreightAllowance({
         ...(order.allowanceOverrideHt === undefined
           ? {}
           : { allowanceOverrideHt: order.allowanceOverrideHt }),
-        productSellHt: orderProductSell.toString(),
+        productPurchaseCostHt: orderProductPurchaseCost.toString(),
         projectFreightEstimateRate: input.projectFreightEstimateRate ?? "0",
       }).amount,
     );
@@ -136,7 +140,7 @@ export function reconcileProjectFreight(
     complete: true,
     freightGrossProfitHt: recovery.minus(actualCost).toFixed(4),
     headroomHt: allowance.minus(recovery).toFixed(4),
-    productSellHt: productSell.toFixed(4),
+    productPurchaseCostHt: productPurchaseCost.toFixed(4),
     recoveryTargetHt: recovery.toFixed(4),
   };
 }

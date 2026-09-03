@@ -57,6 +57,9 @@ describe("procurement money presentation", () => {
     expect(formatPercentage("0.99999")).toBe("100%");
     expect(formatPercentage("1")).toBe("100%");
     expect(formatPercentage("0.33335")).toBe("33.34%");
+    expect(formatRate("0.2983626500527716006")).toBe("29.84%");
+    expect(formatRate("0.0000000000000000001")).toBe("0%");
+    expect(formatHumanPercentage("29.83626500527716006")).toBe("29.84%");
     expect(formatHumanPercentage("33.333333333")).toBe("33.33%");
     expect(formatHumanPercentage("15.555")).toBe("15.56%");
     expect(formatHumanPercentage("100")).toBe("100%");

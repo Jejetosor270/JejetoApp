@@ -99,6 +99,26 @@ describe("Order pricing draft", () => {
     ).toBe(false);
   });
 
+  it("exposes Product Purchase Cost in selling currency for AUTO freight", () => {
+    expect(
+      calculateOrderPricingDraft({
+        ...base,
+        method: "PROJECT_MARKUP",
+        productCost: "40000",
+      }).productPurchaseCostSelling,
+    ).toBe("40000.0000");
+    expect(
+      calculateOrderPricingDraft({
+        ...base,
+        method: "PROJECT_MARKUP",
+        productCost: "50000",
+        purchaseCurrencyCode: "USD",
+        purchaseFxRate: "0.80",
+        sellingCurrencyCode: "EUR",
+      }).productPurchaseCostSelling,
+    ).toBe("40000.0000");
+  });
+
   it("initializes explicit Order markups from currently effective rates", () => {
     expect(
       initializePricingMethod("ORDER_MARKUP", {

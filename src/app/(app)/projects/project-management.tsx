@@ -369,7 +369,7 @@ function ProjectInlineRow({
       <td className="px-4 py-3">
         {editing ? (
           <InlinePercentInput
-            ariaLabel="Client freight allowance percentage"
+            ariaLabel="Client freight allowance percentage of Product Purchase Cost"
             onChange={(value) => set("freightEstimateRate", value)}
             value={draft.freightEstimateRate}
           />
@@ -470,7 +470,9 @@ export function ProjectManagement({
                 <th className="px-4 py-3">Project manager</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Expected completion</th>
-                <th className="px-4 py-3">Client freight allowance %</th>
+                <th className="px-4 py-3">
+                  Client freight allowance % of purchase
+                </th>
                 {canEdit ? (
                   <th className="px-4 py-3 text-right">Edit</th>
                 ) : null}

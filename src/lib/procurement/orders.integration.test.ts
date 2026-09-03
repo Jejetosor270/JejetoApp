@@ -296,6 +296,44 @@ describe("single order cost write", () => {
     expect(second.costs.outputVat?.amount).toBe("28");
   });
 
+  it("derives legacy AUTO freight allowance from Product Purchase Cost", () => {
+    const order = sellingOrder("0", VatTreatment.DOMESTIC);
+    order.pricingMode = PricingMode.PROJECT_MARKUP;
+    order.freightTreatment = FreightTreatment.NOT_APPLICABLE;
+    order.project.freightEstimateRate = new Decimal("0.10");
+    order.project.defaultProductMarkupRate = new Decimal("0.30");
+    order.costLines = [
+      {
+        category: ProcurementCostCategory.SUPPLIER_PURCHASE,
+        createdAt: timestamp,
+        createdById: null,
+        description: null,
+        id: "aa2b6b9b-10e9-4e42-b93f-38796de4f65a",
+        originalAmount: new Decimal("50000"),
+        orderId: order.id,
+        updatedAt: timestamp,
+        updatedById: null,
+      },
+    ];
+
+    const automatic = summarizeOrder(order);
+    order.freightAllowanceOverrideAmount = new Decimal("4500");
+    const productLine = order.costLines[0];
+    if (!productLine) throw new Error("Expected a Product purchase cost line.");
+    productLine.originalAmount = new Decimal("60000");
+    const manual = summarizeOrder(order);
+
+    expect(automatic.componentPricing.productSellReporting).toBe("65000.0000");
+    expect(automatic.freightAllowance).toEqual({
+      amount: "5000",
+      source: "PROJECT_ESTIMATE",
+    });
+    expect(manual.freightAllowance).toEqual({
+      amount: "4500",
+      source: "MANUAL",
+    });
+  });
+
   it("derives Order profitability from comparable Invoice allocations", () => {
     const order = sellingOrder("18000", VatTreatment.DOMESTIC);
     const summary = summarizeOrder({

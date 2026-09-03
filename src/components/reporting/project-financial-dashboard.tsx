@@ -35,7 +35,7 @@ interface FreightReconciliationView {
   freightEstimateRate: string | null;
   freightGrossProfitHt: string | null;
   headroomHt: string | null;
-  productSellHt: string | null;
+  productPurchaseCostHt: string | null;
   recoveryTargetHt: string | null;
 }
 
@@ -284,7 +284,11 @@ export function ProjectFinancialDashboard({
                 freight?.freightEstimateRate ?? null,
                 "rate",
               ],
-              ["Product Sell HT", freight?.productSellHt ?? null, "money"],
+              [
+                "Product Purchase Cost HT",
+                freight?.productPurchaseCostHt ?? null,
+                "money",
+              ],
               [
                 "Client Freight Allowance HT",
                 freight?.allowanceHt ?? null,

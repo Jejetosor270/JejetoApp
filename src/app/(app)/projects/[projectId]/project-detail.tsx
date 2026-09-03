@@ -207,7 +207,7 @@ function ProjectFields({
           type="date"
         />
       </Field>
-      <Field label="Client Freight Allowance % of Product Sell HT">
+      <Field label="Client Freight Allowance % of Product Purchase Cost HT">
         <PercentageInput
           className={inputClassName}
           defaultValue={

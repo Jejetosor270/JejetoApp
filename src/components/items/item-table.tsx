@@ -138,7 +138,7 @@ function FinancialRow({
   const currency =
     item.purchaseCurrencyCode ?? item.project.reportingCurrencyCode;
   const shippingAllowance = projectFreightEstimate(
-    item.totalSellingPriceHt ?? "0",
+    item.totalPurchasePriceHt ?? "0",
     item.project.freightEstimateRate,
   );
   const moneyInput = (

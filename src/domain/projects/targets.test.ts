@@ -8,6 +8,24 @@ import {
 } from "./targets";
 
 describe("project financial targets", () => {
+  it("keeps Product and Freight estimates on their component markups", () => {
+    expect(
+      calculateProjectTargets({
+        defaultFreightMarkupRate: "0.10",
+        defaultProductMarkupRate: "0.30",
+        estimatedFreightCostHt: null,
+        estimatedPurchaseCostHt: "591700",
+        targetMode: "MARKUP",
+      }),
+    ).toMatchObject({
+      effectiveMarkupRate: "0.300000",
+      estimatedCostHt: "591700.0000",
+      expectedFreightSellHt: null,
+      expectedProductSellHt: "769210.0000",
+      expectedSellHt: "769210.0000",
+    });
+  });
+
   it("derives expected sell, profit, markup and margin from cost and markup", () => {
     expect(
       calculateProjectTargets({

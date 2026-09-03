@@ -391,7 +391,12 @@ function componentPricing(order: OrderRecord) {
     freightSellOriginal: originalSelling(calculated?.freightSell ?? null),
     otherMarkup,
     productMarkup,
-    productSellOriginal: originalSelling(calculated?.productSell ?? null),
+    productPurchaseCostSelling:
+      order.orderCurrencyCode === order.sellingCurrencyCode
+        ? new Decimal(
+            costAmount(order, ProcurementCostCategory.SUPPLIER_PURCHASE) ?? "0",
+          )
+        : originalSelling(product?.toString() ?? null),
     totalSellOriginal: originalSelling(calculated?.totalSell ?? null),
   };
 }
@@ -461,15 +466,11 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
             order.freightResaleAmount?.toString() ?? "0",
           )
         : null;
-  const productSellOriginal =
-    order.pricingMode === PricingMode.PROJECT_MARKUP ||
-    order.pricingMode === PricingMode.ORDER_MARKUP ||
-    order.pricingMode === PricingMode.COMPONENT_MARKUP
-      ? component.productSellOriginal
-      : packagePrice;
   const automaticFreightAllowance =
-    productSellOriginal && order.project.freightEstimateRate
-      ? productSellOriginal.times(order.project.freightEstimateRate)
+    component.productPurchaseCostSelling && order.project.freightEstimateRate
+      ? component.productPurchaseCostSelling.times(
+          order.project.freightEstimateRate,
+        )
       : null;
   const freightAllowance =
     order.freightAllowanceOverrideAmount ?? automaticFreightAllowance;

@@ -101,9 +101,9 @@ export default async function ProjectPage({
       project.clientBudgetTargetHt?.toString() ?? targets.expectedSellHt,
     ),
   };
-  const estimatedFreight = itemSummary?.selling
+  const estimatedFreight = itemSummary?.purchase
     ? projectFreightEstimate(
-        itemSummary.selling,
+        itemSummary.purchase,
         project.freightEstimateRate?.toString() ?? null,
       )
     : null;
@@ -145,7 +145,7 @@ export default async function ProjectPage({
               </div>
               <div className="rounded-lg border p-3">
                 <p className="text-muted-foreground text-xs">
-                  Client freight allowance (Items plan)
+                  Client freight allowance (Item purchase plan)
                 </p>
                 <p className="financial-figure mt-1 font-semibold">
                   {formatMoney(estimatedFreight, project.reportingCurrencyCode)}

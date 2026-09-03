@@ -61,6 +61,12 @@ export function calculateOrderPricingDraft(input: OrderPricingDraftInput) {
   const totalCostReporting = purchaseRate
     ? productCost.plus(freightCost).plus(otherCost).times(purchaseRate)
     : null;
+  const productPurchaseCostSelling =
+    input.purchaseCurrencyCode === input.sellingCurrencyCode
+      ? productCost
+      : purchaseRate && sellingRate
+        ? productCost.times(purchaseRate).dividedBy(sellingRate)
+        : null;
 
   if (input.method === "DIRECT_SELLING_PRICE") {
     const packageSell = nonNegative(input.directPackageSell);
@@ -88,6 +94,8 @@ export function calculateOrderPricingDraft(input: OrderPricingDraftInput) {
       otherSell: null,
       productSell: packageSell.toFixed(4),
       productMarkupRate: effectiveMarkupRate,
+      productPurchaseCostSelling:
+        productPurchaseCostSelling?.toFixed(4) ?? null,
       totalCostReporting: totalCostReporting?.toFixed(4) ?? null,
       totalSell: totalSell.toFixed(4),
       totalSellReporting: totalSellReporting?.toFixed(4) ?? null,
@@ -102,6 +110,8 @@ export function calculateOrderPricingDraft(input: OrderPricingDraftInput) {
       grossProfitReporting: null,
       otherSell: null,
       productMarkupRate: null,
+      productPurchaseCostSelling:
+        productPurchaseCostSelling?.toFixed(4) ?? null,
       productSell: null,
       totalCostReporting: totalCostReporting?.toFixed(4) ?? null,
       totalSell: null,
@@ -124,6 +134,7 @@ export function calculateOrderPricingDraft(input: OrderPricingDraftInput) {
     grossProfitReporting: calculated.grossProfit,
     otherSell: toSelling(calculated.otherSell),
     productMarkupRate: input.productMarkupRate,
+    productPurchaseCostSelling: productPurchaseCostSelling?.toFixed(4) ?? null,
     productSell: toSelling(calculated.productSell),
     totalCostReporting: calculated.totalCost,
     totalSell: toSelling(calculated.totalSell),
