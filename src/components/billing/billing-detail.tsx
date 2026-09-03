@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { updateClientBillingDocumentAction } from "@/app/(app)/billing/actions";
 import { BillingInstallmentEditor } from "@/components/billing/billing-installment-editor";
+import { BillingScheduleManager } from "@/components/billing/billing-schedule-manager";
 import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import {
   ActionFeedback,
@@ -980,6 +981,9 @@ export function BillingDetail({
               No payment schedule is attached.
             </p>
           ) : null}
+        </div>
+        <div className="mt-4 border-t pt-4">
+          <BillingScheduleManager canEdit={canEdit} document={document} />
         </div>
       </section>
 

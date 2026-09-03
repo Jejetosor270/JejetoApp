@@ -60,7 +60,7 @@ async function deleteClientBillingHierarchy(
     data: { matchedInstallmentId: null },
   });
   await transaction.clientReceipt.deleteMany({
-    where: { installmentId: { in: installments.map((item) => item.id) } },
+    where: { billingDocumentId: { in: documentIds } },
   });
   await transaction.clientDocumentImport.deleteMany({
     where: { billingDocumentId: { in: documentIds } },

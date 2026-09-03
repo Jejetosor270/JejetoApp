@@ -713,6 +713,7 @@ model ClientBillingDocument {
   createdBy           User?                      @relation("ClientBillingDocumentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy           User?                      @relation("ClientBillingDocumentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   paymentInstallments ClientPaymentInstallment[] @relation("ClientDocumentInstallments")
+  receipts            ClientReceipt[]
   allocations         ClientBillingAllocation[]
   imports             ClientDocumentImport[]
 
@@ -757,7 +758,8 @@ model ClientPaymentInstallment {
 
 model ClientReceipt {
   id                String   @id @default(uuid()) @db.Uuid
-  installmentId     String   @db.Uuid
+  billingDocumentId String   @db.Uuid
+  installmentId     String?  @db.Uuid
   amount            Decimal  @db.Decimal(19, 4)
   receivedAt        DateTime @db.Date
   fxRateToReporting Decimal? @db.Decimal(20, 10)
@@ -768,10 +770,12 @@ model ClientReceipt {
   createdById       String?  @db.Uuid
   updatedById       String?  @db.Uuid
 
-  installment ClientPaymentInstallment @relation(fields: [installmentId], references: [id], onDelete: Restrict)
-  createdBy   User?                    @relation("ClientReceiptCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy   User?                    @relation("ClientReceiptUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  billingDocument ClientBillingDocument     @relation(fields: [billingDocumentId], references: [id], onDelete: Restrict)
+  installment     ClientPaymentInstallment? @relation(fields: [installmentId], references: [id], onDelete: Restrict)
+  createdBy       User?                     @relation("ClientReceiptCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy       User?                     @relation("ClientReceiptUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
+  @@index([billingDocumentId, receivedAt])
   @@index([installmentId, receivedAt])
   @@map("client_receipts")
 }

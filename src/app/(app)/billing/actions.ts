@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  clientBillingInstallmentCreateSchema,
+  clientBillingInstallmentDeleteSchema,
   clientReceiptSchema,
   clientBillingInstallmentUpdateSchema,
   inlineClientBillingSchema,
@@ -20,6 +22,8 @@ import {
   ClientBillingNotFoundError,
   ClientBillingValidationError,
   confirmClientBillingDocument,
+  createClientBillingInstallment,
+  deleteClientBillingInstallment,
   recordClientReceipt,
   updateClientBillingInstallment,
   updateClientBillingAllocations,
@@ -151,6 +155,7 @@ export async function recordClientReceiptAction(
   try {
     await recordClientReceipt(actor.id, input.data);
     revalidatePath("/billing");
+    revalidatePath(`/billing/${input.data.billingDocumentId}`);
     revalidatePath("/payments");
     revalidateProjectFinancialViews();
     return { message: "Client receipt recorded.", status: "success" };
@@ -168,6 +173,72 @@ export async function recordClientReceiptAction(
     return {
       formError: "The Client receipt could not be recorded.",
       message: "The Client receipt could not be recorded.",
+      status: "error",
+    };
+  }
+}
+
+export async function createClientBillingInstallmentAction(
+  _: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = clientBillingInstallmentCreateSchema.safeParse(
+    Object.fromEntries(formData),
+  );
+  if (!input.success)
+    return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the installment.",
+      message: input.error.issues[0]?.message ?? "Check the installment.",
+      status: "error",
+    };
+  try {
+    await createClientBillingInstallment(actor.id, input.data);
+    revalidatePath("/billing");
+    revalidatePath(`/billing/${input.data.billingDocumentId}`);
+    revalidatePath("/payments");
+    revalidateProjectFinancialViews();
+    return { message: "Payment installment added.", status: "success" };
+  } catch (error) {
+    const expected = expectedBillingError(error);
+    if (expected) return expected;
+    console.error("Unable to add Client Billing installment.", error);
+    return {
+      formError: "The payment installment could not be added.",
+      message: "The payment installment could not be added.",
+      status: "error",
+    };
+  }
+}
+
+export async function deleteClientBillingInstallmentAction(
+  formData: FormData,
+): Promise<BillingActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = clientBillingInstallmentDeleteSchema.safeParse(
+    Object.fromEntries(formData),
+  );
+  if (!input.success)
+    return {
+      formError: input.error.issues[0]?.message ?? "Check the installment.",
+      message: input.error.issues[0]?.message ?? "Check the installment.",
+      status: "error",
+    };
+  try {
+    await deleteClientBillingInstallment(actor.id, input.data);
+    revalidatePath("/billing");
+    revalidatePath(`/billing/${input.data.billingDocumentId}`);
+    revalidatePath("/payments");
+    revalidateProjectFinancialViews();
+    return { message: "Payment installment removed.", status: "success" };
+  } catch (error) {
+    const expected = expectedBillingError(error);
+    if (expected) return expected;
+    console.error("Unable to remove Client Billing installment.", error);
+    return {
+      formError: "The payment installment could not be removed.",
+      message: "The payment installment could not be removed.",
       status: "error",
     };
   }

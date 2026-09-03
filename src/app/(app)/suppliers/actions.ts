@@ -59,6 +59,9 @@ export async function updateSupplierAction(
     return unexpectedActionError("supplier");
   }
   revalidatePath("/suppliers");
+  revalidatePath(`/suppliers/${input.data.id}`);
+  revalidatePath("/orders");
+  revalidatePath("/reports");
   return { message: "Supplier updated.", status: "success" };
 }
 

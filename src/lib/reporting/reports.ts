@@ -19,7 +19,11 @@ import {
   type ReportingOrderInput,
 } from "@/domain/reporting/calculations";
 import { convertPaymentAmount } from "@/domain/payments/calculations";
-import { businessToday, isDateOnly } from "@/domain/payments/dates";
+import {
+  businessToday,
+  dateToDateOnly,
+  isDateOnly,
+} from "@/domain/payments/dates";
 import {
   PaymentDirection,
   ProjectStatus,
@@ -37,6 +41,14 @@ export interface ReportingRangeInput {
   end?: string | undefined;
   horizon: "30d" | "90d" | "6m" | "12m";
   start?: string | undefined;
+}
+
+interface ReportingReceiptInput {
+  amount: string;
+  currencyCode: string;
+  fxRate: string | null;
+  id: string;
+  receivedAt: string;
 }
 
 export interface SerializedAggregateAmount {
@@ -348,12 +360,69 @@ function serializedDirection(
 }
 
 function serializedCashFlow(input: {
+  clientReceipts: readonly ReportingReceiptInput[];
   end: string;
   installments: readonly ReportingInstallmentInput[];
   reportingCurrencyCode: string;
   start: string;
 }): SerializedCashFlow {
-  const rows = buildMonthlyCashFlow(input);
+  const scheduleRows = buildMonthlyCashFlow(input);
+  const actualByMonth = new Map<
+    string,
+    { cashIn: Decimal; cashOut: Decimal; missingIds: string[] }
+  >();
+  for (const row of scheduleRows)
+    actualByMonth.set(row.month, {
+      cashIn: new Decimal(0),
+      cashOut: new Decimal(0),
+      missingIds: [],
+    });
+  for (const receipt of input.clientReceipts) {
+    if (receipt.receivedAt < input.start || receipt.receivedAt > input.end)
+      continue;
+    const month = actualByMonth.get(receipt.receivedAt.slice(0, 7));
+    if (!month) continue;
+    const converted = convertPaymentAmount({
+      amount: receipt.amount,
+      currencyCode: receipt.currencyCode,
+      fxRateToReporting: receipt.fxRate,
+      reportingCurrencyCode: input.reportingCurrencyCode,
+    });
+    if (converted === null) month.missingIds.push(receipt.id);
+    else month.cashIn = month.cashIn.plus(converted);
+  }
+  for (const installment of input.installments) {
+    if (installment.direction !== PaymentDirection.SUPPLIER_PAYMENT) continue;
+    for (const settlement of installment.settlements) {
+      if (
+        settlement.settledAt < input.start ||
+        settlement.settledAt > input.end
+      )
+        continue;
+      const month = actualByMonth.get(settlement.settledAt.slice(0, 7));
+      if (!month) continue;
+      const converted = convertPaymentAmount({
+        amount: settlement.amount,
+        currencyCode: installment.currencyCode,
+        fxRateToReporting: settlement.actualFxRate,
+        reportingCurrencyCode: input.reportingCurrencyCode,
+      });
+      if (converted === null) month.missingIds.push(settlement.id);
+      else month.cashOut = month.cashOut.plus(converted);
+    }
+  }
+  const rows = scheduleRows.map((row) => {
+    const actual = actualByMonth.get(row.month);
+    if (!actual) return row;
+    return {
+      ...row,
+      actualComplete: actual.missingIds.length === 0,
+      actualIn: actual.cashIn,
+      actualNet: actual.cashIn.minus(actual.cashOut),
+      actualOut: actual.cashOut,
+      missingActualIds: actual.missingIds,
+    };
+  });
   const totals = summarizeMonthlyCashFlow(rows);
   return {
     chart: cashFlowChartScale(rows),
@@ -418,6 +487,7 @@ function overdueItems(
 }
 
 function projectSnapshot(input: {
+  clientReceipts: readonly ReportingReceiptInput[];
   installments: readonly PaymentInstallmentView[];
   orders: readonly OrderSummary[];
   range: { end: string; start: string };
@@ -497,6 +567,7 @@ function projectSnapshot(input: {
   });
   return {
     cashFlow: serializedCashFlow({
+      clientReceipts: input.clientReceipts,
       end: input.range.end,
       installments,
       reportingCurrencyCode: input.reportingCurrencyCode,
@@ -520,16 +591,33 @@ export async function getProjectReportingSnapshot(
   rangeInput: ReportingRangeInput,
 ): Promise<ProjectReportingSnapshot | null> {
   const database = getDatabase();
-  const [project, orders, installments] = await Promise.all([
+  const [project, orders, installments, receipts] = await Promise.all([
     database.project.findUnique({
       where: { id: projectId },
       select: { reportingCurrencyCode: true },
     }),
     listOrders({ projectId, query: "" }),
     listPaymentInstallments({ projectId }),
+    database.clientReceipt.findMany({
+      where: { billingDocument: { projectId } },
+      select: {
+        amount: true,
+        billingDocument: { select: { currencyCode: true } },
+        fxRateToReporting: true,
+        id: true,
+        receivedAt: true,
+      },
+    }),
   ]);
   if (!project) return null;
   return projectSnapshot({
+    clientReceipts: receipts.map((receipt) => ({
+      amount: receipt.amount.toString(),
+      currencyCode: receipt.billingDocument.currencyCode,
+      fxRate: receipt.fxRateToReporting?.toString() ?? null,
+      id: receipt.id,
+      receivedAt: dateToDateOnly(receipt.receivedAt),
+    })),
     installments,
     orders,
     range: reportingRange(rangeInput),
@@ -586,11 +674,32 @@ export async function getPortfolioReportingSnapshot(
   const scopedInstallments = installments.filter((item) =>
     projectIds.has(item.projectId),
   );
+  const receiptRecords = await database.clientReceipt.findMany({
+    where: { billingDocument: { projectId: { in: [...projectIds] } } },
+    select: {
+      amount: true,
+      billingDocument: { select: { currencyCode: true, projectId: true } },
+      fxRateToReporting: true,
+      id: true,
+      receivedAt: true,
+    },
+  });
+  const scopedReceipts = receiptRecords.map((receipt) => ({
+    amount: receipt.amount.toString(),
+    currencyCode: receipt.billingDocument.currencyCode,
+    fxRate: receipt.fxRateToReporting?.toString() ?? null,
+    id: receipt.id,
+    projectId: receipt.billingDocument.projectId,
+    receivedAt: dateToDateOnly(receipt.receivedAt),
+  }));
   const range = reportingRange(rangeInput);
   const projectSnapshots = new Map(
     projects.map((project) => [
       project.id,
       projectSnapshot({
+        clientReceipts: scopedReceipts.filter(
+          (receipt) => receipt.projectId === project.id,
+        ),
         installments: scopedInstallments.filter(
           (item) => item.projectId === project.id,
         ),
@@ -608,6 +717,9 @@ export async function getPortfolioReportingSnapshot(
     companyProjects.map((project) => project.id),
   );
   const companySnapshot = projectSnapshot({
+    clientReceipts: scopedReceipts.filter((receipt) =>
+      companyProjectIds.has(receipt.projectId),
+    ),
     installments: scopedInstallments.filter((item) =>
       companyProjectIds.has(item.projectId),
     ),

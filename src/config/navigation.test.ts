@@ -21,3 +21,16 @@ describe("Item Management Beta navigation", () => {
     );
   });
 });
+
+describe("Directory navigation", () => {
+  it("groups Projects, Clients, and Suppliers together", () => {
+    const directory = navigationForRole("ADMIN", true).find(
+      (group) => group.label === "Directory",
+    );
+    expect(directory?.items.map((item) => item.href)).toEqual([
+      "/projects",
+      "/clients",
+      "/suppliers",
+    ]);
+  });
+});

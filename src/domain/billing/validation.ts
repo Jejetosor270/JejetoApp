@@ -198,11 +198,42 @@ export function parseClientBillingConfirmation(formData: FormData) {
 
 export const clientReceiptSchema = z.object({
   amount: positiveMoney,
+  billingDocumentId: requiredUuid("Select a valid Billing Event."),
   fxRate: optionalFx,
-  installmentId: requiredUuid("Select a valid billing installment."),
+  installmentId: optionalUuid("Select a valid billing installment."),
   notes: optionalText(4000),
   receivedAt: dateOnly,
   reference: optionalText(120),
+});
+
+export const clientBillingInstallmentCreateSchema = z
+  .object({
+    basis: z.enum(InstallmentBasis),
+    billingDocumentId: requiredUuid("Select a valid Billing Event."),
+    dueDate: dateOnly,
+    label: z.string().trim().min(1, "Enter an installment label.").max(200),
+    notes: optionalText(4000),
+    percentageRate: optionalPercentageFraction({
+      label: "Installment percentage",
+      maximumPercent: "100",
+    }),
+    scheduledAmount: money,
+  })
+  .superRefine((value, context) => {
+    if (
+      value.basis === InstallmentBasis.PERCENTAGE &&
+      value.percentageRate === undefined
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Enter a percentage between 0 and 100.",
+        path: ["percentageRate"],
+      });
+  });
+
+export const clientBillingInstallmentDeleteSchema = z.object({
+  billingDocumentId: requiredUuid("Select a valid Billing Event."),
+  id: requiredUuid("Select a valid installment."),
 });
 
 export const clientBillingInstallmentUpdateSchema = z
@@ -417,6 +448,12 @@ export type ClientBillingConfirmation = z.infer<
   typeof clientBillingConfirmationSchema
 >;
 export type ClientReceiptInput = z.infer<typeof clientReceiptSchema>;
+export type ClientBillingInstallmentCreateInput = z.infer<
+  typeof clientBillingInstallmentCreateSchema
+>;
+export type ClientBillingInstallmentDeleteInput = z.infer<
+  typeof clientBillingInstallmentDeleteSchema
+>;
 export type ClientBillingInstallmentUpdateInput = z.infer<
   typeof clientBillingInstallmentUpdateSchema
 >;

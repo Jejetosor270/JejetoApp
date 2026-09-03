@@ -2,6 +2,7 @@
 
 import { Pencil, Plus } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import {
@@ -211,7 +212,7 @@ function EditClientForm({
 }: {
   client: ClientView;
   currencies: CurrencyOption[];
-  onClose: () => void;
+  onClose?: () => void;
 }) {
   const { state, onSubmit, pending } = usePersistentActionState(
     updateClientAction,
@@ -221,9 +222,11 @@ function EditClientForm({
     <section className="bg-card rounded-lg border p-4">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-sm font-semibold">Edit client</h2>
-        <Button onClick={onClose} size="sm" type="button" variant="ghost">
-          Close
-        </Button>
+        {onClose ? (
+          <Button onClick={onClose} size="sm" type="button" variant="ghost">
+            Close
+          </Button>
+        ) : null}
       </div>
       <form
         onSubmit={onSubmit}
@@ -262,6 +265,7 @@ function ClientInlineRow({
   onFullEdit: () => void;
   onSelect: () => void;
 }) {
+  const router = useRouter();
   const initial = () => ({
     countryCode: client.countryCode ?? "",
     displayName: client.displayName,
@@ -305,7 +309,22 @@ function ClientInlineRow({
     });
   };
   return (
-    <tr className="hover:bg-muted/25 align-top">
+    <tr
+      className="hover:bg-muted/25 cursor-pointer align-top"
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("a,button,input,select"))
+          return;
+        router.push(`/clients/${client.id}`);
+      }}
+      onKeyDown={(event) => {
+        if (
+          event.key === "Enter" &&
+          !(event.target as HTMLElement).closest("a,button,input,select")
+        )
+          router.push(`/clients/${client.id}`);
+      }}
+      tabIndex={0}
+    >
       {canEdit ? (
         <SelectionCell
           checked={isSelected}
@@ -325,12 +344,9 @@ function ClientInlineRow({
         ) : (
           <Link
             className="hover:text-primary hover:underline"
-            href={`/billing?clientId=${client.id}`}
+            href={`/clients/${client.id}`}
           >
             {saved.displayName}
-            <span className="text-muted-foreground ml-2 text-xs font-normal">
-              Billing
-            </span>
           </Link>
         )}
       </td>
@@ -419,6 +435,20 @@ function ClientInlineRow({
       ) : null}
     </tr>
   );
+}
+
+export function ClientDetailEditor({
+  canEdit,
+  client,
+  currencies,
+}: {
+  canEdit: boolean;
+  client: ClientView;
+  currencies: CurrencyOption[];
+}) {
+  return canEdit ? (
+    <EditClientForm client={client} currencies={currencies} />
+  ) : null;
 }
 
 export function ClientManagement({

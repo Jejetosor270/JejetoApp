@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const database = vi.hoisted(() => ({
+  clientReceipt: { findMany: vi.fn() },
   project: { findMany: vi.fn() },
 }));
 const billing = vi.hoisted(() => ({
@@ -32,6 +33,7 @@ describe("portfolio Client financial integrity", () => {
     ]);
     orders.listOrders.mockResolvedValue([]);
     payments.listPaymentInstallments.mockResolvedValue([]);
+    database.clientReceipt.findMany.mockResolvedValue([]);
   });
 
   it("uses actual Billing receipts for outstanding and cash position", async () => {

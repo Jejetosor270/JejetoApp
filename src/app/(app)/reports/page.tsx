@@ -2,44 +2,40 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CashFlowPanel } from "@/components/reporting/cash-flow-panel";
+import {
+  ActualCashReport,
+  GlobalFreightReport,
+  GlobalVatReport,
+} from "@/components/reporting/global-report-tables";
 import { OverdueItems } from "@/components/reporting/overdue-items";
 import {
   CompanyFinancialSummary,
   ProjectPortfolioTable,
 } from "@/components/reporting/portfolio-report";
-import { Badge } from "@/components/ui/badge";
 import { isCashFlowHorizon, type CashFlowHorizon } from "@/config/reporting";
-import type { DerivedPaymentStatus } from "@/domain/payments/calculations";
-import { formatDateOnly, isDateOnly } from "@/domain/payments/dates";
-import { formatMoney } from "@/domain/procurement/presentation";
+import { isDateOnly } from "@/domain/payments/dates";
 import { PaymentDirection, ProjectStatus } from "@/generated/prisma/client";
 import { requireUser } from "@/lib/auth/current-user";
-import {
-  listPaymentInstallments,
-  type PaymentInstallmentView,
-} from "@/lib/payments/payments";
 import {
   getPortfolioReportingSnapshot,
   listReportingOptions,
 } from "@/lib/reporting/reports";
+import {
+  getActualCashReport,
+  getGlobalFreightReport,
+  getGlobalVatReport,
+} from "@/lib/reporting/global-reports";
 
 export const metadata: Metadata = { title: "Reports" };
 
 const views = [
   { label: "Project financial summary", value: "projects" },
   { label: "Cash flow", value: "cash-flow" },
-  { label: "Payment / receipt status", value: "payments" },
+  { label: "Payments / Receipts", value: "payments" },
+  { label: "VAT", value: "vat" },
+  { label: "Freight", value: "freight" },
 ] as const;
 type ReportView = (typeof views)[number]["value"];
-
-const paymentStatuses: readonly DerivedPaymentStatus[] = [
-  "OVERDUE",
-  "DUE",
-  "PARTIALLY_PAID",
-  "UPCOMING",
-  "PAID",
-  "CANCELLED",
-];
 
 function first(
   params: Record<string, string | string[] | undefined>,
@@ -142,29 +138,15 @@ function ReportingFilters({
         ))}
       </select>
       {view === "payments" ? (
-        <>
-          <select
-            className="border-input bg-background h-9 rounded-md border px-3 text-sm"
-            defaultValue={first(params, "direction") ?? ""}
-            name="direction"
-          >
-            <option value="">Both cash directions</option>
-            <option value="SUPPLIER_PAYMENT">Supplier payments</option>
-            <option value="CLIENT_RECEIPT">Client receipts</option>
-          </select>
-          <select
-            className="border-input bg-background h-9 rounded-md border px-3 text-sm"
-            defaultValue={first(params, "paymentStatus") ?? ""}
-            name="paymentStatus"
-          >
-            <option value="">All payment statuses</option>
-            {paymentStatuses.map((status) => (
-              <option key={status} value={status}>
-                {status.replaceAll("_", " ")}
-              </option>
-            ))}
-          </select>
-        </>
+        <select
+          className="border-input bg-background h-9 rounded-md border px-3 text-sm"
+          defaultValue={first(params, "direction") ?? ""}
+          name="direction"
+        >
+          <option value="">Both cash directions</option>
+          <option value="SUPPLIER_PAYMENT">Supplier payments</option>
+          <option value="CLIENT_RECEIPT">Client receipts</option>
+        </select>
       ) : view === "cash-flow" ? (
         <select
           className="border-input bg-background h-9 rounded-md border px-3 text-sm"
@@ -177,24 +159,28 @@ function ReportingFilters({
           <option value="12m">Next 12 months</option>
         </select>
       ) : null}
-      {view === "projects" ? null : (
+      {view === "payments" || view === "cash-flow" ? (
         <div className="flex gap-2 xl:col-span-2">
           <input
-            aria-label={view === "payments" ? "Due from" : "Cash-flow start"}
+            aria-label={
+              view === "payments" ? "Actual date from" : "Cash-flow start"
+            }
             className="border-input bg-background h-9 min-w-0 flex-1 rounded-md border px-3 text-sm"
             defaultValue={first(params, "dateFrom") ?? ""}
             name="dateFrom"
             type="date"
           />
           <input
-            aria-label={view === "payments" ? "Due to" : "Cash-flow end"}
+            aria-label={
+              view === "payments" ? "Actual date to" : "Cash-flow end"
+            }
             className="border-input bg-background h-9 min-w-0 flex-1 rounded-md border px-3 text-sm"
             defaultValue={first(params, "dateTo") ?? ""}
             name="dateTo"
             type="date"
           />
         </div>
-      )}
+      ) : null}
       <button
         className="bg-primary text-primary-foreground h-9 rounded-md px-3 text-sm font-medium"
         type="submit"
@@ -208,102 +194,6 @@ function ReportingFilters({
         Clear
       </Link>
     </form>
-  );
-}
-
-function PaymentStatusReport({
-  installments,
-}: {
-  installments: readonly PaymentInstallmentView[];
-}) {
-  return (
-    <section className="bg-card overflow-hidden rounded-lg border">
-      <header className="border-b px-4 py-3">
-        <h2 className="text-sm font-semibold">Payment / receipt status</h2>
-        <p className="text-muted-foreground mt-1 text-xs">
-          Current installment balances from the authoritative payment schedules.
-        </p>
-      </header>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[74rem] text-left text-xs">
-          <thead className="bg-muted/40 text-muted-foreground">
-            <tr>
-              <th className="px-3 py-2">Direction</th>
-              <th className="px-3 py-2">Due</th>
-              <th className="px-3 py-2">Project / Order</th>
-              <th className="px-3 py-2">Party</th>
-              <th className="px-3 py-2">Installment</th>
-              <th className="px-3 py-2 text-right">Scheduled</th>
-              <th className="px-3 py-2 text-right">Paid / Received</th>
-              <th className="px-3 py-2 text-right">Outstanding</th>
-              <th className="px-3 py-2">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {installments.map((item) => {
-              const supplier =
-                item.direction === PaymentDirection.SUPPLIER_PAYMENT;
-              return (
-                <tr key={item.id}>
-                  <td className="px-3 py-2">
-                    <Badge variant={supplier ? "destructive" : "default"}>
-                      {supplier ? "CASH OUT" : "CASH IN"}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2">{formatDateOnly(item.dueDate)}</td>
-                  <td className="px-3 py-2">
-                    <Link
-                      className="font-medium hover:underline"
-                      href={`/orders/${item.orderId}#payments`}
-                    >
-                      {item.projectName}
-                    </Link>
-                    <span className="text-muted-foreground block font-mono">
-                      {item.orderNumber}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    {supplier ? item.supplierName : item.clientName}
-                  </td>
-                  <td className="px-3 py-2">{item.label}</td>
-                  {[
-                    item.scheduledAmount,
-                    item.paidAmount,
-                    item.outstandingAmount,
-                  ].map((value, index) => (
-                    <td
-                      className="financial-figure px-3 py-2 text-right"
-                      key={`${item.id}-${index}`}
-                    >
-                      {formatMoney(value, item.currencyCode)}
-                    </td>
-                  ))}
-                  <td className="px-3 py-2">
-                    <Badge
-                      variant={
-                        item.status === "OVERDUE" ? "destructive" : "outline"
-                      }
-                    >
-                      {item.status.replaceAll("_", " ")}
-                    </Badge>
-                  </td>
-                </tr>
-              );
-            })}
-            {installments.length === 0 ? (
-              <tr>
-                <td
-                  className="text-muted-foreground px-3 py-12 text-center text-sm"
-                  colSpan={9}
-                >
-                  No payment installments match these filters.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
-    </section>
   );
 }
 
@@ -332,34 +222,38 @@ export default async function ReportsPage({
     Object.values(PaymentDirection),
     first(params, "direction"),
   );
-  const paymentStatus = selected(
-    paymentStatuses,
-    first(params, "paymentStatus"),
-  );
   const reportingFilters = {
     clientId: first(params, "clientId"),
     projectId: first(params, "projectId"),
     projectStatus,
     supplierId: first(params, "supplierId"),
   };
-  const [, options, report, installments] = await Promise.all([
+  const reportPromise =
+    view === "projects" || view === "cash-flow"
+      ? getPortfolioReportingSnapshot(reportingFilters, {
+          end: dateTo && isDateOnly(dateTo) ? dateTo : undefined,
+          horizon,
+          start: dateFrom && isDateOnly(dateFrom) ? dateFrom : undefined,
+        })
+      : Promise.resolve(null);
+  const [, options, report, actualCash, vat, freight] = await Promise.all([
     requireUser(),
     listReportingOptions(),
-    getPortfolioReportingSnapshot(reportingFilters, {
-      end: dateTo && isDateOnly(dateTo) ? dateTo : undefined,
-      horizon,
-      start: dateFrom && isDateOnly(dateFrom) ? dateFrom : undefined,
-    }),
-    listPaymentInstallments({
-      clientId: reportingFilters.clientId,
-      direction,
-      dueFrom: dateFrom && isDateOnly(dateFrom) ? dateFrom : undefined,
-      dueTo: dateTo && isDateOnly(dateTo) ? dateTo : undefined,
-      projectId: reportingFilters.projectId,
-      projectStatus,
-      status: paymentStatus,
-      supplierId: reportingFilters.supplierId,
-    }),
+    reportPromise,
+    view === "payments"
+      ? getActualCashReport({
+          ...reportingFilters,
+          dateFrom: dateFrom && isDateOnly(dateFrom) ? dateFrom : undefined,
+          dateTo: dateTo && isDateOnly(dateTo) ? dateTo : undefined,
+          direction,
+        })
+      : Promise.resolve(null),
+    view === "vat"
+      ? getGlobalVatReport(reportingFilters)
+      : Promise.resolve(null),
+    view === "freight"
+      ? getGlobalFreightReport(reportingFilters)
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -393,13 +287,13 @@ export default async function ReportsPage({
 
       <ReportingFilters options={options} params={params} view={view} />
 
-      {view === "projects" ? (
+      {view === "projects" && report ? (
         <>
           <CompanyFinancialSummary report={report} />
           <ProjectPortfolioTable report={report} />
         </>
       ) : null}
-      {view === "cash-flow" ? (
+      {view === "cash-flow" && report ? (
         <>
           {report.excludedCurrencyProjects.length ? (
             <div className="border-warning/30 bg-warning-muted rounded-lg border px-4 py-3 text-xs">
@@ -423,8 +317,12 @@ export default async function ReportsPage({
           <OverdueItems items={report.overdueItems} />
         </>
       ) : null}
-      {view === "payments" ? (
-        <PaymentStatusReport installments={installments} />
+      {view === "payments" && actualCash ? (
+        <ActualCashReport report={actualCash} />
+      ) : null}
+      {view === "vat" && vat ? <GlobalVatReport report={vat} /> : null}
+      {view === "freight" && freight ? (
+        <GlobalFreightReport report={freight} />
       ) : null}
     </div>
   );

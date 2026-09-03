@@ -1,6 +1,8 @@
 "use client";
 
 import { Pencil, Plus } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import {
@@ -237,7 +239,7 @@ function EditSupplierForm({
   supplier,
 }: {
   currencies: CurrencyOption[];
-  onClose: () => void;
+  onClose?: () => void;
   supplier: SupplierView;
 }) {
   const { state, onSubmit, pending } = usePersistentActionState(
@@ -248,9 +250,11 @@ function EditSupplierForm({
     <section className="bg-card rounded-lg border p-4">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-sm font-semibold">Edit supplier</h2>
-        <Button onClick={onClose} size="sm" type="button" variant="ghost">
-          Close
-        </Button>
+        {onClose ? (
+          <Button onClick={onClose} size="sm" type="button" variant="ghost">
+            Close
+          </Button>
+        ) : null}
       </div>
       <form
         onSubmit={onSubmit}
@@ -291,6 +295,7 @@ function SupplierInlineRow({
   onSelect: () => void;
   supplier: SupplierView;
 }) {
+  const router = useRouter();
   const initial = () => ({
     countryCode: supplier.countryCode ?? "",
     defaultCurrencyCode: supplier.defaultCurrencyCode,
@@ -342,7 +347,22 @@ function SupplierInlineRow({
     });
   };
   return (
-    <tr className="hover:bg-muted/25 align-top">
+    <tr
+      className="hover:bg-muted/25 cursor-pointer align-top"
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("a,button,input,select"))
+          return;
+        router.push(`/suppliers/${supplier.id}`);
+      }}
+      onKeyDown={(event) => {
+        if (
+          event.key === "Enter" &&
+          !(event.target as HTMLElement).closest("a,button,input,select")
+        )
+          router.push(`/suppliers/${supplier.id}`);
+      }}
+      tabIndex={0}
+    >
       {canEdit ? (
         <SelectionCell
           checked={isSelected}
@@ -358,7 +378,12 @@ function SupplierInlineRow({
             value={draft.displayName}
           />
         ) : (
-          saved.displayName
+          <Link
+            className="hover:text-primary hover:underline"
+            href={`/suppliers/${supplier.id}`}
+          >
+            {saved.displayName}
+          </Link>
         )}
       </td>
       <td className="text-muted-foreground px-4 py-3">
@@ -468,6 +493,20 @@ function SupplierInlineRow({
       ) : null}
     </tr>
   );
+}
+
+export function SupplierDetailEditor({
+  canEdit,
+  currencies,
+  supplier,
+}: {
+  canEdit: boolean;
+  currencies: CurrencyOption[];
+  supplier: SupplierView;
+}) {
+  return canEdit ? (
+    <EditSupplierForm currencies={currencies} supplier={supplier} />
+  ) : null;
 }
 
 export function SupplierManagement({

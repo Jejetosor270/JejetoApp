@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 const auth = vi.hoisted(() => ({ requireMasterDataEditor: vi.fn() }));
 const billing = vi.hoisted(() => ({
   confirmClientBillingDocument: vi.fn(),
+  createClientBillingInstallment: vi.fn(),
+  deleteClientBillingInstallment: vi.fn(),
   recordClientReceipt: vi.fn(),
   updateClientBillingAllocations: vi.fn(),
   updateClientBillingDocument: vi.fn(),
@@ -22,6 +24,8 @@ vi.mock("@/lib/billing/billing", () => ({
 
 import {
   confirmClientDocumentAction,
+  createClientBillingInstallmentAction,
+  deleteClientBillingInstallmentAction,
   recordClientReceiptAction,
   updateClientBillingAllocationsAction,
   updateClientBillingDocumentAction,
@@ -31,6 +35,18 @@ import {
 
 describe("Client billing authorization", () => {
   it.each([
+    [
+      "Billing installment creation",
+      () =>
+        createClientBillingInstallmentAction(
+          { message: "", status: "idle" },
+          new FormData(),
+        ),
+    ],
+    [
+      "Billing installment removal",
+      () => deleteClientBillingInstallmentAction(new FormData()),
+    ],
     [
       "confirmation",
       () =>
@@ -83,6 +99,8 @@ describe("Client billing authorization", () => {
     auth.requireMasterDataEditor.mockRejectedValueOnce(new Error("Forbidden"));
     await expect(invoke()).rejects.toThrow("Forbidden");
     expect(billing.confirmClientBillingDocument).not.toHaveBeenCalled();
+    expect(billing.createClientBillingInstallment).not.toHaveBeenCalled();
+    expect(billing.deleteClientBillingInstallment).not.toHaveBeenCalled();
     expect(billing.recordClientReceipt).not.toHaveBeenCalled();
     expect(billing.updateClientBillingDocument).not.toHaveBeenCalled();
     expect(billing.updateClientBillingInstallment).not.toHaveBeenCalled();

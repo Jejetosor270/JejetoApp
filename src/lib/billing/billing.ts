@@ -19,6 +19,8 @@ import type {
   BillingAllocationInput,
   BillingAllocationsEditInput,
   BillingDocumentEditInput,
+  ClientBillingInstallmentCreateInput,
+  ClientBillingInstallmentDeleteInput,
   ClientBillingInstallmentUpdateInput,
   ClientBillingConfirmation,
   ClientReceiptInput,
@@ -71,6 +73,7 @@ const billingInclude = {
     },
     orderBy: { sequence: "asc" },
   },
+  receipts: { orderBy: { receivedAt: "asc" } },
   project: {
     select: { id: true, name: true, reportingCurrencyCode: true },
   },
@@ -87,13 +90,10 @@ type BillingRecord = Prisma.ClientBillingDocumentGetPayload<{
 }>;
 
 function receiptRecords(record: BillingRecord) {
-  const own = record.paymentInstallments.flatMap(
-    (installment) => installment.receipts,
-  );
   const matched = record.matchedInstallment?.receipts ?? [];
   return [
     ...new Map(
-      [...own, ...matched].map((receipt) => [receipt.id, receipt]),
+      [...record.receipts, ...matched].map((receipt) => [receipt.id, receipt]),
     ).values(),
   ];
 }
@@ -152,6 +152,15 @@ function billingView(record: BillingRecord, today = businessToday()) {
     notes: record.notes,
     outstanding: calculated.outstanding,
     paid: calculated.paid,
+    receipts: record.receipts.map((receipt) => ({
+      amount: receipt.amount.toString(),
+      fxRate: receipt.fxRateToReporting?.toString() ?? null,
+      id: receipt.id,
+      installmentId: receipt.installmentId,
+      notes: receipt.notes,
+      receivedAt: dateToDateOnly(receipt.receivedAt),
+      reference: receipt.reference,
+    })),
     paymentInstallments: visibleInstallments.map((installment) => ({
       basis: installment.basis,
       billingDocumentId: installment.billingDocumentId,
@@ -168,6 +177,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
         amount: receipt.amount.toString(),
         fxRate: receipt.fxRateToReporting?.toString() ?? null,
         id: receipt.id,
+        installmentId: receipt.installmentId,
         notes: receipt.notes,
         receivedAt: dateToDateOnly(receipt.receivedAt),
         reference: receipt.reference,
@@ -599,63 +609,94 @@ export async function recordClientReceipt(
   actorId: string,
   input: ClientReceiptInput,
 ): Promise<void> {
-  const installment = await getDatabase().clientPaymentInstallment.findUnique({
-    where: { id: input.installmentId },
-    include: {
-      billingDocument: {
-        select: {
+  await getDatabase().$transaction(
+    async (transaction) => {
+      const document = await transaction.clientBillingDocument.findUnique({
+        where: { id: input.billingDocumentId },
+        include: {
+          matchedInstallment: {
+            include: { receipts: { select: { amount: true } } },
+          },
           project: { select: { reportingCurrencyCode: true } },
-          reference: true,
+          receipts: { select: { amount: true } },
         },
-      },
-      receipts: { select: { amount: true } },
+      });
+      if (!document) throw new ClientBillingNotFoundError();
+      const installment = input.installmentId
+        ? await transaction.clientPaymentInstallment.findUnique({
+            where: { id: input.installmentId },
+            include: { receipts: { select: { amount: true } } },
+          })
+        : null;
+      if (input.installmentId && !installment)
+        throw new ClientBillingNotFoundError();
+      if (
+        installment &&
+        installment.billingDocumentId !== input.billingDocumentId
+      )
+        throw new ClientBillingValidationError(
+          "The selected installment belongs to another Billing Event.",
+        );
+      const paid = [
+        ...document.receipts,
+        ...(document.matchedInstallment?.receipts ?? []),
+      ].reduce((sum, receipt) => sum.plus(receipt.amount), new Decimal(0));
+      if (paid.plus(input.amount).greaterThan(document.totalTtc))
+        throw new ClientBillingValidationError(
+          "The receipt would exceed the Billing Event outstanding balance.",
+        );
+      if (installment) {
+        const installmentPaid = installment.receipts.reduce(
+          (sum, receipt) => sum.plus(receipt.amount),
+          new Decimal(0),
+        );
+        if (
+          installmentPaid
+            .plus(input.amount)
+            .greaterThan(installment.scheduledAmount)
+        )
+          throw new ClientBillingValidationError(
+            "The receipt would exceed the selected installment balance. Record it at Billing level instead.",
+          );
+      }
+      if (
+        document.currencyCode !== document.project.reportingCurrencyCode &&
+        !input.fxRate
+      )
+        throw new ClientBillingValidationError(
+          "Enter the actual receipt FX rate to Project reporting currency.",
+        );
+      const receipt = await transaction.clientReceipt.create({
+        data: {
+          amount: input.amount,
+          billingDocumentId: input.billingDocumentId,
+          createdById: actorId,
+          fxRateToReporting:
+            document.currencyCode === document.project.reportingCurrencyCode
+              ? null
+              : (input.fxRate ?? null),
+          installmentId: input.installmentId ?? null,
+          notes: input.notes ?? null,
+          receivedAt: dateOnlyToDate(input.receivedAt),
+          reference: input.reference ?? null,
+          updatedById: actorId,
+        },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "CREATED",
+        entityId: receipt.id,
+        entityReference: `${document.reference} · receipt`,
+        entityType: "CLIENT_RECEIPT",
+        metadata: {
+          amount: input.amount,
+          billingDocumentId: input.billingDocumentId,
+          installmentId: input.installmentId ?? null,
+        },
+        summary: "Recorded an actual Client receipt.",
+      });
     },
-  });
-  if (!installment) throw new ClientBillingNotFoundError();
-  const paid = installment.receipts.reduce(
-    (sum, receipt) => sum.plus(receipt.amount),
-    new Decimal(0),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
-  if (paid.plus(input.amount).greaterThan(installment.scheduledAmount)) {
-    throw new ClientBillingValidationError(
-      "The receipt would exceed the scheduled amount.",
-    );
-  }
-  if (
-    installment.currencyCode !==
-      installment.billingDocument.project.reportingCurrencyCode &&
-    !input.fxRate
-  ) {
-    throw new ClientBillingValidationError(
-      "Enter the actual receipt FX rate to Project reporting currency.",
-    );
-  }
-  await getDatabase().$transaction(async (transaction) => {
-    const receipt = await transaction.clientReceipt.create({
-      data: {
-        amount: input.amount,
-        createdById: actorId,
-        fxRateToReporting:
-          installment.currencyCode ===
-          installment.billingDocument.project.reportingCurrencyCode
-            ? null
-            : (input.fxRate ?? null),
-        installmentId: input.installmentId,
-        notes: input.notes ?? null,
-        receivedAt: dateOnlyToDate(input.receivedAt),
-        reference: input.reference ?? null,
-        updatedById: actorId,
-      },
-    });
-    await writeAuditEvent(transaction, actorId, {
-      action: "CREATED",
-      entityId: receipt.id,
-      entityReference: `${installment.billingDocument.reference} · receipt`,
-      entityType: "CLIENT_RECEIPT",
-      metadata: { amount: input.amount, installmentId: input.installmentId },
-      summary: "Recorded an actual Client receipt.",
-    });
-  });
 }
 
 export async function updateClientBillingInline(
@@ -667,6 +708,7 @@ export async function updateClientBillingInline(
       where: { id: input.id },
       select: {
         isCancelled: true,
+        _count: { select: { receipts: true } },
         matchedInstallment: {
           select: { _count: { select: { receipts: true } } },
         },
@@ -677,6 +719,7 @@ export async function updateClientBillingInline(
     });
     if (!existing) throw new ClientBillingNotFoundError();
     const receiptCount =
+      existing._count.receipts +
       (existing.matchedInstallment?._count.receipts ?? 0) +
       existing.paymentInstallments.reduce(
         (total, installment) => total + installment._count.receipts,
@@ -821,6 +864,115 @@ export async function updateClientBillingInstallment(
       percentageRate: installment.percentageRate?.toString() ?? "",
       scheduledAmount: installment.scheduledAmount.toString(),
     };
+  });
+}
+
+export async function createClientBillingInstallment(
+  actorId: string,
+  input: ClientBillingInstallmentCreateInput,
+) {
+  return getDatabase().$transaction(
+    async (transaction) => {
+      const document = await transaction.clientBillingDocument.findUnique({
+        where: { id: input.billingDocumentId },
+        include: {
+          paymentInstallments: {
+            where: { isCancelled: false },
+            select: { scheduledAmount: true, sequence: true },
+          },
+        },
+      });
+      if (!document) throw new ClientBillingNotFoundError();
+      const amount =
+        input.basis === InstallmentBasis.PERCENTAGE
+          ? scheduledAmountFromPercentage(
+              document.totalTtc,
+              input.percentageRate ?? "0",
+            )
+          : new Decimal(input.scheduledAmount);
+      const scheduled = document.paymentInstallments.reduce(
+        (total, installment) => total.plus(installment.scheduledAmount),
+        new Decimal(0),
+      );
+      if (scheduled.plus(amount).greaterThan(document.totalTtc))
+        throw new ClientBillingValidationError(
+          "The Client payment schedule cannot exceed the Billing TTC.",
+        );
+      const sequence =
+        document.paymentInstallments.reduce(
+          (maximum, installment) => Math.max(maximum, installment.sequence),
+          0,
+        ) + 1;
+      const installment = await transaction.clientPaymentInstallment.create({
+        data: {
+          basis: input.basis,
+          billingDocumentId: document.id,
+          createdById: actorId,
+          currencyCode: document.currencyCode,
+          dueDate: dateOnlyToDate(input.dueDate),
+          expectedFxRateToReporting: document.fxRateToReporting,
+          label: input.label,
+          notes: input.notes ?? null,
+          percentageRate:
+            input.basis === InstallmentBasis.PERCENTAGE
+              ? (input.percentageRate ?? "0")
+              : null,
+          scheduledAmount: amount.toFixed(4),
+          sequence,
+          updatedById: actorId,
+        },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "CREATED",
+        entityId: installment.id,
+        entityReference: `${document.reference} · ${installment.label}`,
+        entityType: "INSTALLMENT",
+        metadata: { billingDocumentId: document.id },
+        summary: "Added a Client Billing payment installment.",
+      });
+      return installment.id;
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
+export async function deleteClientBillingInstallment(
+  actorId: string,
+  input: ClientBillingInstallmentDeleteInput,
+): Promise<void> {
+  await getDatabase().$transaction(async (transaction) => {
+    const installment = await transaction.clientPaymentInstallment.findUnique({
+      where: { id: input.id },
+      include: {
+        billingDocument: { select: { reference: true } },
+        matchedInvoices: { select: { id: true } },
+        receipts: { select: { id: true } },
+      },
+    });
+    if (!installment) throw new ClientBillingNotFoundError();
+    if (installment.billingDocumentId !== input.billingDocumentId)
+      throw new ClientBillingValidationError(
+        "This installment belongs to another Billing Event.",
+      );
+    if (installment.receipts.length > 0)
+      throw new ClientBillingValidationError(
+        "An installment with attributed receipts cannot be removed.",
+      );
+    if (installment.matchedInvoices.length > 0)
+      throw new ClientBillingValidationError(
+        "An installment matched to an Invoice cannot be removed.",
+      );
+    await transaction.clientPaymentInstallment.delete({
+      where: { id: installment.id },
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "DELETED",
+      entityId: installment.id,
+      entityReference: `${installment.billingDocument.reference} · ${installment.label}`,
+      entityType: "INSTALLMENT",
+      metadata: { billingDocumentId: input.billingDocumentId },
+      summary: "Removed a Client Billing payment installment.",
+    });
   });
 }
 

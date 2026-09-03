@@ -135,6 +135,13 @@ export async function listSuppliers(filters: SupplierListFilters) {
   return { items, total };
 }
 
+export async function getSupplier(id: string): Promise<ManagedSupplier | null> {
+  return getDatabase().supplier.findUnique({
+    where: { id },
+    select: supplierSelect,
+  });
+}
+
 export async function createSupplier(
   actorId: string,
   input: CreateSupplierInput,

@@ -1,9 +1,13 @@
 "use client";
 
 import Decimal from "decimal.js";
-import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
 
-import { updateClientBillingInstallmentAction } from "@/app/(app)/billing/actions";
+import {
+  deleteClientBillingInstallmentAction,
+  updateClientBillingInstallmentAction,
+} from "@/app/(app)/billing/actions";
 import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import {
   Field,
@@ -19,6 +23,8 @@ import {
 } from "@/domain/billing/calculations";
 import type { BillingActionState } from "@/domain/billing/action-state";
 import { formatDateOnly } from "@/domain/payments/dates";
+import { businessToday } from "@/domain/payments/dates";
+import { derivePaymentStatus } from "@/domain/payments/calculations";
 import {
   formatMoney,
   formatRate,
@@ -83,6 +89,8 @@ export function BillingInstallmentEditor({
   canEdit: boolean;
   installment: Installment;
 }) {
+  const router = useRouter();
+  const [deleting, startDeleting] = useTransition();
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(() => installmentDraft(installment));
   const [draft, setDraft] = useState(() => installmentDraft(installment));
@@ -118,6 +126,14 @@ export function BillingInstallmentEditor({
     (total, receipt) => total.plus(receipt.amount),
     new Decimal(0),
   );
+  const remaining = Decimal.max(new Decimal(saved.amount).minus(received), 0);
+  const status = derivePaymentStatus({
+    dueDate: saved.dueDate,
+    isCancelled: installment.isCancelled,
+    paidAmount: received,
+    scheduledAmount: saved.amount,
+    today: businessToday(),
+  });
   const fieldErrors = state.fieldErrors ?? {};
 
   return (
@@ -266,18 +282,43 @@ export function BillingInstallmentEditor({
                 {formatMoney(saved.amount, installment.currencyCode)}
               </p>
               {canEdit ? (
-                <Button
-                  className="mt-2"
-                  onClick={() => {
-                    setDraft(saved);
-                    setEditing(true);
-                  }}
-                  size="xs"
-                  type="button"
-                  variant="outline"
-                >
-                  Edit
-                </Button>
+                <div className="mt-2 flex justify-end gap-1">
+                  <Button
+                    onClick={() => {
+                      setDraft(saved);
+                      setEditing(true);
+                    }}
+                    size="xs"
+                    type="button"
+                    variant="outline"
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    disabled={
+                      deleting ||
+                      installment.receipts.length > 0 ||
+                      installment.billingDocumentId !== billingDocumentId
+                    }
+                    onClick={() => {
+                      if (!window.confirm("Remove this payment installment?"))
+                        return;
+                      const data = new FormData();
+                      data.set("billingDocumentId", billingDocumentId);
+                      data.set("id", installment.id);
+                      startDeleting(async () => {
+                        const result =
+                          await deleteClientBillingInstallmentAction(data);
+                        if (result.status === "success") router.refresh();
+                      });
+                    }}
+                    size="xs"
+                    type="button"
+                    variant="ghost"
+                  >
+                    Remove
+                  </Button>
+                </div>
               ) : null}
             </div>
           </div>
@@ -303,6 +344,15 @@ export function BillingInstallmentEditor({
                 </span>
               </p>
             )}
+            <p className="flex justify-between gap-2 border-t pt-1">
+              <span>Remaining</span>
+              <span className="financial-figure">
+                {formatMoney(remaining.toString(), installment.currencyCode)}
+              </span>
+            </p>
+            <p className="text-muted-foreground text-right">
+              {status.replaceAll("_", " ")}
+            </p>
           </div>
         </>
       )}

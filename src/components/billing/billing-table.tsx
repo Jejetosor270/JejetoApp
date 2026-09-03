@@ -2,110 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 
-import { recordClientReceiptAction } from "@/app/(app)/billing/actions";
-import type { BillingActionState } from "@/domain/billing/action-state";
-import { inputClassName, SubmitButton } from "@/components/master-data/form-ui";
-import { Field } from "@/components/master-data/form-ui";
-import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney } from "@/domain/procurement/presentation";
 import type { ClientBillingView } from "@/lib/billing/billing";
-
-const initialState: BillingActionState = { message: "", status: "idle" };
-
-function ReceiptForm({
-  currencyCode,
-  installmentId,
-}: {
-  currencyCode: string;
-  installmentId: string;
-}) {
-  const { state, onSubmit, pending } = usePersistentActionState(
-    recordClientReceiptAction,
-    initialState,
-  );
-  const [amount, setAmount] = useState("");
-  const [receivedAt, setReceivedAt] = useState("");
-  const [reference, setReference] = useState("");
-  const [fxRate, setFxRate] = useState("");
-  const [notes, setNotes] = useState("");
-  const fieldErrors = state.fieldErrors ?? {};
-  return (
-    <form
-      className="mt-2 grid gap-2 rounded-md border p-2 sm:grid-cols-2 xl:grid-cols-5"
-      onSubmit={onSubmit}
-    >
-      <input name="installmentId" type="hidden" value={installmentId} />
-      <Field
-        error={fieldErrors.amount}
-        label={`Receipt amount (${currencyCode})`}
-        required
-      >
-        <input
-          className={inputClassName}
-          inputMode="decimal"
-          name="amount"
-          onChange={(event) => setAmount(event.target.value)}
-          required
-          value={amount}
-        />
-      </Field>
-      <Field
-        error={fieldErrors.receivedAt}
-        label="Actual payment date"
-        required
-      >
-        <input
-          className={inputClassName}
-          name="receivedAt"
-          onChange={(event) => setReceivedAt(event.target.value)}
-          required
-          type="date"
-          value={receivedAt}
-        />
-      </Field>
-      <Field error={fieldErrors.reference} label="Payment reference">
-        <input
-          className={inputClassName}
-          name="reference"
-          onChange={(event) => setReference(event.target.value)}
-          value={reference}
-        />
-      </Field>
-      <Field error={fieldErrors.fxRate} label="Actual receipt FX">
-        <input
-          className={inputClassName}
-          inputMode="decimal"
-          name="fxRate"
-          onChange={(event) => setFxRate(event.target.value)}
-          value={fxRate}
-        />
-      </Field>
-      <Field error={fieldErrors.notes} label="Notes">
-        <input
-          className={inputClassName}
-          name="notes"
-          onChange={(event) => setNotes(event.target.value)}
-          value={notes}
-        />
-      </Field>
-      <SubmitButton pending={pending}>Record receipt</SubmitButton>
-      {state.message ? (
-        <p
-          className={
-            state.status === "error"
-              ? "text-destructive text-xs sm:col-span-5"
-              : "text-xs sm:col-span-5"
-          }
-        >
-          {state.message}
-        </p>
-      ) : null}
-    </form>
-  );
-}
 
 function BillingRow({
   canEdit,
@@ -212,10 +112,12 @@ function BillingRow({
                       </div>
                     </div>
                     {canEdit ? (
-                      <ReceiptForm
-                        currencyCode={installment.currencyCode}
-                        installmentId={installment.id}
-                      />
+                      <Link
+                        className="text-primary mt-2 inline-block text-xs underline"
+                        href={href}
+                      >
+                        Manage schedule and receipts
+                      </Link>
                     ) : null}
                   </article>
                 ))}

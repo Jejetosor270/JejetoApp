@@ -127,6 +127,13 @@ export async function listClients(filters: ClientListFilters) {
   return { items, total };
 }
 
+export async function getClient(id: string): Promise<ManagedClient | null> {
+  return getDatabase().client.findUnique({
+    where: { id },
+    select: clientSelect,
+  });
+}
+
 export async function createClient(
   actorId: string,
   input: CreateClientInput,

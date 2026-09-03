@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   clientBillingInstallmentUpdateSchema,
+  clientReceiptSchema,
   parseBillingDocumentEdit,
   parseClientBillingConfirmation,
   parseOrderCreationBillingLink,
@@ -145,6 +146,20 @@ describe("Client billing confirmation", () => {
     if (!result.success) return;
     expect(result.data.existingDocumentId).toBeNull();
     expect(result.data.matchedInstallmentId).toBeNull();
+  });
+
+  it("allows Billing-level receipts without installment attribution", () => {
+    const receipt = clientReceiptSchema.parse({
+      amount: "100000",
+      billingDocumentId: projectId,
+      installmentId: "",
+      receivedAt: "2026-09-03",
+    });
+    expect(receipt).toMatchObject({
+      amount: "100000.0000",
+      billingDocumentId: projectId,
+      installmentId: null,
+    });
   });
 
   it("returns a friendly error for a non-empty invalid Order ID", () => {

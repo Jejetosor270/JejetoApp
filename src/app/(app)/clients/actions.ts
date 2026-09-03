@@ -58,7 +58,9 @@ export async function updateClientAction(
     return unexpectedActionError("client");
   }
   revalidatePath("/clients");
+  revalidatePath(`/clients/${input.data.id}`);
   revalidatePath("/projects");
+  revalidatePath("/reports");
   return { message: "Client updated.", status: "success" };
 }
 

@@ -535,6 +535,14 @@ async function clientReceiptsCsv(): Promise<string> {
     orderBy: [{ receivedAt: "desc" }, { id: "asc" }],
     select: {
       amount: true,
+      billingDocument: {
+        select: {
+          client: { select: { displayName: true } },
+          currencyCode: true,
+          project: { select: { name: true, reportingCurrencyCode: true } },
+          reference: true,
+        },
+      },
       fxRateToReporting: true,
       installment: {
         select: {
@@ -567,20 +575,18 @@ async function clientReceiptsCsv(): Promise<string> {
       "Project currency",
     ],
     items.map((item) => [
-      item.installment.billingDocument.client.displayName,
-      item.installment.billingDocument.project.name,
-      item.installment.billingDocument.reference,
-      item.installment.label,
+      item.billingDocument.client.displayName,
+      item.billingDocument.project.name,
+      item.billingDocument.reference,
+      item.installment?.label ?? "Billing level",
       item.reference ?? "",
       trustedCsvValue(item.receivedAt.toISOString().slice(0, 10)),
       money(item.amount.toString()),
-      trustedCsvValue(item.installment.currencyCode),
+      trustedCsvValue(item.billingDocument.currencyCode),
       item.fxRateToReporting
         ? trustedCsvValue(item.fxRateToReporting.toString())
         : "",
-      trustedCsvValue(
-        item.installment.billingDocument.project.reportingCurrencyCode,
-      ),
+      trustedCsvValue(item.billingDocument.project.reportingCurrencyCode),
     ]),
   );
 }
