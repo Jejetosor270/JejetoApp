@@ -85,11 +85,11 @@ describe("budget duplicate and revised-Item matching", () => {
               description: "Chair",
               finishColor: "Dark Oak",
               itemReference: "I-1",
-              markupRate: "30%",
+              markupRate: "30,5%",
               quantity: "10",
               supplierSku: "CHAIR-1",
-              totalPurchasePriceHt: "13100",
-              unitPurchasePriceHt: "1310",
+              totalPurchasePriceHt: "13 100,00",
+              unitPurchasePriceHt: "1 310,00",
               vendor: "Supplier A",
             },
             rowNumber: 2,
@@ -125,9 +125,9 @@ describe("budget duplicate and revised-Item matching", () => {
       ]),
     );
     expect(result.rows[0]).toMatchObject({
-      markupRate: "0.300000",
-      totalSellingPriceHt: "17030.0000",
-      unitSellingPriceHt: "1703.0000",
+      markupRate: "0.305000",
+      totalSellingPriceHt: "17095.5000",
+      unitSellingPriceHt: "1709.5500",
     });
     expect(database.item.findMany).toHaveBeenCalledTimes(1);
   });

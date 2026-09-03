@@ -19,6 +19,10 @@ describe("Item Decimal-safe financials", () => {
   it("recalculates quote-review totals and VAT with exact decimals", () => {
     expect(quoteItemTotalFromUnit("3", "19.95")).toBe("59.8500");
     expect(quoteItemPercentInputToRate("5.5")).toBe("0.055000");
+    expect(quoteItemTotalFromUnit("3,5", "1 000,50")).toBe("3501.7500");
+    expect(quoteItemPercentInputToRate("15,5%")).toBe("0.155000");
+    expect(quoteItemPercentInputToRate("100")).toBe("1.000000");
+    expect(quoteItemPercentInputToRate("100.0001")).toBeNull();
     expect(
       quoteItemLineAmounts({
         totalPriceHt: "59.8500",

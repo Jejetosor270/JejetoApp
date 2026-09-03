@@ -6,6 +6,7 @@ const billing = vi.hoisted(() => ({
   recordClientReceipt: vi.fn(),
   updateClientBillingAllocations: vi.fn(),
   updateClientBillingDocument: vi.fn(),
+  updateClientBillingInstallment: vi.fn(),
   updateClientBillingInline: vi.fn(),
   updateOrderBillingLink: vi.fn(),
 }));
@@ -24,6 +25,7 @@ import {
   recordClientReceiptAction,
   updateClientBillingAllocationsAction,
   updateClientBillingDocumentAction,
+  updateClientBillingInstallmentAction,
   updateOrderBillingLinkAction,
 } from "./actions";
 
@@ -54,6 +56,14 @@ describe("Client billing authorization", () => {
         ),
     ],
     [
+      "Billing installment edit",
+      () =>
+        updateClientBillingInstallmentAction(
+          { message: "", status: "idle" },
+          new FormData(),
+        ),
+    ],
+    [
       "Billing allocations",
       () =>
         updateClientBillingAllocationsAction(
@@ -75,6 +85,7 @@ describe("Client billing authorization", () => {
     expect(billing.confirmClientBillingDocument).not.toHaveBeenCalled();
     expect(billing.recordClientReceipt).not.toHaveBeenCalled();
     expect(billing.updateClientBillingDocument).not.toHaveBeenCalled();
+    expect(billing.updateClientBillingInstallment).not.toHaveBeenCalled();
     expect(billing.updateClientBillingAllocations).not.toHaveBeenCalled();
     expect(billing.updateOrderBillingLink).not.toHaveBeenCalled();
   });

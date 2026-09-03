@@ -6,7 +6,6 @@ import { useState, type ReactNode } from "react";
 import type { MasterDataActionState } from "@/components/master-data/action-state";
 import { Button } from "@/components/ui/button";
 import {
-  finalizeMoneyInput,
   formatMoneyInput,
   normalizeMoneyInput,
 } from "@/domain/procurement/presentation";
@@ -69,6 +68,9 @@ export function MoneyInput({
   const [internalValue, setInternalValue] = useState(defaultValue ?? "");
   const [focused, setFocused] = useState(false);
   const rawValue = value ?? internalValue;
+  const [draftValue, setDraftValue] = useState(rawValue);
+  const submittedValue = focused ? draftValue : rawValue;
+  const normalizedValue = normalizeMoneyInput(submittedValue);
   const setValue = (nextValue: string) => {
     if (value === undefined) setInternalValue(nextValue);
     onValueChange?.(nextValue);
@@ -80,20 +82,27 @@ export function MoneyInput({
         className={`${className}${invalid ? "border-destructive focus-visible:border-destructive" : ""}`}
         disabled={disabled}
         inputMode="decimal"
-        onBlur={() => {
-          setValue(finalizeMoneyInput(rawValue));
-          setFocused(false);
-        }}
+        onBlur={() => setFocused(false)}
         onChange={(event) => {
-          const normalized = normalizeMoneyInput(event.target.value);
-          if (normalized !== null) setValue(normalized);
+          const next = event.target.value;
+          setDraftValue(next);
+          const normalized = normalizeMoneyInput(next);
+          setValue(normalized === null ? next : normalized);
         }}
-        onFocus={() => setFocused(true)}
+        onFocus={() => {
+          setDraftValue(rawValue);
+          setFocused(true);
+        }}
         placeholder={placeholder}
         required={required}
-        value={focused ? rawValue : formatMoneyInput(rawValue)}
+        value={focused ? draftValue : formatMoneyInput(rawValue)}
       />
-      <input disabled={disabled} name={name} type="hidden" value={rawValue} />
+      <input
+        disabled={disabled}
+        name={name}
+        type="hidden"
+        value={normalizedValue === null ? submittedValue : normalizedValue}
+      />
     </>
   );
 }

@@ -17,6 +17,7 @@ import type {
   BillingAllocationInput,
   BillingAllocationsEditInput,
   BillingDocumentEditInput,
+  ClientBillingInstallmentUpdateInput,
   ClientBillingConfirmation,
   ClientReceiptInput,
   InlineClientBillingInput,
@@ -54,10 +55,16 @@ const billingInclude = {
   },
   client: { select: { displayName: true, id: true } },
   matchedInstallment: {
-    include: { receipts: { orderBy: { receivedAt: "asc" } } },
+    include: {
+      billingDocument: { select: { reference: true, totalTtc: true } },
+      receipts: { orderBy: { receivedAt: "asc" } },
+    },
   },
   paymentInstallments: {
-    include: { receipts: { orderBy: { receivedAt: "asc" } } },
+    include: {
+      billingDocument: { select: { reference: true, totalTtc: true } },
+      receipts: { orderBy: { receivedAt: "asc" } },
+    },
     orderBy: { sequence: "asc" },
   },
   project: {
@@ -143,6 +150,9 @@ function billingView(record: BillingRecord, today = businessToday()) {
     paid: calculated.paid,
     paymentInstallments: visibleInstallments.map((installment) => ({
       basis: installment.basis,
+      billingDocumentId: installment.billingDocumentId,
+      billingReference: installment.billingDocument.reference,
+      billingTotalTtc: installment.billingDocument.totalTtc.toString(),
       currencyCode: installment.currencyCode,
       dueDate: dateToDateOnly(installment.dueDate),
       id: installment.id,
@@ -695,6 +705,118 @@ export async function updateClientBillingInline(
       summary: "Updated safe Client billing fields.",
     });
     return document;
+  });
+}
+
+export async function updateClientBillingInstallment(
+  actorId: string,
+  input: ClientBillingInstallmentUpdateInput,
+) {
+  return getDatabase().$transaction(async (transaction) => {
+    const current = await transaction.clientPaymentInstallment.findUnique({
+      where: { id: input.id },
+      include: {
+        billingDocument: {
+          select: { id: true, reference: true, totalTtc: true },
+        },
+        matchedInvoices: { select: { id: true } },
+        receipts: { select: { amount: true } },
+      },
+    });
+    if (!current) throw new ClientBillingNotFoundError();
+    const belongsToView =
+      current.billingDocumentId === input.billingDocumentId ||
+      current.matchedInvoices.some(
+        (document) => document.id === input.billingDocumentId,
+      );
+    if (!belongsToView)
+      throw new ClientBillingValidationError(
+        "This installment does not belong to the selected Billing Event.",
+      );
+
+    const amount =
+      input.basis === InstallmentBasis.PERCENTAGE
+        ? scheduledAmountFromPercentage(
+            current.billingDocument.totalTtc,
+            input.percentageRate ?? "0",
+          )
+        : new Decimal(input.scheduledAmount);
+    const settled = current.receipts.reduce(
+      (total, receipt) => total.plus(receipt.amount),
+      new Decimal(0),
+    );
+    if (amount.lessThan(settled))
+      throw new ClientBillingValidationError(
+        "Scheduled amount cannot be reduced below the amount already received.",
+      );
+
+    const otherScheduled = await transaction.clientPaymentInstallment.aggregate(
+      {
+        where: {
+          billingDocumentId: current.billingDocumentId,
+          id: { not: current.id },
+          isCancelled: false,
+        },
+        _sum: { scheduledAmount: true },
+      },
+    );
+    if (
+      new Decimal(otherScheduled._sum.scheduledAmount?.toString() ?? "0")
+        .plus(amount)
+        .greaterThan(current.billingDocument.totalTtc)
+    )
+      throw new ClientBillingValidationError(
+        "The Client payment schedule cannot exceed the Billing TTC.",
+      );
+
+    const installment = await transaction.clientPaymentInstallment.update({
+      where: { id: current.id },
+      data: {
+        basis: input.basis,
+        dueDate: dateOnlyToDate(input.dueDate),
+        label: input.label,
+        notes: input.notes ?? null,
+        percentageRate:
+          input.basis === InstallmentBasis.PERCENTAGE
+            ? (input.percentageRate ?? "0")
+            : null,
+        scheduledAmount: amount.toFixed(4),
+        updatedById: actorId,
+      },
+      select: {
+        basis: true,
+        dueDate: true,
+        label: true,
+        notes: true,
+        percentageRate: true,
+        scheduledAmount: true,
+      },
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "UPDATED",
+      entityId: current.id,
+      entityReference: `${current.billingDocument.reference} · ${installment.label}`,
+      entityType: "INSTALLMENT",
+      metadata: {
+        fields: [
+          "basis",
+          "percentageRate",
+          "scheduledAmount",
+          "dueDate",
+          "label",
+          "notes",
+        ],
+      },
+      summary: "Updated a Client Billing payment installment.",
+    });
+    return {
+      basis: installment.basis,
+      dueDate: dateToDateOnly(installment.dueDate),
+      label: installment.label,
+      notes: installment.notes ?? "",
+      percentageRate: installment.percentageRate?.toString() ?? "",
+      scheduledAmount: installment.scheduledAmount.toString(),
+    };
   });
 }
 

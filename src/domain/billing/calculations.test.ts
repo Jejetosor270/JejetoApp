@@ -64,7 +64,9 @@ describe("client billing calculations", () => {
   it("links human percentages and amounts in both directions", () => {
     expect(amountFromPercentage("100000", "30%")).toBe("30000.0000");
     expect(amountFromPercentage("100000", "30,5")).toBe("30500.0000");
+    expect(amountFromPercentage("100 000,00", "30,5%")).toBe("30500.0000");
     expect(percentageFromAmount("100000", "35000")).toBe("35");
+    expect(percentageFromAmount("100 000,00", "40 000,00")).toBe("40");
     expect(scheduleReconciliation("100000", ["30000", "60000"])).toEqual({
       allocated: "90000.0000",
       overallocated: "0.0000",

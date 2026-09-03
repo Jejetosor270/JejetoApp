@@ -9,7 +9,11 @@ import {
   businessToday,
   formatDateOnly,
 } from "@/domain/payments/dates";
-import { formatMoney, formatRate } from "@/domain/procurement/presentation";
+import {
+  formatFxRate,
+  formatMoney,
+  formatRate,
+} from "@/domain/procurement/presentation";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { getOrder, listOrderOptions } from "@/lib/procurement/orders";
 import { getOrderPaymentSummary } from "@/lib/payments/payments";
@@ -246,16 +250,19 @@ export default async function OrderPage({
             </dl>
             <p className="text-muted-foreground mt-4 border-t pt-3 text-xs">
               Purchase FX:{" "}
-              {cost.purchaseFxRate ??
-                (order.orderCurrencyCode === order.project.reportingCurrencyCode
+              {cost.purchaseFxRate
+                ? formatFxRate(cost.purchaseFxRate)
+                : order.orderCurrencyCode ===
+                    order.project.reportingCurrencyCode
                   ? "1 (same currency)"
-                  : "Missing")}{" "}
+                  : "Missing"}{" "}
               · Selling FX:{" "}
-              {cost.sellingFxRate ??
-                (order.sellingCurrencyCode ===
-                order.project.reportingCurrencyCode
+              {cost.sellingFxRate
+                ? formatFxRate(cost.sellingFxRate)
+                : order.sellingCurrencyCode ===
+                    order.project.reportingCurrencyCode
                   ? "1 (same currency)"
-                  : "Missing")}
+                  : "Missing"}
             </p>
             {cost.missingFx.length ? (
               <p className="text-destructive mt-2 text-xs">

@@ -4,6 +4,7 @@ import Decimal from "decimal.js";
 import { isSupportedCountryCode } from "@/config/countries";
 import { ProjectStatus, ProjectTargetMode } from "@/generated/prisma/client";
 import { optionalPercentageFraction } from "@/domain/validation/percentage";
+import { normalizeNumericText } from "@/domain/validation/numeric";
 
 const optionalText = (maximum: number) =>
   z.preprocess(
@@ -54,8 +55,13 @@ const optionalPercentRate = optionalPercentageFraction({
 });
 
 const optionalMoney = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
+  (value) => {
+    if (typeof value === "string" && value.trim() === "") return undefined;
+    return normalizeNumericText(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 4,
+    });
+  },
   z
     .string()
     .trim()

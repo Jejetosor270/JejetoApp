@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { isDateOnly } from "@/domain/payments/dates";
 import { optionalPercentageFraction } from "@/domain/validation/percentage";
+import { normalizeNumericText } from "@/domain/validation/numeric";
 import { optionalUuid, requiredUuid } from "@/domain/validation/uuid";
 
 const optionalText = (maximum: number) =>
@@ -12,8 +13,13 @@ const optionalText = (maximum: number) =>
     z.string().trim().max(maximum).optional(),
   );
 const optionalFx = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
+  (value) => {
+    if (typeof value === "string" && value.trim() === "") return undefined;
+    return normalizeNumericText(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 10,
+    });
+  },
   z
     .string()
     .trim()
@@ -26,15 +32,22 @@ const optionalFx = z.preprocess(
 );
 
 export const projectFreightExpenseSchema = z.object({
-  costAmountHt: z
-    .string()
-    .trim()
-    .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/, "Enter a valid freight cost.")
-    .refine(
-      (value) => new Decimal(value).greaterThan(0),
-      "Cost must be positive.",
-    )
-    .transform((value) => new Decimal(value).toFixed(4)),
+  costAmountHt: z.preprocess(
+    (value) =>
+      normalizeNumericText(value, {
+        allowNegative: false,
+        maximumDecimalPlaces: 4,
+      }),
+    z
+      .string()
+      .trim()
+      .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/, "Enter a valid freight cost.")
+      .refine(
+        (value) => new Decimal(value).greaterThan(0),
+        "Cost must be positive.",
+      )
+      .transform((value) => new Decimal(value).toFixed(4)),
+  ),
   currencyCode: z
     .string()
     .trim()

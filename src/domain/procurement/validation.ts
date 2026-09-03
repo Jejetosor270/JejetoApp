@@ -12,6 +12,7 @@ import { isSupportedCountryCode } from "@/config/countries";
 import { isDateOnly } from "@/domain/payments/dates";
 import { orderPricingMethods } from "@/domain/finance/order-pricing";
 import { optionalPercentageFraction } from "@/domain/validation/percentage";
+import { normalizeNumericText } from "@/domain/validation/numeric";
 
 const optionalText = (maximum: number) =>
   z.preprocess(
@@ -21,8 +22,13 @@ const optionalText = (maximum: number) =>
   );
 const optionalMoney = (label: string) =>
   z.preprocess(
-    (value) =>
-      typeof value === "string" && value.trim() === "" ? undefined : value,
+    (value) => {
+      if (typeof value === "string" && value.trim() === "") return undefined;
+      return normalizeNumericText(value, {
+        allowNegative: false,
+        maximumDecimalPlaces: 4,
+      });
+    },
     z
       .string()
       .trim()
@@ -34,8 +40,13 @@ const optionalMoney = (label: string) =>
       .optional(),
   );
 const optionalFxRate = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
+  (value) => {
+    if (typeof value === "string" && value.trim() === "") return undefined;
+    return normalizeNumericText(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 10,
+    });
+  },
   z
     .string()
     .trim()

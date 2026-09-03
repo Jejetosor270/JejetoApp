@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  clientBillingInstallmentUpdateSchema,
   parseBillingDocumentEdit,
   parseClientBillingConfirmation,
 } from "./validation";
@@ -31,6 +32,27 @@ function baseForm() {
 }
 
 describe("Client billing confirmation", () => {
+  it.each([
+    ["0", "0.000000"],
+    ["15,5", "0.155000"],
+    ["100%", "1.000000"],
+  ])(
+    "accepts the closed percentage interval for installment value %s",
+    (input, expected) => {
+      const result = clientBillingInstallmentUpdateSchema.parse({
+        basis: "PERCENTAGE",
+        billingDocumentId: clientId,
+        dueDate: "2026-09-30",
+        id: projectId,
+        label: "Deposit",
+        percentageRate: input,
+        scheduledAmount: "9 999,99",
+      });
+      expect(result.percentageRate).toBe(expected);
+      expect(result.scheduledAmount).toBe("9999.9900");
+    },
+  );
+
   it("normalizes reviewed monetary, VAT, schedule and allocation values", () => {
     const form = baseForm();
     form.set("vatRate", "0.20");
@@ -61,6 +83,27 @@ describe("Client billing confirmation", () => {
     expect(result.data.totalHt).toBe("100.0000");
     expect(result.data.vatRate).toBe("0.200000");
     expect(result.data.installments[0]?.percentageRate).toBe("0.300000");
+  });
+
+  it("accepts zero and one hundred as allocation percentage boundaries", () => {
+    for (const [percentageRate, allocatedAmount] of [
+      ["0.000000", "0"],
+      ["1.000000", "100"],
+    ] as const) {
+      const form = baseForm();
+      form.set(
+        "allocations",
+        JSON.stringify([
+          {
+            allocatedAmount,
+            basis: "PERCENTAGE",
+            orderId,
+            percentageRate,
+          },
+        ]),
+      );
+      expect(parseClientBillingConfirmation(form).success).toBe(true);
+    }
   });
 
   it("rejects inconsistent HT, VAT and TTC", () => {

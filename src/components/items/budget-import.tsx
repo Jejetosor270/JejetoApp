@@ -17,6 +17,8 @@ import {
   type BudgetReviewRow,
 } from "@/domain/items/import";
 import { initialQuoteSupplierCreationState } from "@/domain/quote-intake/action-state";
+import { rateToPercentInput } from "@/domain/procurement/presentation";
+import { humanPercentageToFraction } from "@/domain/validation/percentage";
 
 type Options = Awaited<
   ReturnType<typeof import("@/lib/items/items").listItemOptions>
@@ -135,7 +137,13 @@ function ReviewGrid({
     "rows"
   >;
 }) {
-  const [rows, setRows] = useState(initialRows);
+  const [rows, setRows] = useState<BudgetReviewRow[]>(() =>
+    initialRows.map((row) => ({
+      ...row,
+      markupRate: rateToPercentInput(row.markupRate),
+      vatRate: rateToPercentInput(row.vatRate),
+    })),
+  );
   const [selected, setSelected] = useState(() => new Set<number>());
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
@@ -492,7 +500,22 @@ function ReviewGrid({
           disabled={pending}
           onClick={() =>
             startTransition(async () => {
-              const result = await confirmBudgetAction({ ...payload, rows });
+              const result = await confirmBudgetAction({
+                ...payload,
+                rows: rows.map((row) => ({
+                  ...row,
+                  markupRate: row.markupRate
+                    ? (humanPercentageToFraction(row.markupRate, {
+                        maximumPercent: "100",
+                      }) ?? row.markupRate)
+                    : null,
+                  vatRate: row.vatRate
+                    ? (humanPercentageToFraction(row.vatRate, {
+                        maximumPercent: "100",
+                      }) ?? row.vatRate)
+                    : null,
+                })),
+              });
               setFeedback(result.message ?? "");
             })
           }

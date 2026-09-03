@@ -6,6 +6,7 @@ import { europeanInputToDateOnly, isDateOnly } from "@/domain/payments/dates";
 import { VatRecoverability, VatTreatment } from "@/generated/prisma/client";
 import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 import { optionalPercentageFraction } from "@/domain/validation/percentage";
+import { normalizeNumericText } from "@/domain/validation/numeric";
 
 function optionalString(maximum: number) {
   return z.preprocess(
@@ -16,8 +17,13 @@ function optionalString(maximum: number) {
 }
 
 const optionalMoney = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
+  (value) => {
+    if (typeof value === "string" && value.trim() === "") return undefined;
+    return normalizeNumericText(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 4,
+    });
+  },
   z
     .string()
     .trim()
@@ -26,8 +32,13 @@ const optionalMoney = z.preprocess(
     .optional(),
 );
 const optionalFx = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
+  (value) => {
+    if (typeof value === "string" && value.trim() === "") return undefined;
+    return normalizeNumericText(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 10,
+    });
+  },
   z
     .string()
     .trim()
@@ -44,6 +55,20 @@ const optionalDate = z.preprocess((value) => {
   if (value.trim() === "") return undefined;
   return europeanInputToDateOnly(value) ?? value;
 }, z.string().refine(isDateOnly, "Enter a valid date as DD/MM/YYYY.").optional());
+
+const nullableHumanDecimal = z.preprocess(
+  (value) => {
+    if (value === null) return null;
+    return normalizeNumericText(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 4,
+    });
+  },
+  z
+    .string()
+    .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
+    .nullable(),
+);
 
 const paymentSchema = z
   .object({
@@ -79,33 +104,18 @@ const quoteItemSchema = z
     itemReference: z.string().max(120).nullable(),
     name: z.string().min(1).max(240),
     notes: z.string().max(1000).nullable(),
-    quantity: z
-      .string()
-      .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
-      .nullable(),
+    quantity: nullableHumanDecimal,
     roomId: z.uuid().nullable(),
     supplierSku: z.string().max(160).nullable(),
-    totalPriceHt: z
-      .string()
-      .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
-      .nullable(),
+    totalPriceHt: nullableHumanDecimal,
     unitOfMeasure: z.string().max(24).nullable(),
-    unitPriceHt: z
-      .string()
-      .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
-      .nullable(),
+    unitPriceHt: nullableHumanDecimal,
     vatRate: z
       .string()
       .regex(/^(?:0(?:\.\d{1,6})?|1(?:\.0{1,6})?)$/)
       .nullable(),
-    volumeEach: z
-      .string()
-      .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
-      .nullable(),
-    weightEach: z
-      .string()
-      .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
-      .nullable(),
+    volumeEach: nullableHumanDecimal,
+    weightEach: nullableHumanDecimal,
     warnings: z.array(z.string().max(300)).max(20),
   })
   .strict();

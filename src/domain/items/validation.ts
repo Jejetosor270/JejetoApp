@@ -12,7 +12,11 @@ import {
   VatRecoverability,
   VatTreatment,
 } from "@/generated/prisma/client";
-import { optionalPercentageFraction } from "@/domain/validation/percentage";
+import {
+  humanPercentageToFraction,
+  optionalPercentageFraction,
+} from "@/domain/validation/percentage";
+import { normalizeNumericText } from "@/domain/validation/numeric";
 
 const blankToUndefined = (value: unknown) =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
@@ -20,21 +24,36 @@ const optionalText = (max: number) =>
   z.preprocess(blankToUndefined, z.string().trim().max(max).optional());
 const optionalUuid = z.preprocess(blankToUndefined, z.uuid().optional());
 const requiredDecimal = (label: string) =>
-  z
-    .string()
-    .trim()
-    .regex(
-      /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/,
-      `${label} must be non-negative with up to 4 decimals.`,
-    )
-    .refine(
-      (value) => new Decimal(value).greaterThan(0),
-      `${label} must be greater than zero.`,
-    )
-    .transform((value) => new Decimal(value).toFixed(4));
+  z.preprocess(
+    (value) =>
+      normalizeNumericText(value, {
+        allowNegative: false,
+        maximumDecimalPlaces: 4,
+      }),
+    z
+      .string()
+      .trim()
+      .regex(
+        /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/,
+        `${label} must be non-negative with up to 4 decimals.`,
+      )
+      .refine(
+        (value) => new Decimal(value).greaterThan(0),
+        `${label} must be greater than zero.`,
+      )
+      .transform((value) => new Decimal(value).toFixed(4)),
+  );
 const optionalDecimal = (label: string) =>
   z.preprocess(
-    blankToUndefined,
+    (value) => {
+      const optional = blankToUndefined(value);
+      return optional === undefined
+        ? undefined
+        : normalizeNumericText(optional, {
+            allowNegative: false,
+            maximumDecimalPlaces: 4,
+          });
+    },
     z
       .string()
       .trim()
@@ -217,8 +236,13 @@ export const updateFreightEstimateSchema = z.object({
 
 const nullableDecimal = (label: string) =>
   z.preprocess(
-    (value) =>
-      typeof value === "string" && value.trim() === "" ? null : value,
+    (value) => {
+      if (typeof value === "string" && value.trim() === "") return null;
+      return normalizeNumericText(value, {
+        allowNegative: false,
+        maximumDecimalPlaces: 4,
+      });
+    },
     z.union([
       z
         .string()
@@ -233,17 +257,22 @@ const nullableDecimal = (label: string) =>
   );
 const nullableRate = (label: string) =>
   z.preprocess(
-    (value) =>
-      typeof value === "string" && value.trim() === "" ? null : value,
+    (value) => {
+      if (typeof value === "string" && value.trim() === "") return null;
+      if (typeof value !== "string") return value;
+      return (
+        humanPercentageToFraction(value, { maximumPercent: "100" }) ?? value
+      );
+    },
     z.union([
       z
         .string()
         .trim()
         .regex(
-          /^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/,
+          /^(?:0(?:\.\d{1,6})?|1(?:\.0{1,6})?)$/,
           `${label} must be between 0 and 100.`,
         )
-        .transform((value) => new Decimal(value).dividedBy(100).toFixed(6)),
+        .transform((value) => new Decimal(value).toFixed(6)),
       z.null(),
     ]),
   );

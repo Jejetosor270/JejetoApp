@@ -20,7 +20,7 @@ import {
   percentageFromAmount,
 } from "@/domain/billing/calculations";
 import { formatDateOnly } from "@/domain/payments/dates";
-import { formatMoney } from "@/domain/procurement/presentation";
+import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
 
 interface BillingLinkDocument {
@@ -88,7 +88,9 @@ function BillingLinkForm({
         type="hidden"
         value={
           basis === "PERCENTAGE"
-            ? (humanPercentageToFraction(percentage) ?? percentage)
+            ? (humanPercentageToFraction(percentage, {
+                maximumPercent: "100",
+              }) ?? percentage)
             : ""
         }
       />
@@ -282,7 +284,15 @@ export function OrderBillingReconciliation({
               </p>
               <p className="financial-figure text-right">
                 {document.allocation
-                  ? `${percentageFromAmount(document.totalHt, document.allocation.allocatedAmount) ?? "—"}%`
+                  ? formatRate(
+                      humanPercentageToFraction(
+                        percentageFromAmount(
+                          document.totalHt,
+                          document.allocation.allocatedAmount,
+                        ) ?? "",
+                        { maximumPercent: "100" },
+                      ),
+                    )
                   : "—"}
               </p>
               {canEdit ? (

@@ -8,6 +8,8 @@ import {
   VatTreatment,
 } from "@/generated/prisma/client";
 import { isDateOnly } from "@/domain/payments/dates";
+import { normalizeNumericText } from "@/domain/validation/numeric";
+import { optionalPercentageFraction } from "@/domain/validation/percentage";
 import { optionalUuid, requiredUuid } from "@/domain/validation/uuid";
 
 const optionalText = (maximum: number) =>
@@ -16,33 +18,48 @@ const optionalText = (maximum: number) =>
       typeof value === "string" && value.trim() === "" ? undefined : value,
     z.string().trim().max(maximum).optional(),
   );
-const money = z
-  .string()
-  .trim()
-  .regex(
-    /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/,
-    "Enter a non-negative amount with up to 4 decimals.",
-  )
-  .transform((value) => new Decimal(value).toFixed(4));
+const money = z.preprocess(
+  (value) =>
+    normalizeNumericText(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 4,
+    }),
+  z
+    .string()
+    .trim()
+    .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/, "Enter a valid amount.")
+    .transform((value) => new Decimal(value).toFixed(4)),
+);
 const positiveMoney = money.refine(
   (value) => new Decimal(value).greaterThan(0),
   "Amount must be greater than zero.",
 );
-const fraction = z
-  .string()
-  .regex(/^(?:0|1|0?\.\d{1,6})$/, "Enter a percentage between 0 and 100.")
-  .refine(
-    (value) => new Decimal(value).greaterThan(0),
-    "Percentage must be greater than zero.",
-  )
-  .transform((value) => new Decimal(value).toFixed(6));
+const fraction = z.preprocess(
+  (value) =>
+    normalizeNumericText(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 6,
+    }),
+  z
+    .string()
+    .regex(
+      /^(?:0(?:\.\d{1,6})?|1(?:\.0{1,6})?)$/,
+      "Enter a percentage between 0 and 100.",
+    )
+    .transform((value) => new Decimal(value).toFixed(6)),
+);
 const optionalFraction = z.preprocess(
   (value) => (value === "" || value === null ? undefined : value),
   fraction.optional(),
 );
 const optionalFx = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
+  (value) => {
+    if (typeof value === "string" && value.trim() === "") return undefined;
+    return normalizeNumericText(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 10,
+    });
+  },
   z
     .string()
     .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,10})?$/)
@@ -61,7 +78,7 @@ export const billingAllocationSchema = z
   .object({
     orderId: requiredUuid("Select a valid Order."),
     basis: z.enum(ClientBillingAllocationBasis),
-    allocatedAmount: positiveMoney,
+    allocatedAmount: money,
     percentageRate: optionalFraction,
   })
   .superRefine((value, context) => {
@@ -188,6 +205,32 @@ export const clientReceiptSchema = z.object({
   reference: optionalText(120),
 });
 
+export const clientBillingInstallmentUpdateSchema = z
+  .object({
+    basis: z.enum(InstallmentBasis),
+    billingDocumentId: requiredUuid("Select a valid Billing Event."),
+    dueDate: dateOnly,
+    id: requiredUuid("Select a valid installment."),
+    label: z.string().trim().min(1, "Enter an installment label.").max(200),
+    notes: optionalText(4000),
+    percentageRate: optionalPercentageFraction({
+      label: "Installment percentage",
+      maximumPercent: "100",
+    }),
+    scheduledAmount: money,
+  })
+  .superRefine((value, context) => {
+    if (
+      value.basis === InstallmentBasis.PERCENTAGE &&
+      value.percentageRate === undefined
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Enter a percentage between 0 and 100.",
+        path: ["percentageRate"],
+      });
+  });
+
 export const inlineClientBillingSchema = z.object({
   dueDate: optionalDate,
   id: z.uuid(),
@@ -243,7 +286,7 @@ export const billingAllocationsEditSchema = z.object({
 
 export const orderBillingLinkSchema = z
   .object({
-    allocatedAmount: positiveMoney.optional(),
+    allocatedAmount: money.optional(),
     basis: z.enum(ClientBillingAllocationBasis).optional(),
     billingDocumentId: requiredUuid("Select a valid billing document."),
     isProjectRemainderApproved: z.boolean(),
@@ -275,7 +318,7 @@ export const orderBillingLinkSchema = z
 
 export const orderCreationBillingLinkSchema = z
   .object({
-    allocatedAmount: positiveMoney,
+    allocatedAmount: money,
     basis: z.enum(ClientBillingAllocationBasis),
     billingDocumentId: requiredUuid("Select a valid billing document."),
     isProjectRemainderApproved: z.boolean(),
@@ -356,6 +399,9 @@ export type ClientBillingConfirmation = z.infer<
   typeof clientBillingConfirmationSchema
 >;
 export type ClientReceiptInput = z.infer<typeof clientReceiptSchema>;
+export type ClientBillingInstallmentUpdateInput = z.infer<
+  typeof clientBillingInstallmentUpdateSchema
+>;
 export type InlineClientBillingInput = z.infer<
   typeof inlineClientBillingSchema
 >;

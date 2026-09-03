@@ -23,7 +23,11 @@ import {
 } from "@/components/master-data/form-ui";
 import { initialOrderActionState } from "@/components/procurement/action-state";
 import { countries } from "@/config/countries";
-import { rateToPercentInput } from "@/domain/procurement/presentation";
+import {
+  formatMoney,
+  formatRate,
+  rateToPercentInput,
+} from "@/domain/procurement/presentation";
 import { addWeeksToDateOnly } from "@/domain/payments/dates";
 import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 import { vatAmount as calculateVatAmount } from "@/domain/finance/calculations";
@@ -38,6 +42,7 @@ import {
   updateOrderDraftField,
 } from "@/domain/procurement/order-draft";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
+import { normalizeDecimalInput } from "@/domain/validation/numeric";
 import {
   freightRecoveryTarget,
   resolveOrderFreightAllowance,
@@ -165,6 +170,15 @@ function label(value: string): string {
       .replaceAll("_", " ")
       .toLowerCase()
       .replace(/^./, (letter) => letter.toUpperCase())
+  );
+}
+
+function calculationValue(value: string, maximumDecimalPlaces = 4): string {
+  return (
+    normalizeDecimalInput(value, {
+      allowNegative: false,
+      maximumDecimalPlaces,
+    }) ?? value
   );
 }
 function editablePricingMethod(order?: EditableOrder): OrderPricingMethod {
@@ -519,29 +533,33 @@ export function OrderForm({
     if (project) {
       const useProjectDefaults = pricingMode === "PROJECT_MARKUP";
       livePricing = calculateOrderPricingDraft({
-        directPackageSell: directSellingPrice || "0",
-        freightCost: freightCost || "0",
+        directPackageSell: calculationValue(directSellingPrice || "0"),
+        freightCost: calculationValue(freightCost || "0"),
         freightMarkupRate: useProjectDefaults
           ? project.defaultFreightMarkupRate
           : toRate(freightMarkupOverride, project.defaultFreightMarkupRate),
-        freightResale: freightResale || "0",
+        freightResale: calculationValue(freightResale || "0"),
         freightTreatment,
         method: pricingMode,
-        otherCost: new Decimal(customsCost || 0)
-          .plus(miscellaneousCost || 0)
+        otherCost: new Decimal(calculationValue(customsCost || "0"))
+          .plus(calculationValue(miscellaneousCost || "0"))
           .toString(),
         otherMarkupRate: useProjectDefaults
           ? project.defaultOtherCostMarkupRate
           : toRate(otherMarkupOverride, project.defaultOtherCostMarkupRate),
-        productCost: purchaseCost || "0",
+        productCost: calculationValue(purchaseCost || "0"),
         productMarkupRate: useProjectDefaults
           ? project.defaultProductMarkupRate
           : toRate(productMarkupOverride, project.defaultProductMarkupRate),
         purchaseCurrencyCode: purchaseCurrency,
-        purchaseFxRate,
+        purchaseFxRate: purchaseFxRate
+          ? calculationValue(purchaseFxRate, 10)
+          : null,
         reportingCurrencyCode: project.reportingCurrencyCode,
         sellingCurrencyCode: sellingCurrency,
-        sellingFxRate,
+        sellingFxRate: sellingFxRate
+          ? calculationValue(sellingFxRate, 10)
+          : null,
       });
     }
   } catch {
@@ -560,13 +578,17 @@ export function OrderForm({
       }).amount.toFixed(4);
     }
     effectiveFreightAllowance = freightAllowanceIsManual
-      ? new Decimal(draft.freightAllowanceOverrideAmount || "0").toFixed(4)
+      ? new Decimal(
+          calculationValue(draft.freightAllowanceOverrideAmount || "0"),
+        ).toFixed(4)
       : automaticFreightAllowance;
     const purchaseRate =
       purchaseCurrency === project?.reportingCurrencyCode
         ? new Decimal(1)
-        : new Decimal(purchaseFxRate || "0");
-    const reportingCost = new Decimal(freightCost || "0").times(purchaseRate);
+        : new Decimal(calculationValue(purchaseFxRate || "0", 10));
+    const reportingCost = new Decimal(
+      calculationValue(freightCost || "0"),
+    ).times(purchaseRate);
     const effectiveMarkup =
       pricingMode === "ORDER_MARKUP"
         ? toRate(
@@ -589,11 +611,13 @@ export function OrderForm({
   }
   const outputVatBase = effectiveVatBase(
     automaticOutputVatBase,
-    outputVatBaseIsManual ? manualOutputVatBase || "0" : null,
+    outputVatBaseIsManual ? calculationValue(manualOutputVatBase || "0") : null,
   );
   let liveOutputVat = "0.0000";
   try {
-    const normalizedOutputVatRate = humanPercentageToFraction(outputVatRate);
+    const normalizedOutputVatRate = humanPercentageToFraction(outputVatRate, {
+      maximumPercent: "100",
+    });
     if (outputVatTreatment && normalizedOutputVatRate !== null)
       liveOutputVat = calculateVatAmount(
         outputVatBase ?? "0",
@@ -1149,7 +1173,7 @@ export function OrderForm({
             <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <Field label={`Actual freight cost HT (${purchaseCurrency})`}>
                 <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                  {freightCost || "0.0000"}
+                  {formatMoney(freightCost || "0", purchaseCurrency)}
                 </p>
               </Field>
               <Field
@@ -1175,7 +1199,12 @@ export function OrderForm({
                       value=""
                     />
                     <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                      {automaticFreightAllowance ?? "Incomplete"}
+                      {automaticFreightAllowance
+                        ? formatMoney(
+                            automaticFreightAllowance,
+                            sellingCurrency,
+                          )
+                        : "Incomplete"}
                     </p>
                   </>
                 )}
@@ -1183,7 +1212,7 @@ export function OrderForm({
               <Field label="Freight estimate %">
                 <p className="financial-figure bg-muted rounded-md border px-3 py-2">
                   {project?.freightEstimateRate
-                    ? `${new Decimal(project.freightEstimateRate).times(100).toFixed(2)}%`
+                    ? formatRate(project.freightEstimateRate)
                     : "Not set"}
                 </p>
               </Field>
@@ -1191,14 +1220,24 @@ export function OrderForm({
                 label={`Freight recovery target HT (${project?.reportingCurrencyCode ?? "reporting"})`}
               >
                 <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                  {freightRecovery ?? "Incomplete"}
+                  {freightRecovery
+                    ? formatMoney(
+                        freightRecovery,
+                        project?.reportingCurrencyCode ?? "",
+                      )
+                    : "Incomplete"}
                 </p>
               </Field>
               <Field
                 label={`Freight profit HT (${project?.reportingCurrencyCode ?? "reporting"})`}
               >
                 <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                  {freightProfit ?? "Incomplete"}
+                  {freightProfit
+                    ? formatMoney(
+                        freightProfit,
+                        project?.reportingCurrencyCode ?? "",
+                      )
+                    : "Incomplete"}
                 </p>
               </Field>
             </div>
@@ -1293,7 +1332,9 @@ export function OrderForm({
                         value=""
                       />
                       <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                        {outputVatBase ?? "Incomplete"}
+                        {outputVatBase
+                          ? formatMoney(outputVatBase, sellingCurrency)
+                          : "Incomplete"}
                       </p>
                     </>
                   )}
@@ -1322,12 +1363,14 @@ export function OrderForm({
                 </div>
                 <Field label={`VAT amount (${sellingCurrency})`}>
                   <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                    {liveOutputVat}
+                    {formatMoney(liveOutputVat, sellingCurrency)}
                   </p>
                 </Field>
                 <Field label={`Selling TTC (${sellingCurrency})`}>
                   <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                    {liveTtc ?? "Incomplete"}
+                    {liveTtc
+                      ? formatMoney(liveTtc, sellingCurrency)
+                      : "Incomplete"}
                   </p>
                 </Field>
                 <Field error={fieldErrors.outputVatCountryCode} label="Country">
@@ -1548,8 +1591,7 @@ export function OrderForm({
                 <div className="rounded-md border p-3 text-sm" key={name}>
                   <p className="text-muted-foreground text-xs">{name} markup</p>
                   <p className="financial-figure mt-1">
-                    {new Decimal(rate ?? "0").times(100).toFixed(2)}% · Project
-                    default
+                    {formatRate(rate ?? "0")} · Project default
                   </p>
                 </div>
               ))}
@@ -1593,7 +1635,7 @@ export function OrderForm({
                 </p>
                 <p className="financial-figure mt-1">
                   {livePricing?.productMarkupRate
-                    ? `${new Decimal(livePricing.productMarkupRate).times(100).toFixed(2)}%`
+                    ? formatRate(livePricing.productMarkupRate)
                     : "Incomplete · FX or cost required"}
                 </p>
               </div>
@@ -1612,7 +1654,9 @@ export function OrderForm({
                     Product Sell HT
                   </p>
                   <p className="financial-figure mt-1">
-                    {livePricing?.productSell ?? "Incomplete"}
+                    {livePricing?.productSell
+                      ? formatMoney(livePricing.productSell, sellingCurrency)
+                      : "Incomplete"}
                   </p>
                 </div>
                 <div className="rounded-md border p-3 text-sm">
@@ -1620,13 +1664,17 @@ export function OrderForm({
                     Freight Sell HT
                   </p>
                   <p className="financial-figure mt-1">
-                    {livePricing?.freightSell ?? "Incomplete"}
+                    {livePricing?.freightSell
+                      ? formatMoney(livePricing.freightSell, sellingCurrency)
+                      : "Incomplete"}
                   </p>
                 </div>
                 <div className="rounded-md border p-3 text-sm">
                   <p className="text-muted-foreground text-xs">Other Sell HT</p>
                   <p className="financial-figure mt-1">
-                    {livePricing?.otherSell ?? "Incomplete"}
+                    {livePricing?.otherSell
+                      ? formatMoney(livePricing.otherSell, sellingCurrency)
+                      : "Incomplete"}
                   </p>
                 </div>
               </>
@@ -1634,7 +1682,9 @@ export function OrderForm({
             <div className="rounded-md border p-3 text-sm">
               <p className="text-muted-foreground text-xs">Total Sell HT</p>
               <p className="financial-figure mt-1">
-                {livePricing?.totalSell ?? "Incomplete"} {sellingCurrency}
+                {livePricing?.totalSell
+                  ? formatMoney(livePricing.totalSell, sellingCurrency)
+                  : "Incomplete"}
               </p>
             </div>
             <div className="rounded-md border p-3 text-sm">
@@ -1642,10 +1692,15 @@ export function OrderForm({
                 Gross Profit / Effective Markup
               </p>
               <p className="financial-figure mt-1">
-                {livePricing?.grossProfitReporting ?? "Incomplete"}{" "}
-                {project?.reportingCurrencyCode ?? ""} /{" "}
+                {livePricing?.grossProfitReporting
+                  ? formatMoney(
+                      livePricing.grossProfitReporting,
+                      project?.reportingCurrencyCode ?? "",
+                    )
+                  : "Incomplete"}{" "}
+                /{" "}
                 {livePricing?.effectiveMarkupRate
-                  ? `${new Decimal(livePricing.effectiveMarkupRate).times(100).toFixed(2)}%`
+                  ? formatRate(livePricing.effectiveMarkupRate)
                   : "—"}
               </p>
             </div>
@@ -1729,8 +1784,9 @@ export function OrderForm({
                       type="hidden"
                       value={
                         billingAllocationBasis === "PERCENTAGE"
-                          ? (humanPercentageToFraction(billingPercentage) ??
-                            billingPercentage)
+                          ? (humanPercentageToFraction(billingPercentage, {
+                              maximumPercent: "100",
+                            }) ?? billingPercentage)
                           : ""
                       }
                     />

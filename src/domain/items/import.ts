@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { MAX_BUDGET_ROWS } from "@/config/item-extraction";
 import { quantityTimesUnitMatchesTotal } from "@/domain/items/calculations";
+import { normalizeNumericText } from "@/domain/validation/numeric";
 
 export const budgetFields = [
   "area",
@@ -69,14 +70,32 @@ export const budgetColumnMappingSchema = z.record(
   z.string(),
   z.enum(budgetFields),
 );
-const decimal = z
-  .string()
-  .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
-  .nullable();
-const rateDecimal = z
-  .string()
-  .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/)
-  .nullable();
+const decimal = z.preprocess(
+  (value) =>
+    value === null
+      ? null
+      : normalizeNumericText(value, {
+          allowNegative: false,
+          maximumDecimalPlaces: 4,
+        }),
+  z
+    .string()
+    .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
+    .nullable(),
+);
+const rateDecimal = z.preprocess(
+  (value) =>
+    value === null
+      ? null
+      : normalizeNumericText(value, {
+          allowNegative: false,
+          maximumDecimalPlaces: 6,
+        }),
+  z
+    .string()
+    .regex(/^(?:0(?:\.\d{1,6})?|1(?:\.0{1,6})?)$/)
+    .nullable(),
+);
 export const budgetReviewRowSchema = z.object({
   action: z.enum(["CREATE", "UPDATE", "SKIP"]),
   brand: z.string().max(160).nullable(),

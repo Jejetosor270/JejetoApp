@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { updateClientBillingDocumentAction } from "@/app/(app)/billing/actions";
+import { BillingInstallmentEditor } from "@/components/billing/billing-installment-editor";
 import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import {
   ActionFeedback,
@@ -22,8 +23,13 @@ import {
 } from "@/domain/billing/calculations";
 import { amountIncludingVat } from "@/domain/finance/calculations";
 import { formatDateOnly } from "@/domain/payments/dates";
-import { formatMoney, formatRate } from "@/domain/procurement/presentation";
+import {
+  formatFxRate,
+  formatMoney,
+  formatRate,
+} from "@/domain/procurement/presentation";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
+import { normalizeDecimalInput } from "@/domain/validation/numeric";
 import type { ClientBillingView } from "@/lib/billing/billing";
 
 interface BillingDetailOptions {
@@ -82,9 +88,22 @@ const initialState: BillingActionState = { message: "", status: "idle" };
 
 function decimal(value: string): string {
   try {
-    return new Decimal(value || 0).toFixed(4);
+    const normalized = normalizeDecimalInput(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 4,
+    });
+    return normalized ? new Decimal(normalized).toFixed(4) : value;
   } catch {
     return value;
+  }
+}
+
+function calculationDecimal(value: string): string {
+  const normalized = decimal(value);
+  try {
+    return new Decimal(normalized || 0).toFixed(4);
+  } catch {
+    return "0.0000";
   }
 }
 
@@ -163,8 +182,8 @@ export function BillingDetail({
   const reconciliation = useMemo(
     () =>
       allocationReconciliation(
-        decimal(draft.totalHt),
-        draft.allocations.map((item) => decimal(item.amount)),
+        calculationDecimal(draft.totalHt),
+        draft.allocations.map((item) => calculationDecimal(item.amount)),
       ),
     [draft.allocations, draft.totalHt],
   );
@@ -185,9 +204,10 @@ export function BillingDetail({
       const vatAmount = next.vatAmount ?? current.vatAmount;
       let totalTtc = current.totalTtc;
       try {
-        totalTtc = amountIncludingVat(totalHt || "0", vatAmount || "0").toFixed(
-          4,
-        );
+        totalTtc = amountIncludingVat(
+          calculationDecimal(totalHt),
+          calculationDecimal(vatAmount),
+        ).toFixed(4);
       } catch {
         totalTtc = "";
       }
@@ -214,7 +234,9 @@ export function BillingDetail({
     ...(item.basis === "PERCENTAGE"
       ? {
           percentageRate:
-            humanPercentageToFraction(item.percentage) ?? item.percentage,
+            humanPercentageToFraction(item.percentage, {
+              maximumPercent: "100",
+            }) ?? item.percentage,
         }
       : {}),
   }));
@@ -796,7 +818,7 @@ export function BillingDetail({
                   <DetailValue
                     label="FX to reporting"
                     value={
-                      saved.fxRate ||
+                      (saved.fxRate ? formatFxRate(saved.fxRate) : "") ||
                       (saved.currencyCode ===
                       savedProject?.reportingCurrencyCode
                         ? "1 · same currency"
@@ -818,7 +840,15 @@ export function BillingDetail({
                   />
                   <DetailValue
                     label="VAT rate"
-                    value={saved.vatRate ? `${saved.vatRate}%` : "—"}
+                    value={
+                      saved.vatRate
+                        ? formatRate(
+                            humanPercentageToFraction(saved.vatRate, {
+                              maximumPercent: "100",
+                            }),
+                          )
+                        : "—"
+                    }
                   />
                   <DetailValue
                     label="TTC"
@@ -885,13 +915,17 @@ export function BillingDetail({
                             {formatMoney(allocation.amount, saved.currencyCode)}
                           </td>
                           <td className="financial-figure text-right">
-                            {allocation.percentage ||
-                              percentageFromAmount(
-                                saved.totalHt,
-                                allocation.amount,
-                              ) ||
-                              "—"}
-                            %
+                            {formatRate(
+                              humanPercentageToFraction(
+                                allocation.percentage ||
+                                  percentageFromAmount(
+                                    saved.totalHt,
+                                    allocation.amount,
+                                  ) ||
+                                  "",
+                                { maximumPercent: "100" },
+                              ),
+                            )}
                           </td>
                           <td className="financial-figure text-right">
                             {formatMoney(
@@ -932,41 +966,12 @@ export function BillingDetail({
         <h2 className="text-sm font-semibold">Payment Schedule & Receipts</h2>
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
           {document.paymentInstallments.map((installment) => (
-            <article
-              className="rounded-md border p-3 text-sm"
+            <BillingInstallmentEditor
+              billingDocumentId={document.id}
+              canEdit={canEdit}
+              installment={installment}
               key={installment.id}
-            >
-              <div className="flex justify-between gap-3">
-                <div>
-                  <p className="font-medium">{installment.label}</p>
-                  <p className="text-muted-foreground text-xs">
-                    Due {formatDateOnly(installment.dueDate)}
-                  </p>
-                </div>
-                <p className="financial-figure">
-                  {formatMoney(
-                    installment.scheduledAmount,
-                    installment.currencyCode,
-                  )}
-                </p>
-              </div>
-              <div className="mt-3 space-y-1 border-t pt-2 text-xs">
-                {installment.receipts.map((receipt) => (
-                  <p className="flex justify-between gap-2" key={receipt.id}>
-                    <span>
-                      {formatDateOnly(receipt.receivedAt)} ·{" "}
-                      {receipt.reference ?? "Receipt"}
-                    </span>
-                    <span className="financial-figure">
-                      {formatMoney(receipt.amount, installment.currencyCode)}
-                    </span>
-                  </p>
-                ))}
-                {installment.receipts.length === 0 ? (
-                  <p className="text-muted-foreground">No receipts recorded.</p>
-                ) : null}
-              </div>
-            </article>
+            />
           ))}
           {document.paymentInstallments.length === 0 ? (
             <p className="text-muted-foreground text-sm">

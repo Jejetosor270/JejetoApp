@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import {
   clientReceiptSchema,
+  clientBillingInstallmentUpdateSchema,
   inlineClientBillingSchema,
   parseBillingAllocationsEdit,
   parseBillingDocumentEdit,
@@ -20,6 +21,7 @@ import {
   ClientBillingValidationError,
   confirmClientBillingDocument,
   recordClientReceipt,
+  updateClientBillingInstallment,
   updateClientBillingAllocations,
   updateClientBillingDocument,
   updateClientBillingInline,
@@ -166,6 +168,56 @@ export async function recordClientReceiptAction(
     return {
       formError: "The Client receipt could not be recorded.",
       message: "The Client receipt could not be recorded.",
+      status: "error",
+    };
+  }
+}
+
+export async function updateClientBillingInstallmentAction(
+  _: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = clientBillingInstallmentUpdateSchema.safeParse(
+    Object.fromEntries(formData),
+  );
+  if (!input.success)
+    return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the installment.",
+      message: input.error.issues[0]?.message ?? "Check the installment.",
+      status: "error",
+    };
+  try {
+    const values = await updateClientBillingInstallment(actor.id, input.data);
+    revalidatePath("/billing");
+    revalidatePath(`/billing/${input.data.billingDocumentId}`);
+    revalidatePath("/payments");
+    revalidatePath("/projects", "layout");
+    revalidatePath("/reports");
+    return {
+      message: "Payment installment updated.",
+      status: "success",
+      values,
+    };
+  } catch (error) {
+    if (
+      error instanceof ClientBillingValidationError &&
+      (error.message.includes("Scheduled amount") ||
+        error.message.includes("payment schedule"))
+    )
+      return {
+        fieldErrors: { scheduledAmount: error.message },
+        formError: error.message,
+        message: error.message,
+        status: "error",
+      };
+    const expected = expectedBillingError(error);
+    if (expected) return expected;
+    console.error("Unable to update Client Billing installment.", error);
+    return {
+      formError: "The payment installment could not be updated.",
+      message: "The payment installment could not be updated.",
       status: "error",
     };
   }

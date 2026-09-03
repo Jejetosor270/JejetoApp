@@ -18,6 +18,7 @@ import {
 import { normalizeSupplierName } from "@/domain/quote-intake/supplier-matching";
 import { writeAuditEvent } from "@/lib/audit/events";
 import { getDatabase } from "@/lib/db";
+import { normalizeDecimalInput } from "@/domain/validation/numeric";
 import type { ParsedBudgetWorkbook } from "@/lib/items/xlsx";
 
 function text(value: string | undefined, max: number): string | null {
@@ -27,13 +28,14 @@ function text(value: string | undefined, max: number): string | null {
 function decimalValue(value: string | undefined, rate = false): string | null {
   if (!value) return null;
   const includesPercent = value.trim().endsWith("%");
-  const cleaned = value
-    .trim()
-    .replace(/[€£$\s]/g, "")
-    .replaceAll(",", "")
-    .replace(/%$/, "");
+  const cleaned = value.trim().replace(/[€£$]/g, "").replace(/%$/, "");
   try {
-    const decimal = new Decimal(cleaned);
+    const normalizedInput = normalizeDecimalInput(cleaned, {
+      allowNegative: false,
+      maximumDecimalPlaces: 10,
+    });
+    if (!normalizedInput) return null;
+    const decimal = new Decimal(normalizedInput);
     if (decimal.isNegative() || !decimal.isFinite()) return null;
     const normalized =
       rate && (includesPercent || decimal.greaterThan(1))

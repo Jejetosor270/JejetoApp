@@ -5,6 +5,8 @@ import {
   sellingPriceFromTargetMargin,
   vatAmount,
 } from "@/domain/finance/calculations";
+import { humanPercentageToFraction } from "@/domain/validation/percentage";
+import { normalizeDecimalInput } from "@/domain/validation/numeric";
 
 const MONEY_SCALE = 4;
 export const ITEM_TOTAL_TOLERANCE = new Decimal("0.02");
@@ -41,47 +43,42 @@ export interface ItemBudgetVariance {
   status: ItemBudgetVarianceStatus;
 }
 
-const editableMoneyPattern = /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/;
-const editablePercentPattern = /^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/;
+function editableMoney(value: string | null): string | null {
+  if (!value) return null;
+  return normalizeDecimalInput(value, {
+    allowNegative: false,
+    maximumDecimalPlaces: 4,
+  });
+}
 
 export function quoteItemTotalFromUnit(
   quantity: string | null,
   unitPriceHt: string | null,
 ): string | null {
-  if (
-    !quantity ||
-    !unitPriceHt ||
-    !editableMoneyPattern.test(quantity) ||
-    !editableMoneyPattern.test(unitPriceHt)
-  )
-    return null;
-  const quantityValue = new Decimal(quantity);
+  const normalizedQuantity = editableMoney(quantity);
+  const normalizedUnitPrice = editableMoney(unitPriceHt);
+  if (!normalizedQuantity || !normalizedUnitPrice) return null;
+  const quantityValue = new Decimal(normalizedQuantity);
   if (!quantityValue.greaterThan(0)) return null;
-  return quantityValue.times(unitPriceHt).toFixed(MONEY_SCALE);
+  return quantityValue.times(normalizedUnitPrice).toFixed(MONEY_SCALE);
 }
 
 export function quoteItemPercentInputToRate(value: string): string | null {
-  const normalized = value.trim();
-  if (
-    !editablePercentPattern.test(normalized) ||
-    new Decimal(normalized).greaterThan(100)
-  )
-    return null;
-  return new Decimal(normalized).dividedBy(100).toFixed(6);
+  return humanPercentageToFraction(value, { maximumPercent: "100" });
 }
 
 export function quoteItemLineAmounts(input: {
   totalPriceHt: string | null;
   vatRate: string | null;
 }): { totalTtc: string | null; vatAmount: string | null } {
+  const normalizedTotal = editableMoney(input.totalPriceHt);
   if (
-    !input.totalPriceHt ||
+    !normalizedTotal ||
     !input.vatRate ||
-    !editableMoneyPattern.test(input.totalPriceHt) ||
     !/^(?:0(?:\.\d{1,6})?|1(?:\.0{1,6})?)$/.test(input.vatRate)
   )
     return { totalTtc: null, vatAmount: null };
-  const total = new Decimal(input.totalPriceHt);
+  const total = new Decimal(normalizedTotal);
   const vat = total.times(input.vatRate);
   return {
     totalTtc: total.plus(vat).toFixed(MONEY_SCALE),
@@ -95,11 +92,12 @@ export function quoteItemReviewTotal(
   let complete = true;
   const total = rows.reduce((sum, row) => {
     if (!row.include) return sum;
-    if (!row.totalPriceHt || !editableMoneyPattern.test(row.totalPriceHt)) {
+    const normalized = editableMoney(row.totalPriceHt);
+    if (!normalized) {
       complete = false;
       return sum;
     }
-    return sum.plus(row.totalPriceHt);
+    return sum.plus(normalized);
   }, new Decimal(0));
   return { complete, totalHt: total.toFixed(MONEY_SCALE) };
 }
@@ -108,13 +106,10 @@ export function quoteItemReviewReconciliation(
   itemTotalHt: string,
   orderSubtotalHt: string | null,
 ): { difference: string; isReconciled: boolean } | null {
-  if (
-    !orderSubtotalHt ||
-    !editableMoneyPattern.test(itemTotalHt) ||
-    !editableMoneyPattern.test(orderSubtotalHt)
-  )
-    return null;
-  const difference = new Decimal(itemTotalHt).minus(orderSubtotalHt);
+  const normalizedItems = editableMoney(itemTotalHt);
+  const normalizedOrder = editableMoney(orderSubtotalHt);
+  if (!normalizedItems || !normalizedOrder) return null;
+  const difference = new Decimal(normalizedItems).minus(normalizedOrder);
   return {
     difference: difference.toFixed(MONEY_SCALE),
     isReconciled: difference.abs().lessThanOrEqualTo(ITEM_TOTAL_TOLERANCE),

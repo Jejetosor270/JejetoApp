@@ -1,6 +1,8 @@
 import Decimal from "decimal.js";
 
 import { derivePaymentStatus } from "@/domain/payments/calculations";
+import { normalizeDecimalInput } from "@/domain/validation/numeric";
+import { humanPercentageToFraction } from "@/domain/validation/percentage";
 
 export interface ClientBillingAmounts {
   outstanding: string;
@@ -80,13 +82,17 @@ export function amountFromPercentage(
   baseAmount: string,
   humanPercentage: string,
 ): string | null {
-  const normalized = humanPercentage.trim().replace(/%$/, "").replace(",", ".");
-  if (!normalized) return null;
+  const normalized = humanPercentageToFraction(humanPercentage, {
+    maximumPercent: "100",
+  });
+  const base = normalizeDecimalInput(baseAmount, {
+    allowNegative: false,
+    maximumDecimalPlaces: 4,
+  });
+  if (!normalized || !base) return null;
   try {
-    const percentage = new Decimal(normalized);
-    if (!percentage.isFinite()) return null;
-    return new Decimal(baseAmount)
-      .times(percentage.dividedBy(100))
+    return new Decimal(base)
+      .times(normalized)
       .toDecimalPlaces(4, Decimal.ROUND_HALF_UP)
       .toFixed(4);
   } catch {
@@ -99,9 +105,19 @@ export function percentageFromAmount(
   amount: string,
 ): string | null {
   try {
-    const base = new Decimal(baseAmount || 0);
+    const normalizedBase = normalizeDecimalInput(baseAmount, {
+      allowNegative: false,
+      maximumDecimalPlaces: 4,
+    });
+    const normalizedAmount = normalizeDecimalInput(amount, {
+      allowNegative: false,
+      maximumDecimalPlaces: 4,
+    });
+    if (!normalizedBase || normalizedAmount === null || normalizedAmount === "")
+      return null;
+    const base = new Decimal(normalizedBase);
     if (base.isZero()) return null;
-    const value = new Decimal(amount || 0);
+    const value = new Decimal(normalizedAmount);
     if (!value.isFinite()) return null;
     return value
       .dividedBy(base)
@@ -115,7 +131,16 @@ export function percentageFromAmount(
 
 export function addAllocationAmount(amount: string, additional: string) {
   try {
-    return new Decimal(amount || 0).plus(additional || 0).toFixed(4);
+    const first = normalizeDecimalInput(amount, {
+      allowNegative: false,
+      maximumDecimalPlaces: 4,
+    });
+    const second = normalizeDecimalInput(additional, {
+      allowNegative: false,
+      maximumDecimalPlaces: 4,
+    });
+    if (first === null || second === null) return amount;
+    return new Decimal(first || 0).plus(second || 0).toFixed(4);
   } catch {
     return amount;
   }

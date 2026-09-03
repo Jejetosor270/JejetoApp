@@ -33,6 +33,20 @@ describe("payment validation", () => {
     expect(
       createInstallmentSchema.parse({
         ...base,
+        basis: "PERCENTAGE",
+        percentageRate: "0",
+      }).percentageRate,
+    ).toBe("0.000000");
+    expect(
+      createInstallmentSchema.parse({
+        ...base,
+        basis: "PERCENTAGE",
+        percentageRate: "100,0%",
+      }).percentageRate,
+    ).toBe("1.000000");
+    expect(
+      createInstallmentSchema.parse({
+        ...base,
         basis: "FIXED_AMOUNT",
         fixedAmount: "25000",
       }).fixedAmount,
@@ -81,6 +95,14 @@ describe("payment validation", () => {
         scheduledAmount: "25000",
       }).scheduledAmount,
     ).toBe("25000.0000");
+    expect(
+      inlineInstallmentSchema.parse({
+        dueDate: "2026-09-20",
+        id: base.orderId,
+        label: "Balance",
+        scheduledAmount: "25 000,50",
+      }).scheduledAmount,
+    ).toBe("25000.5000");
     expect(() =>
       inlineInstallmentSchema.parse({
         dueDate: "20/09/2026",

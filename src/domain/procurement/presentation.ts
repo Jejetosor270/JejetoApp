@@ -1,41 +1,55 @@
 import Decimal from "decimal.js";
 
-export function formatDecimal(amount: string): string {
-  const fixed = new Decimal(amount).toDecimalPlaces(2).toFixed(2);
+import { normalizeDecimalInput } from "@/domain/validation/numeric";
+
+function formatGroupedDecimal(
+  amount: string,
+  minimumDecimalPlaces: number,
+  maximumDecimalPlaces: number,
+): string {
+  const normalized = normalizeDecimalInput(amount, {
+    allowNegative: true,
+    maximumDecimalPlaces: 10,
+  });
+  if (normalized === null || normalized === "") return amount;
+  const decimal = new Decimal(normalized).toDecimalPlaces(maximumDecimalPlaces);
+  const fixed = decimal.toFixed(maximumDecimalPlaces);
   const negative = fixed.startsWith("-");
-  const [integer = "0", fraction = "00"] = (
+  const [integer = "0", fullFraction = ""] = (
     negative ? fixed.slice(1) : fixed
   ).split(".");
-  const groupedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const groupedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  const fraction = fullFraction.replace(/0+$/, "");
+  const paddedFraction = fraction.padEnd(minimumDecimalPlaces, "0");
 
-  return `${negative ? "-" : ""}${groupedInteger}.${fraction}`;
+  return `${negative ? "-" : ""}${groupedInteger}${paddedFraction ? `.${paddedFraction}` : ""}`;
+}
+
+export function formatDecimal(amount: string): string {
+  return formatGroupedDecimal(amount, 2, 2);
 }
 
 export function formatMoneyInput(amount: string | null | undefined): string {
   if (!amount?.trim()) return "";
-  return formatDecimal(amount);
+  const normalized = normalizeDecimalInput(amount, {
+    allowNegative: false,
+    maximumDecimalPlaces: 4,
+  });
+  return normalized === null || normalized === ""
+    ? amount
+    : formatDecimal(normalized);
 }
 
 export function normalizeMoneyInput(value: string): string | null {
-  const compact = value.replaceAll(/\s+/g, "").trim();
-  const commaCount = (compact.match(/,/g) ?? []).length;
-  const normalized =
-    compact.includes(".") || commaCount > 1
-      ? compact.replaceAll(",", "")
-      : compact.replace(",", ".");
-  if (normalized === "") return "";
-  if (!/^(?:\d+)(?:\.\d{0,4})?$/.test(normalized)) return null;
-  const [integer = "0", fraction] = normalized.split(".");
-  const canonicalInteger = integer.replace(/^0+(?=\d)/, "");
-  return fraction === undefined
-    ? canonicalInteger
-    : `${canonicalInteger}.${fraction}`;
+  return normalizeDecimalInput(value, {
+    allowNegative: false,
+    maximumDecimalPlaces: 4,
+  });
 }
 
 export function finalizeMoneyInput(value: string): string {
   const normalized = normalizeMoneyInput(value);
-  if (normalized === null || normalized === "") return "";
-  return normalized.endsWith(".") ? normalized.slice(0, -1) : normalized;
+  return normalized === null ? value : normalized;
 }
 
 export function formatMoney(amount: string | null, currency: string): string {
@@ -45,11 +59,15 @@ export function formatMoney(amount: string | null, currency: string): string {
 
 export function formatRate(rate: string | null): string {
   if (rate === null) return "—";
-  return `${new Decimal(rate).times(100).toDecimalPlaces(2).toFixed(2)}%`;
+  return `${formatGroupedDecimal(new Decimal(rate).times(100).toString(), 0, 4)}%`;
 }
 
 export function formatQuantity(value: string): string {
-  return new Decimal(value).toDecimalPlaces(4).toFixed().replace(/\.0+$/, "");
+  return formatGroupedDecimal(value, 0, 4);
+}
+
+export function formatFxRate(value: string | null): string {
+  return value === null ? "—" : formatGroupedDecimal(value, 0, 10);
 }
 
 export function rateToPercentInput(rate: string | null): string {

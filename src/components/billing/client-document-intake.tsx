@@ -26,6 +26,7 @@ import {
   scheduleReconciliation,
 } from "@/domain/billing/calculations";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
+import { normalizeDecimalInput } from "@/domain/validation/numeric";
 
 interface BillingOptions {
   clients: { displayName: string; id: string }[];
@@ -78,7 +79,11 @@ type AllocationDraftRow = AllocationRow & {
 
 function fixedDecimal(value: string): string {
   try {
-    return new Decimal(value).toFixed(4);
+    const normalized = normalizeDecimalInput(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 4,
+    });
+    return normalized ? new Decimal(normalized).toFixed(4) : value;
   } catch {
     return value;
   }
@@ -86,7 +91,11 @@ function fixedDecimal(value: string): string {
 
 function calculationDecimal(value: string): string {
   try {
-    return new Decimal(value || 0).toFixed(4);
+    const normalized = normalizeDecimalInput(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 4,
+    });
+    return new Decimal(normalized || 0).toFixed(4);
   } catch {
     return "0.0000";
   }
@@ -214,7 +223,9 @@ function ClientDocumentReview({
       notes: item.notes || undefined,
       percentageRate:
         item.basis === "PERCENTAGE" && item.percentage
-          ? (humanPercentageToFraction(item.percentage) ?? item.percentage)
+          ? (humanPercentageToFraction(item.percentage, {
+              maximumPercent: "100",
+            }) ?? item.percentage)
           : undefined,
     }),
   );
@@ -224,7 +235,9 @@ function ClientDocumentReview({
     orderId: item.orderId,
     percentageRate:
       item.basis === "PERCENTAGE"
-        ? (humanPercentageToFraction(item.percentage) ?? item.percentage)
+        ? (humanPercentageToFraction(item.percentage, {
+            maximumPercent: "100",
+          }) ?? item.percentage)
         : undefined,
   }));
   const scheduleOverallocated = new Decimal(
@@ -595,7 +608,11 @@ function ClientDocumentReview({
               name="vatRate"
               type="hidden"
               value={
-                vatRate ? (humanPercentageToFraction(vatRate) ?? vatRate) : ""
+                vatRate
+                  ? (humanPercentageToFraction(vatRate, {
+                      maximumPercent: "100",
+                    }) ?? vatRate)
+                  : ""
               }
             />
           </ReviewField>

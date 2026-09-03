@@ -5,6 +5,7 @@ import { InstallmentBasis, PaymentDirection } from "@/generated/prisma/client";
 import { isDateOnly } from "@/domain/payments/dates";
 import { paymentSchedulePresets } from "@/domain/payments/presets";
 import { optionalPercentageFraction } from "@/domain/validation/percentage";
+import { normalizeNumericText } from "@/domain/validation/numeric";
 import { requiredUuid } from "@/domain/validation/uuid";
 
 const optionalText = (maximum: number) =>
@@ -14,18 +15,25 @@ const optionalText = (maximum: number) =>
     z.string().trim().max(maximum).optional(),
   );
 const money = (label: string, allowZero: boolean) =>
-  z
-    .string()
-    .trim()
-    .regex(
-      /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/,
-      `${label} must be a non-negative amount with up to 4 decimals.`,
-    )
-    .refine(
-      (value) => allowZero || new Decimal(value).greaterThan(0),
-      `${label} must be greater than zero.`,
-    )
-    .transform((value) => new Decimal(value).toFixed(4));
+  z.preprocess(
+    (value) =>
+      normalizeNumericText(value, {
+        allowNegative: false,
+        maximumDecimalPlaces: 4,
+      }),
+    z
+      .string()
+      .trim()
+      .regex(
+        /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/,
+        `Enter a valid ${label.toLowerCase()}.`,
+      )
+      .refine(
+        (value) => allowZero || new Decimal(value).greaterThan(0),
+        `${label} must be greater than zero.`,
+      )
+      .transform((value) => new Decimal(value).toFixed(4)),
+  );
 const optionalPositiveMoney = (label: string) =>
   z.preprocess(
     (value) =>
@@ -33,8 +41,13 @@ const optionalPositiveMoney = (label: string) =>
     money(label, false).optional(),
   );
 const optionalFxRate = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
+  (value) => {
+    if (typeof value === "string" && value.trim() === "") return undefined;
+    return normalizeNumericText(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 10,
+    });
+  },
   z
     .string()
     .trim()
@@ -49,10 +62,7 @@ const optionalFxRate = z.preprocess(
 const percentage = optionalPercentageFraction({
   label: "Payment percentage",
   maximumPercent: "100",
-}).refine(
-  (value) => value === undefined || new Decimal(value).greaterThan(0),
-  "Payment percentage must be greater than zero.",
-);
+});
 const dateOnly = z
   .string()
   .trim()

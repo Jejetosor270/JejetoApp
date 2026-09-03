@@ -21,9 +21,12 @@ const transaction = vi.hoisted(() => ({
   },
   clientDocumentImport: { create: vi.fn() },
   clientPaymentInstallment: {
+    aggregate: vi.fn(),
     count: vi.fn(),
     createMany: vi.fn(),
     deleteMany: vi.fn(),
+    findUnique: vi.fn(),
+    update: vi.fn(),
   },
   clientReceipt: { create: vi.fn() },
   currency: { findFirst: vi.fn() },
@@ -52,6 +55,7 @@ import {
   recordClientReceipt,
   updateClientBillingAllocations,
   updateClientBillingDocument,
+  updateClientBillingInstallment,
   updateClientBillingInline,
   updateOrderBillingLink,
 } from "./billing";
@@ -102,6 +106,9 @@ describe("Client billing persistence", () => {
     });
     transaction.clientBillingDocument.findUnique.mockResolvedValue(null);
     transaction.clientPaymentInstallment.count.mockResolvedValue(0);
+    transaction.clientPaymentInstallment.aggregate.mockResolvedValue({
+      _sum: { scheduledAmount: new Decimal(0) },
+    });
     transaction.clientReceipt.create.mockResolvedValue({ id: "receipt-1" });
     transaction.currency.findFirst.mockResolvedValue({ code: "EUR" });
     transaction.procurementOrder.count.mockResolvedValue(0);
@@ -269,6 +276,93 @@ describe("Client billing persistence", () => {
         receivedAt: "2026-09-02",
       }),
     ).rejects.toBeInstanceOf(ClientBillingValidationError);
+  });
+
+  it("updates an existing Client Billing installment in both directions without creating a duplicate", async () => {
+    transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
+      billingDocument: {
+        id: "document-1",
+        reference: "INV-1",
+        totalTtc: new Decimal("100000"),
+      },
+      billingDocumentId: "document-1",
+      id: installmentId,
+      matchedInvoices: [],
+      receipts: [],
+    });
+    transaction.clientPaymentInstallment.update
+      .mockResolvedValueOnce({
+        basis: InstallmentBasis.PERCENTAGE,
+        dueDate: new Date("2026-09-30T00:00:00.000Z"),
+        label: "Deposit",
+        notes: null,
+        percentageRate: new Decimal("0.35"),
+        scheduledAmount: new Decimal("35000"),
+      })
+      .mockResolvedValueOnce({
+        basis: InstallmentBasis.FIXED_AMOUNT,
+        dueDate: new Date("2026-09-30T00:00:00.000Z"),
+        label: "Deposit",
+        notes: "Revised",
+        percentageRate: null,
+        scheduledAmount: new Decimal("40000"),
+      });
+
+    const percentageResult = await updateClientBillingInstallment("actor-1", {
+      basis: InstallmentBasis.PERCENTAGE,
+      billingDocumentId: "document-1",
+      dueDate: "2026-09-30",
+      id: installmentId,
+      label: "Deposit",
+      percentageRate: "0.350000",
+      scheduledAmount: "35000.0000",
+    });
+    const amountResult = await updateClientBillingInstallment("actor-1", {
+      basis: InstallmentBasis.FIXED_AMOUNT,
+      billingDocumentId: "document-1",
+      dueDate: "2026-09-30",
+      id: installmentId,
+      label: "Deposit",
+      notes: "Revised",
+      scheduledAmount: "40000.0000",
+    });
+
+    expect(percentageResult.scheduledAmount).toBe("35000");
+    expect(amountResult.scheduledAmount).toBe("40000");
+    expect(transaction.clientPaymentInstallment.update).toHaveBeenCalledTimes(
+      2,
+    );
+    expect(
+      transaction.clientPaymentInstallment.createMany,
+    ).not.toHaveBeenCalled();
+    expect(audit.writeAuditEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects reducing a Client Billing installment below receipts without an audit write", async () => {
+    transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
+      billingDocument: {
+        id: "document-1",
+        reference: "INV-1",
+        totalTtc: new Decimal("100000"),
+      },
+      billingDocumentId: "document-1",
+      id: installmentId,
+      matchedInvoices: [],
+      receipts: [{ amount: new Decimal("20000") }],
+    });
+
+    await expect(
+      updateClientBillingInstallment("actor-1", {
+        basis: InstallmentBasis.FIXED_AMOUNT,
+        billingDocumentId: "document-1",
+        dueDate: "2026-09-30",
+        id: installmentId,
+        label: "Deposit",
+        scheduledAmount: "15000.0000",
+      }),
+    ).rejects.toThrow("below the amount already received");
+    expect(transaction.clientPaymentInstallment.update).not.toHaveBeenCalled();
+    expect(audit.writeAuditEvent).not.toHaveBeenCalled();
   });
 
   it("does not cancel a billing document that already has receipts", async () => {

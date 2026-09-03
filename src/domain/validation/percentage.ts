@@ -1,6 +1,8 @@
 import Decimal from "decimal.js";
 import { z } from "zod";
 
+import { normalizeDecimalInput } from "@/domain/validation/numeric";
+
 const humanPercentagePattern = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
 
 function normalizePercentageText(value: unknown): unknown {
@@ -10,9 +12,11 @@ function normalizePercentageText(value: unknown): unknown {
   const withoutSuffix = trimmed.endsWith("%")
     ? trimmed.slice(0, -1).trim()
     : trimmed;
-  return withoutSuffix.includes(".")
-    ? withoutSuffix
-    : withoutSuffix.replace(",", ".");
+  const normalized = normalizeDecimalInput(withoutSuffix, {
+    allowNegative: true,
+    maximumDecimalPlaces: 10,
+  });
+  return normalized === null ? withoutSuffix : normalized;
 }
 
 export function optionalPercentageFraction({
@@ -51,7 +55,10 @@ export function optionalPercentageFraction({
   );
 }
 
-export function humanPercentageToFraction(value: string): string | null {
-  const parsed = optionalPercentageFraction().safeParse(value);
+export function humanPercentageToFraction(
+  value: string,
+  options?: Parameters<typeof optionalPercentageFraction>[0],
+): string | null {
+  const parsed = optionalPercentageFraction(options).safeParse(value);
   return parsed.success ? (parsed.data ?? null) : null;
 }
