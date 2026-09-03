@@ -14,6 +14,7 @@ import { rateToPercentInput } from "@/domain/procurement/presentation";
 import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 import type { ManagedItem } from "@/lib/items/items";
 import { ItemActionForm } from "@/components/items/item-action-form";
+import { PercentageInput } from "@/components/master-data/form-ui";
 
 type Options = Awaited<
   ReturnType<typeof import("@/lib/items/items").listItemOptions>
@@ -307,12 +308,11 @@ export function ItemForm({
         <input name="pricingMode" type="hidden" value="SELLING_PRICE" />
         <input name="targetMarginRate" type="hidden" value="" />
         <Field label="Markup %">
-          <input
+          <PercentageInput
             className={input}
             defaultValue={rateToPercentInput(
               item?.financial.markupRate ?? null,
             )}
-            inputMode="decimal"
             name="markupRate"
             placeholder="30.00"
           />
@@ -396,10 +396,9 @@ export function ItemForm({
           <input name="vatRecoverability" type="hidden" value="" />
         )}
         <Field label="VAT %">
-          <input
+          <PercentageInput
             className={input}
             defaultValue={rateToPercentInput(item?.vatRate ?? null)}
-            inputMode="decimal"
             name="vatRate"
           />
         </Field>

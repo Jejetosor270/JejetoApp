@@ -4,6 +4,7 @@ import {
   clientBillingInstallmentUpdateSchema,
   parseBillingDocumentEdit,
   parseClientBillingConfirmation,
+  parseOrderCreationBillingLink,
 } from "./validation";
 
 const clientId = "a12b6b9b-10e9-4e42-b93f-38796de4f65a";
@@ -104,6 +105,18 @@ describe("Client billing confirmation", () => {
       );
       expect(parseClientBillingConfirmation(form).success).toBe(true);
     }
+  });
+
+  it("accepts an Order-relative percentage without trusting a client amount", () => {
+    const form = new FormData();
+    form.set("billingDocumentId", clientId);
+    form.set("billingAllocationBasis", "PERCENTAGE");
+    form.set("billingPercentageRate", "1.000000");
+    const result = parseOrderCreationBillingLink(form);
+    expect(result.success).toBe(true);
+    if (!result.success || result.data === null) return;
+    expect(result.data.allocatedAmount).toBeUndefined();
+    expect(result.data.percentageRate).toBe("1.000000");
   });
 
   it("rejects inconsistent HT, VAT and TTC", () => {

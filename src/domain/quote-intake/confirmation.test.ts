@@ -144,14 +144,13 @@ describe("quote confirmation validation", () => {
     form.set("applyCurrency", "on");
     form.set("billingDocumentId", "c12b6b9b-10e9-4e42-b93f-38796de4f65a");
     form.set("billingAllocationBasis", "PERCENTAGE");
-    form.set("billingAllocatedAmount", "40000");
     form.set("billingPercentageRate", "40");
     form.set("billingRemainderApproved", "on");
     const result = parseQuoteConfirmation(form);
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.billingPercentageRate).toBe("0.400000");
-    expect(result.data.billingAllocatedAmount).toBe("40000.0000");
+    expect(result.data.billingAllocatedAmount).toBeUndefined();
     expect(result.data.billingRemainderApproved).toBe(true);
   });
 });

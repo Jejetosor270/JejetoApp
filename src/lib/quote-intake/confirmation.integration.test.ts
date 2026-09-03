@@ -281,7 +281,6 @@ describe("reviewed quote confirmation persistence", () => {
     form.set("payment.0.percentageRate", "30");
     form.set("billingDocumentId", "e12b6b9b-10e9-4e42-b93f-38796de4f65a");
     form.set("billingAllocationBasis", "PERCENTAGE");
-    form.set("billingAllocatedAmount", "40000");
     form.set("billingPercentageRate", "40");
     form.set("billingRemainderApproved", "on");
     orderMocks.getOrderInTransaction.mockResolvedValue(null);
@@ -325,7 +324,6 @@ describe("reviewed quote confirmation persistence", () => {
       transaction,
       "actor-1",
       expect.objectContaining({
-        allocatedAmount: "40000.0000",
         orderId,
         percentageRate: "0.400000",
       }),

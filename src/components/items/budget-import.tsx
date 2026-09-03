@@ -19,6 +19,7 @@ import {
 import { initialQuoteSupplierCreationState } from "@/domain/quote-intake/action-state";
 import { rateToPercentInput } from "@/domain/procurement/presentation";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
+import { PercentageInput } from "@/components/master-data/form-ui";
 
 type Options = Awaited<
   ReturnType<typeof import("@/lib/items/items").listItemOptions>
@@ -470,13 +471,23 @@ function ReviewGrid({
                   ] as const
                 ).map((field) => (
                   <td className="p-2" key={field}>
-                    <input
-                      className={`${control} w-28`}
-                      onChange={(e) =>
-                        update(index, { [field]: e.target.value || null })
-                      }
-                      value={row[field] ?? ""}
-                    />
+                    {field === "markupRate" || field === "vatRate" ? (
+                      <PercentageInput
+                        className={`${control} w-28`}
+                        onValueChange={(value) =>
+                          update(index, { [field]: value || null })
+                        }
+                        value={row[field] ?? ""}
+                      />
+                    ) : (
+                      <input
+                        className={`${control} w-28`}
+                        onChange={(e) =>
+                          update(index, { [field]: e.target.value || null })
+                        }
+                        value={row[field] ?? ""}
+                      />
+                    )}
                   </td>
                 ))}
                 <td className="max-w-80 p-2">

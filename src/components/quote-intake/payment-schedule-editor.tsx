@@ -8,6 +8,7 @@ import {
   Field,
   inputClassName,
   MoneyInput,
+  PercentageInput,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
 import {
@@ -208,21 +209,13 @@ export function PaymentScheduleEditor({
                 label="Percentage %"
                 required={approveSchedule && payment.basis === "PERCENTAGE"}
               >
-                <input
-                  aria-invalid={Boolean(percentageError) || undefined}
+                <PercentageInput
                   className={errorClass(percentageError)}
                   disabled={payment.basis !== "PERCENTAGE"}
-                  inputMode="decimal"
+                  invalid={Boolean(percentageError)}
                   name={`payment.${index}.percentageRate`}
-                  onBlur={() =>
-                    updatePayment(index, {
-                      percentagePercent: payment.percentagePercent.endsWith(".")
-                        ? payment.percentagePercent.slice(0, -1)
-                        : payment.percentagePercent,
-                    })
-                  }
-                  onChange={(event) => {
-                    const nextValue = percentageInput(event.target.value);
+                  onValueChange={(value) => {
+                    const nextValue = percentageInput(value);
                     if (nextValue !== null) {
                       updatePayment(index, { percentagePercent: nextValue });
                     }

@@ -12,7 +12,10 @@ function formatGroupedDecimal(
     maximumDecimalPlaces: 10,
   });
   if (normalized === null || normalized === "") return amount;
-  const decimal = new Decimal(normalized).toDecimalPlaces(maximumDecimalPlaces);
+  const decimal = new Decimal(normalized).toDecimalPlaces(
+    maximumDecimalPlaces,
+    Decimal.ROUND_HALF_UP,
+  );
   const fixed = decimal.toFixed(maximumDecimalPlaces);
   const negative = fixed.startsWith("-");
   const [integer = "0", fullFraction = ""] = (
@@ -57,9 +60,26 @@ export function formatMoney(amount: string | null, currency: string): string {
   return `${formatDecimal(amount)} ${currency}`;
 }
 
-export function formatRate(rate: string | null): string {
+export function formatPercentage(rate: string | null): string {
   if (rate === null) return "—";
-  return `${formatGroupedDecimal(new Decimal(rate).times(100).toString(), 0, 4)}%`;
+  return `${formatGroupedDecimal(new Decimal(rate).times(100).toString(), 0, 2)}%`;
+}
+
+export function formatPercentageInput(value: string): string {
+  const withoutSuffix = value.trim().endsWith("%")
+    ? value.trim().slice(0, -1).trim()
+    : value;
+  const normalized = normalizeDecimalInput(withoutSuffix, {
+    allowNegative: false,
+    maximumDecimalPlaces: 10,
+  });
+  return normalized === null || normalized === ""
+    ? value
+    : formatGroupedDecimal(normalized, 0, 2);
+}
+
+export function formatRate(rate: string | null): string {
+  return formatPercentage(rate);
 }
 
 export function formatQuantity(value: string): string {

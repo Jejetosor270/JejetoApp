@@ -21,6 +21,7 @@ import {
   InlineDateInput,
   InlineEditActions,
   InlineMoneyInput,
+  InlinePercentInput,
   InlineSelect,
   InlineTextInput,
 } from "@/components/inline-editing/inline-edit";
@@ -176,17 +177,14 @@ function FinancialRow({
         {moneyInput("Budget total HT", "budgetTotal", "BUDGET_TOTAL")}
       </td>
       <td className="p-2">
-        <input
-          aria-label={`Markup percentage for ${item.itemReference ?? item.name}`}
-          className={`${control} w-20 text-right tabular-nums`}
+        <InlinePercentInput
+          ariaLabel={`Markup percentage for ${item.itemReference ?? item.name}`}
           disabled={!editing}
-          inputMode="decimal"
-          onChange={(event) =>
-            updateFinancial("MARKUP", "markupPercent", event.target.value)
+          onChange={(value) =>
+            updateFinancial("MARKUP", "markupPercent", value)
           }
           value={draft.markupPercent}
         />
-        <span className="ml-1">%</span>
       </td>
       <td className="p-2">
         <select
@@ -216,17 +214,14 @@ function FinancialRow({
         </select>
       </td>
       <td className="p-2">
-        <input
-          aria-label={`VAT percentage for ${item.itemReference ?? item.name}`}
-          className={`${control} w-20 text-right tabular-nums`}
+        <InlinePercentInput
+          ariaLabel={`VAT percentage for ${item.itemReference ?? item.name}`}
           disabled={!editing}
-          inputMode="decimal"
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, vatRate: event.target.value }))
+          onChange={(value) =>
+            setDraft((current) => ({ ...current, vatRate: value }))
           }
           value={draft.vatRate}
         />
-        <span className="ml-1">%</span>
       </td>
       <td className="p-2">
         {inputVatRecoverabilityApplies(draft.vatTreatment) ? (

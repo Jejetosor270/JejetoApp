@@ -16,7 +16,11 @@ import {
   ACCEPTED_CLIENT_DOCUMENT_TYPES,
   MAX_CLIENT_DOCUMENT_LABEL,
 } from "@/config/client-document-extraction";
-import { inputClassName, SubmitButton } from "@/components/master-data/form-ui";
+import {
+  inputClassName,
+  PercentageInput,
+  SubmitButton,
+} from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
 import type { ProcessedClientDocumentReview } from "@/lib/billing/process";
 import {
@@ -597,11 +601,9 @@ function ClientDocumentReview({
             </select>
           </ReviewField>
           <ReviewField error={state.fieldErrors?.vatRate} label="VAT rate %">
-            <input
+            <PercentageInput
               className={inputClassName}
-              inputMode="decimal"
-              name="vatRatePercent"
-              onChange={(event) => setVatRate(event.target.value)}
+              onValueChange={setVatRate}
               value={vatRate}
             />
             <input
@@ -782,11 +784,9 @@ function ClientDocumentReview({
                   label="Installment %"
                   required
                 >
-                  <input
+                  <PercentageInput
                     className={inputClassName}
-                    inputMode="decimal"
-                    onChange={(event) => {
-                      const percentage = event.target.value;
+                    onValueChange={(percentage) => {
                       setSchedule((current) =>
                         current.map((row, rowIndex) =>
                           rowIndex === index
@@ -979,14 +979,12 @@ function ClientDocumentReview({
                 error={
                   state.fieldErrors?.[`allocations.${index}.percentageRate`]
                 }
-                label="Order allocation %"
+                label="% of Billing"
                 required
               >
-                <input
+                <PercentageInput
                   className={inputClassName}
-                  inputMode="decimal"
-                  onChange={(event) => {
-                    const percentage = event.target.value;
+                  onValueChange={(percentage) => {
                     setAllocations((current) =>
                       current.map((row, rowIndex) =>
                         rowIndex === index

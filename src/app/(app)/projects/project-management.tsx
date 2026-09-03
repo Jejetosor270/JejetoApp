@@ -27,10 +27,15 @@ import {
   ActionFeedback,
   Field,
   inputClassName,
+  PercentageInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { countries, countryLabel } from "@/config/countries";
-import { rateToPercentInput } from "@/domain/procurement/presentation";
+import {
+  formatRate,
+  rateToPercentInput,
+} from "@/domain/procurement/presentation";
+import { humanPercentageToFraction } from "@/domain/validation/percentage";
 
 interface ClientOption {
   displayName: string;
@@ -188,18 +193,16 @@ function CreateProjectForm({
           </select>
         </Field>
         <Field label="Default Product Markup %">
-          <input
+          <PercentageInput
             className={inputClassName}
             defaultValue="0"
-            inputMode="decimal"
             name="defaultProductMarkupRate"
           />
         </Field>
         <Field label="Default Freight Markup %">
-          <input
+          <PercentageInput
             className={inputClassName}
             defaultValue="0"
-            inputMode="decimal"
             name="defaultFreightMarkupRate"
           />
         </Field>
@@ -371,7 +374,7 @@ function ProjectInlineRow({
             value={draft.freightEstimateRate}
           />
         ) : saved.freightEstimateRate ? (
-          `${saved.freightEstimateRate}%`
+          formatRate(humanPercentageToFraction(saved.freightEstimateRate))
         ) : (
           "—"
         )}

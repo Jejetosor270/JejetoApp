@@ -19,6 +19,7 @@ import type {
   ProcessedQuoteReview,
   QuoteItemReviewRow,
 } from "@/lib/quote-intake/process";
+import { PercentageInput } from "@/components/master-data/form-ui";
 
 const control = "border-input bg-background h-8 rounded border px-2 text-xs";
 const area =
@@ -405,13 +406,12 @@ export function QuoteItemReview({
                       />
                     </td>
                     <td className="p-2 align-top">
-                      <input
-                        aria-label={`VAT percentage for line ${index + 1}`}
+                      <PercentageInput
+                        ariaLabel={`VAT percentage for line ${index + 1}`}
                         className={`${control} w-20`}
-                        inputMode="decimal"
-                        onChange={(event) =>
+                        onValueChange={(value) =>
                           update(index, {
-                            vatPercentInput: event.target.value,
+                            vatPercentInput: value,
                           })
                         }
                         value={row.vatPercentInput}

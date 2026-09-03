@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { vatAmount as calculateVatAmount } from "@/domain/finance/calculations";
 import { isDateOnly } from "@/domain/payments/dates";
+import { formatPercentage } from "@/domain/procurement/presentation";
 
 export const extractionStatuses = [
   "EXTRACTED",
@@ -440,7 +441,7 @@ export function buildQuoteReviewProposal(
     !percentageTotal.equals(1)
   ) {
     warnings.push(
-      `Extracted percentage installments total ${percentageTotal.times(100).toDecimalPlaces(4).toString()}%, not 100%.`,
+      `Extracted percentage installments total ${formatPercentage(percentageTotal.toString())}, not 100%.`,
     );
   }
   if (payments.some((item) => item.dueDate === null)) {

@@ -19,6 +19,7 @@ import {
   Field,
   inputClassName,
   MoneyInput,
+  PercentageInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { initialOrderActionState } from "@/components/procurement/action-state";
@@ -49,6 +50,7 @@ import {
 } from "@/domain/freight/calculations";
 import {
   amountFromPercentage,
+  orderSellingBasisInBillingCurrency,
   percentageFromAmount,
 } from "@/domain/billing/calculations";
 
@@ -97,8 +99,10 @@ interface CostView {
 }
 export interface OrderFormOptions {
   billingDocuments: {
+    allocatedHt: string;
     currencyCode: string;
     documentType: string;
+    fxRateToReporting: string | null;
     id: string;
     isProjectRemainderApproved: boolean;
     projectId: string;
@@ -303,12 +307,11 @@ function InputVatFields({
           value={draft.inputVatTaxableBase}
         />
         <Field error={fieldErrors.inputVatRate} label="VAT rate %">
-          <input
-            aria-invalid={Boolean(fieldErrors.inputVatRate) || undefined}
+          <PercentageInput
             className={errorClass("inputVatRate")}
-            inputMode="decimal"
+            invalid={Boolean(fieldErrors.inputVatRate)}
             name="inputVatRate"
-            onChange={(event) => onChange("inputVatRate", event.target.value)}
+            onValueChange={(value) => onChange("inputVatRate", value)}
             placeholder="20.00"
             value={draft.inputVatRate}
           />
@@ -565,6 +568,23 @@ export function OrderForm({
   } catch {
     livePricing = null;
   }
+  const selectedBillingOrderBasis =
+    project && selectedBillingDocument
+      ? orderSellingBasisInBillingCurrency({
+          billingCurrencyCode: selectedBillingDocument.currencyCode,
+          billingFxRateToReporting: selectedBillingDocument.fxRateToReporting,
+          orderSellingReporting: livePricing?.totalSellReporting ?? null,
+          reportingCurrencyCode: project.reportingCurrencyCode,
+        })
+      : null;
+  const selectedBillingAvailable = selectedBillingDocument
+    ? Decimal.max(
+        new Decimal(selectedBillingDocument.totalHt).minus(
+          selectedBillingDocument.allocatedHt,
+        ),
+        0,
+      ).toFixed(4)
+    : null;
   const automaticOutputVatBase = livePricing?.totalSell ?? null;
   let automaticFreightAllowance: string | null = null;
   let effectiveFreightAllowance: string | null = null;
@@ -1295,15 +1315,12 @@ export function OrderForm({
                   </select>
                 </Field>
                 <Field error={fieldErrors.outputVatRate} label="VAT rate %">
-                  <input
-                    aria-invalid={
-                      Boolean(fieldErrors.outputVatRate) || undefined
-                    }
+                  <PercentageInput
                     className={errorClass("outputVatRate")}
-                    inputMode="decimal"
+                    invalid={Boolean(fieldErrors.outputVatRate)}
                     name="outputVatRate"
-                    onChange={(event) =>
-                      changeDraft("outputVatRate", event.target.value)
+                    onValueChange={(value) =>
+                      changeDraft("outputVatRate", value)
                     }
                     placeholder="20.00"
                     value={outputVatRate}
@@ -1478,87 +1495,57 @@ export function OrderForm({
                 error={fieldErrors.productMarkupOverridePercent}
                 label="Product markup %"
               >
-                <input
-                  aria-invalid={
-                    Boolean(fieldErrors.productMarkupOverridePercent) ||
-                    undefined
-                  }
+                <PercentageInput
                   className={errorClass("productMarkupOverridePercent")}
-                  inputMode="decimal"
+                  invalid={Boolean(fieldErrors.productMarkupOverridePercent)}
                   name="productMarkupOverridePercent"
-                  onChange={(event) =>
-                    changeDraft(
-                      "productMarkupOverridePercent",
-                      event.target.value,
-                    )
+                  onValueChange={(value) =>
+                    changeDraft("productMarkupOverridePercent", value)
                   }
                   placeholder="0.00"
                   value={productMarkupOverride}
                 />
                 <span className="text-muted-foreground text-xs">
                   Project default:{" "}
-                  {new Decimal(project.defaultProductMarkupRate)
-                    .times(100)
-                    .toString()}
-                  %
+                  {formatRate(project.defaultProductMarkupRate)}
                 </span>
               </Field>
               <Field
                 error={fieldErrors.freightMarkupOverridePercent}
                 label="Freight markup %"
               >
-                <input
-                  aria-invalid={
-                    Boolean(fieldErrors.freightMarkupOverridePercent) ||
-                    undefined
-                  }
+                <PercentageInput
                   className={errorClass("freightMarkupOverridePercent")}
-                  inputMode="decimal"
+                  invalid={Boolean(fieldErrors.freightMarkupOverridePercent)}
                   name="freightMarkupOverridePercent"
-                  onChange={(event) =>
-                    changeDraft(
-                      "freightMarkupOverridePercent",
-                      event.target.value,
-                    )
+                  onValueChange={(value) =>
+                    changeDraft("freightMarkupOverridePercent", value)
                   }
                   placeholder="0.00"
                   value={freightMarkupOverride}
                 />
                 <span className="text-muted-foreground text-xs">
                   Project default:{" "}
-                  {new Decimal(project.defaultFreightMarkupRate)
-                    .times(100)
-                    .toString()}
-                  %
+                  {formatRate(project.defaultFreightMarkupRate)}
                 </span>
               </Field>
               <Field
                 error={fieldErrors.otherCostMarkupOverridePercent}
                 label="Other Cost markup %"
               >
-                <input
-                  aria-invalid={
-                    Boolean(fieldErrors.otherCostMarkupOverridePercent) ||
-                    undefined
-                  }
+                <PercentageInput
                   className={errorClass("otherCostMarkupOverridePercent")}
-                  inputMode="decimal"
+                  invalid={Boolean(fieldErrors.otherCostMarkupOverridePercent)}
                   name="otherCostMarkupOverridePercent"
-                  onChange={(event) =>
-                    changeDraft(
-                      "otherCostMarkupOverridePercent",
-                      event.target.value,
-                    )
+                  onValueChange={(value) =>
+                    changeDraft("otherCostMarkupOverridePercent", value)
                   }
                   placeholder="0.00"
                   value={otherMarkupOverride}
                 />
                 <span className="text-muted-foreground text-xs">
                   Project default:{" "}
-                  {new Decimal(project.defaultOtherCostMarkupRate)
-                    .times(100)
-                    .toString()}
-                  %
+                  {formatRate(project.defaultOtherCostMarkupRate)}
                 </span>
               </Field>
             </div>
@@ -1761,18 +1748,16 @@ export function OrderForm({
                   </Field>
                   <Field
                     error={fieldErrors.billingPercentageRate}
-                    label="Allocation %"
+                    label="% of Order"
                   >
-                    <input
+                    <PercentageInput
                       className={inputClassName}
                       disabled={billingAllocationBasis !== "PERCENTAGE"}
-                      inputMode="decimal"
-                      onChange={(event) => {
-                        const next = event.target.value;
+                      onValueChange={(next) => {
                         setBillingPercentage(next);
                         setBillingAllocatedAmount(
                           amountFromPercentage(
-                            selectedBillingDocument.totalHt,
+                            selectedBillingOrderBasis ?? "",
                             next,
                           ) ?? "",
                         );
@@ -1804,7 +1789,7 @@ export function OrderForm({
                         setBillingAllocatedAmount(next);
                         setBillingPercentage(
                           percentageFromAmount(
-                            selectedBillingDocument.totalHt,
+                            selectedBillingOrderBasis ?? "",
                             next,
                           ) ?? "",
                         );
@@ -1812,6 +1797,36 @@ export function OrderForm({
                       value={billingAllocatedAmount}
                     />
                   </Field>
+                  <div className="bg-background grid gap-2 rounded-md border p-3 text-xs sm:col-span-2 sm:grid-cols-4 xl:col-span-4">
+                    <p>
+                      Order Sell HT:{" "}
+                      {formatMoney(
+                        selectedBillingOrderBasis,
+                        selectedBillingDocument.currencyCode,
+                      )}
+                    </p>
+                    <p>
+                      Billing HT:{" "}
+                      {formatMoney(
+                        selectedBillingDocument.totalHt,
+                        selectedBillingDocument.currencyCode,
+                      )}
+                    </p>
+                    <p>
+                      Already allocated:{" "}
+                      {formatMoney(
+                        selectedBillingDocument.allocatedHt,
+                        selectedBillingDocument.currencyCode,
+                      )}
+                    </p>
+                    <p>
+                      Available:{" "}
+                      {formatMoney(
+                        selectedBillingAvailable,
+                        selectedBillingDocument.currencyCode,
+                      )}
+                    </p>
+                  </div>
                   <label className="flex items-center gap-2 text-xs sm:col-span-2 xl:col-span-4">
                     <input
                       checked={billingRemainderApproved}

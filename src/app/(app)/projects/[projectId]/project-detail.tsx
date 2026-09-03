@@ -19,6 +19,7 @@ import {
   ActionFeedback,
   Field,
   inputClassName,
+  PercentageInput,
   StatusBadge,
   SubmitButton,
 } from "@/components/master-data/form-ui";
@@ -106,7 +107,7 @@ function ProjectFields({
   return (
     <>
       <Field label="Project name">
-        <input
+        <PercentageInput
           className={inputClassName}
           defaultValue={project.name}
           name="name"
@@ -114,7 +115,7 @@ function ProjectFields({
         />
       </Field>
       <Field label="Project code">
-        <input
+        <PercentageInput
           className={inputClassName}
           defaultValue={project.code}
           name="code"
@@ -207,7 +208,7 @@ function ProjectFields({
         />
       </Field>
       <Field label="Client Freight Allowance % of Product Sell HT">
-        <input
+        <PercentageInput
           className={inputClassName}
           defaultValue={
             project.freightEstimateRate
@@ -216,7 +217,6 @@ function ProjectFields({
                   .toString()
               : ""
           }
-          inputMode="decimal"
           name="freightEstimateRate"
         />
       </Field>
@@ -245,34 +245,31 @@ function ProjectFields({
         />
       </Field>
       <Field label="Default Product Markup %">
-        <input
+        <PercentageInput
           className={inputClassName}
           defaultValue={new Decimal(project.defaultProductMarkupRate.toString())
             .times(100)
             .toString()}
-          inputMode="decimal"
           name="defaultProductMarkupRate"
         />
       </Field>
       <Field label="Default Freight Markup %">
-        <input
+        <PercentageInput
           className={inputClassName}
           defaultValue={new Decimal(project.defaultFreightMarkupRate.toString())
             .times(100)
             .toString()}
-          inputMode="decimal"
           name="defaultFreightMarkupRate"
         />
       </Field>
       <Field label="Default Other Cost Markup %">
-        <input
+        <PercentageInput
           className={inputClassName}
           defaultValue={new Decimal(
             project.defaultOtherCostMarkupRate.toString(),
           )
             .times(100)
             .toString()}
-          inputMode="decimal"
           name="defaultOtherCostMarkupRate"
         />
       </Field>

@@ -44,10 +44,15 @@ const database = vi.hoisted(() => ({
   project: { findFirst: vi.fn() },
 }));
 const audit = vi.hoisted(() => ({ writeAuditEvent: vi.fn() }));
+const procurementOrders = vi.hoisted(() => ({
+  getOrder: vi.fn(),
+  getOrderInTransaction: vi.fn(),
+}));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/audit/events", () => audit);
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
+vi.mock("@/lib/procurement/orders", () => procurementOrders);
 
 import {
   ClientBillingValidationError,
@@ -115,6 +120,10 @@ describe("Client billing persistence", () => {
     transaction.project.findFirst.mockResolvedValue({
       id: projectId,
       reportingCurrencyCode: "EUR",
+    });
+    procurementOrders.getOrderInTransaction.mockResolvedValue({
+      costs: { reportingSellingRevenue: "80000" },
+      project: { id: projectId, reportingCurrencyCode: "EUR" },
     });
   });
 
@@ -450,28 +459,37 @@ describe("Client billing persistence", () => {
     );
   });
 
-  it("uses the same reconciliation when an Order links and removes Billing", async () => {
+  it("uses Order Sell HT for an Order-side percentage and persists one amount truth", async () => {
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
       allocations: [],
+      currencyCode: "EUR",
+      fxRateToReporting: null,
       id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
       isProjectRemainderApproved: false,
       projectId,
       reference: "INV-1",
-      totalHt: new Decimal("100"),
+      totalHt: new Decimal("200000"),
     });
     transaction.procurementOrder.count.mockResolvedValue(1);
     await updateOrderBillingLink("actor-1", {
-      allocatedAmount: "40.0000",
+      allocatedAmount: "0.0000",
       basis: ClientBillingAllocationBasis.PERCENTAGE,
       billingDocumentId: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
       isProjectRemainderApproved: true,
       orderId: firstOrderId,
-      percentageRate: "0.400000",
+      percentageRate: "1.000000",
       remove: false,
     });
     expect(transaction.clientBillingAllocation.createMany).toHaveBeenCalledWith(
       {
-        data: [expect.objectContaining({ orderId: firstOrderId })],
+        data: [
+          expect.objectContaining({
+            allocatedAmount: "80000.0000",
+            basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+            orderId: firstOrderId,
+            percentageRate: null,
+          }),
+        ],
       },
     );
 
@@ -485,11 +503,13 @@ describe("Client billing persistence", () => {
           percentageRate: new Decimal("0.4"),
         },
       ],
+      currencyCode: "EUR",
+      fxRateToReporting: null,
       id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
       isProjectRemainderApproved: true,
       projectId,
       reference: "INV-1",
-      totalHt: new Decimal("100"),
+      totalHt: new Decimal("200000"),
     });
     transaction.procurementOrder.count.mockResolvedValue(0);
     await updateOrderBillingLink("actor-1", {
@@ -501,6 +521,43 @@ describe("Client billing persistence", () => {
     expect(transaction.clientBillingAllocation.deleteMany).toHaveBeenCalledWith(
       { where: { id: { in: ["allocation-a"] } } },
     );
+  });
+
+  it("rejects an Order-side percentage above remaining Billing capacity", async () => {
+    transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      allocations: [
+        {
+          allocatedAmount: new Decimal("30000"),
+          basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+          id: "allocation-other",
+          orderId: secondOrderId,
+          percentageRate: null,
+        },
+      ],
+      currencyCode: "EUR",
+      fxRateToReporting: null,
+      id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      isCancelled: false,
+      isProjectRemainderApproved: true,
+      projectId,
+      reference: "INV-1",
+      totalHt: new Decimal("50000"),
+    });
+
+    await expect(
+      updateOrderBillingLink("actor-1", {
+        basis: ClientBillingAllocationBasis.PERCENTAGE,
+        billingDocumentId: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+        isProjectRemainderApproved: true,
+        orderId: firstOrderId,
+        percentageRate: "1.000000",
+        remove: false,
+      }),
+    ).rejects.toThrow("remaining Billing Event amount");
+    expect(
+      transaction.clientBillingAllocation.createMany,
+    ).not.toHaveBeenCalled();
+    expect(audit.writeAuditEvent).not.toHaveBeenCalled();
   });
 
   it("rejects cross-Project allocations and unsafe Billing Project changes", async () => {

@@ -9,6 +9,7 @@ import {
   Field,
   inputClassName,
   MoneyInput,
+  PercentageInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
@@ -170,12 +171,10 @@ export function BillingInstallmentEditor({
             label="Installment %"
             required
           >
-            <input
+            <PercentageInput
               className={inputClassName}
-              inputMode="decimal"
               name="percentageRate"
-              onChange={(event) => {
-                const percentage = event.target.value;
+              onValueChange={(percentage) => {
                 setDraft((current) => ({
                   ...current,
                   amount:

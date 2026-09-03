@@ -18,7 +18,7 @@ import {
   initialQuoteProcessingState,
 } from "@/domain/quote-intake/action-state";
 import type { ExtractionStatus } from "@/domain/quote-intake/extraction";
-import { formatMoney } from "@/domain/procurement/presentation";
+import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import { calculateQuoteSupplierPayable } from "@/domain/quote-intake/payment-schedule";
 import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 import {
@@ -31,16 +31,13 @@ import {
   Field,
   inputClassName,
   MoneyInput,
+  PercentageInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import type { QuoteIntakeOptions } from "@/lib/quote-intake/options";
 import { PaymentScheduleEditor } from "@/components/quote-intake/payment-schedule-editor";
 import { QuoteSupplierCreationForm } from "@/components/quote-intake/supplier-creation-form";
 import { QuoteItemReview } from "@/components/quote-intake/quote-item-review";
-import {
-  amountFromPercentage,
-  percentageFromAmount,
-} from "@/domain/billing/calculations";
 
 function statusLabel(status: ExtractionStatus): string {
   return status.toLowerCase().replace(/^./, (value) => value.toUpperCase());
@@ -389,7 +386,7 @@ function QuoteReview({
                   <p className="text-sm">
                     Rate:{" "}
                     {line.rate.status === "EXTRACTED" && line.rate.value
-                      ? `${percentValue(line.rate.value)}%`
+                      ? formatRate(line.rate.value)
                       : "—"}
                   </p>
                   <p className="text-sm">
@@ -838,12 +835,11 @@ function QuoteReview({
                 />
               </Field>
               <Field error={fieldErrors.inputVatRate} label="VAT rate %">
-                <input
-                  aria-invalid={Boolean(fieldErrors.inputVatRate) || undefined}
+                <PercentageInput
                   className={inputWithError("inputVatRate")}
-                  inputMode="decimal"
+                  invalid={Boolean(fieldErrors.inputVatRate)}
                   name="inputVatRate"
-                  onChange={(event) => setInputVatRate(event.target.value)}
+                  onValueChange={setInputVatRate}
                   value={inputVatRate}
                 />
               </Field>
@@ -951,22 +947,15 @@ function QuoteReview({
                   </Field>
                   <Field
                     error={fieldErrors.billingPercentageRate}
-                    label="Allocation %"
+                    label="% of Order"
                   >
-                    <input
+                    <PercentageInput
                       className={inputClassName}
                       disabled={billingAllocationBasis !== "PERCENTAGE"}
-                      inputMode="decimal"
                       name="billingPercentageRate"
-                      onChange={(event) => {
-                        const next = event.target.value;
+                      onValueChange={(next) => {
                         setBillingPercentage(next);
-                        setBillingAllocatedAmount(
-                          amountFromPercentage(
-                            selectedBillingDocument.totalHt,
-                            next,
-                          ) ?? "",
-                        );
+                        setBillingAllocatedAmount("");
                       }}
                       value={billingPercentage}
                     />
@@ -976,20 +965,55 @@ function QuoteReview({
                     label={`Allocation HT (${selectedBillingDocument.currencyCode})`}
                   >
                     <MoneyInput
+                      disabled={billingAllocationBasis === "PERCENTAGE"}
                       invalid={Boolean(fieldErrors.billingAllocatedAmount)}
                       name="billingAllocatedAmount"
                       onValueChange={(next) => {
                         setBillingAllocatedAmount(next);
-                        setBillingPercentage(
-                          percentageFromAmount(
-                            selectedBillingDocument.totalHt,
-                            next,
-                          ) ?? "",
-                        );
                       }}
+                      placeholder={
+                        billingAllocationBasis === "PERCENTAGE"
+                          ? "Calculated from Order Sell HT on approval"
+                          : "0.00"
+                      }
                       value={billingAllocatedAmount}
                     />
                   </Field>
+                  <div className="bg-background grid gap-2 rounded-md border p-3 text-xs sm:col-span-2 sm:grid-cols-3 xl:col-span-4">
+                    <p>
+                      Billing HT:{" "}
+                      {formatMoney(
+                        selectedBillingDocument.totalHt,
+                        selectedBillingDocument.currencyCode,
+                      )}
+                    </p>
+                    <p>
+                      Already allocated:{" "}
+                      {formatMoney(
+                        selectedBillingDocument.allocatedHt,
+                        selectedBillingDocument.currencyCode,
+                      )}
+                    </p>
+                    <p>
+                      Available:{" "}
+                      {formatMoney(
+                        Decimal.max(
+                          new Decimal(selectedBillingDocument.totalHt).minus(
+                            selectedBillingDocument.allocatedHt,
+                          ),
+                          0,
+                        ).toFixed(4),
+                        selectedBillingDocument.currencyCode,
+                      )}
+                    </p>
+                    {billingAllocationBasis === "PERCENTAGE" ? (
+                      <p className="text-muted-foreground sm:col-span-3">
+                        The percentage is of the reviewed Order Sell HT. Its
+                        allocation amount is calculated again from authoritative
+                        Order pricing when you approve.
+                      </p>
+                    ) : null}
+                  </div>
                   <label className="flex items-center gap-2 text-xs sm:col-span-2 xl:col-span-4">
                     <input
                       checked={billingRemainderApproved}

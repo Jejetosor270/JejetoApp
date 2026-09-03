@@ -12,6 +12,7 @@ import {
 import {
   allocationReconciliation,
   calculateClientBillingAmounts,
+  orderSellingBasisInBillingCurrency,
 } from "@/domain/billing/calculations";
 import type {
   BillingAllocationInput,
@@ -37,6 +38,7 @@ import { paginationSkip, type PageInput } from "@/domain/listing/validation";
 import { writeAuditEvent } from "@/lib/audit/events";
 import { getDatabase } from "@/lib/db";
 import { COMPANY_REPORTING_CURRENCY_CODE } from "@/config/reporting";
+import { getOrder, getOrderInTransaction } from "@/lib/procurement/orders";
 
 export class ClientBillingValidationError extends Error {}
 export class ClientBillingNotFoundError extends Error {}
@@ -1026,19 +1028,32 @@ export async function updateOrderBillingLinkInTransaction(
   actorId: string,
   input: OrderBillingLinkInput,
 ) {
-  const document = await transaction.clientBillingDocument.findUnique({
-    where: { id: input.billingDocumentId },
-    select: {
-      allocations: true,
-      id: true,
-      isCancelled: true,
-      isProjectRemainderApproved: true,
-      projectId: true,
-      reference: true,
-      totalHt: true,
-    },
-  });
+  const [document, order] = await Promise.all([
+    transaction.clientBillingDocument.findUnique({
+      where: { id: input.billingDocumentId },
+      select: {
+        allocations: true,
+        currencyCode: true,
+        fxRateToReporting: true,
+        id: true,
+        isCancelled: true,
+        isProjectRemainderApproved: true,
+        projectId: true,
+        reference: true,
+        totalHt: true,
+      },
+    }),
+    getOrderInTransaction(transaction, input.orderId),
+  ]);
   if (!document) throw new ClientBillingNotFoundError();
+  if (!order)
+    throw new ClientBillingValidationError(
+      "The selected Order no longer exists.",
+    );
+  if (order.project.id !== document.projectId)
+    throw new ClientBillingValidationError(
+      "The selected Order must belong to the Billing Event Project.",
+    );
   if (!input.remove && document.isCancelled)
     throw new ClientBillingValidationError(
       "A cancelled Billing Event cannot receive a new Order allocation.",
@@ -1053,13 +1068,48 @@ export async function updateOrderBillingLinkInTransaction(
         ? { percentageRate: item.percentageRate.toString() }
         : {}),
     }));
-  if (!input.remove && input.basis && input.allocatedAmount)
-    allocations.push({
-      allocatedAmount: input.allocatedAmount,
-      basis: input.basis,
-      orderId: input.orderId,
-      ...(input.percentageRate ? { percentageRate: input.percentageRate } : {}),
+  if (
+    !input.remove &&
+    input.basis &&
+    (input.allocatedAmount || input.percentageRate !== undefined)
+  ) {
+    const orderBasis = orderSellingBasisInBillingCurrency({
+      billingCurrencyCode: document.currencyCode,
+      billingFxRateToReporting: document.fxRateToReporting?.toString() ?? null,
+      orderSellingReporting: order.costs.reportingSellingRevenue,
+      reportingCurrencyCode: order.project.reportingCurrencyCode,
     });
+    if (orderBasis === null)
+      throw new ClientBillingValidationError(
+        "The Order selling amount is incomplete because a required FX rate is missing.",
+      );
+    const allocatedAmount =
+      input.basis === ClientBillingAllocationBasis.PERCENTAGE
+        ? new Decimal(orderBasis)
+            .times(input.percentageRate ?? "0")
+            .toDecimalPlaces(4, Decimal.ROUND_HALF_UP)
+            .toFixed(4)
+        : (input.allocatedAmount ?? "0");
+    const allocatedToOtherOrders = document.allocations
+      .filter((item) => item.orderId !== input.orderId)
+      .reduce(
+        (total, allocation) => total.plus(allocation.allocatedAmount),
+        new Decimal(0),
+      );
+    const available = Decimal.max(
+      new Decimal(document.totalHt).minus(allocatedToOtherOrders),
+      0,
+    );
+    if (new Decimal(allocatedAmount).greaterThan(available))
+      throw new ClientBillingValidationError(
+        "Allocation exceeds the remaining Billing Event amount.",
+      );
+    allocations.push({
+      allocatedAmount,
+      basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+      orderId: input.orderId,
+    });
+  }
   await reconcileBillingAllocationsInTransaction(
     transaction,
     actorId,
@@ -1470,14 +1520,11 @@ export async function getOrderBillingAllocations(orderIds: readonly string[]) {
 
 export async function getOrderBillingReconciliation(orderId: string) {
   const database = getDatabase();
-  const order = await database.procurementOrder.findUnique({
-    where: { id: orderId },
-    select: { projectId: true },
-  });
+  const order = await getOrder(orderId);
   if (!order) return null;
   const records = await database.clientBillingDocument.findMany({
     where: {
-      projectId: order.projectId,
+      projectId: order.project.id,
       OR: [{ isCancelled: false }, { allocations: { some: { orderId } } }],
     },
     include: billingInclude,
@@ -1488,6 +1535,12 @@ export async function getOrderBillingReconciliation(orderId: string) {
     const allocation = view.allocations.find(
       (item) => item.orderId === orderId,
     );
+    const allocatedToOtherOrders = view.allocations
+      .filter((item) => item.orderId !== orderId)
+      .reduce(
+        (total, item) => total.plus(item.allocatedAmount),
+        new Decimal(0),
+      );
     return {
       allocation: allocation
         ? {
@@ -1502,6 +1555,17 @@ export async function getOrderBillingReconciliation(orderId: string) {
       id: view.id,
       isCancelled: view.isCancelled,
       isProjectRemainderApproved: view.isProjectRemainderApproved,
+      allocatedToOtherOrdersHt: allocatedToOtherOrders.toFixed(4),
+      availableForOrderHt: Decimal.max(
+        new Decimal(view.totalHt).minus(allocatedToOtherOrders),
+        0,
+      ).toFixed(4),
+      orderSellingBasisHt: orderSellingBasisInBillingCurrency({
+        billingCurrencyCode: view.currencyCode,
+        billingFxRateToReporting: view.fxRate,
+        orderSellingReporting: order.costs.reportingSellingRevenue,
+        reportingCurrencyCode: order.project.reportingCurrencyCode,
+      }),
       projectRemainder: view.allocationReconciliation.remaining,
       reference: view.reference,
       status: view.status,

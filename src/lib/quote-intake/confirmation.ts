@@ -523,10 +523,13 @@ export async function confirmSupplierQuote(
       if (
         input.billingDocumentId &&
         input.billingAllocationBasis &&
-        input.billingAllocatedAmount
+        (input.billingAllocatedAmount ||
+          input.billingPercentageRate !== undefined)
       )
         await updateOrderBillingLinkInTransaction(transaction, actorId, {
-          allocatedAmount: input.billingAllocatedAmount,
+          ...(input.billingAllocatedAmount
+            ? { allocatedAmount: input.billingAllocatedAmount }
+            : {}),
           basis: input.billingAllocationBasis,
           billingDocumentId: input.billingDocumentId,
           isProjectRemainderApproved: input.billingRemainderApproved,

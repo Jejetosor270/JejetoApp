@@ -5,6 +5,9 @@ import {
   allocationReconciliation,
   amountFromPercentage,
   calculateClientBillingAmounts,
+  fractionFromAmount,
+  orderBillingCoverage,
+  orderSellingBasisInBillingCurrency,
   percentageFromAmount,
   orderBillingDifference,
   scheduleReconciliation,
@@ -71,6 +74,56 @@ describe("client billing calculations", () => {
       allocated: "90000.0000",
       overallocated: "0.0000",
       remaining: "10000.0000",
+    });
+  });
+
+  it("derives contextual allocation rates from one authoritative amount", () => {
+    expect(fractionFromAmount("200000", "40000")).toBe("0.2");
+    expect(fractionFromAmount("80000", "40000")).toBe("0.5");
+    expect(percentageFromAmount("80000", "60000")).toBe("75");
+  });
+
+  it("converts the authoritative Order Sell HT into Billing currency", () => {
+    expect(
+      orderSellingBasisInBillingCurrency({
+        billingCurrencyCode: "EUR",
+        billingFxRateToReporting: null,
+        orderSellingReporting: "80000",
+        reportingCurrencyCode: "EUR",
+      }),
+    ).toBe("80000.0000");
+    expect(
+      orderSellingBasisInBillingCurrency({
+        billingCurrencyCode: "USD",
+        billingFxRateToReporting: "0.8",
+        orderSellingReporting: "80000",
+        reportingCurrencyCode: "EUR",
+      }),
+    ).toBe("100000.0000");
+    expect(
+      orderSellingBasisInBillingCurrency({
+        billingCurrencyCode: "USD",
+        billingFxRateToReporting: null,
+        orderSellingReporting: "80000",
+        reportingCurrencyCode: "EUR",
+      }),
+    ).toBeNull();
+  });
+
+  it("summarizes Order coverage across multiple Billing Events", () => {
+    expect(orderBillingCoverage("100000", "80000")).toEqual({
+      allocated: "80000.0000",
+      coverageRate: "0.8",
+      overallocated: "0.0000",
+      remaining: "20000.0000",
+      remainingRate: "0.2",
+    });
+    expect(orderBillingCoverage("100000", "120000")).toEqual({
+      allocated: "120000.0000",
+      coverageRate: "1.2",
+      overallocated: "20000.0000",
+      remaining: "0.0000",
+      remainingRate: "0",
     });
   });
 

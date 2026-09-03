@@ -11,6 +11,7 @@ import {
   ActionFeedback,
   Field,
   inputClassName,
+  PercentageInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
@@ -113,9 +114,8 @@ function initialDraft(document: ClientBillingView): BillingDraft {
       amount: item.allocatedAmount,
       basis: item.basis,
       orderId: item.orderId,
-      percentage: item.percentageRate
-        ? new Decimal(item.percentageRate).times(100).toString()
-        : (percentageFromAmount(document.totalHt, item.allocatedAmount) ?? ""),
+      percentage:
+        percentageFromAmount(document.totalHt, item.allocatedAmount) ?? "",
     })),
     clientId: document.clientId,
     currencyCode: document.currencyCode,
@@ -463,18 +463,24 @@ export function BillingDetail({
                   </select>
                 </Field>
                 <Field error={fieldErrors.vatRate} label="VAT rate (%)">
-                  <input
+                  <PercentageInput
                     className={inputClassName}
-                    inputMode="decimal"
-                    name="vatRate"
-                    onChange={(event) => {
-                      const vatRate = event.target.value;
+                    onValueChange={(vatRate) => {
                       const vatAmount =
                         amountFromPercentage(draft.totalHt, vatRate) ??
                         draft.vatAmount;
                       updateFinancialTotals({ vatAmount, vatRate });
                     }}
                     value={draft.vatRate}
+                  />
+                  <input
+                    name="vatRate"
+                    type="hidden"
+                    value={
+                      humanPercentageToFraction(draft.vatRate, {
+                        maximumPercent: "100",
+                      }) ?? draft.vatRate
+                    }
                   />
                 </Field>
                 <Field
@@ -620,14 +626,12 @@ export function BillingDetail({
                     </Field>
                     <Field
                       error={fieldErrors[`allocations.${index}.percentageRate`]}
-                      label="Allocation %"
+                      label="% of Billing"
                     >
-                      <input
+                      <PercentageInput
                         className={inputClassName}
                         disabled={allocation.basis !== "PERCENTAGE"}
-                        inputMode="decimal"
-                        onChange={(event) => {
-                          const percentage = event.target.value;
+                        onValueChange={(percentage) => {
                           const amount =
                             amountFromPercentage(draft.totalHt, percentage) ??
                             "";
@@ -889,7 +893,7 @@ export function BillingDetail({
                       <th className="py-2">Order</th>
                       <th>Supplier</th>
                       <th className="text-right">Allocated HT</th>
-                      <th className="text-right">Allocation</th>
+                      <th className="text-right">% of Billing</th>
                       <th className="text-right">Planned Sell HT</th>
                       <th className="text-right">Effective markup</th>
                     </tr>
@@ -917,12 +921,10 @@ export function BillingDetail({
                           <td className="financial-figure text-right">
                             {formatRate(
                               humanPercentageToFraction(
-                                allocation.percentage ||
-                                  percentageFromAmount(
-                                    saved.totalHt,
-                                    allocation.amount,
-                                  ) ||
-                                  "",
+                                percentageFromAmount(
+                                  saved.totalHt,
+                                  allocation.amount,
+                                ) ?? "",
                                 { maximumPercent: "100" },
                               ),
                             )}

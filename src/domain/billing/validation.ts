@@ -296,21 +296,30 @@ export const orderBillingLinkSchema = z
   })
   .superRefine((value, context) => {
     if (value.remove) return;
-    if (!value.basis || !value.allocatedAmount) {
+    if (!value.basis) {
       context.addIssue({
         code: "custom",
-        message: "Choose an allocation basis and enter an amount.",
-        path: ["allocatedAmount"],
+        message: "Choose an allocation basis.",
+        path: ["basis"],
       });
       return;
     }
     if (
-      (value.basis === ClientBillingAllocationBasis.PERCENTAGE) !==
-      Boolean(value.percentageRate)
+      value.basis === ClientBillingAllocationBasis.FIXED_AMOUNT &&
+      !value.allocatedAmount
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Enter an allocation amount.",
+        path: ["allocatedAmount"],
+      });
+    if (
+      value.basis === ClientBillingAllocationBasis.PERCENTAGE &&
+      value.percentageRate === undefined
     ) {
       context.addIssue({
         code: "custom",
-        message: "Percentage allocations require a rate.",
+        message: "Enter a percentage between 0 and 100.",
         path: ["percentageRate"],
       });
     }
@@ -318,7 +327,7 @@ export const orderBillingLinkSchema = z
 
 export const orderCreationBillingLinkSchema = z
   .object({
-    allocatedAmount: money,
+    allocatedAmount: money.optional(),
     basis: z.enum(ClientBillingAllocationBasis),
     billingDocumentId: requiredUuid("Select a valid billing document."),
     isProjectRemainderApproved: z.boolean(),
@@ -326,13 +335,22 @@ export const orderCreationBillingLinkSchema = z
   })
   .superRefine((value, context) => {
     if (
-      (value.basis === ClientBillingAllocationBasis.PERCENTAGE) !==
-      Boolean(value.percentageRate)
+      value.basis === ClientBillingAllocationBasis.PERCENTAGE &&
+      value.percentageRate === undefined
     )
       context.addIssue({
         code: "custom",
-        message: "Percentage allocations require a rate.",
+        message: "Enter a percentage between 0 and 100.",
         path: ["percentageRate"],
+      });
+    if (
+      value.basis === ClientBillingAllocationBasis.FIXED_AMOUNT &&
+      !value.allocatedAmount
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Enter an allocation amount.",
+        path: ["allocatedAmount"],
       });
   });
 

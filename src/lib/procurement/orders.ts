@@ -1055,8 +1055,10 @@ export async function listOrderOptions() {
         where: { isCancelled: false },
         orderBy: [{ documentDate: "desc" }, { reference: "asc" }],
         select: {
+          allocations: { select: { allocatedAmount: true } },
           currencyCode: true,
           documentType: true,
+          fxRateToReporting: true,
           id: true,
           isProjectRemainderApproved: true,
           projectId: true,
@@ -1099,7 +1101,19 @@ export async function listOrderOptions() {
   );
   return {
     billingDocuments: billingDocuments.map((document) => ({
-      ...document,
+      allocatedHt: document.allocations
+        .reduce(
+          (total, allocation) => total.plus(allocation.allocatedAmount),
+          new Decimal(0),
+        )
+        .toFixed(4),
+      currencyCode: document.currencyCode,
+      documentType: document.documentType,
+      fxRateToReporting: document.fxRateToReporting?.toString() ?? null,
+      id: document.id,
+      isProjectRemainderApproved: document.isProjectRemainderApproved,
+      projectId: document.projectId,
+      reference: document.reference,
       totalHt: document.totalHt.toString(),
     })),
     currencies,

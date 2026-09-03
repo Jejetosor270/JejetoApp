@@ -129,6 +129,61 @@ export function percentageFromAmount(
   }
 }
 
+export function fractionFromAmount(
+  baseAmount: string,
+  amount: string,
+): string | null {
+  try {
+    const base = new Decimal(baseAmount);
+    const value = new Decimal(amount);
+    if (!base.isFinite() || !value.isFinite() || base.isZero()) return null;
+    return value.dividedBy(base).toString();
+  } catch {
+    return null;
+  }
+}
+
+export function orderSellingBasisInBillingCurrency(input: {
+  billingCurrencyCode: string;
+  billingFxRateToReporting: string | null;
+  orderSellingReporting: string | null;
+  reportingCurrencyCode: string;
+}): string | null {
+  if (input.orderSellingReporting === null) return null;
+  const selling = new Decimal(input.orderSellingReporting);
+  if (input.billingCurrencyCode === input.reportingCurrencyCode)
+    return selling.toFixed(4);
+  if (input.billingFxRateToReporting === null) return null;
+  const rate = new Decimal(input.billingFxRateToReporting);
+  if (!rate.isPositive()) return null;
+  return selling
+    .dividedBy(rate)
+    .toDecimalPlaces(4, Decimal.ROUND_HALF_UP)
+    .toFixed(4);
+}
+
+export function orderBillingCoverage(
+  orderSellingHt: string | null,
+  allocatedHt: string | null,
+) {
+  if (orderSellingHt === null || allocatedHt === null) return null;
+  const selling = new Decimal(orderSellingHt);
+  const allocated = new Decimal(allocatedHt);
+  const remaining = Decimal.max(selling.minus(allocated), 0);
+  const overallocated = Decimal.max(allocated.minus(selling), 0);
+  return {
+    allocated: allocated.toFixed(4),
+    coverageRate: selling.isZero()
+      ? null
+      : allocated.dividedBy(selling).toString(),
+    overallocated: overallocated.toFixed(4),
+    remaining: remaining.toFixed(4),
+    remainingRate: selling.isZero()
+      ? null
+      : remaining.dividedBy(selling).toString(),
+  };
+}
+
 export function addAllocationAmount(amount: string, additional: string) {
   try {
     const first = normalizeDecimalInput(amount, {

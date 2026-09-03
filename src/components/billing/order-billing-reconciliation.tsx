@@ -11,12 +11,15 @@ import {
   ActionFeedback,
   Field,
   inputClassName,
+  PercentageInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
 import type { BillingActionState } from "@/domain/billing/action-state";
 import {
   amountFromPercentage,
+  fractionFromAmount,
+  orderBillingCoverage,
   percentageFromAmount,
 } from "@/domain/billing/calculations";
 import { formatDateOnly } from "@/domain/payments/dates";
@@ -24,6 +27,8 @@ import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
 
 interface BillingLinkDocument {
+  allocatedToOtherOrdersHt: string;
+  availableForOrderHt: string;
   allocation: {
     allocatedAmount: string;
     basis: "PERCENTAGE" | "FIXED_AMOUNT";
@@ -35,6 +40,7 @@ interface BillingLinkDocument {
   id: string;
   isCancelled: boolean;
   isProjectRemainderApproved: boolean;
+  orderSellingBasisHt: string | null;
   projectRemainder: string;
   reference: string;
   status: string;
@@ -58,12 +64,10 @@ function BillingLinkForm({
     document.allocation?.allocatedAmount ?? "",
   );
   const [percentage, setPercentage] = useState(
-    document.allocation?.percentageRate
-      ? new Decimal(document.allocation.percentageRate).times(100).toString()
-      : (percentageFromAmount(
-          document.totalHt,
-          document.allocation?.allocatedAmount ?? "",
-        ) ?? ""),
+    percentageFromAmount(
+      document.orderSellingBasisHt ?? "",
+      document.allocation?.allocatedAmount ?? "",
+    ) ?? "",
   );
   const [approveRemainder, setApproveRemainder] = useState(
     document.isProjectRemainderApproved,
@@ -107,15 +111,16 @@ function BillingLinkForm({
           <option value="PERCENTAGE">Percentage</option>
         </select>
       </Field>
-      <Field error={state.fieldErrors?.percentageRate} label="Allocation %">
-        <input
+      <Field error={state.fieldErrors?.percentageRate} label="% of Order">
+        <PercentageInput
           className={inputClassName}
           disabled={basis !== "PERCENTAGE"}
-          inputMode="decimal"
-          onChange={(event) => {
-            const next = event.target.value;
+          onValueChange={(next) => {
             setPercentage(next);
-            setAmount(amountFromPercentage(document.totalHt, next) ?? "");
+            setAmount(
+              amountFromPercentage(document.orderSellingBasisHt ?? "", next) ??
+                "",
+            );
           }}
           value={percentage}
         />
@@ -131,7 +136,10 @@ function BillingLinkForm({
           onChange={(event) => {
             const next = event.target.value;
             setAmount(next);
-            setPercentage(percentageFromAmount(document.totalHt, next) ?? "");
+            setPercentage(
+              percentageFromAmount(document.orderSellingBasisHt ?? "", next) ??
+                "",
+            );
           }}
           value={amount}
         />
@@ -140,6 +148,41 @@ function BillingLinkForm({
         <SubmitButton pending={pending}>
           {document.allocation ? "Save allocation" : "Link Billing"}
         </SubmitButton>
+      </div>
+      <div className="bg-muted/30 grid gap-2 rounded-md border p-3 text-xs sm:grid-cols-4 lg:col-span-4">
+        <p>
+          Order Sell HT:{" "}
+          {formatMoney(document.orderSellingBasisHt, document.currencyCode)}
+        </p>
+        <p>
+          Billing HT: {formatMoney(document.totalHt, document.currencyCode)}
+        </p>
+        <p>
+          Allocated to other Orders:{" "}
+          {formatMoney(
+            document.allocatedToOtherOrdersHt,
+            document.currencyCode,
+          )}
+        </p>
+        <p>
+          Available for this Order:{" "}
+          {formatMoney(document.availableForOrderHt, document.currencyCode)}
+          {document.orderSellingBasisHt ? (
+            <span className="text-muted-foreground block">
+              Maximum now{" "}
+              {formatRate(
+                fractionFromAmount(
+                  document.orderSellingBasisHt,
+                  Decimal.min(
+                    document.availableForOrderHt,
+                    document.orderSellingBasisHt,
+                  ).toString(),
+                ),
+              )}{" "}
+              of Order
+            </span>
+          ) : null}
+        </p>
       </div>
       <label className="flex items-center gap-2 text-xs lg:col-span-3">
         <input
@@ -222,6 +265,7 @@ export function OrderBillingReconciliation({
     (document) => !document.allocation && !document.isCancelled,
   );
   const selected = available.find((document) => document.id === selectedId);
+  const coverage = orderBillingCoverage(plannedSell, invoicedAllocated);
   return (
     <section className="bg-card rounded-lg border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -232,9 +276,9 @@ export function OrderBillingReconciliation({
             records.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-right text-xs sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-right text-xs sm:grid-cols-3 xl:grid-cols-6">
           <p>
-            Planned Sell{" "}
+            Order Sell HT{" "}
             <span className="financial-figure block font-medium">
               {formatMoney(plannedSell, reportingCurrencyCode)}
             </span>
@@ -246,19 +290,39 @@ export function OrderBillingReconciliation({
             </span>
           </p>
           <p>
-            Invoiced{" "}
+            Allocated / invoiced HT{" "}
             <span className="financial-figure block font-medium">
               {formatMoney(invoicedAllocated, reportingCurrencyCode)}
             </span>
           </p>
           <p>
-            {difference?.state === "OVERBILLED" ? "Overbilled" : "Unbilled"}{" "}
+            % of Order invoiced{" "}
+            <span className="financial-figure block font-medium">
+              {formatRate(coverage?.coverageRate ?? null)}
+            </span>
+          </p>
+          <p>
+            {difference?.state === "OVERBILLED"
+              ? "Overbilled HT"
+              : "Unbilled HT"}{" "}
             <span className="financial-figure block font-medium">
               {formatMoney(difference?.amount ?? null, reportingCurrencyCode)}
             </span>
           </p>
+          <p>
+            Remaining %{" "}
+            <span className="financial-figure block font-medium">
+              {formatRate(coverage?.remainingRate ?? null)}
+            </span>
+          </p>
         </div>
       </div>
+      {coverage && new Decimal(coverage.overallocated).greaterThan(0) ? (
+        <p className="text-destructive mt-3 text-xs" role="status">
+          Overbilled / overallocated by{" "}
+          {formatMoney(coverage.overallocated, reportingCurrencyCode)}.
+        </p>
+      ) : null}
       <div className="mt-4 space-y-3">
         {linked.map((document) => (
           <article className="rounded-md border p-3" key={document.id}>
@@ -283,14 +347,14 @@ export function OrderBillingReconciliation({
                 )}
               </p>
               <p className="financial-figure text-right">
+                <span className="text-muted-foreground block text-[0.6875rem]">
+                  % of Order
+                </span>
                 {document.allocation
                   ? formatRate(
-                      humanPercentageToFraction(
-                        percentageFromAmount(
-                          document.totalHt,
-                          document.allocation.allocatedAmount,
-                        ) ?? "",
-                        { maximumPercent: "100" },
+                      fractionFromAmount(
+                        document.orderSellingBasisHt ?? "",
+                        document.allocation.allocatedAmount,
                       ),
                     )
                   : "—"}

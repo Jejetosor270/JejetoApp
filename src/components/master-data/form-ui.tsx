@@ -7,6 +7,7 @@ import type { MasterDataActionState } from "@/components/master-data/action-stat
 import { Button } from "@/components/ui/button";
 import {
   formatMoneyInput,
+  formatPercentageInput,
   normalizeMoneyInput,
 } from "@/domain/procurement/presentation";
 
@@ -103,6 +104,71 @@ export function MoneyInput({
         type="hidden"
         value={normalizedValue === null ? submittedValue : normalizedValue}
       />
+    </>
+  );
+}
+
+export function PercentageInput({
+  ariaLabel,
+  className = inputClassName,
+  defaultValue = "",
+  disabled = false,
+  invalid = false,
+  name,
+  onValueChange,
+  placeholder = "0",
+  required = false,
+  value,
+}: {
+  ariaLabel?: string | undefined;
+  className?: string | undefined;
+  defaultValue?: string | null | undefined;
+  disabled?: boolean | undefined;
+  invalid?: boolean | undefined;
+  name?: string | undefined;
+  onValueChange?: ((value: string) => void) | undefined;
+  placeholder?: string | undefined;
+  required?: boolean | undefined;
+  value?: string | undefined;
+}) {
+  const [internalValue, setInternalValue] = useState(defaultValue ?? "");
+  const [focused, setFocused] = useState(false);
+  const rawValue = value ?? internalValue;
+  const [draftValue, setDraftValue] = useState(rawValue);
+  const submittedValue = focused ? draftValue : rawValue;
+  const setValue = (nextValue: string) => {
+    if (value === undefined) setInternalValue(nextValue);
+    onValueChange?.(nextValue);
+  };
+  return (
+    <>
+      <input
+        aria-label={ariaLabel}
+        aria-invalid={invalid || undefined}
+        className={`${className}${invalid ? "border-destructive focus-visible:border-destructive" : ""}`}
+        disabled={disabled}
+        inputMode="decimal"
+        onBlur={() => setFocused(false)}
+        onChange={(event) => {
+          setDraftValue(event.target.value);
+          setValue(event.target.value);
+        }}
+        onFocus={() => {
+          setDraftValue(rawValue);
+          setFocused(true);
+        }}
+        placeholder={placeholder}
+        required={required}
+        value={focused ? draftValue : formatPercentageInput(rawValue)}
+      />
+      {name ? (
+        <input
+          disabled={disabled}
+          name={name}
+          type="hidden"
+          value={submittedValue}
+        />
+      ) : null}
     </>
   );
 }

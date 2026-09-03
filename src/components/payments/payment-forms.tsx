@@ -16,6 +16,7 @@ import {
   Field,
   inputClassName,
   MoneyInput,
+  PercentageInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
@@ -136,11 +137,9 @@ export function InstallmentForm({
         />
       </Field>
       <Field error={fieldErrors.percentageRate} label="Installment %" required>
-        <input
+        <PercentageInput
           className={inputClassName}
-          inputMode="decimal"
-          onChange={(event) => {
-            const next = event.target.value;
+          onValueChange={(next) => {
             setBasis("PERCENTAGE");
             setPercentage(next);
             const derived = amountFromPercentage(baseAmount, next);

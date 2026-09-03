@@ -1,5 +1,7 @@
 import "server-only";
 
+import Decimal from "decimal.js";
+
 import {
   FreightTreatment,
   VatRecoverability,
@@ -15,8 +17,10 @@ export async function listQuoteIntakeOptions() {
         where: { isCancelled: false },
         orderBy: [{ documentDate: "desc" }, { reference: "asc" }],
         select: {
+          allocations: { select: { allocatedAmount: true } },
           currencyCode: true,
           documentType: true,
+          fxRateToReporting: true,
           id: true,
           isProjectRemainderApproved: true,
           projectId: true,
@@ -41,6 +45,9 @@ export async function listQuoteIntakeOptions() {
               shortCode: true,
             },
           },
+          defaultFreightMarkupRate: true,
+          defaultOtherCostMarkupRate: true,
+          defaultProductMarkupRate: true,
           id: true,
           name: true,
           reportingCurrencyCode: true,
@@ -60,12 +67,29 @@ export async function listQuoteIntakeOptions() {
   );
   return {
     billingDocuments: billingDocuments.map((document) => ({
-      ...document,
+      allocatedHt: document.allocations
+        .reduce(
+          (total, allocation) => total.plus(allocation.allocatedAmount),
+          new Decimal(0),
+        )
+        .toFixed(4),
+      currencyCode: document.currencyCode,
+      documentType: document.documentType,
+      fxRateToReporting: document.fxRateToReporting?.toString() ?? null,
+      id: document.id,
+      isProjectRemainderApproved: document.isProjectRemainderApproved,
+      projectId: document.projectId,
+      reference: document.reference,
       totalHt: document.totalHt.toString(),
     })),
     currencies,
     freightTreatments: Object.values(FreightTreatment),
-    projects,
+    projects: projects.map((project) => ({
+      ...project,
+      defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
+      defaultOtherCostMarkupRate: project.defaultOtherCostMarkupRate.toString(),
+      defaultProductMarkupRate: project.defaultProductMarkupRate.toString(),
+    })),
     suppliers,
     vatRecoverabilities: Object.values(VatRecoverability),
     vatTreatments: Object.values(VatTreatment),

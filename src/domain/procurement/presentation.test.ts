@@ -5,6 +5,8 @@ import {
   formatFxRate,
   formatMoney,
   formatMoneyInput,
+  formatPercentage,
+  formatPercentageInput,
   formatQuantity,
   formatRate,
   finalizeMoneyInput,
@@ -42,5 +44,19 @@ describe("procurement money presentation", () => {
     expect(formatRate("0.155")).toBe("15.5%");
     expect(formatRate("1")).toBe("100%");
     expect(formatFxRate("1.0847250000")).toBe("1.084725");
+  });
+
+  it("formats all human-facing percentages to at most two decimal places", () => {
+    expect(formatPercentage("0")).toBe("0%");
+    expect(formatPercentage("0.001")).toBe("0.1%");
+    expect(formatPercentage("0.15")).toBe("15%");
+    expect(formatPercentage("0.155")).toBe("15.5%");
+    expect(formatPercentage("0.15555")).toBe("15.56%");
+    expect(formatPercentage("0.333333")).toBe("33.33%");
+    expect(formatPercentage("0.99999")).toBe("100%");
+    expect(formatPercentage("1")).toBe("100%");
+    expect(formatPercentage("0.33335")).toBe("33.34%");
+    expect(formatPercentageInput("33.335")).toBe("33.34");
+    expect(formatPercentageInput("15,5000% ")).toBe("15.5");
   });
 });

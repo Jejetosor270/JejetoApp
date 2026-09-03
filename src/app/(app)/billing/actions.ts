@@ -370,6 +370,13 @@ export async function updateOrderBillingLinkAction(
       status: "success",
     };
   } catch (error) {
+    if (error instanceof ClientBillingValidationError)
+      return {
+        fieldErrors: { allocatedAmount: error.message },
+        formError: error.message,
+        message: error.message,
+        status: "error",
+      };
     const expected = expectedBillingError(error);
     if (expected) return expected;
     console.error("Unable to update the Order Billing link.", error);

@@ -13,6 +13,7 @@ import {
   Field,
   inputClassName,
   MoneyInput,
+  PercentageInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
@@ -141,9 +142,8 @@ export function ProjectFreightExpenses({
             error={fieldErrors.freightMarkupOverrideRate}
             label="Freight markup override %"
           >
-            <input
+            <PercentageInput
               className={inputClassName}
-              inputMode="decimal"
               name="freightMarkupOverrideRate"
               placeholder="Blank uses Project default"
             />

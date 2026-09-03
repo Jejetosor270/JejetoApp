@@ -1,8 +1,9 @@
 "use client";
 
-import type { ChangeEventHandler, ReactNode } from "react";
+import { useState, type ChangeEventHandler, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { formatPercentageInput } from "@/domain/procurement/presentation";
 
 export const inlineControlClassName =
   "border-input bg-background h-8 min-w-20 rounded border px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60";
@@ -47,11 +48,18 @@ export function InlineMoneyInput(props: InputProps) {
 }
 
 export function InlinePercentInput(props: InputProps) {
+  const [focused, setFocused] = useState(false);
   return (
     <span className="inline-flex items-center gap-1">
-      <InlineMoneyInput
-        {...props}
-        className={`w-20 ${props.className ?? ""}`}
+      <input
+        aria-label={props.ariaLabel}
+        className={`${inlineControlClassName} w-20 text-right tabular-nums ${props.className ?? ""}`}
+        disabled={props.disabled}
+        inputMode="decimal"
+        onBlur={() => setFocused(false)}
+        onChange={(event) => props.onChange(event.target.value)}
+        onFocus={() => setFocused(true)}
+        value={focused ? props.value : formatPercentageInput(props.value)}
       />
       <span aria-hidden="true">%</span>
     </span>

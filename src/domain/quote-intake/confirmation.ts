@@ -211,15 +211,24 @@ const confirmationSchema = z
   .strict()
   .superRefine((value, context) => {
     if (value.billingDocumentId) {
-      if (!value.billingAllocationBasis || !value.billingAllocatedAmount)
+      if (!value.billingAllocationBasis)
         context.addIssue({
           code: "custom",
-          message: "Enter the approved Client Billing allocation.",
+          message: "Choose an allocation basis.",
+          path: ["billingAllocationBasis"],
+        });
+      if (
+        value.billingAllocationBasis === "FIXED_AMOUNT" &&
+        !value.billingAllocatedAmount
+      )
+        context.addIssue({
+          code: "custom",
+          message: "Enter the approved Client Billing allocation amount.",
           path: ["billingAllocatedAmount"],
         });
       if (
         value.billingAllocationBasis === "PERCENTAGE" &&
-        !value.billingPercentageRate
+        value.billingPercentageRate === undefined
       )
         context.addIssue({
           code: "custom",
