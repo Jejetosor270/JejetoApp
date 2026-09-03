@@ -91,6 +91,7 @@ export function BillingInstallmentEditor({
 }) {
   const router = useRouter();
   const [deleting, startDeleting] = useTransition();
+  const [deleteMessage, setDeleteMessage] = useState("");
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(() => installmentDraft(installment));
   const [draft, setDraft] = useState(() => installmentDraft(installment));
@@ -120,7 +121,8 @@ export function BillingInstallmentEditor({
     setSaved(next);
     setDraft(next);
     setEditing(false);
-  }, [state]);
+    router.refresh();
+  }, [router, state]);
 
   const received = installment.receipts.reduce(
     (total, receipt) => total.plus(receipt.amount),
@@ -285,6 +287,7 @@ export function BillingInstallmentEditor({
                 <div className="mt-2 flex justify-end gap-1">
                   <Button
                     onClick={() => {
+                      setDeleteMessage("");
                       setDraft(saved);
                       setEditing(true);
                     }}
@@ -297,7 +300,6 @@ export function BillingInstallmentEditor({
                   <Button
                     disabled={
                       deleting ||
-                      installment.receipts.length > 0 ||
                       installment.billingDocumentId !== billingDocumentId
                     }
                     onClick={() => {
@@ -309,6 +311,9 @@ export function BillingInstallmentEditor({
                       startDeleting(async () => {
                         const result =
                           await deleteClientBillingInstallmentAction(data);
+                        setDeleteMessage(
+                          result.status === "success" ? "" : result.message,
+                        );
                         if (result.status === "success") router.refresh();
                       });
                     }}
@@ -323,27 +328,12 @@ export function BillingInstallmentEditor({
             </div>
           </div>
           <div className="mt-3 space-y-1 border-t pt-2 text-xs">
-            {installment.receipts.map((receipt) => (
-              <p className="flex justify-between gap-2" key={receipt.id}>
-                <span>
-                  {formatDateOnly(receipt.receivedAt)} ·{" "}
-                  {receipt.reference ?? "Receipt"}
-                </span>
-                <span className="financial-figure">
-                  {formatMoney(receipt.amount, installment.currencyCode)}
-                </span>
-              </p>
-            ))}
-            {installment.receipts.length === 0 ? (
-              <p className="text-muted-foreground">No receipts recorded.</p>
-            ) : (
-              <p className="flex justify-between gap-2 border-t pt-1 font-medium">
-                <span>Received</span>
-                <span className="financial-figure">
-                  {formatMoney(received.toString(), installment.currencyCode)}
-                </span>
-              </p>
-            )}
+            <p className="flex justify-between gap-2 font-medium">
+              <span>Received</span>
+              <span className="financial-figure">
+                {formatMoney(received.toString(), installment.currencyCode)}
+              </span>
+            </p>
             <p className="flex justify-between gap-2 border-t pt-1">
               <span>Remaining</span>
               <span className="financial-figure">
@@ -353,6 +343,11 @@ export function BillingInstallmentEditor({
             <p className="text-muted-foreground text-right">
               {status.replaceAll("_", " ")}
             </p>
+            {deleteMessage ? (
+              <p className="text-destructive text-right" role="alert">
+                {deleteMessage}
+              </p>
+            ) : null}
           </div>
         </>
       )}

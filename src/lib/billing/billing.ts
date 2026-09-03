@@ -23,7 +23,9 @@ import type {
   ClientBillingInstallmentDeleteInput,
   ClientBillingInstallmentUpdateInput,
   ClientBillingConfirmation,
+  ClientReceiptDeleteInput,
   ClientReceiptInput,
+  ClientReceiptUpdateInput,
   InlineClientBillingInput,
   OrderBillingLinkInput,
 } from "@/domain/billing/validation";
@@ -697,6 +699,177 @@ export async function recordClientReceipt(
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
+}
+
+export async function updateClientReceipt(
+  actorId: string,
+  input: ClientReceiptUpdateInput,
+) {
+  return getDatabase().$transaction(
+    async (transaction) => {
+      const current = await transaction.clientReceipt.findUnique({
+        where: { id: input.id },
+        select: {
+          billingDocumentId: true,
+        },
+      });
+      if (!current) throw new ClientBillingNotFoundError();
+      if (current.billingDocumentId !== input.billingDocumentId)
+        throw new ClientBillingValidationError(
+          "This receipt belongs to another Billing Event.",
+        );
+
+      const document = await transaction.clientBillingDocument.findUnique({
+        where: { id: input.billingDocumentId },
+        include: {
+          matchedInstallment: {
+            include: { receipts: { select: { amount: true, id: true } } },
+          },
+          project: { select: { reportingCurrencyCode: true } },
+          receipts: { select: { amount: true, id: true } },
+        },
+      });
+      if (!document) throw new ClientBillingNotFoundError();
+
+      const installment = input.installmentId
+        ? await transaction.clientPaymentInstallment.findUnique({
+            where: { id: input.installmentId },
+            include: {
+              receipts: { select: { amount: true, id: true } },
+            },
+          })
+        : null;
+      if (input.installmentId && !installment)
+        throw new ClientBillingNotFoundError();
+      if (
+        installment &&
+        installment.billingDocumentId !== input.billingDocumentId
+      )
+        throw new ClientBillingValidationError(
+          "The selected installment belongs to another Billing Event.",
+        );
+
+      const paidWithoutCurrent = [
+        ...document.receipts,
+        ...(document.matchedInstallment?.receipts ?? []),
+      ].reduce(
+        (sum, receipt) =>
+          receipt.id === input.id ? sum : sum.plus(receipt.amount),
+        new Decimal(0),
+      );
+      if (paidWithoutCurrent.plus(input.amount).greaterThan(document.totalTtc))
+        throw new ClientBillingValidationError(
+          "The receipt would exceed the Billing Event outstanding balance.",
+        );
+
+      if (installment) {
+        const installmentPaidWithoutCurrent = installment.receipts.reduce(
+          (sum, receipt) =>
+            receipt.id === input.id ? sum : sum.plus(receipt.amount),
+          new Decimal(0),
+        );
+        if (
+          installmentPaidWithoutCurrent
+            .plus(input.amount)
+            .greaterThan(installment.scheduledAmount)
+        )
+          throw new ClientBillingValidationError(
+            "The receipt would exceed the selected installment balance. Record it at Billing level instead.",
+          );
+      }
+      if (
+        document.currencyCode !== document.project.reportingCurrencyCode &&
+        !input.fxRate
+      )
+        throw new ClientBillingValidationError(
+          "Enter the actual receipt FX rate to Project reporting currency.",
+        );
+
+      const receipt = await transaction.clientReceipt.update({
+        where: { id: input.id },
+        data: {
+          amount: input.amount,
+          fxRateToReporting:
+            document.currencyCode === document.project.reportingCurrencyCode
+              ? null
+              : (input.fxRate ?? null),
+          installmentId: input.installmentId ?? null,
+          notes: input.notes ?? null,
+          receivedAt: dateOnlyToDate(input.receivedAt),
+          reference: input.reference ?? null,
+          updatedById: actorId,
+        },
+        select: {
+          amount: true,
+          fxRateToReporting: true,
+          installmentId: true,
+          notes: true,
+          receivedAt: true,
+          reference: true,
+        },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: input.id,
+        entityReference: `${document.reference} · receipt`,
+        entityType: "CLIENT_RECEIPT",
+        metadata: {
+          billingDocumentId: input.billingDocumentId,
+          changedFields: [
+            "amount",
+            "receivedAt",
+            "reference",
+            "fxRateToReporting",
+            "notes",
+            "installmentId",
+          ],
+        },
+        summary: "Updated an actual Client receipt.",
+      });
+      return {
+        amount: receipt.amount.toString(),
+        fxRate: receipt.fxRateToReporting?.toString() ?? "",
+        installmentId: receipt.installmentId ?? "",
+        notes: receipt.notes ?? "",
+        receivedAt: dateToDateOnly(receipt.receivedAt),
+        reference: receipt.reference ?? "",
+      };
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
+export async function deleteClientReceipt(
+  actorId: string,
+  input: ClientReceiptDeleteInput,
+): Promise<void> {
+  await getDatabase().$transaction(async (transaction) => {
+    const receipt = await transaction.clientReceipt.findUnique({
+      where: { id: input.id },
+      include: {
+        billingDocument: { select: { reference: true } },
+      },
+    });
+    if (!receipt) throw new ClientBillingNotFoundError();
+    if (receipt.billingDocumentId !== input.billingDocumentId)
+      throw new ClientBillingValidationError(
+        "This receipt belongs to another Billing Event.",
+      );
+    await transaction.clientReceipt.delete({ where: { id: receipt.id } });
+    await writeAuditEvent(transaction, actorId, {
+      action: "DELETED",
+      entityId: receipt.id,
+      entityReference: `${receipt.billingDocument.reference} · receipt`,
+      entityType: "CLIENT_RECEIPT",
+      metadata: {
+        amount: receipt.amount.toString(),
+        billingDocumentId: receipt.billingDocumentId,
+        installmentId: receipt.installmentId,
+        receivedAt: dateToDateOnly(receipt.receivedAt),
+      },
+      summary: "Removed an actual Client receipt.",
+    });
+  });
 }
 
 export async function updateClientBillingInline(

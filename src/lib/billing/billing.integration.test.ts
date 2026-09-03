@@ -30,7 +30,12 @@ const transaction = vi.hoisted(() => ({
     findUnique: vi.fn(),
     update: vi.fn(),
   },
-  clientReceipt: { create: vi.fn() },
+  clientReceipt: {
+    create: vi.fn(),
+    delete: vi.fn(),
+    findUnique: vi.fn(),
+    update: vi.fn(),
+  },
   currency: { findFirst: vi.fn() },
   procurementOrder: { count: vi.fn() },
   project: { findFirst: vi.fn() },
@@ -62,12 +67,14 @@ import {
   confirmClientBillingDocument,
   createClientBillingInstallment,
   deleteClientBillingInstallment,
+  deleteClientReceipt,
   getProjectsClientBillingSummaries,
   recordClientReceipt,
   updateClientBillingAllocations,
   updateClientBillingDocument,
   updateClientBillingInstallment,
   updateClientBillingInline,
+  updateClientReceipt,
   updateOrderBillingLink,
 } from "./billing";
 
@@ -194,7 +201,7 @@ describe("Client billing persistence", () => {
         installments: [
           {
             dueDate: "2026-09-02",
-            receiptAmounts: ["84363.86"],
+            receiptAmounts: ["30000", "20000", "34363.86"],
             scheduledAmount: "84363.86",
           },
         ],
@@ -565,6 +572,85 @@ describe("Client billing persistence", () => {
     );
   });
 
+  it("updates a receipt in place without creating a duplicate", async () => {
+    const receiptId = "f12b6b9b-10e9-4e42-b93f-38796de4f65a";
+    transaction.clientReceipt.findUnique.mockResolvedValue({
+      billingDocumentId: projectId,
+      installmentId,
+    });
+    transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      currencyCode: "EUR",
+      matchedInstallment: null,
+      project: { reportingCurrencyCode: "EUR" },
+      receipts: [{ amount: new Decimal("30000"), id: receiptId }],
+      reference: "INV-1",
+      totalTtc: new Decimal("100000"),
+    });
+    transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
+      billingDocumentId: projectId,
+      receipts: [{ amount: new Decimal("30000"), id: receiptId }],
+      scheduledAmount: new Decimal("100000"),
+    });
+    transaction.clientReceipt.update.mockResolvedValue({
+      amount: new Decimal("40000"),
+      fxRateToReporting: null,
+      installmentId,
+      notes: "Revised",
+      receivedAt: new Date("2026-09-04T00:00:00.000Z"),
+      reference: "BANK-2",
+    });
+
+    const result = await updateClientReceipt("actor-1", {
+      amount: "40000.0000",
+      billingDocumentId: projectId,
+      id: receiptId,
+      installmentId,
+      notes: "Revised",
+      receivedAt: "2026-09-04",
+      reference: "BANK-2",
+    });
+
+    expect(result.amount).toBe("40000");
+    expect(transaction.clientReceipt.update).toHaveBeenCalledOnce();
+    expect(transaction.clientReceipt.create).not.toHaveBeenCalled();
+    expect(audit.writeAuditEvent).toHaveBeenCalledWith(
+      transaction,
+      "actor-1",
+      expect.objectContaining({
+        action: "UPDATED",
+        entityType: "CLIENT_RECEIPT",
+      }),
+    );
+  });
+
+  it("removes the selected receipt with an immutable audit snapshot", async () => {
+    transaction.clientReceipt.findUnique.mockResolvedValue({
+      amount: new Decimal("20000"),
+      billingDocument: { reference: "INV-1" },
+      billingDocumentId: projectId,
+      id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      installmentId: null,
+      receivedAt: new Date("2026-09-03T00:00:00.000Z"),
+    });
+
+    await deleteClientReceipt("actor-1", {
+      billingDocumentId: projectId,
+      id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+    });
+
+    expect(transaction.clientReceipt.delete).toHaveBeenCalledWith({
+      where: { id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a" },
+    });
+    expect(audit.writeAuditEvent).toHaveBeenCalledWith(
+      transaction,
+      "actor-1",
+      expect.objectContaining({
+        action: "DELETED",
+        entityType: "CLIENT_RECEIPT",
+      }),
+    );
+  });
+
   it("rejects installment attribution across Billing Events", async () => {
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
       currencyCode: "EUR",
@@ -697,6 +783,85 @@ describe("Client billing persistence", () => {
     expect(transaction.clientPaymentInstallment.delete).toHaveBeenCalledWith({
       where: { id: installmentId },
     });
+  });
+
+  it("supports repeatedly adding three installments up to Billing TTC", async () => {
+    transaction.clientBillingDocument.findUnique
+      .mockResolvedValueOnce({
+        currencyCode: "EUR",
+        fxRateToReporting: null,
+        id: projectId,
+        paymentInstallments: [],
+        reference: "INV-1",
+        totalTtc: new Decimal("100000"),
+      })
+      .mockResolvedValueOnce({
+        currencyCode: "EUR",
+        fxRateToReporting: null,
+        id: projectId,
+        paymentInstallments: [
+          { scheduledAmount: new Decimal("30000"), sequence: 1 },
+        ],
+        reference: "INV-1",
+        totalTtc: new Decimal("100000"),
+      })
+      .mockResolvedValueOnce({
+        currencyCode: "EUR",
+        fxRateToReporting: null,
+        id: projectId,
+        paymentInstallments: [
+          { scheduledAmount: new Decimal("30000"), sequence: 1 },
+          { scheduledAmount: new Decimal("20000"), sequence: 2 },
+        ],
+        reference: "INV-1",
+        totalTtc: new Decimal("100000"),
+      });
+    transaction.clientPaymentInstallment.create.mockResolvedValue({
+      id: installmentId,
+      label: "Installment",
+    });
+
+    for (const [index, scheduledAmount] of [
+      "30000",
+      "20000",
+      "50000",
+    ].entries()) {
+      await createClientBillingInstallment("actor-1", {
+        basis: InstallmentBasis.FIXED_AMOUNT,
+        billingDocumentId: projectId,
+        dueDate: `2026-${10 + index}-01`,
+        label: `Installment ${index + 1}`,
+        scheduledAmount,
+      });
+    }
+
+    expect(transaction.clientPaymentInstallment.create).toHaveBeenCalledTimes(
+      3,
+    );
+    expect(
+      transaction.clientPaymentInstallment.create.mock.calls.map(
+        ([call]) => call.data.scheduledAmount,
+      ),
+    ).toEqual(["30000.0000", "20000.0000", "50000.0000"]);
+  });
+
+  it("rejects removing an installment with an attributed receipt", async () => {
+    transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
+      billingDocument: { reference: "INV-1" },
+      billingDocumentId: projectId,
+      id: installmentId,
+      label: "Deposit",
+      matchedInvoices: [],
+      receipts: [{ id: "receipt-1" }],
+    });
+
+    await expect(
+      deleteClientBillingInstallment("actor-1", {
+        billingDocumentId: projectId,
+        id: installmentId,
+      }),
+    ).rejects.toThrow("attributed receipts");
+    expect(transaction.clientPaymentInstallment.delete).not.toHaveBeenCalled();
   });
 
   it("rejects reducing a Client Billing installment below receipts without an audit write", async () => {

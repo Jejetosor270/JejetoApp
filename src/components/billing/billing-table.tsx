@@ -17,116 +17,65 @@ function BillingRow({
   const router = useRouter();
   const href = `/billing/${document.id}`;
   return (
-    <>
-      <tr
-        className="hover:bg-muted/30 cursor-pointer align-top"
-        onClick={(event) => {
-          const target = event.target as HTMLElement;
-          if (target.closest("a, button, input, select, textarea, form"))
-            return;
+    <tr
+      className="hover:bg-muted/30 cursor-pointer align-top"
+      onClick={(event) => {
+        const target = event.target as HTMLElement;
+        if (target.closest("a, button, input, select, textarea, form")) return;
+        router.push(href);
+      }}
+      onKeyDown={(event) => {
+        const target = event.target as HTMLElement;
+        if (
+          event.key === "Enter" &&
+          !target.closest("a, button, input, select, textarea, form")
+        )
           router.push(href);
-        }}
-        onKeyDown={(event) => {
-          const target = event.target as HTMLElement;
-          if (
-            event.key === "Enter" &&
-            !target.closest("a, button, input, select, textarea, form")
-          )
-            router.push(href);
-        }}
-        tabIndex={0}
-      >
-        <td className="px-3 py-3 font-medium">{document.client.displayName}</td>
-        <td className="px-3 py-3">{document.project.name}</td>
-        <td className="px-3 py-3">
-          {document.documentType === "QUOTE" ? "Quote / Devis" : "Invoice"}
-        </td>
-        <td className="px-3 py-3 font-mono text-xs">
-          <Link className="underline-offset-2 hover:underline" href={href}>
-            {document.reference}
-          </Link>
-        </td>
-        <td className="px-3 py-3">{formatDateOnly(document.documentDate)}</td>
-        <td className="px-3 py-3">{formatDateOnly(document.dueDate)}</td>
-        <td className="financial-figure px-3 py-3 text-right">
-          {formatMoney(document.totalHt, document.currencyCode)}
-        </td>
-        <td className="financial-figure px-3 py-3 text-right">
-          {formatMoney(document.vatAmount, document.currencyCode)}
-        </td>
-        <td className="financial-figure px-3 py-3 text-right">
-          {formatMoney(document.totalTtc, document.currencyCode)}
-        </td>
-        <td className="financial-figure px-3 py-3 text-right">
-          {formatMoney(document.paid, document.currencyCode)}
-        </td>
-        <td className="financial-figure px-3 py-3 text-right">
-          {formatMoney(document.outstanding, document.currencyCode)}
-        </td>
-        <td className="px-3 py-3">{document.status.replaceAll("_", " ")}</td>
-        <td className="px-3 py-3 text-center">{document.allocations.length}</td>
+      }}
+      tabIndex={0}
+    >
+      <td className="px-3 py-3 font-mono text-xs">
+        <Link className="underline-offset-2 hover:underline" href={href}>
+          {document.reference}
+        </Link>
+      </td>
+      <td className="px-3 py-3 font-medium">{document.client.displayName}</td>
+      <td className="px-3 py-3">{document.project.name}</td>
+      <td className="px-3 py-3">
+        {document.documentType === "QUOTE" ? "Quote / Devis" : "Invoice"}
+      </td>
+      <td className="px-3 py-3">{formatDateOnly(document.documentDate)}</td>
+      <td className="px-3 py-3">{formatDateOnly(document.dueDate)}</td>
+      <td className="financial-figure px-3 py-3 text-right">
+        {formatMoney(document.totalHt, document.currencyCode)}
+      </td>
+      <td className="financial-figure px-3 py-3 text-right">
+        {formatMoney(document.totalTtc, document.currencyCode)}
+      </td>
+      <td className="financial-figure px-3 py-3 text-right">
+        {formatMoney(document.paid, document.currencyCode)}
+      </td>
+      <td className="financial-figure px-3 py-3 text-right">
+        {formatMoney(document.outstanding, document.currencyCode)}
+      </td>
+      <td className="px-3 py-3">{document.status.replaceAll("_", " ")}</td>
+      <td className="px-3 py-3 whitespace-nowrap">
+        <Link
+          className="text-primary mr-3 text-xs font-medium underline"
+          href={href}
+        >
+          View
+        </Link>
         {canEdit ? (
-          <td className="px-3 py-3 whitespace-nowrap">
-            <Link
-              className="text-primary mr-3 text-xs font-medium underline"
-              href={href}
-            >
-              View
-            </Link>
-            <Link
-              className="text-primary text-xs font-medium underline"
-              href={`${href}?edit=1`}
-            >
-              Edit
-            </Link>
-          </td>
+          <Link
+            className="text-primary text-xs font-medium underline"
+            href={`${href}?edit=1`}
+          >
+            Edit
+          </Link>
         ) : null}
-      </tr>
-      {document.paymentInstallments.length > 0 ? (
-        <tr className="bg-muted/15">
-          <td className="px-3 py-3" colSpan={canEdit ? 14 : 13}>
-            {document.paymentInstallments.length ? (
-              <div className="mt-2 grid gap-2 lg:grid-cols-2">
-                {document.paymentInstallments.map((installment) => (
-                  <article
-                    className="bg-background rounded-md border p-3 text-xs"
-                    key={installment.id}
-                  >
-                    <div className="flex justify-between gap-3">
-                      <div>
-                        <p className="font-medium">{installment.label}</p>
-                        <p className="text-muted-foreground">
-                          Due {formatDateOnly(installment.dueDate)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p>
-                          {formatMoney(
-                            installment.scheduledAmount,
-                            installment.currencyCode,
-                          )}
-                        </p>
-                        <p className="text-muted-foreground">
-                          {installment.receipts.length} receipt(s)
-                        </p>
-                      </div>
-                    </div>
-                    {canEdit ? (
-                      <Link
-                        className="text-primary mt-2 inline-block text-xs underline"
-                        href={href}
-                      >
-                        Manage schedule and receipts
-                      </Link>
-                    ) : null}
-                  </article>
-                ))}
-              </div>
-            ) : null}
-          </td>
-        </tr>
-      ) : null}
-    </>
+      </td>
+    </tr>
   );
 }
 
@@ -140,23 +89,21 @@ export function BillingTable({
   return (
     <section className="bg-card overflow-hidden rounded-lg border">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[92rem] text-left text-sm">
+        <table className="w-full min-w-[78rem] text-left text-sm">
           <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
             <tr>
+              <th className="px-3 py-3">Reference</th>
               <th className="px-3 py-3">Client</th>
               <th className="px-3 py-3">Project</th>
               <th className="px-3 py-3">Type</th>
-              <th className="px-3 py-3">Reference</th>
               <th className="px-3 py-3">Date</th>
               <th className="px-3 py-3">Due</th>
               <th className="px-3 py-3 text-right">HT</th>
-              <th className="px-3 py-3 text-right">VAT</th>
               <th className="px-3 py-3 text-right">TTC</th>
-              <th className="px-3 py-3 text-right">Paid</th>
+              <th className="px-3 py-3 text-right">Received</th>
               <th className="px-3 py-3 text-right">Outstanding</th>
               <th className="px-3 py-3">Status</th>
-              <th className="px-3 py-3 text-center">Orders</th>
-              {canEdit ? <th className="px-3 py-3">Edit</th> : null}
+              <th className="px-3 py-3">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y">

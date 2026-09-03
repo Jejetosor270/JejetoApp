@@ -5,7 +5,9 @@ import { revalidatePath } from "next/cache";
 import {
   clientBillingInstallmentCreateSchema,
   clientBillingInstallmentDeleteSchema,
+  clientReceiptDeleteSchema,
   clientReceiptSchema,
+  clientReceiptUpdateSchema,
   clientBillingInstallmentUpdateSchema,
   inlineClientBillingSchema,
   parseBillingAllocationsEdit,
@@ -24,11 +26,13 @@ import {
   confirmClientBillingDocument,
   createClientBillingInstallment,
   deleteClientBillingInstallment,
+  deleteClientReceipt,
   recordClientReceipt,
   updateClientBillingInstallment,
   updateClientBillingAllocations,
   updateClientBillingDocument,
   updateClientBillingInline,
+  updateClientReceipt,
   updateOrderBillingLink,
 } from "@/lib/billing/billing";
 import { ClientDocumentFileValidationError } from "@/lib/billing/files";
@@ -173,6 +177,76 @@ export async function recordClientReceiptAction(
     return {
       formError: "The Client receipt could not be recorded.",
       message: "The Client receipt could not be recorded.",
+      status: "error",
+    };
+  }
+}
+
+export async function updateClientReceiptAction(
+  _: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = clientReceiptUpdateSchema.safeParse(
+    Object.fromEntries(formData),
+  );
+  if (!input.success)
+    return {
+      fieldErrors: fieldErrorMap(input.error.issues),
+      formError: input.error.issues[0]?.message ?? "Check the receipt.",
+      message: input.error.issues[0]?.message ?? "Check the receipt.",
+      status: "error",
+    };
+  try {
+    const values = await updateClientReceipt(actor.id, input.data);
+    revalidatePath("/billing");
+    revalidatePath(`/billing/${input.data.billingDocumentId}`);
+    revalidatePath("/payments");
+    revalidateProjectFinancialViews();
+    return {
+      message: "Client receipt updated.",
+      status: "success",
+      values,
+    };
+  } catch (error) {
+    const expected = expectedBillingError(error);
+    if (expected) return expected;
+    console.error("Unable to update Client receipt.", error);
+    return {
+      formError: "The Client receipt could not be updated.",
+      message: "The Client receipt could not be updated.",
+      status: "error",
+    };
+  }
+}
+
+export async function deleteClientReceiptAction(
+  formData: FormData,
+): Promise<BillingActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = clientReceiptDeleteSchema.safeParse(
+    Object.fromEntries(formData),
+  );
+  if (!input.success)
+    return {
+      formError: input.error.issues[0]?.message ?? "Check the receipt.",
+      message: input.error.issues[0]?.message ?? "Check the receipt.",
+      status: "error",
+    };
+  try {
+    await deleteClientReceipt(actor.id, input.data);
+    revalidatePath("/billing");
+    revalidatePath(`/billing/${input.data.billingDocumentId}`);
+    revalidatePath("/payments");
+    revalidateProjectFinancialViews();
+    return { message: "Client receipt removed.", status: "success" };
+  } catch (error) {
+    const expected = expectedBillingError(error);
+    if (expected) return expected;
+    console.error("Unable to remove Client receipt.", error);
+    return {
+      formError: "The Client receipt could not be removed.",
+      message: "The Client receipt could not be removed.",
       status: "error",
     };
   }

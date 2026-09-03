@@ -5,11 +5,13 @@ const billing = vi.hoisted(() => ({
   confirmClientBillingDocument: vi.fn(),
   createClientBillingInstallment: vi.fn(),
   deleteClientBillingInstallment: vi.fn(),
+  deleteClientReceipt: vi.fn(),
   recordClientReceipt: vi.fn(),
   updateClientBillingAllocations: vi.fn(),
   updateClientBillingDocument: vi.fn(),
   updateClientBillingInstallment: vi.fn(),
   updateClientBillingInline: vi.fn(),
+  updateClientReceipt: vi.fn(),
   updateOrderBillingLink: vi.fn(),
 }));
 
@@ -26,10 +28,12 @@ import {
   confirmClientDocumentAction,
   createClientBillingInstallmentAction,
   deleteClientBillingInstallmentAction,
+  deleteClientReceiptAction,
   recordClientReceiptAction,
   updateClientBillingAllocationsAction,
   updateClientBillingDocumentAction,
   updateClientBillingInstallmentAction,
+  updateClientReceiptAction,
   updateOrderBillingLinkAction,
 } from "./actions";
 
@@ -63,6 +67,15 @@ describe("Client billing authorization", () => {
           new FormData(),
         ),
     ],
+    [
+      "receipt edit",
+      () =>
+        updateClientReceiptAction(
+          { message: "", status: "idle" },
+          new FormData(),
+        ),
+    ],
+    ["receipt removal", () => deleteClientReceiptAction(new FormData())],
     [
       "Billing edit",
       () =>
@@ -101,9 +114,11 @@ describe("Client billing authorization", () => {
     expect(billing.confirmClientBillingDocument).not.toHaveBeenCalled();
     expect(billing.createClientBillingInstallment).not.toHaveBeenCalled();
     expect(billing.deleteClientBillingInstallment).not.toHaveBeenCalled();
+    expect(billing.deleteClientReceipt).not.toHaveBeenCalled();
     expect(billing.recordClientReceipt).not.toHaveBeenCalled();
     expect(billing.updateClientBillingDocument).not.toHaveBeenCalled();
     expect(billing.updateClientBillingInstallment).not.toHaveBeenCalled();
+    expect(billing.updateClientReceipt).not.toHaveBeenCalled();
     expect(billing.updateClientBillingAllocations).not.toHaveBeenCalled();
     expect(billing.updateOrderBillingLink).not.toHaveBeenCalled();
   });

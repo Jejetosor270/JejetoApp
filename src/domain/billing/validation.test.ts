@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   clientBillingInstallmentUpdateSchema,
+  clientReceiptDeleteSchema,
   clientReceiptSchema,
+  clientReceiptUpdateSchema,
   parseBillingDocumentEdit,
   parseClientBillingConfirmation,
   parseOrderCreationBillingLink,
@@ -160,6 +162,26 @@ describe("Client billing confirmation", () => {
       billingDocumentId: projectId,
       installmentId: null,
     });
+  });
+
+  it("validates receipt edit and removal identities", () => {
+    const id = "f12b6b9b-10e9-4e42-b93f-38796de4f65a";
+    expect(
+      clientReceiptUpdateSchema.parse({
+        amount: "40 000,00",
+        billingDocumentId: projectId,
+        id,
+        installmentId: "",
+        receivedAt: "2026-09-04",
+      }),
+    ).toMatchObject({
+      amount: "40000.0000",
+      id,
+      installmentId: null,
+    });
+    expect(
+      clientReceiptDeleteSchema.parse({ billingDocumentId: projectId, id }),
+    ).toEqual({ billingDocumentId: projectId, id });
   });
 
   it("returns a friendly error for a non-empty invalid Order ID", () => {

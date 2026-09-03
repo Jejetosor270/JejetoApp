@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { updateClientBillingDocumentAction } from "@/app/(app)/billing/actions";
-import { BillingInstallmentEditor } from "@/components/billing/billing-installment-editor";
 import { BillingScheduleManager } from "@/components/billing/billing-schedule-manager";
 import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import {
@@ -965,28 +964,6 @@ export function BillingDetail({
         )}
       </form>
 
-      <section className="bg-card rounded-lg border p-4">
-        <h2 className="text-sm font-semibold">Payment Schedule & Receipts</h2>
-        <div className="mt-3 grid gap-3 lg:grid-cols-2">
-          {document.paymentInstallments.map((installment) => (
-            <BillingInstallmentEditor
-              billingDocumentId={document.id}
-              canEdit={canEdit}
-              installment={installment}
-              key={installment.id}
-            />
-          ))}
-          {document.paymentInstallments.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No payment schedule is attached.
-            </p>
-          ) : null}
-        </div>
-        <div className="mt-4 border-t pt-4">
-          <BillingScheduleManager canEdit={canEdit} document={document} />
-        </div>
-      </section>
-
       <section className="grid gap-4 lg:grid-cols-2">
         <article className="bg-card rounded-lg border p-4">
           <h2 className="text-sm font-semibold">Notes</h2>
@@ -1029,6 +1006,8 @@ export function BillingDetail({
           </div>
         </article>
       </section>
+
+      <BillingScheduleManager canEdit={canEdit} document={document} />
     </div>
   );
 }

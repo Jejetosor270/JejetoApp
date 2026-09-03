@@ -206,6 +206,15 @@ export const clientReceiptSchema = z.object({
   reference: optionalText(120),
 });
 
+export const clientReceiptUpdateSchema = clientReceiptSchema.extend({
+  id: requiredUuid("Select a valid Client receipt."),
+});
+
+export const clientReceiptDeleteSchema = z.object({
+  billingDocumentId: requiredUuid("Select a valid Billing Event."),
+  id: requiredUuid("Select a valid Client receipt."),
+});
+
 export const clientBillingInstallmentCreateSchema = z
   .object({
     basis: z.enum(InstallmentBasis),
@@ -448,6 +457,12 @@ export type ClientBillingConfirmation = z.infer<
   typeof clientBillingConfirmationSchema
 >;
 export type ClientReceiptInput = z.infer<typeof clientReceiptSchema>;
+export type ClientReceiptUpdateInput = z.infer<
+  typeof clientReceiptUpdateSchema
+>;
+export type ClientReceiptDeleteInput = z.infer<
+  typeof clientReceiptDeleteSchema
+>;
 export type ClientBillingInstallmentCreateInput = z.infer<
   typeof clientBillingInstallmentCreateSchema
 >;
