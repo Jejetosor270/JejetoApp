@@ -70,6 +70,15 @@ export function formatMoney(amount: string | null, currency: string): string {
   return `${formatDecimal(amount)} ${currency}`;
 }
 
+export function formatSignedMoney(
+  amount: string | null,
+  currency: string,
+): string {
+  if (amount === null) return "—";
+  const prefix = new Decimal(amount).greaterThan(0) ? "+" : "";
+  return `${prefix}${formatMoney(amount, currency)}`;
+}
+
 function formatHumanPercentageValue(value: string): string {
   return formatGroupedDecimal(value, 0, 2);
 }
@@ -100,6 +109,12 @@ export function formatPercentageInput(value: string): string {
 
 export function formatRate(rate: string | null): string {
   return formatPercentage(rate);
+}
+
+export function formatSignedRate(rate: string | null): string {
+  if (rate === null) return "—";
+  const prefix = new Decimal(rate).greaterThan(0) ? "+" : "";
+  return `${prefix}${formatRate(rate)}`;
 }
 
 export function formatQuantity(value: string): string {

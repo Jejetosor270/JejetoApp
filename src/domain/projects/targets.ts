@@ -23,6 +23,20 @@ export interface ProjectTargetSummary {
   targetMarkupRate: string | null;
 }
 
+export interface ProjectFinancialMetrics {
+  costHt: string | null;
+  grossProfitHt: string | null;
+  marginRate: string | null;
+  markupRate: string | null;
+  sellHt: string | null;
+}
+
+export interface ProjectFinancialPerformance {
+  actual: ProjectFinancialMetrics;
+  target: ProjectFinancialMetrics;
+  variance: ProjectFinancialMetrics;
+}
+
 const value = (input?: string | null) =>
   input === null || input === undefined ? null : new Decimal(input);
 
@@ -103,6 +117,59 @@ export function calculateProjectActualProfitability(
     grossProfit: profit.toFixed(4),
     marginRate: sell.isZero() ? null : profit.dividedBy(sell).toFixed(6),
     markupRate: cost.isZero() ? null : profit.dividedBy(cost).toFixed(6),
+  };
+}
+
+export function sumComparableFinancialAmounts(
+  ...amounts: readonly (string | null)[]
+): string | null {
+  if (amounts.some((amount) => amount === null)) return null;
+  return amounts
+    .reduce((total, amount) => total.plus(amount ?? 0), new Decimal(0))
+    .toFixed(4);
+}
+
+export function calculateProjectFinancialPerformance(input: {
+  actualInvoicedHt: string | null;
+  actualOrderEconomicCostHt: string | null;
+  projectFreightExpenseEconomicCostHt: string | null;
+  target: ProjectTargetSummary;
+}): ProjectFinancialPerformance {
+  const actualCostHt = sumComparableFinancialAmounts(
+    input.actualOrderEconomicCostHt,
+    input.projectFreightExpenseEconomicCostHt,
+  );
+  const actualProfitability = calculateProjectActualProfitability(
+    actualCostHt,
+    input.actualInvoicedHt,
+  );
+  const target: ProjectFinancialMetrics = {
+    costHt: input.target.estimatedCostHt,
+    grossProfitHt: input.target.expectedGrossProfit,
+    marginRate: input.target.expectedMarginRate,
+    markupRate: input.target.effectiveMarkupRate,
+    sellHt: input.target.expectedSellHt,
+  };
+  const actual: ProjectFinancialMetrics = {
+    costHt: actualCostHt,
+    grossProfitHt: actualProfitability.grossProfit,
+    marginRate: actualProfitability.marginRate,
+    markupRate: actualProfitability.markupRate,
+    sellHt: input.actualInvoicedHt,
+  };
+  return {
+    actual,
+    target,
+    variance: {
+      costHt: financialVariance(actual.costHt, target.costHt),
+      grossProfitHt: financialVariance(
+        actual.grossProfitHt,
+        target.grossProfitHt,
+      ),
+      marginRate: financialVariance(actual.marginRate, target.marginRate),
+      markupRate: financialVariance(actual.markupRate, target.markupRate),
+      sellHt: financialVariance(actual.sellHt, target.sellHt),
+    },
   };
 }
 

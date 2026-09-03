@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   calculateNetCashPosition,
   calculateProjectActualProfitability,
+  calculateProjectFinancialPerformance,
   calculateProjectTargets,
   financialVariance,
+  sumComparableFinancialAmounts,
 } from "./targets";
 
 describe("project financial targets", () => {
@@ -69,5 +71,50 @@ describe("project financial targets", () => {
       markupRate: "0.428571",
     });
     expect(calculateNetCashPosition("60000", "45000")).toBe("15000.0000");
+  });
+
+  it("compares full Project targets with authoritative actual-to-date values", () => {
+    const target = calculateProjectTargets({
+      defaultFreightMarkupRate: "0.15",
+      defaultProductMarkupRate: "0.30",
+      estimatedFreightCostHt: "10000",
+      estimatedPurchaseCostHt: "90000",
+      targetMode: "MARKUP",
+    });
+    expect(
+      calculateProjectFinancialPerformance({
+        actualInvoicedHt: "100000",
+        actualOrderEconomicCostHt: "70000",
+        projectFreightExpenseEconomicCostHt: "10000",
+        target,
+      }),
+    ).toEqual({
+      actual: {
+        costHt: "80000.0000",
+        grossProfitHt: "20000.0000",
+        marginRate: "0.200000",
+        markupRate: "0.250000",
+        sellHt: "100000",
+      },
+      target: {
+        costHt: "100000.0000",
+        grossProfitHt: "28500.0000",
+        marginRate: "0.221790",
+        markupRate: "0.285000",
+        sellHt: "128500.0000",
+      },
+      variance: {
+        costHt: "-20000.0000",
+        grossProfitHt: "-8500.0000",
+        marginRate: "-0.0218",
+        markupRate: "-0.0350",
+        sellHt: "-28500.0000",
+      },
+    });
+  });
+
+  it("requires every comparable actual-cost source", () => {
+    expect(sumComparableFinancialAmounts("100", "20")).toBe("120.0000");
+    expect(sumComparableFinancialAmounts("100", null)).toBeNull();
   });
 });

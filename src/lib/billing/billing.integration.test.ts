@@ -109,6 +109,7 @@ function summaryRecord(input: {
   }[];
   totalHt: string;
   totalTtc: string;
+  vatAmount?: string;
 }) {
   return {
     currencyCode: "EUR",
@@ -138,6 +139,9 @@ function summaryRecord(input: {
     projectId,
     totalHt: new Decimal(input.totalHt),
     totalTtc: new Decimal(input.totalTtc),
+    vatAmount: new Decimal(
+      input.vatAmount ?? new Decimal(input.totalTtc).minus(input.totalHt),
+    ),
   };
 }
 
@@ -201,15 +205,85 @@ describe("Client billing persistence", () => {
 
     expect(summaries.get(projectId)).toMatchObject({
       complete: true,
+      invoicedComplete: true,
       invoicedHt: "70303.2200",
       invoicedTtc: "84363.8600",
       nextDueDate: null,
       outstandingTtc: "0.0000",
       overdueTtc: "0.0000",
+      outputVat: "14060.6400",
+      outputVatComplete: true,
       paidTtc: "84363.8600",
       quotedHt: "100000.0000",
       scheduleComplete: true,
       upcomingScheduledTtc: "0.0000",
+    });
+  });
+
+  it("uses active Invoice VAT only and keeps Quotes out of Project output VAT", async () => {
+    database.clientBillingDocument.findMany.mockResolvedValue([
+      summaryRecord({
+        id: "invoice-1",
+        totalHt: "40000",
+        totalTtc: "48000",
+        vatAmount: "8000",
+      }),
+      summaryRecord({
+        id: "invoice-2",
+        totalHt: "30000",
+        totalTtc: "31500",
+        vatAmount: "1500",
+      }),
+      summaryRecord({
+        documentType: ClientBillingDocumentType.QUOTE,
+        id: "quote-1",
+        totalHt: "100000",
+        totalTtc: "120000",
+        vatAmount: "20000",
+      }),
+    ]);
+
+    const summaries = await getProjectsClientBillingSummaries([
+      { id: projectId, reportingCurrencyCode: "EUR" },
+    ]);
+
+    expect(summaries.get(projectId)).toMatchObject({
+      invoicedHt: "70000.0000",
+      outputVat: "9500.0000",
+      outputVatComplete: true,
+      quotedHt: "100000.0000",
+    });
+  });
+
+  it("tracks Invoice FX completeness independently from Quotes and receipts", async () => {
+    database.clientBillingDocument.findMany.mockResolvedValue([
+      {
+        ...summaryRecord({
+          documentType: ClientBillingDocumentType.QUOTE,
+          id: "foreign-quote",
+          totalHt: "100",
+          totalTtc: "120",
+        }),
+        currencyCode: "USD",
+      },
+      summaryRecord({
+        id: "invoice-1",
+        totalHt: "100",
+        totalTtc: "120",
+        vatAmount: "20",
+      }),
+    ]);
+
+    const summaries = await getProjectsClientBillingSummaries([
+      { id: projectId, reportingCurrencyCode: "EUR" },
+    ]);
+
+    expect(summaries.get(projectId)).toMatchObject({
+      complete: false,
+      invoicedComplete: true,
+      invoicedHt: "100.0000",
+      outputVat: "20.0000",
+      outputVatComplete: true,
     });
   });
 

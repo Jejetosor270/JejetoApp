@@ -18,11 +18,12 @@ import {
   listProjectFreightExpenses,
 } from "@/lib/freight/expenses";
 import {
-  calculateProjectActualProfitability,
+  calculateProjectFinancialPerformance,
   calculateProjectTargets,
   calculateNetCashPosition,
-  financialVariance,
+  sumComparableFinancialAmounts,
 } from "@/domain/projects/targets";
+import { calculateProjectVatPosition } from "@/domain/vat/position";
 
 export const metadata: Metadata = { title: "Project" };
 
@@ -72,34 +73,36 @@ export default async function ProjectPage({
     targetMarkupRate: project.targetMarkupRate?.toString() ?? null,
     targetMode: project.targetMode,
   });
-  const actualProfitability = calculateProjectActualProfitability(
-    reporting.financial.complete
+  const financialPerformance = calculateProjectFinancialPerformance({
+    actualInvoicedHt: billing?.invoicedComplete ? billing.invoicedHt : null,
+    actualOrderEconomicCostHt: reporting.financial.totals.economicLandedCost
+      .complete
       ? reporting.financial.totals.economicLandedCost.value
       : null,
-    billing?.complete ? billing.invoicedHt : null,
+    projectFreightExpenseEconomicCostHt: freight?.projectExpenseEconomicCost
+      .complete
+      ? freight.projectExpenseEconomicCost.value
+      : null,
+    target: targets,
+  });
+  const deductibleInputVat = sumComparableFinancialAmounts(
+    reporting.financial.totals.recoverableInputVat.complete
+      ? reporting.financial.totals.recoverableInputVat.value
+      : null,
+    freight?.projectExpenseDeductibleInputVat.complete
+      ? freight.projectExpenseDeductibleInputVat.value
+      : null,
   );
+  const vatPosition = calculateProjectVatPosition({
+    deductibleInputVat,
+    outputVat: billing?.outputVatComplete ? billing.outputVat : null,
+  });
   const phase11CashPosition = calculateNetCashPosition(
     billing?.complete ? billing.paidTtc : null,
     reporting.payments.supplier.paid.complete
       ? reporting.payments.supplier.paid.value
       : null,
   );
-  const targetVariances = {
-    cost: financialVariance(
-      reporting.financial.complete
-        ? reporting.financial.totals.economicLandedCost.value
-        : null,
-      targets.estimatedCostHt,
-    ),
-    markup: financialVariance(
-      actualProfitability.markupRate,
-      targets.targetMarkupRate,
-    ),
-    sell: financialVariance(
-      billing?.complete ? billing.invoicedHt : null,
-      project.clientBudgetTargetHt?.toString() ?? targets.expectedSellHt,
-    ),
-  };
   return (
     <ProjectDetail
       buildings={buildings}
@@ -139,18 +142,14 @@ export default async function ProjectPage({
             </section>
           ) : null}
           <ProjectFinancialDashboard
-            actualProfitability={actualProfitability}
             billing={billing}
-            clientBudgetTargetHt={
-              project.clientBudgetTargetHt?.toString() ?? null
-            }
+            financialPerformance={financialPerformance}
             freight={freight}
             horizon={horizon}
             phase11CashPosition={phase11CashPosition}
             projectId={projectId}
             report={reporting}
-            targets={targets}
-            variances={targetVariances}
+            vatPosition={vatPosition}
           />
           <ProjectFreightExpenses
             canEdit={canEditMasterData(user.role)}

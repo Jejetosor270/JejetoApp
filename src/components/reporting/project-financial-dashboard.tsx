@@ -5,31 +5,34 @@ import { OverdueItems } from "@/components/reporting/overdue-items";
 import { Badge } from "@/components/ui/badge";
 import type { CashFlowHorizon } from "@/config/reporting";
 import { formatDateOnly } from "@/domain/payments/dates";
-import { formatMoney, formatRate } from "@/domain/procurement/presentation";
+import {
+  formatMoney,
+  formatRate,
+  formatSignedMoney,
+  formatSignedRate,
+} from "@/domain/procurement/presentation";
 import type {
   ProjectReportingSnapshot,
   SerializedAggregateAmount,
   SerializedDirectionPaymentSummary,
 } from "@/lib/reporting/reports";
-import type { ProjectTargetSummary } from "@/domain/projects/targets";
+import type { ProjectFinancialPerformance } from "@/domain/projects/targets";
+import type { ProjectVatPosition } from "@/domain/vat/position";
 
 interface Phase11BillingSummary {
   complete: boolean;
+  invoicedComplete: boolean;
   invoicedHt: string;
   invoicedTtc: string;
   nextDueDate: string | null;
   outstandingTtc: string;
   overdueTtc: string;
+  outputVat: string;
+  outputVatComplete: boolean;
   paidTtc: string;
   quotedHt: string;
   scheduleComplete: boolean;
   upcomingScheduledTtc: string | null;
-}
-
-interface ActualProfitability {
-  grossProfit: string | null;
-  marginRate: string | null;
-  markupRate: string | null;
 }
 
 interface FreightReconciliationView {
@@ -43,7 +46,131 @@ interface FreightReconciliationView {
   freightGrossProfitHt: string | null;
   headroomHt: string | null;
   planningComplete: boolean;
+  projectExpenseDeductibleInputVat: SerializedAggregateAmount;
+  projectExpenseEconomicCost: SerializedAggregateAmount;
   recoveryTargetHt: string | null;
+}
+
+function FinancialPerformanceTable({
+  currencyCode,
+  performance,
+  projectId,
+}: {
+  currencyCode: string;
+  performance: ProjectFinancialPerformance;
+  projectId: string;
+}) {
+  const rows = [
+    [
+      "Cost HT",
+      "money",
+      performance.target.costHt,
+      performance.actual.costHt,
+      performance.variance.costHt,
+    ],
+    [
+      "Client Sell / Billing HT",
+      "money",
+      performance.target.sellHt,
+      performance.actual.sellHt,
+      performance.variance.sellHt,
+    ],
+    [
+      "Gross Profit HT",
+      "money",
+      performance.target.grossProfitHt,
+      performance.actual.grossProfitHt,
+      performance.variance.grossProfitHt,
+    ],
+    [
+      "Markup",
+      "rate",
+      performance.target.markupRate,
+      performance.actual.markupRate,
+      performance.variance.markupRate,
+    ],
+    [
+      "Margin",
+      "rate",
+      performance.target.marginRate,
+      performance.actual.marginRate,
+      performance.variance.marginRate,
+    ],
+  ] as const;
+  const complete =
+    performance.target.costHt !== null &&
+    performance.target.sellHt !== null &&
+    performance.actual.costHt !== null &&
+    performance.actual.sellHt !== null;
+  return (
+    <section className="bg-card overflow-hidden rounded-lg border">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
+        <div>
+          <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
+            Project financial performance
+          </p>
+          <h2 className="mt-0.5 text-sm font-semibold">
+            Full-Project target vs actual to date
+          </h2>
+          <p className="text-muted-foreground mt-1 text-xs">
+            HT commercial performance in {currencyCode}; targets are not
+            prorated for Project completion.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant={complete ? "outline" : "destructive"}>
+            {complete ? "Complete" : "Incomplete"}
+          </Badge>
+          <Link
+            className="border-input rounded-md border px-2.5 py-1.5 text-xs font-medium"
+            href={`/billing?projectId=${projectId}`}
+          >
+            Open Billing
+          </Link>
+        </div>
+      </header>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[42rem] text-left text-xs">
+          <thead className="bg-muted/40 text-muted-foreground">
+            <tr>
+              <th className="px-4 py-2">Metric</th>
+              <th className="px-4 py-2 text-right">Target</th>
+              <th className="px-4 py-2 text-right">Actual to date</th>
+              <th className="px-4 py-2 text-right">Variance</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {rows.map(([label, kind, target, actual, variance]) => (
+              <tr key={label}>
+                <th className="px-4 py-2.5 font-medium">{label}</th>
+                <td className="financial-figure px-4 py-2.5 text-right">
+                  {kind === "rate"
+                    ? formatRate(target)
+                    : formatMoney(target, currencyCode)}
+                </td>
+                <td className="financial-figure px-4 py-2.5 text-right font-semibold">
+                  {kind === "rate"
+                    ? formatRate(actual)
+                    : formatMoney(actual, currencyCode)}
+                </td>
+                <td className="financial-figure px-4 py-2.5 text-right">
+                  {kind === "rate"
+                    ? formatSignedRate(variance)
+                    : formatSignedMoney(variance, currencyCode)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!complete ? (
+        <p className="text-destructive border-t px-4 py-2 text-xs">
+          A required Project estimate, Invoice FX rate, Order FX rate, or
+          freight-expense FX rate is missing.
+        </p>
+      ) : null}
+    </section>
+  );
 }
 
 function AggregateMoney({
@@ -173,149 +300,38 @@ function ClientCollectionSummary({
 }
 
 export function ProjectFinancialDashboard({
-  actualProfitability,
   billing,
-  clientBudgetTargetHt,
+  financialPerformance,
   freight,
   horizon,
   phase11CashPosition,
   projectId,
   report,
-  targets,
-  variances,
+  vatPosition,
 }: {
-  actualProfitability: ActualProfitability;
   billing: Phase11BillingSummary | null;
-  clientBudgetTargetHt: string | null;
+  financialPerformance: ProjectFinancialPerformance;
   freight: FreightReconciliationView | null;
   horizon: CashFlowHorizon;
   phase11CashPosition: string | null;
   projectId: string;
   report: ProjectReportingSnapshot;
-  targets: ProjectTargetSummary;
-  variances: {
-    cost: string | null;
-    markup: string | null;
-    sell: string | null;
-  };
+  vatPosition: ProjectVatPosition;
 }) {
   const currency = report.reportingCurrencyCode;
-  const missingOrders = report.orderRows.filter((order) =>
-    report.financial.missingOrderIds.includes(order.id),
-  );
+  const vatPositionLabel =
+    vatPosition.status === "PAYABLE"
+      ? "VAT payable to State"
+      : vatPosition.status === "CREDIT"
+        ? "VAT credit / deductible"
+        : "VAT position";
   return (
     <div className="space-y-5">
-      <section className="grid gap-4 xl:grid-cols-2">
-        <article className="bg-card rounded-lg border p-4">
-          <h2 className="text-sm font-semibold">Budget / Target</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Planning values in {currency}; Client Budget remains independent
-            from markup-derived expected sell.
-          </p>
-          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-            {(
-              [
-                ["Client Budget Target HT", clientBudgetTargetHt, "money"],
-                [
-                  "Estimated economic cost HT",
-                  targets.estimatedCostHt,
-                  "money",
-                ],
-                [
-                  "Expected Product Sell HT",
-                  targets.expectedProductSellHt,
-                  "money",
-                ],
-                [
-                  "Expected Freight Sell HT",
-                  targets.expectedFreightSellHt,
-                  "money",
-                ],
-                [
-                  "Effective target markup",
-                  targets.effectiveMarkupRate,
-                  "rate",
-                ],
-                ["Expected sell HT", targets.expectedSellHt, "money"],
-                ["Expected gross profit", targets.expectedGrossProfit, "money"],
-                [
-                  "Analytical expected margin",
-                  targets.expectedMarginRate,
-                  "rate",
-                ],
-              ] as const
-            ).map(([label, value, kind]) => (
-              <div className="contents" key={label}>
-                <dt className="text-muted-foreground">{label}</dt>
-                <dd className="financial-figure text-right font-semibold">
-                  {kind === "rate"
-                    ? formatRate(value)
-                    : formatMoney(value, currency)}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </article>
-        <article className="bg-card rounded-lg border p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold">
-                Client Billing & actual profitability
-              </h2>
-              <p className="text-muted-foreground mt-1 text-xs">
-                Billing is authoritative for actual Client sell; Order selling
-                values remain the procurement plan.
-              </p>
-            </div>
-            <Link
-              className="border-input rounded-md border px-2.5 py-1.5 text-xs font-medium"
-              href={`/billing?projectId=${projectId}`}
-            >
-              Open Billing
-            </Link>
-          </div>
-          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-            {(
-              [
-                ["Client quoted HT", billing?.quotedHt ?? null],
-                ["Client invoiced HT", billing?.invoicedHt ?? null],
-                ["Client received TTC", billing?.paidTtc ?? null],
-                ["Client outstanding TTC", billing?.outstandingTtc ?? null],
-                ["Client overdue TTC", billing?.overdueTtc ?? null],
-                ["Actual gross profit HT", actualProfitability.grossProfit],
-              ] as const
-            ).map(([label, value]) => (
-              <div className="contents" key={label}>
-                <dt className="text-muted-foreground">{label}</dt>
-                <dd className="financial-figure text-right font-semibold">
-                  {formatMoney(value, currency)}
-                </dd>
-              </div>
-            ))}
-            <dt className="text-muted-foreground">Actual effective markup</dt>
-            <dd className="financial-figure text-right font-semibold">
-              {formatRate(actualProfitability.markupRate)}
-              <span className="text-muted-foreground block text-[0.6875rem]">
-                Analytical margin {formatRate(actualProfitability.marginRate)}
-              </span>
-            </dd>
-            <dt className="text-muted-foreground">
-              Sell / cost / markup variance
-            </dt>
-            <dd className="financial-figure text-right font-semibold">
-              {formatMoney(variances.sell, currency)} /{" "}
-              {formatMoney(variances.cost, currency)} /{" "}
-              {formatRate(variances.markup)}
-            </dd>
-          </dl>
-          {!billing?.complete ? (
-            <p className="text-destructive mt-3 text-xs">
-              Client billing totals are incomplete because a required FX rate is
-              missing.
-            </p>
-          ) : null}
-        </article>
-      </section>
+      <FinancialPerformanceTable
+        currencyCode={currency}
+        performance={financialPerformance}
+        projectId={projectId}
+      />
       <section className="bg-card rounded-lg border p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -393,104 +409,13 @@ export function ProjectFinancialDashboard({
           remains in Supplier Payments.
         </p>
       </section>
-      <section className="bg-card rounded-lg border p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">Financial overview</h2>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Commercial profitability in {currency}; VAT is shown separately
-              and cash timing is reported below.
-            </p>
-          </div>
-          <Badge
-            variant={report.financial.complete ? "outline" : "destructive"}
-          >
-            {report.financial.complete ? "Complete" : "Incomplete"}
-          </Badge>
-        </div>
-        <dl className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
-          <div className="bg-muted/25 rounded-md border p-3">
-            <dt className="text-muted-foreground text-xs">
-              Order planned sell HT
-            </dt>
-            <dd className="mt-1 text-sm font-semibold">
-              <AggregateMoney
-                aggregate={report.financial.totals.salesRevenue}
-                currencyCode={currency}
-              />
-            </dd>
-          </div>
-          <div className="bg-muted/25 rounded-md border p-3">
-            <dt className="text-muted-foreground text-xs">
-              Economic landed cost
-            </dt>
-            <dd className="mt-1 text-sm font-semibold">
-              <AggregateMoney
-                aggregate={report.financial.totals.economicLandedCost}
-                currencyCode={currency}
-              />
-            </dd>
-          </div>
-          <div className="bg-muted/25 rounded-md border p-3">
-            <dt className="text-muted-foreground text-xs">Gross profit</dt>
-            <dd className="financial-figure mt-1 text-sm font-semibold">
-              {formatMoney(report.financial.grossProfit, currency)}
-            </dd>
-          </div>
-          <div className="bg-muted/25 rounded-md border p-3">
-            <dt className="text-muted-foreground text-xs">Effective markup</dt>
-            <dd className="financial-figure mt-1 text-sm font-semibold">
-              {formatRate(report.financial.markupRate)}
-            </dd>
-          </div>
-          <div className="bg-muted/25 rounded-md border p-3">
-            <dt className="text-muted-foreground text-xs">
-              Supplier outstanding TTC
-            </dt>
-            <dd className="financial-figure mt-1 text-sm font-semibold">
-              {formatMoney(report.payments.supplier.totalRemaining, currency)}
-            </dd>
-          </div>
-          <div className="bg-muted/25 rounded-md border p-3">
-            <dt className="text-muted-foreground text-xs">
-              Client outstanding TTC
-            </dt>
-            <dd className="financial-figure mt-1 text-sm font-semibold">
-              {formatMoney(
-                billing?.complete ? billing.outstandingTtc : null,
-                currency,
-              )}
-            </dd>
-          </div>
-        </dl>
-        {missingOrders.length ? (
-          <div className="border-destructive/30 bg-destructive/5 mt-3 rounded-md border px-3 py-2 text-xs">
-            <p className="text-destructive font-medium">
-              Project profitability is incomplete because required financial or
-              FX data is missing.
-            </p>
-            <p className="text-muted-foreground mt-1">
-              Affected Orders:{" "}
-              {missingOrders.map((order, index) => (
-                <span key={order.id}>
-                  {index ? ", " : ""}
-                  <Link
-                    className="text-primary hover:underline"
-                    href={`/orders/${order.id}`}
-                  >
-                    {order.orderNumber}
-                  </Link>
-                </span>
-              ))}
-              .
-            </p>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+      <section className="grid gap-4 xl:grid-cols-3">
         <article className="bg-card rounded-lg border p-4">
-          <h2 className="text-sm font-semibold">Procurement & sales</h2>
+          <h2 className="text-sm font-semibold">Order commercial plan</h2>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Procurement Order costs and planned selling values; Invoice billing
+            remains the actual revenue source above.
+          </p>
           <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
             {[
               ["Purchase cost HT", report.financial.totals.purchaseCost],
@@ -499,7 +424,7 @@ export function ProjectFinancialDashboard({
               ["Miscellaneous", report.financial.totals.miscellaneous],
               ["Landed cost HT", report.financial.totals.landedCost],
               [
-                "Economic landed cost",
+                "Order economic landed cost",
                 report.financial.totals.economicLandedCost,
               ],
               [
@@ -510,7 +435,7 @@ export function ProjectFinancialDashboard({
                 "Separately recharged freight",
                 report.financial.totals.rechargedFreight,
               ],
-              ["Total sales HT", report.financial.totals.salesRevenue],
+              ["Order planned sales HT", report.financial.totals.salesRevenue],
             ].map(([label, aggregate]) => (
               <div className="contents" key={label as string}>
                 <dt className="text-muted-foreground py-1">
@@ -524,7 +449,9 @@ export function ProjectFinancialDashboard({
                 </dd>
               </div>
             ))}
-            <dt className="border-t pt-2 font-medium">Gross profit</dt>
+            <dt className="border-t pt-2 font-medium">
+              Order planned gross profit
+            </dt>
             <dd className="financial-figure border-t pt-2 text-right font-semibold">
               {formatMoney(report.financial.grossProfit, currency)}
             </dd>
@@ -536,48 +463,91 @@ export function ProjectFinancialDashboard({
           </dl>
         </article>
         <article className="bg-card rounded-lg border p-4">
-          <h2 className="text-sm font-semibold">VAT overview</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            VAT remains separate from revenue and profit; only non-recoverable
-            input VAT is included in economic cost.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
+                Project VAT position
+              </p>
+              <h2 className="mt-0.5 text-sm font-semibold">
+                Invoice output VAT vs deductible input VAT
+              </h2>
+            </div>
+            <Badge variant={vatPosition.complete ? "outline" : "destructive"}>
+              {vatPosition.status ?? "INCOMPLETE"}
+            </Badge>
+          </div>
           <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-            {[
-              ["Input VAT", report.financial.totals.inputVat],
-              [
-                "Recoverable input VAT",
-                report.financial.totals.recoverableInputVat,
-              ],
-              [
-                "Non-recoverable input VAT",
-                report.financial.totals.nonRecoverableInputVat,
-              ],
-              ["Output VAT", report.financial.totals.outputVat],
-            ].map(([label, aggregate]) => (
-              <div className="contents" key={label as string}>
-                <dt className="text-muted-foreground">{label as string}</dt>
-                <dd className="text-right font-medium">
+            <dt className="text-muted-foreground">Output VAT</dt>
+            <dd className="financial-figure text-right font-medium">
+              {formatMoney(vatPosition.outputVat, currency)}
+            </dd>
+            <dt className="text-muted-foreground">Deductible input VAT</dt>
+            <dd className="financial-figure text-right font-medium">
+              {formatMoney(vatPosition.deductibleInputVat, currency)}
+            </dd>
+            <dt className="border-t pt-3 font-medium">{vatPositionLabel}</dt>
+            <dd className="financial-figure border-t pt-3 text-right text-base font-semibold">
+              {formatMoney(vatPosition.positionAmount, currency)}
+            </dd>
+          </dl>
+          <details className="mt-4 border-t pt-3 text-xs">
+            <summary className="cursor-pointer font-medium">VAT detail</summary>
+            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+              <dt className="text-muted-foreground">
+                Order deductible input VAT
+              </dt>
+              <dd className="text-right">
+                <AggregateMoney
+                  aggregate={report.financial.totals.recoverableInputVat}
+                  currencyCode={currency}
+                />
+              </dd>
+              <dt className="text-muted-foreground">
+                Freight-expense deductible VAT
+              </dt>
+              <dd className="text-right">
+                {freight ? (
                   <AggregateMoney
-                    aggregate={aggregate as SerializedAggregateAmount}
+                    aggregate={freight.projectExpenseDeductibleInputVat}
                     currencyCode={currency}
                   />
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <div className="bg-muted/25 mt-5 rounded-md border p-3">
-            <p className="text-muted-foreground text-xs">
-              Project cash position
+                ) : (
+                  "—"
+                )}
+              </dd>
+              <dt className="text-muted-foreground">
+                Order non-deductible input VAT
+              </dt>
+              <dd className="text-right">
+                <AggregateMoney
+                  aggregate={report.financial.totals.nonRecoverableInputVat}
+                  currencyCode={currency}
+                />
+              </dd>
+            </dl>
+          </details>
+          {!vatPosition.complete ? (
+            <p className="text-destructive mt-3 text-xs">
+              VAT position is incomplete because a required Invoice, Order, or
+              freight-expense FX rate is missing.
             </p>
-            <p className="financial-figure mt-1 text-lg font-semibold">
-              {formatMoney(phase11CashPosition, currency)}
-            </p>
-            <p className="text-muted-foreground mt-1 text-xs leading-5">
-              Phase 11 Client Billing receipts minus Supplier cash paid. A
-              negative value means the company has financed more Supplier cash
-              than it has received from the Client. This is not profit.
-            </p>
-          </div>
+          ) : null}
+        </article>
+        <article className="bg-card rounded-lg border p-4">
+          <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
+            Cash position
+          </p>
+          <h2 className="mt-0.5 text-sm font-semibold">
+            Client cash received minus Supplier cash paid
+          </h2>
+          <p className="financial-figure mt-4 text-lg font-semibold">
+            {formatMoney(phase11CashPosition, currency)}
+          </p>
+          <p className="text-muted-foreground mt-2 text-xs leading-5">
+            A negative value means the company has financed more Supplier cash
+            than it has received from the Client. Cash timing does not change
+            Project VAT or HT profit.
+          </p>
         </article>
       </section>
 

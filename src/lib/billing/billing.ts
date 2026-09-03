@@ -1334,6 +1334,7 @@ function summarizeClientBillingRecords(
   let quoted = new Decimal(0);
   let invoiced = new Decimal(0);
   let invoicedTtc = new Decimal(0);
+  let outputVat = new Decimal(0);
   let invoiceOutstanding = new Decimal(0);
   let paid = new Decimal(0);
   let overdue = new Decimal(0);
@@ -1342,6 +1343,8 @@ function summarizeClientBillingRecords(
   let scheduleComplete = true;
   const today = businessToday();
   const missingIds = new Set<string>();
+  const invoiceMissingIds = new Set<string>();
+  const outputVatMissingIds = new Set<string>();
   const uniqueReceipts = new Map<
     string,
     ReturnType<typeof receiptRecords>[number] & { currencyCode: string }
@@ -1357,8 +1360,11 @@ function summarizeClientBillingRecords(
       reportingCurrencyCode,
       record.fxRateToReporting?.toString() ?? null,
     );
-    if (convertedHt === null) missingIds.add(record.id);
-    else if (record.documentType === ClientBillingDocumentType.QUOTE)
+    if (convertedHt === null) {
+      missingIds.add(record.id);
+      if (record.documentType === ClientBillingDocumentType.INVOICE)
+        invoiceMissingIds.add(record.id);
+    } else if (record.documentType === ClientBillingDocumentType.QUOTE)
       quoted = quoted.plus(convertedHt);
     else invoiced = invoiced.plus(convertedHt);
     if (record.documentType === ClientBillingDocumentType.INVOICE) {
@@ -1370,6 +1376,16 @@ function summarizeClientBillingRecords(
       );
       if (convertedTtc === null) missingIds.add(record.id);
       else invoicedTtc = invoicedTtc.plus(convertedTtc);
+      const convertedVat = converted(
+        record.vatAmount.toString(),
+        record.currencyCode,
+        reportingCurrencyCode,
+        record.fxRateToReporting?.toString() ?? null,
+      );
+      if (convertedVat === null) {
+        missingIds.add(record.id);
+        outputVatMissingIds.add(record.id);
+      } else outputVat = outputVat.plus(convertedVat);
     }
     for (const receipt of receiptRecords(record)) {
       uniqueReceipts.set(receipt.id, {
@@ -1446,12 +1462,17 @@ function summarizeClientBillingRecords(
   }
   return {
     complete: missingIds.size === 0,
+    invoiceMissingIds: [...invoiceMissingIds],
+    invoicedComplete: invoiceMissingIds.size === 0,
     invoicedHt: invoiced.toFixed(4),
     invoicedTtc: invoicedTtc.toFixed(4),
     missingIds: [...missingIds],
     nextDueDate,
     outstandingTtc: invoiceOutstanding.toFixed(4),
     overdueTtc: overdue.toFixed(4),
+    outputVat: outputVat.toFixed(4),
+    outputVatComplete: outputVatMissingIds.size === 0,
+    outputVatMissingIds: [...outputVatMissingIds],
     paidTtc: paid.toFixed(4),
     quotedHt: quoted.toFixed(4),
     reportingCurrencyCode,

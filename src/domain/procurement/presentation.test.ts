@@ -10,6 +10,8 @@ import {
   formatPercentageInput,
   formatQuantity,
   formatRate,
+  formatSignedMoney,
+  formatSignedRate,
   finalizeMoneyInput,
   normalizeMoneyInput,
 } from "@/domain/procurement/presentation";
@@ -27,6 +29,9 @@ describe("procurement money presentation", () => {
 
   it("keeps absent money values distinct", () => {
     expect(formatMoney(null, "EUR")).toBe("—");
+    expect(formatSignedMoney("1250", "EUR")).toBe("+1 250.00 EUR");
+    expect(formatSignedMoney("-1250", "EUR")).toBe("-1 250.00 EUR");
+    expect(formatSignedMoney("0", "EUR")).toBe("0.00 EUR");
   });
 
   it("formats and normalizes editable money without floating-point parsing", () => {
@@ -65,5 +70,7 @@ describe("procurement money presentation", () => {
     expect(formatHumanPercentage("100")).toBe("100%");
     expect(formatPercentageInput("33.335")).toBe("33.34");
     expect(formatPercentageInput("15,5000% ")).toBe("15.5");
+    expect(formatSignedRate("0.05")).toBe("+5%");
+    expect(formatSignedRate("-0.0308")).toBe("-3.08%");
   });
 });

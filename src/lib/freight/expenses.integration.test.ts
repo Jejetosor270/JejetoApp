@@ -107,6 +107,7 @@ describe("Project freight reconciliation", () => {
         currencyCode: "EUR",
         freightMarkupOverrideRate: null,
         fxRateToReporting: null,
+        id: "freight-expense-1",
         recoverability: "PARTIALLY_RECOVERABLE",
         recoverableRate: "0.50",
         vatAmount: "2000",
@@ -118,7 +119,49 @@ describe("Project freight reconciliation", () => {
     ).resolves.toMatchObject({
       actualCostHt: "11000.0000",
       freightGrossProfitHt: "1100.0000",
+      projectExpenseDeductibleInputVat: {
+        complete: true,
+        value: "1000.0000",
+      },
+      projectExpenseEconomicCost: {
+        complete: true,
+        value: "11000.0000",
+      },
+      projectExpenseInputVat: { complete: true, value: "2000.0000" },
+      projectExpenseNonDeductibleInputVat: {
+        complete: true,
+        value: "1000.0000",
+      },
       recoveryTargetHt: "12100.0000",
+    });
+  });
+
+  it("marks freight VAT and economic cost incomplete when manual FX is missing", async () => {
+    orders.listProjectOrders.mockResolvedValue([]);
+    database.projectFreightExpense.findMany.mockResolvedValue([
+      {
+        costAmountHt: "10000",
+        currencyCode: "USD",
+        freightMarkupOverrideRate: null,
+        fxRateToReporting: null,
+        id: "foreign-freight-expense",
+        recoverability: "RECOVERABLE",
+        recoverableRate: "1",
+        vatAmount: "2000",
+      },
+    ]);
+
+    await expect(
+      getProjectFreightReconciliation("project-with-missing-fx"),
+    ).resolves.toMatchObject({
+      projectExpenseDeductibleInputVat: {
+        complete: false,
+        missingIds: ["foreign-freight-expense"],
+      },
+      projectExpenseEconomicCost: {
+        complete: false,
+        missingIds: ["foreign-freight-expense"],
+      },
     });
   });
 

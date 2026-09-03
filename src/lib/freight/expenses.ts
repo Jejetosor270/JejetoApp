@@ -97,6 +97,22 @@ function convertedAmount(input: {
   );
 }
 
+function aggregateConvertedAmounts(
+  values: readonly { id: string; value: string | null }[],
+) {
+  const missingIds: string[] = [];
+  let total = new Decimal(0);
+  for (const item of values) {
+    if (item.value === null) missingIds.push(item.id);
+    else total = total.plus(item.value);
+  }
+  return {
+    complete: missingIds.length === 0,
+    missingIds,
+    value: total.toFixed(4),
+  };
+}
+
 export async function listProjectFreightExpenses(projectId: string) {
   const expenses = await getDatabase().projectFreightExpense.findMany({
     where: { projectId },
@@ -297,17 +313,42 @@ export async function getProjectFreightReconciliation(projectId: string) {
       : "0.0000",
     freightMarkupRate: order.componentPricing.freightMarkupRate,
   }));
-  const convertedExpenses = expenses.map((expense) => ({
-    costHt: convertedAmount({
-      amount: freightExpenseEconomicCost(expense),
-      currencyCode: expense.currencyCode,
-      fxRate: expense.fxRateToReporting?.toString() ?? null,
-      reportingCurrencyCode: project.reportingCurrencyCode,
-    }),
-    markupRate:
-      expense.freightMarkupOverrideRate?.toString() ??
-      project.defaultFreightMarkupRate.toString(),
-  }));
+  const convertedExpenses = expenses.map((expense) => {
+    const recovery = calculateInputVatRecovery({
+      recoverability: expense.recoverability,
+      recoverableRate: expense.recoverableRate?.toString() ?? null,
+      vatAmount: expense.vatAmount?.toString() ?? "0",
+    });
+    const convert = (amount: string) =>
+      convertedAmount({
+        amount,
+        currencyCode: expense.currencyCode,
+        fxRate: expense.fxRateToReporting?.toString() ?? null,
+        reportingCurrencyCode: project.reportingCurrencyCode,
+      });
+    return {
+      costHt: convert(freightExpenseEconomicCost(expense)),
+      deductibleInputVat: convert(recovery.deductibleVat.toString()),
+      id: expense.id,
+      inputVat: convert(expense.vatAmount?.toString() ?? "0"),
+      markupRate:
+        expense.freightMarkupOverrideRate?.toString() ??
+        project.defaultFreightMarkupRate.toString(),
+      nonDeductibleInputVat: convert(recovery.nonDeductibleVat.toString()),
+    };
+  });
+  const expenseAggregate = (
+    field: keyof Pick<
+      (typeof convertedExpenses)[number],
+      "costHt" | "deductibleInputVat" | "inputVat" | "nonDeductibleInputVat"
+    >,
+  ) =>
+    aggregateConvertedAmounts(
+      convertedExpenses.map((expense) => ({
+        id: expense.id,
+        value: expense[field],
+      })),
+    );
   return {
     ...reconcileProjectFreight({
       expenses: convertedExpenses,
@@ -319,6 +360,12 @@ export async function getProjectFreightReconciliation(projectId: string) {
     }),
     defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
     freightEstimateRate: project.freightEstimateRate?.toString() ?? null,
+    projectExpenseDeductibleInputVat: expenseAggregate("deductibleInputVat"),
+    projectExpenseEconomicCost: expenseAggregate("costHt"),
+    projectExpenseInputVat: expenseAggregate("inputVat"),
+    projectExpenseNonDeductibleInputVat: expenseAggregate(
+      "nonDeductibleInputVat",
+    ),
     reportingCurrencyCode: project.reportingCurrencyCode,
   };
 }
