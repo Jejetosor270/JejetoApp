@@ -69,7 +69,7 @@ export default async function DashboardPage() {
           {(
             [
               ["Client invoiced HT", billing.invoicedHt],
-              ["Client paid TTC", billing.paidTtc],
+              ["Client received TTC", billing.paidTtc],
               ["Client outstanding TTC", billing.outstandingTtc],
               ["Client overdue TTC", billing.overdueTtc],
             ] as const

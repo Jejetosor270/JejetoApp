@@ -4,6 +4,7 @@ import { CashFlowPanel } from "@/components/reporting/cash-flow-panel";
 import { OverdueItems } from "@/components/reporting/overdue-items";
 import { Badge } from "@/components/ui/badge";
 import type { CashFlowHorizon } from "@/config/reporting";
+import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import type {
   ProjectReportingSnapshot,
@@ -15,10 +16,14 @@ import type { ProjectTargetSummary } from "@/domain/projects/targets";
 interface Phase11BillingSummary {
   complete: boolean;
   invoicedHt: string;
+  invoicedTtc: string;
+  nextDueDate: string | null;
   outstandingTtc: string;
   overdueTtc: string;
   paidTtc: string;
   quotedHt: string;
+  scheduleComplete: boolean;
+  upcomingScheduledTtc: string | null;
 }
 
 interface ActualProfitability {
@@ -62,44 +67,29 @@ function AggregateMoney({
   );
 }
 
-function PaymentDirectionSummary({
+function SupplierPaymentSummary({
   currencyCode,
-  direction,
   summary,
 }: {
   currencyCode: string;
-  direction: "supplier" | "client";
   summary: SerializedDirectionPaymentSummary;
 }) {
-  const supplier = direction === "supplier";
-  const rows = supplier
-    ? ([
-        ["Supplier payable", summary.base],
-        ["Scheduled", summary.scheduled],
-        ["Paid", summary.paid],
-        ["Scheduled outstanding", summary.scheduledOutstanding],
-        ["Unscheduled", summary.unscheduled],
-        ["Total remaining", summary.totalRemaining],
-        ["Overdue", summary.overdue],
-      ] as const)
-    : ([
-        ["Order receivable plan", summary.base],
-        ["Scheduled", summary.scheduled],
-        ["Received on Order schedules", summary.paid],
-        ["Scheduled remaining", summary.scheduledOutstanding],
-        ["Unscheduled", summary.unscheduled],
-        ["Plan remaining", summary.totalRemaining],
-        ["Overdue", summary.overdue],
-      ] as const);
+  const rows = [
+    ["Supplier payable", summary.base],
+    ["Scheduled", summary.scheduled],
+    ["Paid", summary.paid],
+    ["Scheduled outstanding", summary.scheduledOutstanding],
+    ["Unscheduled", summary.unscheduled],
+    ["Total remaining", summary.totalRemaining],
+    ["Overdue", summary.overdue],
+  ] as const;
   return (
     <article className="overflow-hidden rounded-lg border">
       <header className="bg-muted/25 border-b px-3 py-2.5">
         <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
-          {supplier ? "Cash out" : "Legacy planning"}
+          Cash out
         </p>
-        <h3 className="mt-0.5 text-sm font-semibold">
-          {supplier ? "Supplier payments" : "Order client schedules"}
-        </h3>
+        <h3 className="mt-0.5 text-sm font-semibold">Supplier payments</h3>
       </header>
       <dl className="grid grid-cols-2 gap-x-3 gap-y-3 p-3 text-xs xl:grid-cols-4">
         {rows.map(([label, value]) => (
@@ -117,6 +107,67 @@ function PaymentDirectionSummary({
           </div>
         ))}
       </dl>
+    </article>
+  );
+}
+
+function ClientCollectionSummary({
+  billing,
+  currencyCode,
+  projectId,
+}: {
+  billing: Phase11BillingSummary | null;
+  currencyCode: string;
+  projectId: string;
+}) {
+  const rows = [
+    ["Client invoiced TTC", billing?.invoicedTtc ?? null],
+    ["Client received TTC", billing?.paidTtc ?? null],
+    ["Client outstanding TTC", billing?.outstandingTtc ?? null],
+    ["Client overdue TTC", billing?.overdueTtc ?? null],
+    [
+      "Upcoming scheduled TTC",
+      billing?.scheduleComplete ? billing.upcomingScheduledTtc : null,
+    ],
+  ] as const;
+  return (
+    <article className="overflow-hidden rounded-lg border">
+      <header className="bg-muted/25 flex items-start justify-between gap-3 border-b px-3 py-2.5">
+        <div>
+          <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
+            Cash in
+          </p>
+          <h3 className="mt-0.5 text-sm font-semibold">Client collection</h3>
+        </div>
+        <Link
+          className="text-primary text-xs hover:underline"
+          href={`/billing?projectId=${projectId}`}
+        >
+          Open Billing
+        </Link>
+      </header>
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-3 p-3 text-xs xl:grid-cols-3">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-muted-foreground">{label}</dt>
+            <dd className="financial-figure mt-1 font-semibold">
+              {formatMoney(value, currencyCode)}
+            </dd>
+          </div>
+        ))}
+        <div>
+          <dt className="text-muted-foreground">Next due</dt>
+          <dd className="mt-1 font-semibold">
+            {formatDateOnly(billing?.nextDueDate ?? null)}
+          </dd>
+        </div>
+      </dl>
+      {!billing?.complete || !billing.scheduleComplete ? (
+        <p className="text-destructive border-t px-3 py-2 text-xs">
+          Collection totals are incomplete because a required FX rate is
+          missing.
+        </p>
+      ) : null}
     </article>
   );
 }
@@ -228,7 +279,7 @@ export function ProjectFinancialDashboard({
               [
                 ["Client quoted HT", billing?.quotedHt ?? null],
                 ["Client invoiced HT", billing?.invoicedHt ?? null],
-                ["Client paid TTC", billing?.paidTtc ?? null],
+                ["Client received TTC", billing?.paidTtc ?? null],
                 ["Client outstanding TTC", billing?.outstandingTtc ?? null],
                 ["Client overdue TTC", billing?.overdueTtc ?? null],
                 ["Actual gross profit HT", actualProfitability.grossProfit],
@@ -533,28 +584,30 @@ export function ProjectFinancialDashboard({
       <section className="bg-card rounded-lg border p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold">Payment position</h2>
+            <h2 className="text-sm font-semibold">
+              Payment & collection position
+            </h2>
             <p className="text-muted-foreground mt-1 text-xs">
-              TTC payable/receivable bases remain distinct from HT margin.
+              Supplier payments and authoritative Client Billing collections;
+              TTC cash remains distinct from HT margin.
             </p>
           </div>
           <Link
             className="border-input rounded-md border px-2.5 py-1.5 text-xs font-medium"
-            href={`/payments?projectId=${projectId}`}
+            href={`/payments?projectId=${projectId}&direction=SUPPLIER_PAYMENT`}
           >
-            View installments
+            Open Supplier Payments
           </Link>
         </div>
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
-          <PaymentDirectionSummary
+          <SupplierPaymentSummary
             currencyCode={currency}
-            direction="supplier"
             summary={report.payments.supplier}
           />
-          <PaymentDirectionSummary
+          <ClientCollectionSummary
+            billing={billing}
             currencyCode={currency}
-            direction="client"
-            summary={report.payments.client}
+            projectId={projectId}
           />
         </div>
       </section>
@@ -581,7 +634,7 @@ export function ProjectFinancialDashboard({
                 <th className="px-3 py-2 text-right">Margin</th>
                 <th className="px-3 py-2 text-right">Supplier outstanding</th>
                 <th className="px-3 py-2 text-right">
-                  Client schedule remaining
+                  Legacy Order plan remaining
                 </th>
                 <th className="px-3 py-2">Status</th>
               </tr>

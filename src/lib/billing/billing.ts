@@ -27,6 +27,7 @@ import type {
 } from "@/domain/billing/validation";
 import { reportingAmount } from "@/domain/finance/calculations";
 import {
+  installmentOutstanding,
   reconcileSchedule,
   scheduledAmountFromPercentage,
 } from "@/domain/payments/calculations";
@@ -1322,19 +1323,32 @@ function converted(
   });
 }
 
+function earlierDate(current: string | null, candidate: string): string {
+  return current === null || candidate < current ? candidate : current;
+}
+
 function summarizeClientBillingRecords(
   records: readonly BillingRecord[],
   reportingCurrencyCode: string,
 ) {
   let quoted = new Decimal(0);
   let invoiced = new Decimal(0);
+  let invoicedTtc = new Decimal(0);
   let invoiceOutstanding = new Decimal(0);
   let paid = new Decimal(0);
   let overdue = new Decimal(0);
+  let upcomingScheduled = new Decimal(0);
+  let nextDueDate: string | null = null;
+  let scheduleComplete = true;
+  const today = businessToday();
   const missingIds = new Set<string>();
   const uniqueReceipts = new Map<
     string,
     ReturnType<typeof receiptRecords>[number] & { currencyCode: string }
+  >();
+  const uniqueInstallments = new Map<
+    string,
+    BillingRecord["paymentInstallments"][number]
   >();
   for (const record of records) {
     const convertedHt = converted(
@@ -1347,11 +1361,27 @@ function summarizeClientBillingRecords(
     else if (record.documentType === ClientBillingDocumentType.QUOTE)
       quoted = quoted.plus(convertedHt);
     else invoiced = invoiced.plus(convertedHt);
+    if (record.documentType === ClientBillingDocumentType.INVOICE) {
+      const convertedTtc = converted(
+        record.totalTtc.toString(),
+        record.currencyCode,
+        reportingCurrencyCode,
+        record.fxRateToReporting?.toString() ?? null,
+      );
+      if (convertedTtc === null) missingIds.add(record.id);
+      else invoicedTtc = invoicedTtc.plus(convertedTtc);
+    }
     for (const receipt of receiptRecords(record)) {
       uniqueReceipts.set(receipt.id, {
         ...receipt,
         currencyCode: record.currencyCode,
       });
+    }
+    const visibleInstallments = record.matchedInstallment
+      ? [record.matchedInstallment]
+      : record.paymentInstallments;
+    for (const installment of visibleInstallments) {
+      uniqueInstallments.set(installment.id, installment);
     }
     if (
       isRecognizedClientReceivable({
@@ -1366,7 +1396,7 @@ function summarizeClientBillingRecords(
         paidAmounts: receiptRecords(record).map((receipt) =>
           receipt.amount.toString(),
         ),
-        today: businessToday(),
+        today,
         totalTtc: record.totalTtc.toString(),
       });
       const outstanding = converted(
@@ -1392,15 +1422,43 @@ function summarizeClientBillingRecords(
     if (convertedReceipt === null) missingIds.add(receipt.id);
     else paid = paid.plus(convertedReceipt);
   }
+  for (const installment of uniqueInstallments.values()) {
+    if (installment.isCancelled) continue;
+    const received = installment.receipts.reduce(
+      (total, receipt) => total.plus(receipt.amount),
+      new Decimal(0),
+    );
+    const outstanding = installmentOutstanding(
+      installment.scheduledAmount,
+      received,
+    );
+    const dueDate = dateToDateOnly(installment.dueDate);
+    if (outstanding.isZero() || dueDate < today) continue;
+    nextDueDate = earlierDate(nextDueDate, dueDate);
+    const convertedOutstanding = converted(
+      outstanding.toString(),
+      installment.currencyCode,
+      reportingCurrencyCode,
+      installment.expectedFxRateToReporting?.toString() ?? null,
+    );
+    if (convertedOutstanding === null) scheduleComplete = false;
+    else upcomingScheduled = upcomingScheduled.plus(convertedOutstanding);
+  }
   return {
     complete: missingIds.size === 0,
     invoicedHt: invoiced.toFixed(4),
+    invoicedTtc: invoicedTtc.toFixed(4),
     missingIds: [...missingIds],
+    nextDueDate,
     outstandingTtc: invoiceOutstanding.toFixed(4),
     overdueTtc: overdue.toFixed(4),
     paidTtc: paid.toFixed(4),
     quotedHt: quoted.toFixed(4),
     reportingCurrencyCode,
+    scheduleComplete,
+    upcomingScheduledTtc: scheduleComplete
+      ? upcomingScheduled.toFixed(4)
+      : null,
   };
 }
 

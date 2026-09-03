@@ -61,6 +61,16 @@ describe("client billing calculations", () => {
         documentType: "INVOICE",
         dueDate: "2026-09-03",
         isCancelled: false,
+        paidAmounts: [],
+        today: "2026-09-02",
+        totalTtc: "100000",
+      }).outstanding,
+    ).toBe("100000.0000");
+    expect(
+      calculateClientBillingAmounts({
+        documentType: "INVOICE",
+        dueDate: "2026-09-03",
+        isCancelled: false,
         paidAmounts: ["100000"],
         today: "2026-09-02",
         totalTtc: "100000",

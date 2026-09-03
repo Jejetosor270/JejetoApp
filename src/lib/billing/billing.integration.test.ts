@@ -98,6 +98,49 @@ function confirmation(overrides: Record<string, unknown> = {}) {
   });
 }
 
+function summaryRecord(input: {
+  documentType?: ClientBillingDocumentType;
+  dueDate?: string | null;
+  id: string;
+  installments?: readonly {
+    dueDate: string;
+    receiptAmounts?: readonly string[];
+    scheduledAmount: string;
+  }[];
+  totalHt: string;
+  totalTtc: string;
+}) {
+  return {
+    currencyCode: "EUR",
+    documentType: input.documentType ?? ClientBillingDocumentType.INVOICE,
+    dueDate: input.dueDate ? new Date(`${input.dueDate}T00:00:00.000Z`) : null,
+    fxRateToReporting: null,
+    id: input.id,
+    isCancelled: false,
+    matchedInstallment: null,
+    paymentInstallments: (input.installments ?? []).map(
+      (installment, installmentIndex) => ({
+        currencyCode: "EUR",
+        dueDate: new Date(`${installment.dueDate}T00:00:00.000Z`),
+        expectedFxRateToReporting: null,
+        id: `${input.id}-installment-${installmentIndex}`,
+        isCancelled: false,
+        receipts: (installment.receiptAmounts ?? []).map(
+          (amount, receiptIndex) => ({
+            amount: new Decimal(amount),
+            fxRateToReporting: null,
+            id: `${input.id}-receipt-${installmentIndex}-${receiptIndex}`,
+          }),
+        ),
+        scheduledAmount: new Decimal(installment.scheduledAmount),
+      }),
+    ),
+    projectId,
+    totalHt: new Decimal(input.totalHt),
+    totalTtc: new Decimal(input.totalTtc),
+  };
+}
+
 describe("Client billing persistence", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -129,44 +172,27 @@ describe("Client billing persistence", () => {
     });
   });
 
-  it("aggregates actual Invoice receipts instead of Order payment plans", async () => {
+  it("shows Villa Apsaras as fully collected from its Invoice and Receipt", async () => {
     database.clientBillingDocument.findMany.mockResolvedValue([
-      {
-        currencyCode: "EUR",
-        documentType: ClientBillingDocumentType.INVOICE,
-        dueDate: new Date("2026-09-02T00:00:00.000Z"),
-        fxRateToReporting: null,
+      summaryRecord({
+        dueDate: "2026-09-02",
         id: "invoice-1",
-        isCancelled: false,
-        matchedInstallment: null,
-        paymentInstallments: [
+        installments: [
           {
-            receipts: [
-              {
-                amount: new Decimal("84363.86"),
-                fxRateToReporting: null,
-                id: "receipt-1",
-              },
-            ],
+            dueDate: "2026-09-02",
+            receiptAmounts: ["84363.86"],
+            scheduledAmount: "84363.86",
           },
         ],
-        projectId,
-        totalHt: new Decimal("70303.22"),
-        totalTtc: new Decimal("84363.86"),
-      },
-      {
-        currencyCode: "EUR",
+        totalHt: "70303.22",
+        totalTtc: "84363.86",
+      }),
+      summaryRecord({
         documentType: ClientBillingDocumentType.QUOTE,
-        dueDate: null,
-        fxRateToReporting: null,
         id: "quote-1",
-        isCancelled: false,
-        matchedInstallment: null,
-        paymentInstallments: [],
-        projectId,
-        totalHt: new Decimal("100000"),
-        totalTtc: new Decimal("120000"),
-      },
+        totalHt: "100000",
+        totalTtc: "120000",
+      }),
     ]);
 
     const summaries = await getProjectsClientBillingSummaries([
@@ -176,9 +202,91 @@ describe("Client billing persistence", () => {
     expect(summaries.get(projectId)).toMatchObject({
       complete: true,
       invoicedHt: "70303.2200",
+      invoicedTtc: "84363.8600",
+      nextDueDate: null,
       outstandingTtc: "0.0000",
+      overdueTtc: "0.0000",
       paidTtc: "84363.8600",
       quotedHt: "100000.0000",
+      scheduleComplete: true,
+      upcomingScheduledTtc: "0.0000",
+    });
+  });
+
+  it("derives unpaid and partially collected Invoice balances and timing", async () => {
+    database.clientBillingDocument.findMany.mockResolvedValue([
+      summaryRecord({
+        dueDate: "2099-10-15",
+        id: "invoice-1",
+        installments: [
+          {
+            dueDate: "2099-09-15",
+            receiptAmounts: ["30000"],
+            scheduledAmount: "30000",
+          },
+          { dueDate: "2099-10-15", scheduledAmount: "70000" },
+        ],
+        totalHt: "83333.33",
+        totalTtc: "100000",
+      }),
+      summaryRecord({
+        dueDate: "2099-12-01",
+        id: "invoice-2",
+        totalHt: "100000",
+        totalTtc: "100000",
+      }),
+    ]);
+
+    const summaries = await getProjectsClientBillingSummaries([
+      { id: projectId, reportingCurrencyCode: "EUR" },
+    ]);
+
+    expect(summaries.get(projectId)).toMatchObject({
+      invoicedTtc: "200000.0000",
+      nextDueDate: "2099-10-15",
+      outstandingTtc: "170000.0000",
+      paidTtc: "30000.0000",
+      upcomingScheduledTtc: "70000.0000",
+    });
+  });
+
+  it("aggregates multiple fully paid Invoices without using legacy Order schedules", async () => {
+    database.clientBillingDocument.findMany.mockResolvedValue([
+      summaryRecord({
+        id: "invoice-a",
+        installments: [
+          {
+            dueDate: "2099-09-15",
+            receiptAmounts: ["60000"],
+            scheduledAmount: "60000",
+          },
+        ],
+        totalHt: "50000",
+        totalTtc: "60000",
+      }),
+      summaryRecord({
+        id: "invoice-b",
+        installments: [
+          {
+            dueDate: "2099-10-15",
+            receiptAmounts: ["40000"],
+            scheduledAmount: "40000",
+          },
+        ],
+        totalHt: "33333.33",
+        totalTtc: "40000",
+      }),
+    ]);
+
+    const summaries = await getProjectsClientBillingSummaries([
+      { id: projectId, reportingCurrencyCode: "EUR" },
+    ]);
+
+    expect(summaries.get(projectId)).toMatchObject({
+      invoicedTtc: "100000.0000",
+      outstandingTtc: "0.0000",
+      paidTtc: "100000.0000",
+      upcomingScheduledTtc: "0.0000",
     });
   });
 

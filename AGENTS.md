@@ -130,6 +130,7 @@ Do not introduce a reusable product/SKU catalog, inventory, warehouse management
 - Project Freight Estimate % is a planning allowance applied to the Project's expected Product Purchase Cost HT (`estimatedPurchaseCostHt`), not live Order purchases, freight cost, Client billing, or freight markup.
 - Order AUTO freight remains a separate proportional allocation based on that Order's own Product Purchase Cost HT; a nullable manual amount override may replace only the Order allocation.
 - Order freight cost and Project-level freight expenses are distinct actual-cost sources. Freight reconciliation aggregates both, applies inherited or explicit freight markup, compares recovery with the Project planning allowance, and remains incomplete when required manual FX is missing.
+- Actual Client collection reporting comes only from active Client Invoices and authoritative Client Receipts. Legacy Order client schedules remain planning data and must never drive or be presented as actual received, outstanding, or overdue balances.
 
 ## Database conventions
 
