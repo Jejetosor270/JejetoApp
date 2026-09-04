@@ -9,6 +9,8 @@ import {
   dateToDateOnly,
   europeanInputToDateOnly,
   formatDateOnly,
+  formatTimestamp,
+  formatTimestampDate,
   isDateOnly,
   monthBounds,
   monthGrid,
@@ -19,6 +21,17 @@ describe("date-only payment helpers", () => {
     expect(dateToDateOnly(dateOnlyToDate("2026-09-15"))).toBe("2026-09-15");
     expect(formatDateOnly("2026-09-15")).toBe("15/09/2026");
     expect(dateOnlyToEuropeanInput("2026-08-29")).toBe("29/08/2026");
+  });
+
+  it("formats timestamps as DD/MM/YYYY", () => {
+    expect(formatTimestampDate("2026-09-04T21:15:00.000Z")).toBe("04/09/2026");
+    expect(formatTimestampDate(null)).toBe("—");
+  });
+
+  it("formats audit timestamps with a separate time", () => {
+    expect(formatTimestamp("2026-09-04T15:07:00.000Z")).toBe(
+      "04/09/2026, 17:07",
+    );
   });
 
   it("parses European input without reversing day and month", () => {

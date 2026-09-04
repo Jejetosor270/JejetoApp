@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { OrderDetailShell } from "@/components/procurement/order-detail-shell";
+import { DetailPageHeader } from "@/components/layout/detail-page-header";
 import { OrderBillingReconciliation } from "@/components/billing/order-billing-reconciliation";
 import { PaymentSchedule } from "@/components/payments/payment-schedule";
 import {
@@ -20,6 +21,7 @@ import { getOrderPaymentSummary } from "@/lib/payments/payments";
 import { listOrderQuoteImports } from "@/lib/quote-intake/history";
 import { getOrderBillingReconciliation } from "@/lib/billing/billing";
 import { orderBillingDifference } from "@/domain/billing/calculations";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 
 export const metadata: Metadata = { title: "Supplier Order" };
 export default async function OrderPage({
@@ -47,21 +49,21 @@ export default async function OrderPage({
         options={options}
         order={order}
       >
-        <header className="bg-card rounded-lg border p-5">
-          <p className="text-primary font-mono text-xs">{order.orderNumber}</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            {order.packageName}
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            {order.project.name} · {order.supplier.displayName} ·{" "}
-            {order.status.replaceAll("_", " ")}
-          </p>
+        <div>
+          <DetailPageHeader
+            backHref="/orders"
+            backLabel="Supplier Orders"
+            eyebrow={order.orderNumber}
+            meta={`${order.project.name} · ${order.supplier.displayName}`}
+            status={order.status}
+            title={order.packageName}
+          />
           {order.description ? (
-            <p className="text-muted-foreground mt-4 border-t pt-4 text-sm leading-6">
+            <p className="bg-card text-muted-foreground -mt-px rounded-b-lg border px-5 py-4 text-sm leading-6">
               {order.description}
             </p>
           ) : null}
-        </header>
+        </div>
         <section className="grid gap-3 lg:grid-cols-2">
           <article className="bg-card rounded-lg border p-4">
             <h2 className="text-sm font-semibold">Cost, sell & markup</h2>
@@ -76,7 +78,7 @@ export default async function OrderPage({
               </dd>
               <dt>Pricing method</dt>
               <dd className="text-right">
-                {order.pricingMode.replaceAll("_", " ").toLowerCase()}
+                {formatEnumLabel(order.pricingMode)}
               </dd>
               {order.pricingMode !== "DIRECT_SELLING_PRICE" ? (
                 <>
@@ -117,7 +119,7 @@ export default async function OrderPage({
                 </>
               ) : (
                 <>
-                  <dt>Direct package selling HT</dt>
+                  <dt>Package Sell HT</dt>
                   <dd className="financial-figure text-right">
                     {formatMoney(
                       order.packageSellingPrice,
@@ -135,7 +137,7 @@ export default async function OrderPage({
                 {formatMoney(cost.miscellaneous, order.orderCurrencyCode)}
               </dd>
               <dt className="border-t pt-2">
-                Economic cost ({order.project.reportingCurrencyCode})
+                Economic Landed Cost HT ({order.project.reportingCurrencyCode})
               </dt>
               <dd className="financial-figure border-t pt-2 text-right font-semibold">
                 {formatMoney(
@@ -143,7 +145,7 @@ export default async function OrderPage({
                   order.project.reportingCurrencyCode,
                 )}
               </dd>
-              <dt>Gross profit</dt>
+              <dt>Supplier Order Planned Gross Profit HT</dt>
               <dd className="financial-figure text-right">
                 {formatMoney(
                   cost.grossProfit,
@@ -163,14 +165,14 @@ export default async function OrderPage({
           <article className="bg-card rounded-lg border p-4">
             <h2 className="text-sm font-semibold">Selling & VAT</h2>
             <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-              <dt>Selling HT</dt>
+              <dt>Total Supplier Order Sell HT</dt>
               <dd className="financial-figure text-right">
                 {formatMoney(
                   order.totalSellingRevenue,
                   order.sellingCurrencyCode,
                 )}
               </dd>
-              <dt>Output VAT</dt>
+              <dt>Planned Supplier Order Output VAT</dt>
               <dd className="financial-figure text-right">
                 {formatMoney(
                   cost.outputVat?.amount ?? null,
@@ -206,7 +208,7 @@ export default async function OrderPage({
               <dt>Input VAT recovery</dt>
               <dd className="text-right text-xs">
                 {cost.inputVat?.recoverableRate
-                  ? `${formatRate(cost.inputVat.recoverableRate)} · ${cost.inputVat.recoverability?.replaceAll("_", " ").toLowerCase()}`
+                  ? `${formatRate(cost.inputVat.recoverableRate)} · ${cost.inputVat.recoverability ? formatEnumLabel(cost.inputVat.recoverability) : ""}`
                   : "—"}
               </dd>
               <dt>Selling reporting</dt>
@@ -354,7 +356,7 @@ export default async function OrderPage({
                       })}
                     </td>
                     <td className="px-2 py-2">
-                      {item.action.replaceAll("_", " ").toLowerCase()}
+                      {formatEnumLabel(item.action)}
                     </td>
                     <td className="px-2 py-2">{item.originalFilename}</td>
                     <td className="px-2 py-2">

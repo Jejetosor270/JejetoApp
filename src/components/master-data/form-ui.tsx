@@ -174,7 +174,8 @@ export function PercentageInput({
 }
 
 export function ActionFeedback({ state }: { state: MasterDataActionState }) {
-  if (!state.message || !state.status) return null;
+  const message = state.formError ?? state.message;
+  if (!message || !state.status) return null;
   return (
     <div role={state.status === "error" ? "alert" : "status"}>
       <p
@@ -184,7 +185,7 @@ export function ActionFeedback({ state }: { state: MasterDataActionState }) {
             : "text-positive text-sm"
         }
       >
-        {state.message}
+        {message}
       </p>
       {state.status === "error" && state.fieldErrors ? (
         <ul className="text-destructive mt-1 list-disc pl-4 text-xs">

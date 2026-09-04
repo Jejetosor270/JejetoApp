@@ -27,12 +27,12 @@ import {
   formatDateOnly,
 } from "@/domain/payments/dates";
 import { formatMoney } from "@/domain/procurement/presentation";
+import { formatEnumLabel } from "@/domain/presentation/labels";
+import { tableHeaderClassName } from "@/components/listing/table-styles";
 
 interface PaymentInstallmentRow {
   actualDate: string | null;
-  clientName: string;
   currencyCode: string;
-  direction: "CLIENT_RECEIPT" | "SUPPLIER_PAYMENT";
   dueDate: string;
   id: string;
   label: string;
@@ -77,7 +77,6 @@ function InstallmentRow({
   const [editing, setEditing] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
-  const cashOut = installment.direction === "SUPPLIER_PAYMENT";
   const set = (field: keyof typeof draft, value: string) =>
     setDraft((current) => ({ ...current, [field]: value }));
   const save = () => {
@@ -110,15 +109,10 @@ function InstallmentRow({
       {canEdit ? (
         <SelectionCell
           checked={isSelected}
-          label={`${cashOut ? "Supplier payment" : "Client receipt"} ${saved.label}`}
+          label={`Supplier payment ${saved.label}`}
           onChange={onSelect}
         />
       ) : null}
-      <td className="px-3 py-2">
-        <Badge variant={cashOut ? "destructive" : "default"}>
-          {cashOut ? "CASH OUT" : "CASH IN"}
-        </Badge>
-      </td>
       <td className="px-3 py-2">
         {editing ? (
           <InlineDateInput
@@ -142,9 +136,7 @@ function InstallmentRow({
           {installment.orderNumber}
         </p>
       </td>
-      <td className="px-3 py-2">
-        {cashOut ? installment.supplierName : installment.clientName}
-      </td>
+      <td className="px-3 py-2">{installment.supplierName}</td>
       <td className="px-3 py-2">
         {editing ? (
           <div className="grid gap-1">
@@ -190,7 +182,7 @@ function InstallmentRow({
       </td>
       <td className="px-3 py-2">
         <Badge variant={saved.status === "OVERDUE" ? "destructive" : "outline"}>
-          {saved.status.replaceAll("_", " ")}
+          {formatEnumLabel(saved.status)}
         </Badge>
       </td>
       {canEdit ? (
@@ -236,13 +228,13 @@ export function PaymentInstallmentTable({
           clearSelection={selection.clear}
           entityName="installment"
           impactSummary={`${affectedSettlementCount} recorded settlement${affectedSettlementCount === 1 ? "" : "s"} will also be deleted.`}
-          scope="Deleting the selected payment or receipt installments will also permanently delete all associated settlement and payment-history records."
+          scope="Deleting the selected Supplier Payment installments will also permanently delete all associated settlement and payment-history records."
           selectedIds={selection.selectedIds}
         />
       ) : null}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[86rem] text-left text-sm">
-          <thead className="bg-muted/40 text-muted-foreground text-xs">
+        <table className="w-full min-w-[76rem] text-left text-sm">
+          <thead className={tableHeaderClassName}>
             <tr>
               {canEdit ? (
                 <SelectionHeader
@@ -251,14 +243,13 @@ export function PaymentInstallmentTable({
                   onChange={selection.toggleAll}
                 />
               ) : null}
-              <th className="px-3 py-2">Direction</th>
               <th className="px-3 py-2">Due</th>
               <th className="px-3 py-2">Actual</th>
               <th className="px-3 py-2">Project / Supplier Order</th>
-              <th className="px-3 py-2">Party</th>
+              <th className="px-3 py-2">Supplier</th>
               <th className="px-3 py-2">Installment / notes</th>
               <th className="px-3 py-2 text-right">Scheduled</th>
-              <th className="px-3 py-2 text-right">Paid / Received</th>
+              <th className="px-3 py-2 text-right">Paid</th>
               <th className="px-3 py-2 text-right">Outstanding</th>
               <th className="px-3 py-2">Status</th>
               {canEdit ? <th className="px-3 py-2 text-right">Edit</th> : null}
@@ -278,9 +269,9 @@ export function PaymentInstallmentTable({
               <tr>
                 <td
                   className="text-muted-foreground px-3 py-12 text-center"
-                  colSpan={canEdit ? 12 : 10}
+                  colSpan={canEdit ? 11 : 9}
                 >
-                  No payment installments match these filters.
+                  No Supplier Payment installments match these filters.
                 </td>
               </tr>
             ) : null}

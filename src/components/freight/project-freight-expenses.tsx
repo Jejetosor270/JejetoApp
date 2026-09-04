@@ -25,6 +25,7 @@ import {
 } from "@/domain/procurement/presentation";
 import { vatTreatments } from "@/config/vat";
 import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 
 interface ExpenseView {
   costAmountHt: string;
@@ -47,10 +48,7 @@ interface ExpenseView {
 }
 
 function vatLabel(value: string): string {
-  return value
-    .replaceAll("_", " ")
-    .toLowerCase()
-    .replace(/^./, (letter) => letter.toUpperCase());
+  return formatEnumLabel(value);
 }
 
 function VatFields({

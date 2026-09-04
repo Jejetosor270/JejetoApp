@@ -6,6 +6,10 @@ import { ExportLink } from "@/components/export/export-link";
 import { ItemTable, type ItemViewMode } from "@/components/items/item-table";
 import { PageSizeField, Pagination } from "@/components/listing/pagination";
 import {
+  FilterField,
+  filterControlClassName,
+} from "@/components/listing/filter-field";
+import {
   firstQueryValue,
   optionalUuid,
   parsePageInput,
@@ -22,9 +26,9 @@ import {
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listItemOptions, listItemsPage } from "@/lib/items/items";
 import { isItemManagementEnabled } from "@/lib/settings/application-settings";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 
 export const metadata: Metadata = { title: "Items" };
-const control = "border-input bg-background h-9 rounded-lg border px-3 text-sm";
 
 export default async function ItemsPage({
   searchParams,
@@ -138,151 +142,181 @@ export default async function ItemsPage({
           </Link>
         ))}
       </nav>
-      <form className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+      <form className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-6">
         <input name="view" type="hidden" value={view} />
-        <input
-          className={control}
-          defaultValue={filters.query}
-          name="query"
-          placeholder="Search reference, description, SKU…"
-        />
-        <select
-          className={control}
-          defaultValue={filters.projectId ?? ""}
-          name="projectId"
-        >
-          <option value="">All Projects</option>
-          {options.projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className={control}
-          defaultValue={filters.buildingId ?? ""}
-          name="buildingId"
-        >
-          <option value="">All Buildings</option>
-          {options.projects.flatMap((p) =>
-            p.buildings.map((b) => (
-              <option key={b.id} value={b.id}>
-                {p.name} · {b.name}
+        <FilterField label="Search">
+          <input
+            className={filterControlClassName}
+            defaultValue={filters.query}
+            name="query"
+            placeholder="Search reference, description, SKU…"
+          />
+        </FilterField>
+        <FilterField label="Project">
+          <select
+            className={filterControlClassName}
+            defaultValue={filters.projectId ?? ""}
+            name="projectId"
+          >
+            <option value="">All Projects</option>
+            {options.projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
               </option>
-            )),
-          )}
-        </select>
-        <select
-          className={control}
-          defaultValue={filters.roomId ?? ""}
-          name="roomId"
-        >
-          <option value="">All Rooms</option>
-          {options.projects.flatMap((p) =>
-            p.buildings.flatMap((b) =>
-              b.rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {b.name} · {r.name}
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Building">
+          <select
+            className={filterControlClassName}
+            defaultValue={filters.buildingId ?? ""}
+            name="buildingId"
+          >
+            <option value="">All Buildings</option>
+            {options.projects.flatMap((p) =>
+              p.buildings.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {p.name} · {b.name}
                 </option>
               )),
-            ),
-          )}
-        </select>
-        <select
-          className={control}
-          defaultValue={filters.supplierId ?? ""}
-          name="supplierId"
-        >
-          <option value="">All Suppliers</option>
-          {options.suppliers.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.displayName}
-            </option>
-          ))}
-        </select>
-        <select
-          className={control}
-          defaultValue={filters.orderId ?? ""}
-          name="orderId"
-        >
-          <option value="">All Supplier Orders</option>
-          {options.projects.flatMap((p) =>
-            p.orders.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.orderNumber}
+            )}
+          </select>
+        </FilterField>
+        <FilterField label="Room">
+          <select
+            className={filterControlClassName}
+            defaultValue={filters.roomId ?? ""}
+            name="roomId"
+          >
+            <option value="">All Rooms</option>
+            {options.projects.flatMap((p) =>
+              p.buildings.flatMap((b) =>
+                b.rooms.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {b.name} · {r.name}
+                  </option>
+                )),
+              ),
+            )}
+          </select>
+        </FilterField>
+        <FilterField label="Supplier">
+          <select
+            className={filterControlClassName}
+            defaultValue={filters.supplierId ?? ""}
+            name="supplierId"
+          >
+            <option value="">All Suppliers</option>
+            {options.suppliers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.displayName}
               </option>
-            )),
-          )}
-        </select>
-        <select
-          className={control}
-          defaultValue={filters.commercialStatus ?? ""}
-          name="commercialStatus"
-        >
-          <option value="">All commercial statuses</option>
-          {Object.values(ItemCommercialStatus).map((x) => (
-            <option key={x} value={x}>
-              {x.replaceAll("_", " ")}
-            </option>
-          ))}
-        </select>
-        <select
-          className={control}
-          defaultValue={filters.logisticsStatus ?? ""}
-          name="logisticsStatus"
-        >
-          <option value="">All logistics statuses</option>
-          {Object.values(ItemLogisticsStatus).map((x) => (
-            <option key={x} value={x}>
-              {x.replaceAll("_", " ")}
-            </option>
-          ))}
-        </select>
-        <input
-          className={control}
-          defaultValue={filters.category ?? ""}
-          name="category"
-          placeholder="Category"
-        />
-        <select
-          className={control}
-          defaultValue={filters.currencyCode ?? ""}
-          name="currencyCode"
-        >
-          <option value="">All currencies</option>
-          {options.currencies.map((x) => (
-            <option key={x.code} value={x.code}>
-              {x.code}
-            </option>
-          ))}
-        </select>
-        <select
-          className={control}
-          defaultValue={filters.sourceType ?? ""}
-          name="sourceType"
-        >
-          <option value="">All sources</option>
-          {Object.values(ItemSourceType).map((x) => (
-            <option key={x} value={x}>
-              {x.replaceAll("_", " ")}
-            </option>
-          ))}
-        </select>
-        <select className={control} defaultValue={filters.sort} name="sort">
-          <option value="updated">Updated</option>
-          <option value="reference">Reference</option>
-          <option value="description">Description</option>
-          <option value="status">Status</option>
-          <option value="estimatedDelivery">Estimated delivery</option>
-        </select>
-        <select
-          className={control}
-          defaultValue={filters.direction}
-          name="direction"
-        >
-          <option value="desc">Descending</option>
-          <option value="asc">Ascending</option>
-        </select>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Supplier Order">
+          <select
+            className={filterControlClassName}
+            defaultValue={filters.orderId ?? ""}
+            name="orderId"
+          >
+            <option value="">All Supplier Orders</option>
+            {options.projects.flatMap((p) =>
+              p.orders.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.orderNumber}
+                </option>
+              )),
+            )}
+          </select>
+        </FilterField>
+        <FilterField label="Commercial status">
+          <select
+            className={filterControlClassName}
+            defaultValue={filters.commercialStatus ?? ""}
+            name="commercialStatus"
+          >
+            <option value="">All commercial statuses</option>
+            {Object.values(ItemCommercialStatus).map((x) => (
+              <option key={x} value={x}>
+                {formatEnumLabel(x)}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Logistics status">
+          <select
+            className={filterControlClassName}
+            defaultValue={filters.logisticsStatus ?? ""}
+            name="logisticsStatus"
+          >
+            <option value="">All logistics statuses</option>
+            {Object.values(ItemLogisticsStatus).map((x) => (
+              <option key={x} value={x}>
+                {formatEnumLabel(x)}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Category">
+          <input
+            className={filterControlClassName}
+            defaultValue={filters.category ?? ""}
+            name="category"
+            placeholder="Category"
+          />
+        </FilterField>
+        <FilterField label="Currency">
+          <select
+            className={filterControlClassName}
+            defaultValue={filters.currencyCode ?? ""}
+            name="currencyCode"
+          >
+            <option value="">All currencies</option>
+            {options.currencies.map((x) => (
+              <option key={x.code} value={x.code}>
+                {x.code}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Source">
+          <select
+            className={filterControlClassName}
+            defaultValue={filters.sourceType ?? ""}
+            name="sourceType"
+          >
+            <option value="">All sources</option>
+            {Object.values(ItemSourceType).map((x) => (
+              <option key={x} value={x}>
+                {formatEnumLabel(x)}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Sort by">
+          <select
+            className={filterControlClassName}
+            defaultValue={filters.sort}
+            name="sort"
+          >
+            <option value="updated">Updated</option>
+            <option value="reference">Reference</option>
+            <option value="description">Description</option>
+            <option value="status">Status</option>
+            <option value="estimatedDelivery">Estimated delivery</option>
+          </select>
+        </FilterField>
+        <FilterField label="Sort direction">
+          <select
+            className={filterControlClassName}
+            defaultValue={filters.direction}
+            name="direction"
+          >
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+          </select>
+        </FilterField>
         <PageSizeField value={pageInput.pageSize} />
         <button
           className="border-input h-9 rounded-lg border px-3 text-sm font-medium"
@@ -302,6 +336,7 @@ export default async function ItemsPage({
         pageSize={pageInput.pageSize}
         pathname="/items"
         queryString={queryStringFromParams(params)}
+        selectionIsPageScoped={canEdit}
         total={result.total}
       />
     </div>

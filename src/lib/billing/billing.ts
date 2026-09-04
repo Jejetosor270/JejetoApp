@@ -1839,6 +1839,10 @@ function summarizeClientBillingRecords(
   };
 }
 
+export type ClientBillingSummary = ReturnType<
+  typeof summarizeClientBillingRecords
+>;
+
 export async function getProjectClientBillingSummary(projectId: string) {
   const project = await getDatabase().project.findUnique({
     where: { id: projectId },

@@ -10,6 +10,7 @@ import {
   InlineTextInput,
 } from "@/components/inline-editing/inline-edit";
 import { countries, countryLabel } from "@/config/countries";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 
 interface LocationView {
   city: string | null;
@@ -80,7 +81,7 @@ function LocationRow({ location }: { location: LocationView }) {
           >
             {types.map((type) => (
               <option key={type} value={type}>
-                {type.replaceAll("_", " ")}
+                {formatEnumLabel(type)}
               </option>
             ))}
           </InlineSelect>
@@ -114,7 +115,7 @@ function LocationRow({ location }: { location: LocationView }) {
           <span className="font-medium">{saved.name}</span>
           <span className="text-muted-foreground ml-2 text-xs">
             {location.city ?? countryLabel(saved.countryCode)} ·{" "}
-            {saved.type.replaceAll("_", " ")} ·{" "}
+            {formatEnumLabel(saved.type)} ·{" "}
             {saved.isActive ? "Active" : "Inactive"}
           </span>
         </span>

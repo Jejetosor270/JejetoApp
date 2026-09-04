@@ -148,5 +148,6 @@
 @layer utilities {
   .financial-figure {
     font-variant-numeric: tabular-nums lining-nums;
+    white-space: nowrap;
   }
 }

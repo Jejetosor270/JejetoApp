@@ -31,6 +31,7 @@ import {
 } from "@/domain/procurement/presentation";
 import { addWeeksToDateOnly } from "@/domain/payments/dates";
 import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import { vatAmount as calculateVatAmount } from "@/domain/finance/calculations";
 import {
   calculateOrderPricingDraft,
@@ -169,13 +170,7 @@ const labels: Record<string, string> = {
   NON_RECOVERABLE: "Non-recoverable",
 };
 function label(value: string): string {
-  return (
-    labels[value] ??
-    value
-      .replaceAll("_", " ")
-      .toLowerCase()
-      .replace(/^./, (letter) => letter.toUpperCase())
-  );
+  return labels[value] ?? formatEnumLabel(value);
 }
 
 function calculationValue(value: string, maximumDecimalPlaces = 4): string {
@@ -996,8 +991,10 @@ export function OrderForm({
             ))}
           </div>
         </fieldset>
-        <section className="bg-muted/20 rounded-lg border p-4">
-          <h3 className="text-sm font-semibold">Procurement timing</h3>
+        <details className="bg-muted/20 rounded-lg border p-4">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Procurement timing
+          </summary>
           <p className="text-muted-foreground mt-1 text-xs">
             Business dates remain date-only. Expected ready is calculated from
             Supplier Order date and lead time, and remains editable.
@@ -1081,377 +1078,399 @@ export function OrderForm({
               />
             </Field>
           </div>
-        </section>
-        <section className="space-y-3">
-          <div>
-            <h3 className="text-sm font-semibold">Current procurement cost</h3>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Amounts are HT in {purchaseCurrency}. Inputs stay plain while
-              editing; read-only values are formatted.
+        </details>
+        <details className="rounded-lg border p-4" open>
+          <summary className="cursor-pointer text-sm font-semibold">
+            Costs, FX & VAT
+          </summary>
+          <section className="mt-4 space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold">
+                Current procurement cost
+              </h3>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Amounts are HT in {purchaseCurrency}. Inputs stay plain while
+                editing; read-only values are formatted.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Field
+                error={fieldErrors.purchaseCost}
+                label="Product / supplier cost HT"
+              >
+                <MoneyInput
+                  invalid={Boolean(fieldErrors.purchaseCost)}
+                  name="purchaseCost"
+                  onValueChange={(value) => changeDraft("purchaseCost", value)}
+                  value={purchaseCost}
+                />
+              </Field>
+              <Field error={fieldErrors.freight} label="Freight cost HT">
+                <MoneyInput
+                  invalid={Boolean(fieldErrors.freight)}
+                  name="freight"
+                  onValueChange={(value) => changeDraft("freight", value)}
+                  value={freightCost}
+                />
+              </Field>
+              <Field
+                error={fieldErrors.customsDuties}
+                label="Customs / duties HT"
+              >
+                <MoneyInput
+                  invalid={Boolean(fieldErrors.customsDuties)}
+                  name="customsDuties"
+                  onValueChange={(value) => changeDraft("customsDuties", value)}
+                  value={customsCost}
+                />
+              </Field>
+              <Field error={fieldErrors.miscellaneous} label="Miscellaneous HT">
+                <MoneyInput
+                  invalid={Boolean(fieldErrors.miscellaneous)}
+                  name="miscellaneous"
+                  onValueChange={(value) => changeDraft("miscellaneous", value)}
+                  value={miscellaneousCost}
+                />
+              </Field>
+              <Field
+                error={fieldErrors.purchaseFxRate}
+                label={`Purchase FX (${purchaseCurrency} → ${project?.reportingCurrencyCode ?? "reporting"})`}
+              >
+                <input
+                  aria-invalid={
+                    Boolean(fieldErrors.purchaseFxRate) || undefined
+                  }
+                  className={`${errorClass("purchaseFxRate")} ${purchaseCurrency === project?.reportingCurrencyCode ? "bg-muted" : ""}`}
+                  disabled={purchaseCurrency === project?.reportingCurrencyCode}
+                  inputMode="decimal"
+                  name="purchaseFxRate"
+                  onChange={(event) =>
+                    changeDraft("purchaseFxRate", event.target.value)
+                  }
+                  placeholder={
+                    purchaseCurrency === project?.reportingCurrencyCode
+                      ? "1 (automatic)"
+                      : "e.g. 0.857500"
+                  }
+                  value={purchaseFxRate}
+                />
+              </Field>
+              <Field
+                error={fieldErrors.sellingFxRate}
+                label={`Selling FX (${sellingCurrency} → ${project?.reportingCurrencyCode ?? "reporting"})`}
+              >
+                <input
+                  aria-invalid={Boolean(fieldErrors.sellingFxRate) || undefined}
+                  className={`${errorClass("sellingFxRate")} ${sellingCurrency === project?.reportingCurrencyCode ? "bg-muted" : ""}`}
+                  disabled={sellingCurrency === project?.reportingCurrencyCode}
+                  inputMode="decimal"
+                  name="sellingFxRate"
+                  onChange={(event) =>
+                    changeDraft("sellingFxRate", event.target.value)
+                  }
+                  placeholder={
+                    sellingCurrency === project?.reportingCurrencyCode
+                      ? "1 (automatic)"
+                      : "e.g. 1.170000"
+                  }
+                  value={sellingFxRate}
+                />
+              </Field>
+            </div>
+            <p className="text-muted-foreground text-xs">
+              FX convention: 1 transaction-currency unit = X
+              project-reporting-currency units.
             </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Field
-              error={fieldErrors.purchaseCost}
-              label="Product / supplier cost HT"
-            >
-              <MoneyInput
-                invalid={Boolean(fieldErrors.purchaseCost)}
-                name="purchaseCost"
-                onValueChange={(value) => changeDraft("purchaseCost", value)}
-                value={purchaseCost}
-              />
-            </Field>
-            <Field error={fieldErrors.freight} label="Freight cost HT">
-              <MoneyInput
-                invalid={Boolean(fieldErrors.freight)}
-                name="freight"
-                onValueChange={(value) => changeDraft("freight", value)}
-                value={freightCost}
-              />
-            </Field>
-            <Field
-              error={fieldErrors.customsDuties}
-              label="Customs / duties HT"
-            >
-              <MoneyInput
-                invalid={Boolean(fieldErrors.customsDuties)}
-                name="customsDuties"
-                onValueChange={(value) => changeDraft("customsDuties", value)}
-                value={customsCost}
-              />
-            </Field>
-            <Field error={fieldErrors.miscellaneous} label="Miscellaneous HT">
-              <MoneyInput
-                invalid={Boolean(fieldErrors.miscellaneous)}
-                name="miscellaneous"
-                onValueChange={(value) => changeDraft("miscellaneous", value)}
-                value={miscellaneousCost}
-              />
-            </Field>
-            <Field
-              error={fieldErrors.purchaseFxRate}
-              label={`Purchase FX (${purchaseCurrency} → ${project?.reportingCurrencyCode ?? "reporting"})`}
-            >
-              <input
-                aria-invalid={Boolean(fieldErrors.purchaseFxRate) || undefined}
-                className={`${errorClass("purchaseFxRate")} ${purchaseCurrency === project?.reportingCurrencyCode ? "bg-muted" : ""}`}
-                disabled={purchaseCurrency === project?.reportingCurrencyCode}
-                inputMode="decimal"
-                name="purchaseFxRate"
-                onChange={(event) =>
-                  changeDraft("purchaseFxRate", event.target.value)
-                }
-                placeholder={
-                  purchaseCurrency === project?.reportingCurrencyCode
-                    ? "1 (automatic)"
-                    : "e.g. 0.857500"
-                }
-                value={purchaseFxRate}
-              />
-            </Field>
-            <Field
-              error={fieldErrors.sellingFxRate}
-              label={`Selling FX (${sellingCurrency} → ${project?.reportingCurrencyCode ?? "reporting"})`}
-            >
-              <input
-                aria-invalid={Boolean(fieldErrors.sellingFxRate) || undefined}
-                className={`${errorClass("sellingFxRate")} ${sellingCurrency === project?.reportingCurrencyCode ? "bg-muted" : ""}`}
-                disabled={sellingCurrency === project?.reportingCurrencyCode}
-                inputMode="decimal"
-                name="sellingFxRate"
-                onChange={(event) =>
-                  changeDraft("sellingFxRate", event.target.value)
-                }
-                placeholder={
-                  sellingCurrency === project?.reportingCurrencyCode
-                    ? "1 (automatic)"
-                    : "e.g. 1.170000"
-                }
-                value={sellingFxRate}
-              />
-            </Field>
-          </div>
-          <p className="text-muted-foreground text-xs">
-            FX convention: 1 transaction-currency unit = X
-            project-reporting-currency units.
-          </p>
-          <section className="bg-background/60 rounded-md border p-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h4 className="text-xs font-semibold">
-                  Freight reconciliation
-                </h4>
-                <p className="text-muted-foreground mt-1 text-xs">
-                  Cost, Client commercial allowance, and markup recovery remain
-                  separate.
-                </p>
-              </div>
-              <span className="rounded-md border px-2 py-1 text-xs font-medium">
-                {freightAllowanceIsManual ? "MANUAL" : "AUTO · ORDER PURCHASE"}
-              </span>
-            </div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-              <Field label={`Actual freight cost HT (${purchaseCurrency})`}>
-                <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                  {formatMoney(freightCost || "0", purchaseCurrency)}
-                </p>
-              </Field>
-              <Field
-                error={fieldErrors.freightAllowanceOverrideAmount}
-                label={`Client freight allowance HT (${sellingCurrency})`}
-              >
-                {freightAllowanceIsManual ? (
-                  <MoneyInput
-                    invalid={Boolean(
-                      fieldErrors.freightAllowanceOverrideAmount,
-                    )}
-                    name="freightAllowanceOverrideAmount"
-                    onValueChange={(value) =>
-                      changeDraft("freightAllowanceOverrideAmount", value)
-                    }
-                    value={draft.freightAllowanceOverrideAmount}
-                  />
-                ) : (
-                  <>
-                    <input
-                      name="freightAllowanceOverrideAmount"
-                      type="hidden"
-                      value=""
-                    />
-                    <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                      {automaticFreightAllowance
-                        ? formatMoney(
-                            automaticFreightAllowance,
-                            sellingCurrency,
-                          )
-                        : "Incomplete"}
-                    </p>
-                  </>
-                )}
-              </Field>
-              <Field label="Project freight estimate %">
-                <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                  {project?.freightEstimateRate
-                    ? formatRate(project.freightEstimateRate)
-                    : "Not set"}
-                </p>
-              </Field>
-              <Field label={`Product purchase cost HT (${sellingCurrency})`}>
-                <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                  {livePricing?.productPurchaseCostSelling
-                    ? formatMoney(
-                        livePricing.productPurchaseCostSelling,
-                        sellingCurrency,
-                      )
-                    : "Incomplete"}
-                </p>
-              </Field>
-              <Field
-                label={`Freight recovery target HT (${project?.reportingCurrencyCode ?? "reporting"})`}
-              >
-                <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                  {freightRecovery
-                    ? formatMoney(
-                        freightRecovery,
-                        project?.reportingCurrencyCode ?? "",
-                      )
-                    : "Incomplete"}
-                </p>
-              </Field>
-              <Field
-                label={`Freight profit HT (${project?.reportingCurrencyCode ?? "reporting"})`}
-              >
-                <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                  {freightProfit
-                    ? formatMoney(
-                        freightProfit,
-                        project?.reportingCurrencyCode ?? "",
-                      )
-                    : "Incomplete"}
-                </p>
-              </Field>
-            </div>
-            <button
-              className="text-primary mt-3 text-sm font-medium"
-              onClick={() => {
-                if (freightAllowanceIsManual) {
-                  changeDraft("freightAllowanceOverrideAmount", "");
-                  changeDraft("freightAllowanceMode", "AUTO");
-                } else {
-                  changeDraft(
-                    "freightAllowanceOverrideAmount",
-                    effectiveFreightAllowance ?? "0",
-                  );
-                  changeDraft("freightAllowanceMode", "MANUAL");
-                }
-              }}
-              type="button"
-            >
-              {freightAllowanceIsManual
-                ? "Use Project freight estimate"
-                : "Override freight allowance"}
-            </button>
-          </section>
-          <div className="grid gap-3 xl:grid-cols-2">
-            <InputVatFields
-              currency={purchaseCurrency}
-              draft={draft}
-              fieldErrors={fieldErrors}
-              onChange={changeDraft}
-              options={options}
-            />
             <section className="bg-background/60 rounded-md border p-3">
-              <h4 className="text-xs font-semibold">Sales VAT</h4>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <Field error={fieldErrors.outputVatTreatment} label="Treatment">
-                  <select
-                    aria-invalid={
-                      Boolean(fieldErrors.outputVatTreatment) || undefined
-                    }
-                    className={errorClass("outputVatTreatment")}
-                    name="outputVatTreatment"
-                    onChange={(event) => {
-                      changeDraft("outputVatTreatment", event.target.value);
-                      if (!event.target.value) changeDraft("outputVatRate", "");
-                    }}
-                    value={outputVatTreatment}
-                  >
-                    <option value="">Not recorded</option>
-                    {options.vatTreatments.map((item) => (
-                      <option key={item} value={item}>
-                        {label(item)}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field error={fieldErrors.outputVatRate} label="VAT rate %">
-                  <PercentageInput
-                    className={errorClass("outputVatRate")}
-                    invalid={Boolean(fieldErrors.outputVatRate)}
-                    name="outputVatRate"
-                    onValueChange={(value) =>
-                      changeDraft("outputVatRate", value)
-                    }
-                    placeholder="20.00"
-                    value={outputVatRate}
-                  />
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-semibold">
+                    Freight reconciliation
+                  </h4>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    Cost, Client commercial allowance, and markup recovery
+                    remain separate.
+                  </p>
+                </div>
+                <span className="rounded-md border px-2 py-1 text-xs font-medium">
+                  {freightAllowanceIsManual
+                    ? "MANUAL"
+                    : "AUTO · ORDER PURCHASE"}
+                </span>
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                <Field label={`Actual freight cost HT (${purchaseCurrency})`}>
+                  <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                    {formatMoney(freightCost || "0", purchaseCurrency)}
+                  </p>
                 </Field>
                 <Field
-                  error={fieldErrors.outputVatTaxableBaseOverride}
-                  label={`VAT Base HT (${sellingCurrency}) · ${outputVatBaseIsManual ? "MANUAL OVERRIDE" : "AUTO"}`}
+                  error={fieldErrors.freightAllowanceOverrideAmount}
+                  label={`Client freight allowance HT (${sellingCurrency})`}
                 >
-                  {outputVatBaseIsManual ? (
+                  {freightAllowanceIsManual ? (
                     <MoneyInput
-                      name="outputVatTaxableBaseOverride"
                       invalid={Boolean(
-                        fieldErrors.outputVatTaxableBaseOverride,
+                        fieldErrors.freightAllowanceOverrideAmount,
                       )}
+                      name="freightAllowanceOverrideAmount"
                       onValueChange={(value) =>
-                        changeDraft("outputVatTaxableBaseOverride", value)
+                        changeDraft("freightAllowanceOverrideAmount", value)
                       }
-                      value={manualOutputVatBase}
+                      value={draft.freightAllowanceOverrideAmount}
                     />
                   ) : (
                     <>
                       <input
-                        name="outputVatTaxableBaseOverride"
+                        name="freightAllowanceOverrideAmount"
                         type="hidden"
                         value=""
                       />
                       <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                        {outputVatBase
-                          ? formatMoney(outputVatBase, sellingCurrency)
+                        {automaticFreightAllowance
+                          ? formatMoney(
+                              automaticFreightAllowance,
+                              sellingCurrency,
+                            )
                           : "Incomplete"}
                       </p>
                     </>
                   )}
                 </Field>
-                <div className="flex items-end">
-                  <button
-                    className="text-primary text-sm font-medium"
-                    onClick={() => {
-                      if (outputVatBaseIsManual) {
-                        changeDraft("outputVatTaxableBaseOverride", "");
-                        changeDraft("outputVatBaseMode", "AUTO");
-                      } else {
-                        changeDraft(
-                          "outputVatTaxableBaseOverride",
-                          automaticOutputVatBase ?? "0",
-                        );
-                        changeDraft("outputVatBaseMode", "MANUAL");
-                      }
-                    }}
-                    type="button"
-                  >
-                    {outputVatBaseIsManual
-                      ? "Use calculated VAT base"
-                      : "Override VAT base"}
-                  </button>
-                </div>
-                <Field label={`VAT amount (${sellingCurrency})`}>
+                <Field label="Project freight estimate %">
                   <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                    {formatMoney(liveOutputVat, sellingCurrency)}
+                    {project?.freightEstimateRate
+                      ? formatRate(project.freightEstimateRate)
+                      : "Not set"}
                   </p>
                 </Field>
-                <Field label={`Selling TTC (${sellingCurrency})`}>
+                <Field label={`Product purchase cost HT (${sellingCurrency})`}>
                   <p className="financial-figure bg-muted rounded-md border px-3 py-2">
-                    {liveTtc
-                      ? formatMoney(liveTtc, sellingCurrency)
+                    {livePricing?.productPurchaseCostSelling
+                      ? formatMoney(
+                          livePricing.productPurchaseCostSelling,
+                          sellingCurrency,
+                        )
                       : "Incomplete"}
                   </p>
                 </Field>
-                <Field error={fieldErrors.outputVatCountryCode} label="Country">
-                  <select
-                    aria-invalid={
-                      Boolean(fieldErrors.outputVatCountryCode) || undefined
-                    }
-                    className={errorClass("outputVatCountryCode")}
-                    name="outputVatCountryCode"
-                    onChange={(event) =>
-                      changeDraft("outputVatCountryCode", event.target.value)
-                    }
-                    value={draft.outputVatCountryCode}
-                  >
-                    <option value="">Not specified</option>
-                    {countries.map((country) => (
-                      <option key={country.code} value={country.code}>
-                        {country.label}
-                      </option>
-                    ))}
-                  </select>
+                <Field
+                  label={`Freight recovery target HT (${project?.reportingCurrencyCode ?? "reporting"})`}
+                >
+                  <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                    {freightRecovery
+                      ? formatMoney(
+                          freightRecovery,
+                          project?.reportingCurrencyCode ?? "",
+                        )
+                      : "Incomplete"}
+                  </p>
                 </Field>
                 <Field
-                  error={fieldErrors.outputVatCustomTreatmentNote}
-                  label="Custom treatment note"
+                  label={`Freight profit HT (${project?.reportingCurrencyCode ?? "reporting"})`}
                 >
-                  <input
-                    aria-invalid={
-                      Boolean(fieldErrors.outputVatCustomTreatmentNote) ||
-                      undefined
-                    }
-                    className={errorClass("outputVatCustomTreatmentNote")}
-                    name="outputVatCustomTreatmentNote"
-                    onChange={(event) =>
-                      changeDraft(
-                        "outputVatCustomTreatmentNote",
-                        event.target.value,
-                      )
-                    }
-                    value={draft.outputVatCustomTreatmentNote}
-                  />
+                  <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                    {freightProfit
+                      ? formatMoney(
+                          freightProfit,
+                          project?.reportingCurrencyCode ?? "",
+                        )
+                      : "Incomplete"}
+                  </p>
                 </Field>
               </div>
-              <p className="text-muted-foreground mt-3 text-xs">
-                {outputVatBaseIsManual
-                  ? "Pricing changes do not replace this manual base."
-                  : "Calculated automatically from Total Sell HT."}
-              </p>
+              <button
+                className="text-primary mt-3 text-sm font-medium"
+                onClick={() => {
+                  if (freightAllowanceIsManual) {
+                    changeDraft("freightAllowanceOverrideAmount", "");
+                    changeDraft("freightAllowanceMode", "AUTO");
+                  } else {
+                    changeDraft(
+                      "freightAllowanceOverrideAmount",
+                      effectiveFreightAllowance ?? "0",
+                    );
+                    changeDraft("freightAllowanceMode", "MANUAL");
+                  }
+                }}
+                type="button"
+              >
+                {freightAllowanceIsManual
+                  ? "Use Project freight estimate"
+                  : "Override freight allowance"}
+              </button>
             </section>
-          </div>
-        </section>
-        <section className="bg-muted/20 rounded-lg border p-4">
-          <h3 className="text-sm font-semibold">Commercial pricing</h3>
+            <div className="grid gap-3 xl:grid-cols-2">
+              <InputVatFields
+                currency={purchaseCurrency}
+                draft={draft}
+                fieldErrors={fieldErrors}
+                onChange={changeDraft}
+                options={options}
+              />
+              <section className="bg-background/60 rounded-md border p-3">
+                <h4 className="text-xs font-semibold">
+                  Planned Supplier Order Output VAT
+                </h4>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <Field
+                    error={fieldErrors.outputVatTreatment}
+                    label="Treatment"
+                  >
+                    <select
+                      aria-invalid={
+                        Boolean(fieldErrors.outputVatTreatment) || undefined
+                      }
+                      className={errorClass("outputVatTreatment")}
+                      name="outputVatTreatment"
+                      onChange={(event) => {
+                        changeDraft("outputVatTreatment", event.target.value);
+                        if (!event.target.value)
+                          changeDraft("outputVatRate", "");
+                      }}
+                      value={outputVatTreatment}
+                    >
+                      <option value="">Not recorded</option>
+                      {options.vatTreatments.map((item) => (
+                        <option key={item} value={item}>
+                          {label(item)}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field error={fieldErrors.outputVatRate} label="VAT rate %">
+                    <PercentageInput
+                      className={errorClass("outputVatRate")}
+                      invalid={Boolean(fieldErrors.outputVatRate)}
+                      name="outputVatRate"
+                      onValueChange={(value) =>
+                        changeDraft("outputVatRate", value)
+                      }
+                      placeholder="20.00"
+                      value={outputVatRate}
+                    />
+                  </Field>
+                  <Field
+                    error={fieldErrors.outputVatTaxableBaseOverride}
+                    label={`VAT Base HT (${sellingCurrency}) · ${outputVatBaseIsManual ? "MANUAL OVERRIDE" : "AUTO"}`}
+                  >
+                    {outputVatBaseIsManual ? (
+                      <MoneyInput
+                        name="outputVatTaxableBaseOverride"
+                        invalid={Boolean(
+                          fieldErrors.outputVatTaxableBaseOverride,
+                        )}
+                        onValueChange={(value) =>
+                          changeDraft("outputVatTaxableBaseOverride", value)
+                        }
+                        value={manualOutputVatBase}
+                      />
+                    ) : (
+                      <>
+                        <input
+                          name="outputVatTaxableBaseOverride"
+                          type="hidden"
+                          value=""
+                        />
+                        <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                          {outputVatBase
+                            ? formatMoney(outputVatBase, sellingCurrency)
+                            : "Incomplete"}
+                        </p>
+                      </>
+                    )}
+                  </Field>
+                  <div className="flex items-end">
+                    <button
+                      className="text-primary text-sm font-medium"
+                      onClick={() => {
+                        if (outputVatBaseIsManual) {
+                          changeDraft("outputVatTaxableBaseOverride", "");
+                          changeDraft("outputVatBaseMode", "AUTO");
+                        } else {
+                          changeDraft(
+                            "outputVatTaxableBaseOverride",
+                            automaticOutputVatBase ?? "0",
+                          );
+                          changeDraft("outputVatBaseMode", "MANUAL");
+                        }
+                      }}
+                      type="button"
+                    >
+                      {outputVatBaseIsManual
+                        ? "Use calculated VAT base"
+                        : "Override VAT base"}
+                    </button>
+                  </div>
+                  <Field label={`VAT amount (${sellingCurrency})`}>
+                    <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                      {formatMoney(liveOutputVat, sellingCurrency)}
+                    </p>
+                  </Field>
+                  <Field label={`Selling TTC (${sellingCurrency})`}>
+                    <p className="financial-figure bg-muted rounded-md border px-3 py-2">
+                      {liveTtc
+                        ? formatMoney(liveTtc, sellingCurrency)
+                        : "Incomplete"}
+                    </p>
+                  </Field>
+                  <Field
+                    error={fieldErrors.outputVatCountryCode}
+                    label="Country"
+                  >
+                    <select
+                      aria-invalid={
+                        Boolean(fieldErrors.outputVatCountryCode) || undefined
+                      }
+                      className={errorClass("outputVatCountryCode")}
+                      name="outputVatCountryCode"
+                      onChange={(event) =>
+                        changeDraft("outputVatCountryCode", event.target.value)
+                      }
+                      value={draft.outputVatCountryCode}
+                    >
+                      <option value="">Not specified</option>
+                      {countries.map((country) => (
+                        <option key={country.code} value={country.code}>
+                          {country.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field
+                    error={fieldErrors.outputVatCustomTreatmentNote}
+                    label="Custom treatment note"
+                  >
+                    <input
+                      aria-invalid={
+                        Boolean(fieldErrors.outputVatCustomTreatmentNote) ||
+                        undefined
+                      }
+                      className={errorClass("outputVatCustomTreatmentNote")}
+                      name="outputVatCustomTreatmentNote"
+                      onChange={(event) =>
+                        changeDraft(
+                          "outputVatCustomTreatmentNote",
+                          event.target.value,
+                        )
+                      }
+                      value={draft.outputVatCustomTreatmentNote}
+                    />
+                  </Field>
+                </div>
+                <p className="text-muted-foreground mt-3 text-xs">
+                  {outputVatBaseIsManual
+                    ? "Pricing changes do not replace this manual base."
+                    : "Calculated automatically from Total Sell HT."}
+                </p>
+              </section>
+            </div>
+          </section>
+        </details>
+        <details className="bg-muted/20 rounded-lg border p-4" open>
+          <summary className="cursor-pointer text-sm font-semibold">
+            Commercial pricing
+          </summary>
           <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Field error={fieldErrors.pricingMode} label="Pricing method">
               <select
@@ -1599,7 +1618,7 @@ export function OrderForm({
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <Field
                 error={fieldErrors.sellingPriceAmount}
-                label={`Package selling HT (${sellingCurrency})`}
+                label={`Package Sell HT (${sellingCurrency})`}
               >
                 <MoneyInput
                   invalid={Boolean(fieldErrors.sellingPriceAmount)}
@@ -1703,12 +1722,12 @@ export function OrderForm({
               </p>
             </div>
           </div>
-        </section>
+        </details>
         {!isEditing && availableBillingDocuments.length ? (
-          <section className="bg-muted/20 rounded-lg border p-4">
-            <h3 className="text-sm font-semibold">
+          <details className="bg-muted/20 rounded-lg border p-4">
+            <summary className="cursor-pointer text-sm font-semibold">
               Optional Client Billing link
-            </h3>
+            </summary>
             <p className="text-muted-foreground mt-1 text-xs">
               Link this new Supplier Order to an existing Billing Event from the
               same Project. You can also reconcile it later from either detail
@@ -1853,7 +1872,7 @@ export function OrderForm({
                 </>
               ) : null}
             </div>
-          </section>
+          </details>
         ) : null}
         <div className="flex items-center gap-3">
           <SubmitButton pending={pending}>

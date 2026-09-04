@@ -22,6 +22,10 @@ import {
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
+import {
+  IntakeStageHeader,
+  IntakeWarning,
+} from "@/components/intake/intake-stage";
 import type { ProcessedClientDocumentReview } from "@/lib/billing/process";
 import {
   allocationReconciliation,
@@ -31,6 +35,7 @@ import {
 } from "@/domain/billing/calculations";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
 import { normalizeDecimalInput } from "@/domain/validation/numeric";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 
 interface BillingOptions {
   clients: { displayName: string; id: string }[];
@@ -309,12 +314,11 @@ function ClientDocumentReview({
       />
       <section className="bg-card rounded-lg border p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="font-semibold">Review extracted document</h2>
-            <p className="text-muted-foreground mt-1 text-xs">
-              {review.originalFilename} · {review.provider} / {review.model}
-            </p>
-          </div>
+          <IntakeStageHeader
+            description={`${review.originalFilename} · ${review.provider} / ${review.model}`}
+            stage={2}
+            title="Review and correct"
+          />
           <span className="text-positive text-xs">Source PDF released</span>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -342,11 +346,13 @@ function ClientDocumentReview({
           </div>
         </div>
         {proposal.warnings.length ? (
-          <ul className="bg-warning-muted mt-4 list-disc rounded-md border p-3 pl-8 text-xs">
-            {proposal.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
+          <IntakeWarning>
+            <ul className="list-disc pl-5">
+              {proposal.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </IntakeWarning>
         ) : null}
       </section>
 
@@ -595,7 +601,7 @@ function ClientDocumentReview({
                 "CUSTOM",
               ].map((item) => (
                 <option key={item} value={item}>
-                  {item.replaceAll("_", " ")}
+                  {formatEnumLabel(item)}
                 </option>
               ))}
             </select>
@@ -1075,12 +1081,17 @@ function ClientDocumentReview({
         ) : null}
       </section>
 
+      <IntakeStageHeader
+        description="No authoritative Billing Event is changed until this confirmation is submitted."
+        stage={3}
+        title="Confirm and save"
+      />
       <div className="flex items-center gap-3">
         <SubmitButton
           disabled={scheduleOverallocated || allocationOverallocated}
           pending={pending}
         >
-          Confirm and save Client billing
+          Confirm and save Client Billing
         </SubmitButton>
         {state.message ? (
           <p
@@ -1107,11 +1118,11 @@ export function ClientDocumentIntake({ options }: { options: BillingOptions }) {
   }
   return (
     <section className="bg-card rounded-lg border p-5">
-      <h2 className="font-semibold">Import Client Quote or Invoice</h2>
-      <p className="text-muted-foreground mt-1 text-sm">
-        Upload one temporary PDF. AI proposes structured values; an ADMIN or
-        MANAGER must review before anything is saved.
-      </p>
+      <IntakeStageHeader
+        description="Upload one temporary PDF. AI proposes structured values; an ADMIN or MANAGER must review before anything is saved."
+        stage={1}
+        title="Upload and extract"
+      />
       <form action={action} className="mt-4 flex flex-wrap items-end gap-3">
         <label className="grid gap-1.5 text-sm font-medium">
           Client PDF

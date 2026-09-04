@@ -24,20 +24,19 @@ import {
   dateOnlyToEuropeanInput,
   europeanInputToDateOnly,
   formatDateOnly,
+  formatTimestampDate,
 } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import type { OrderSummary } from "@/lib/procurement/orders";
+import {
+  tableContainerClassName,
+  tableHeaderClassName,
+  tableRowClassName,
+} from "@/components/listing/table-styles";
 
 export type OrderViewMode =
   "general" | "financial" | "supplier-payment" | "delivery";
-
-function dateLabel(value: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
-}
 
 function serverDate(value: string): string {
   if (!value.trim()) return "";
@@ -112,7 +111,7 @@ function OrderRow({
       .filter((value): value is string => value !== null)
       .reduce((sum, value) => sum.plus(value), new Decimal(0));
     return (
-      <tr className="hover:bg-muted/25 align-top">
+      <tr className={tableRowClassName}>
         {selectionCell}
         <td className="px-4 py-3 font-mono text-xs">
           <Link href={`/orders/${order.id}`}>{order.orderNumber}</Link>
@@ -158,16 +157,19 @@ function OrderRow({
           ) : null}
         </td>
         <td className="financial-figure px-4 py-3 text-right">
-          {formatRate(order.billing.actualMarkupRate ?? cost.markupRate)}
-        </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatRate(order.billing.actualMarginRate ?? cost.grossMarginRate)}
+          {formatMoney(cost.grossProfit, order.project.reportingCurrencyCode)}
         </td>
         <td className="financial-figure px-4 py-3 text-right">
           {formatMoney(
-            order.billing.actualGrossProfit ?? cost.grossProfit,
+            order.billing.actualGrossProfit,
             order.project.reportingCurrencyCode,
           )}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatRate(cost.markupRate)}
+        </td>
+        <td className="financial-figure px-4 py-3 text-right">
+          {formatRate(cost.grossMarginRate)}
         </td>
         {canEdit ? <td /> : null}
       </tr>
@@ -175,7 +177,7 @@ function OrderRow({
   }
   if (view === "supplier-payment") {
     return (
-      <tr className="hover:bg-muted/25 align-top">
+      <tr className={tableRowClassName}>
         {selectionCell}
         <td className="px-4 py-3">{order.supplier.displayName}</td>
         <td className="px-4 py-3 font-mono text-xs">
@@ -207,7 +209,7 @@ function OrderRow({
           {formatDateOnly(order.supplierPayment.nextDueDate)}
         </td>
         <td className="px-4 py-3">
-          {order.supplierPayment.status.replaceAll("_", " ")}
+          {formatEnumLabel(order.supplierPayment.status)}
         </td>
         {canEdit ? <td /> : null}
       </tr>
@@ -215,12 +217,12 @@ function OrderRow({
   }
   if (view === "delivery") {
     return (
-      <tr className="hover:bg-muted/25 align-top">
+      <tr className={tableRowClassName}>
         {selectionCell}
         <td className="px-4 py-3 font-mono text-xs">
           <Link href={`/orders/${order.id}`}>{order.orderNumber}</Link>
         </td>
-        <td className="px-4 py-3">{saved.status.replaceAll("_", " ")}</td>
+        <td className="px-4 py-3">{formatEnumLabel(saved.status)}</td>
         <td className="px-4 py-3">{formatDateOnly(order.expectedReadyDate)}</td>
         <td className="px-4 py-3">
           {formatDateOnly(order.expectedDeliveryDate)}
@@ -232,7 +234,7 @@ function OrderRow({
     );
   }
   return (
-    <tr className="hover:bg-muted/25 align-top">
+    <tr className={tableRowClassName}>
       {canEdit ? (
         <SelectionCell
           checked={isSelected}
@@ -273,12 +275,12 @@ function OrderRow({
           >
             {statuses.map((status) => (
               <option key={status} value={status}>
-                {status.replaceAll("_", " ")}
+                {formatEnumLabel(status)}
               </option>
             ))}
           </InlineSelect>
         ) : (
-          saved.status.replaceAll("_", " ")
+          formatEnumLabel(saved.status)
         )}
       </td>
       <td className="px-4 py-3">
@@ -306,28 +308,8 @@ function OrderRow({
       <td className="text-muted-foreground max-w-48 truncate px-4 py-3">
         {order.buildings.join(", ") || "—"}
       </td>
-      <td className="financial-figure px-4 py-3 text-right">
-        {formatMoney(
-          cost.reportingEconomicLandedCost,
-          order.project.reportingCurrencyCode,
-        )}
-      </td>
-      <td className="financial-figure px-4 py-3 text-right">
-        {formatMoney(
-          cost.reportingSellingRevenue,
-          order.project.reportingCurrencyCode,
-        )}
-        {cost.outputVat ? (
-          <span className="text-muted-foreground block text-xs">
-            {cost.outputVat.treatment.replaceAll("_", " ")}
-          </span>
-        ) : null}
-      </td>
-      <td className="financial-figure px-4 py-3 text-right font-medium">
-        {formatRate(cost.markupRate)}
-      </td>
       <td className="text-muted-foreground px-4 py-3 text-xs">
-        {dateLabel(order.updatedAt)}
+        {formatTimestampDate(order.updatedAt)}
       </td>
       {canEdit ? (
         <td className="px-4 py-3">
@@ -366,7 +348,7 @@ export function OrderTable({
 }) {
   const selection = useBulkSelection(orders.map((order) => order.id));
   return (
-    <section className="bg-card overflow-hidden rounded-lg border">
+    <section className={tableContainerClassName}>
       {canEdit ? (
         <BulkActionBar
           action={deleteSelectedOrdersAction}
@@ -377,8 +359,10 @@ export function OrderTable({
         />
       ) : null}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[74rem] text-left text-sm">
-          <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
+        <table
+          className={`w-full text-left text-sm ${view === "general" ? "min-w-[62rem]" : "min-w-[74rem]"}`}
+        >
+          <thead className={tableHeaderClassName}>
             <tr>
               {canEdit ? (
                 <SelectionHeader
@@ -397,9 +381,6 @@ export function OrderTable({
                   <th className="px-4 py-3">Expected ready</th>
                   <th className="px-4 py-3">Expected delivery</th>
                   <th className="px-4 py-3">Buildings</th>
-                  <th className="px-4 py-3 text-right">Economic landed cost</th>
-                  <th className="px-4 py-3 text-right">Selling revenue</th>
-                  <th className="px-4 py-3 text-right">Markup</th>
                   <th className="px-4 py-3">Updated</th>
                 </>
               ) : view === "financial" ? (
@@ -407,16 +388,29 @@ export function OrderTable({
                   <th className="px-4 py-3">Reference</th>
                   <th className="px-4 py-3">Supplier</th>
                   <th className="px-4 py-3">Project</th>
-                  <th className="px-4 py-3 text-right">Purchase HT</th>
+                  <th className="px-4 py-3 text-right">Purchase Cost HT</th>
                   <th className="px-4 py-3 text-right">Freight HT</th>
-                  <th className="px-4 py-3 text-right">Other costs</th>
-                  <th className="px-4 py-3 text-right">Economic cost</th>
-                  <th className="px-4 py-3 text-right">Planned sell</th>
-                  <th className="px-4 py-3 text-right">Quoted allocated</th>
-                  <th className="px-4 py-3 text-right">Invoiced allocated</th>
-                  <th className="px-4 py-3 text-right">Markup</th>
-                  <th className="px-4 py-3 text-right">Margin</th>
-                  <th className="px-4 py-3 text-right">Gross profit</th>
+                  <th className="px-4 py-3 text-right">Other Costs HT</th>
+                  <th className="px-4 py-3 text-right">
+                    Economic Landed Cost HT
+                  </th>
+                  <th className="px-4 py-3 text-right">
+                    Total Supplier Order Sell HT
+                  </th>
+                  <th className="px-4 py-3 text-right">
+                    Client Quote Allocated HT
+                  </th>
+                  <th className="px-4 py-3 text-right">
+                    Client Invoice Allocated HT
+                  </th>
+                  <th className="px-4 py-3 text-right">
+                    Supplier Order Planned Gross Profit HT
+                  </th>
+                  <th className="px-4 py-3 text-right">
+                    Actual Allocated Gross Profit HT
+                  </th>
+                  <th className="px-4 py-3 text-right">Planned Markup</th>
+                  <th className="px-4 py-3 text-right">Planned Margin</th>
                 </>
               ) : view === "supplier-payment" ? (
                 <>

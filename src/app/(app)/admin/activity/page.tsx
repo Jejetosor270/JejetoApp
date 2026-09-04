@@ -1,13 +1,18 @@
 import type { Metadata } from "next";
 
 import { Pagination, PageSizeField } from "@/components/listing/pagination";
+import {
+  FilterField,
+  filterControlClassName,
+} from "@/components/listing/filter-field";
 import { auditActions, auditEntityTypes } from "@/domain/audit/constants";
 import {
   firstQueryValue,
   parsePageInput,
   selectedValue,
 } from "@/domain/listing/validation";
-import { isDateOnly } from "@/domain/payments/dates";
+import { formatTimestamp, isDateOnly } from "@/domain/payments/dates";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import { listAuditActors, listAuditEvents } from "@/lib/audit/events";
 
@@ -59,66 +64,72 @@ export default async function ActivityPage({
           Important authoritative changes, newest first.
         </p>
       </header>
-      <form className="bg-card grid gap-2 rounded-lg border p-3 sm:grid-cols-2 xl:grid-cols-6">
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={firstQueryValue(params, "actorEmail") ?? ""}
-          name="actorEmail"
-        >
-          <option value="">All employees</option>
-          {actors.map((actor) => (
-            <option key={actor.actorEmail} value={actor.actorEmail}>
-              {actor.actorName}
-            </option>
-          ))}
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={action ?? ""}
-          name="action"
-        >
-          <option value="">All actions</option>
-          {auditActions.map((item) => (
-            <option key={item} value={item}>
-              {item.replaceAll("_", " ")}
-            </option>
-          ))}
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={entityType ?? ""}
-          name="entityType"
-        >
-          <option value="">All entity types</option>
-          {auditEntityTypes.map((item) => (
-            <option key={item} value={item}>
-              {item.replaceAll("_", " ")}
-            </option>
-          ))}
-        </select>
-        <input
-          aria-label="Activity from"
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={firstQueryValue(params, "dateFrom") ?? ""}
-          name="dateFrom"
-          type="date"
-        />
-        <input
-          aria-label="Activity to"
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={firstQueryValue(params, "dateTo") ?? ""}
-          name="dateTo"
-          type="date"
-        />
-        <div className="flex gap-2">
-          <PageSizeField value={pageInput.pageSize} />
-          <button
-            className="border-input h-9 rounded-lg border px-3 text-sm font-medium"
-            type="submit"
+      <form className="bg-card grid items-end gap-2 rounded-lg border p-3 sm:grid-cols-2 xl:grid-cols-6">
+        <FilterField label="Employee">
+          <select
+            className={filterControlClassName}
+            defaultValue={firstQueryValue(params, "actorEmail") ?? ""}
+            name="actorEmail"
           >
-            Filter
-          </button>
-        </div>
+            <option value="">All employees</option>
+            {actors.map((actor) => (
+              <option key={actor.actorEmail} value={actor.actorEmail}>
+                {actor.actorName}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Action">
+          <select
+            className={filterControlClassName}
+            defaultValue={action ?? ""}
+            name="action"
+          >
+            <option value="">All actions</option>
+            {auditActions.map((item) => (
+              <option key={item} value={item}>
+                {formatEnumLabel(item)}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Entity type">
+          <select
+            className={filterControlClassName}
+            defaultValue={entityType ?? ""}
+            name="entityType"
+          >
+            <option value="">All entity types</option>
+            {auditEntityTypes.map((item) => (
+              <option key={item} value={item}>
+                {formatEnumLabel(item)}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Activity from">
+          <input
+            className={filterControlClassName}
+            defaultValue={firstQueryValue(params, "dateFrom") ?? ""}
+            name="dateFrom"
+            type="date"
+          />
+        </FilterField>
+        <FilterField label="Activity to">
+          <input
+            className={filterControlClassName}
+            defaultValue={firstQueryValue(params, "dateTo") ?? ""}
+            name="dateTo"
+            type="date"
+          />
+        </FilterField>
+        <PageSizeField value={pageInput.pageSize} />
+        <button
+          className="border-input h-9 rounded-lg border px-3 text-sm font-medium"
+          type="submit"
+        >
+          Filter
+        </button>
       </form>
       <section className="bg-card overflow-hidden rounded-lg border">
         <div className="overflow-x-auto">
@@ -137,11 +148,7 @@ export default async function ActivityPage({
               {events.items.map((event) => (
                 <tr key={event.id}>
                   <td className="px-4 py-3 text-xs">
-                    {event.occurredAt.toLocaleString("en-GB", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                      timeZone: "Europe/Paris",
-                    })}
+                    {formatTimestamp(event.occurredAt)}
                   </td>
                   <td className="px-4 py-3">
                     <span className="block font-medium">{event.actorName}</span>

@@ -1,0 +1,198 @@
+[
+  {
+    "concept": "Supplier Order Purchase Cost HT",
+    "authority": "Normalized PURCHASE cost line on ProcurementOrder",
+    "calculation": "Decimal sum/current authoritative Order cost structure",
+    "status": "CLEAR",
+    "notes": "Original Order purchase currency and manual purchase FX are preserved."
+  },
+  {
+    "concept": "Landed Cost HT",
+    "authority": "Order financial calculator",
+    "calculation": "Purchase + freight + customs/duties + miscellaneous",
+    "status": "CLEAR",
+    "notes": "Excludes input VAT; distinct from Economic Landed Cost HT."
+  },
+  {
+    "concept": "Economic Landed Cost HT",
+    "authority": "Order financial calculator",
+    "calculation": "Landed Cost HT + non-deductible input VAT",
+    "status": "CLEAR",
+    "notes": "Profitability cost; often equals Landed Cost only when input VAT is fully deductible or absent."
+  },
+  {
+    "concept": "Supplier Order Sell HT",
+    "authority": "Procurement Order pricing mode and current cost structure",
+    "calculation": "Package sell plus separately recharged freight exactly once",
+    "status": "CLEAR",
+    "notes": "Commercial plan; it is not actual Client revenue."
+  },
+  {
+    "concept": "Project Target Cost HT",
+    "authority": "Project approved target inputs",
+    "calculation": "Estimated product purchase cost + estimated freight cost",
+    "status": "CLEAR",
+    "notes": "Planning value only."
+  },
+  {
+    "concept": "Project Target Sell HT",
+    "authority": "Project target mode and approved target inputs",
+    "calculation": "Direct expected sell or markup-derived product/freight sell",
+    "status": "CLEAR",
+    "notes": "Does not replace Order or Invoice values."
+  },
+  {
+    "concept": "Client Invoiced HT",
+    "authority": "Confirmed Client Invoice records",
+    "calculation": "Comparable Invoice HT converted with manual reporting FX",
+    "status": "CLEAR",
+    "notes": "Actual revenue to date for Project target-versus-actual profitability."
+  },
+  {
+    "concept": "Client Received TTC",
+    "authority": "ClientReceipt child transactions",
+    "calculation": "Sum of actual receipts converted using receipt FX",
+    "status": "CLEAR",
+    "notes": "Authoritative actual Client cash in."
+  },
+  {
+    "concept": "Client Outstanding TTC",
+    "authority": "Client Billing summary",
+    "calculation": "Confirmed Invoice TTC less Client Receipts",
+    "status": "CONFLICTING_PRESENTATION",
+    "notes": "Legacy Order CLIENT_RECEIPT schedule remaining is still calculated and exposed elsewhere."
+  },
+  {
+    "concept": "Supplier Outstanding TTC",
+    "authority": "Supplier payable and Supplier Payment schedule/settlements",
+    "calculation": "Authoritative payable less actual Supplier Payments, with schedule completeness",
+    "status": "CLEAR",
+    "notes": "Expected and actual settlement FX remain independent."
+  },
+  {
+    "concept": "Funding Coverage HT",
+    "authority": "Funding coverage domain helper",
+    "calculation": "Client Billing coverage HT − Supplier Order Sell HT",
+    "status": "CLEAR",
+    "notes": "Commercial coverage, not cash."
+  },
+  {
+    "concept": "Freight Estimate",
+    "authority": "Project freightEstimateRate",
+    "calculation": "Employee-approved planning percentage",
+    "status": "CLEAR",
+    "notes": "Order AUTO allowance uses proportional Order product cost separately."
+  },
+  {
+    "concept": "Expected Freight Allowance HT",
+    "authority": "Project freight reconciliation helper",
+    "calculation": "Project expected Product Purchase Cost HT × Freight Estimate",
+    "status": "CLEAR",
+    "notes": "Planning only; never based on live actual Order purchase totals."
+  },
+  {
+    "concept": "Actual Freight Cost HT",
+    "authority": "Order freight cost lines plus ProjectFreightExpense costs",
+    "calculation": "Comparable actual Order freight + Project-level freight expenses",
+    "status": "CLEAR",
+    "notes": "Separate from expected allowance."
+  },
+  {
+    "concept": "Freight Recovery Target HT",
+    "authority": "Freight reconciliation helper",
+    "calculation": "Each actual freight cost × (1 + applicable freight markup)",
+    "status": "CLEAR",
+    "notes": "Order and Project-expense markup inputs remain identifiable."
+  },
+  {
+    "concept": "Input VAT",
+    "authority": "Order VAT entry and Project freight-expense VAT",
+    "calculation": "Recorded supplier-side VAT in original currency",
+    "status": "CLEAR",
+    "notes": "Recoverability classification is separate."
+  },
+  {
+    "concept": "Deductible Input VAT",
+    "authority": "VAT recoverability model",
+    "calculation": "Input VAT × recoverable rate, converted to Project currency",
+    "status": "CLEAR",
+    "notes": "Excluded from economic cost."
+  },
+  {
+    "concept": "Output VAT — commercial plan",
+    "authority": "Supplier Order OUTPUT VAT entry",
+    "calculation": "Order output VAT base × rate",
+    "status": "LABEL_RISK",
+    "notes": "Must not be confused with confirmed Invoice output VAT in VAT Position."
+  },
+  {
+    "concept": "Output VAT — Project VAT Position",
+    "authority": "Confirmed Client Invoices",
+    "calculation": "Comparable confirmed Invoice output VAT",
+    "status": "CLEAR",
+    "notes": "Authoritative VAT-position output side."
+  },
+  {
+    "concept": "Project VAT Position",
+    "authority": "VAT position domain helper",
+    "calculation": "Invoice output VAT − deductible Order/freight-expense input VAT",
+    "status": "CLEAR",
+    "notes": "Positive is VAT Payable; negative is VAT Credit."
+  },
+  {
+    "concept": "Supplier Order Planned Gross Profit",
+    "authority": "Order reporting financial calculator",
+    "calculation": "Supplier Order Sell HT − Order Economic Landed Cost HT",
+    "status": "CLEAR",
+    "notes": "Planning/commercial metric."
+  },
+  {
+    "concept": "Actual Invoiced Gross Profit",
+    "authority": "Project target-versus-actual helper",
+    "calculation": "Client Invoiced HT − Order/freight-expense Economic Cost HT",
+    "status": "LABEL_RISK",
+    "notes": "Currently shares Gross Profit wording with planned Order result."
+  },
+  {
+    "concept": "Markup",
+    "authority": "Shared Decimal financial rules",
+    "calculation": "Gross profit ÷ economic landed cost",
+    "status": "CLEAR",
+    "notes": "Aggregate money before deriving a Project rate."
+  },
+  {
+    "concept": "Gross Margin",
+    "authority": "Shared Decimal financial rules",
+    "calculation": "Gross profit ÷ Sell HT",
+    "status": "CLEAR",
+    "notes": "Never average Order margins."
+  },
+  {
+    "concept": "Cash In",
+    "authority": "ClientReceipt actuals; Client Billing installments for forecast",
+    "calculation": "Actual by received date; expected outstanding by due date",
+    "status": "CLEAR",
+    "notes": "Legacy Order client schedules remain a separate compatibility concern."
+  },
+  {
+    "concept": "Cash Out",
+    "authority": "PaymentSettlement actuals; Supplier Payment installments for forecast",
+    "calculation": "Actual by settlement date; expected outstanding by due date",
+    "status": "CLEAR",
+    "notes": "TTC cash basis."
+  },
+  {
+    "concept": "Net Cash Flow",
+    "authority": "Cash-flow reporting helper",
+    "calculation": "Cash In − Cash Out for each selected period",
+    "status": "CLEAR",
+    "notes": "Distinct from cumulative Project Cash Position."
+  },
+  {
+    "concept": "Project Cash Position",
+    "authority": "Client Billing receipts and Supplier settlements",
+    "calculation": "Client cash received − Supplier cash paid",
+    "status": "CLEAR",
+    "notes": "Portfolio Project rows use Billing receipts rather than legacy client schedules."
+  }
+]

@@ -15,6 +15,7 @@ import {
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
+import { DetailPageHeader } from "@/components/layout/detail-page-header";
 import type { BillingActionState } from "@/domain/billing/action-state";
 import {
   addAllocationAmount,
@@ -23,12 +24,13 @@ import {
   percentageFromAmount,
 } from "@/domain/billing/calculations";
 import { amountIncludingVat } from "@/domain/finance/calculations";
-import { formatDateOnly } from "@/domain/payments/dates";
+import { formatDateOnly, formatTimestamp } from "@/domain/payments/dates";
 import {
   formatFxRate,
   formatMoney,
   formatRate,
 } from "@/domain/procurement/presentation";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
 import { normalizeDecimalInput } from "@/domain/validation/numeric";
 import type { ClientBillingView } from "@/lib/billing/billing";
@@ -243,30 +245,26 @@ export function BillingDetail({
 
   return (
     <div className="space-y-5">
-      <header className="bg-card rounded-lg border p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-primary text-xs font-medium tracking-wide uppercase">
-              Client Billing Event
-            </p>
-            <h1 className="mt-2 text-2xl font-semibold">{saved.reference}</h1>
-            <p className="text-muted-foreground mt-2 text-sm">
-              {savedClient?.displayName ?? document.client.displayName} ·{" "}
-              {savedProject?.name ?? document.project.name}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button asChild variant="outline">
-              <Link href="/billing">Back to Billing</Link>
+      <DetailPageHeader
+        actions={
+          canEdit && !editing ? (
+            <Button onClick={() => setEditing(true)} type="button">
+              Edit
             </Button>
-            {canEdit && !editing ? (
-              <Button onClick={() => setEditing(true)} type="button">
-                Edit
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </header>
+          ) : undefined
+        }
+        backHref="/billing"
+        backLabel="Back to Billing"
+        eyebrow="Client Billing Event"
+        meta={
+          <>
+            {savedClient?.displayName ?? document.client.displayName} ·{" "}
+            {savedProject?.name ?? document.project.name}
+          </>
+        }
+        status={saved.isCancelled ? "CANCELLED" : saved.documentType}
+        title={saved.reference}
+      />
 
       <form
         className="space-y-5"
@@ -871,13 +869,13 @@ export function BillingDetail({
                   />
                   <DetailValue
                     label="Status"
-                    value={document.status.replaceAll("_", " ")}
+                    value={formatEnumLabel(document.status)}
                   />
                   <DetailValue
                     label="VAT treatment"
                     value={
                       saved.vatTreatment
-                        ? saved.vatTreatment.replaceAll("_", " ")
+                        ? formatEnumLabel(saved.vatTreatment)
                         : "—"
                     }
                   />
@@ -994,10 +992,8 @@ export function BillingDetail({
           <div className="mt-3 space-y-2 text-xs">
             {document.imports.map((item) => (
               <p key={item.id}>
-                {new Date(item.processedAt).toLocaleString("en-GB", {
-                  timeZone: "Europe/Paris",
-                })}{" "}
-                · {item.action.toLowerCase()} · {item.originalFilename} ·{" "}
+                {formatTimestamp(item.processedAt)} ·{" "}
+                {item.action.toLowerCase()} · {item.originalFilename} ·{" "}
                 {item.extractionProvider}/{item.extractionModel} ·{" "}
                 {item.processedByName ?? "Historical user"}
               </p>

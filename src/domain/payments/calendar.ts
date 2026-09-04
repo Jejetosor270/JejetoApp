@@ -30,6 +30,7 @@ export function buildCalendarEvents(input: {
     currencyCode: string;
     direction: "SUPPLIER_PAYMENT" | "CLIENT_RECEIPT";
     dueDate: string;
+    href?: string | undefined;
     id: string;
     isCancelled: boolean;
     label: string;
@@ -64,7 +65,7 @@ export function buildCalendarEvents(input: {
     amount: item.scheduledAmount,
     currencyCode: item.currencyCode,
     date: item.dueDate,
-    href: `/orders/${item.orderId}#payments`,
+    href: item.href ?? `/orders/${item.orderId}#payments`,
     id: `payment-${item.id}`,
     orderNumber: item.orderNumber,
     partyName: item.partyName,

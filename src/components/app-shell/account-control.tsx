@@ -7,6 +7,7 @@ import { useTransition } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatRoleLabel } from "@/domain/presentation/labels";
 
 export interface AccountControlUser {
   email: string;
@@ -42,7 +43,7 @@ export function AccountControl({ user }: { user: AccountControlUser }) {
         </p>
       </div>
       <Badge className="hidden sm:inline-flex" variant="outline">
-        {user.role.toLowerCase()}
+        {formatRoleLabel(user.role)}
       </Badge>
       {user.role === "ADMIN" ? (
         <Button asChild size="icon-sm" variant="ghost">

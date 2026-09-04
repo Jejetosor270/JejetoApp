@@ -24,12 +24,14 @@ import {
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
+import { DetailPageHeader } from "@/components/layout/detail-page-header";
 import {
   InlineCheckbox,
   InlineEditActions,
   InlineTextInput,
 } from "@/components/inline-editing/inline-edit";
 import { countries } from "@/config/countries";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 
 interface Option {
   id: string;
@@ -80,13 +82,6 @@ interface BuildingView {
     notes: string | null;
   }>;
 }
-const statusLabels: Record<string, string> = {
-  ACTIVE: "Active",
-  ARCHIVED: "Archived",
-  COMPLETED: "Completed",
-  ON_HOLD: "On hold",
-  PLANNING: "Planning",
-};
 function inputDate(value: string | null): string {
   return value ? value.slice(0, 10) : "";
 }
@@ -289,7 +284,7 @@ function ProjectFields({
         >
           {statuses.map((status) => (
             <option key={status} value={status}>
-              {statusLabels[status] ?? status}
+              {formatEnumLabel(status)}
             </option>
           ))}
         </select>
@@ -618,21 +613,9 @@ export function ProjectDetail({
           statuses={statuses}
         />
       ) : (
-        <section className="bg-card rounded-lg border p-5">
-          <div className="flex flex-col justify-between gap-3 sm:flex-row">
-            <div>
-              <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-                {project.code}
-              </p>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-                {project.name}
-              </h1>
-              <p className="text-muted-foreground mt-2 text-sm">
-                {project.client.displayName} · {project.reportingCurrencyCode} ·{" "}
-                {statusLabels[project.status] ?? project.status}
-              </p>
-            </div>
-            {canEdit ? (
+        <DetailPageHeader
+          actions={
+            canEdit ? (
               <Button
                 onClick={() => setEditingProject(true)}
                 type="button"
@@ -641,14 +624,24 @@ export function ProjectDetail({
                 <Pencil data-icon="inline-start" />
                 Edit project
               </Button>
-            ) : null}
-          </div>
-          {project.notes ? (
-            <p className="text-muted-foreground mt-5 border-t pt-4 text-sm leading-6">
-              {project.notes}
-            </p>
-          ) : null}
-        </section>
+            ) : undefined
+          }
+          backHref="/projects"
+          backLabel="Back to Projects"
+          eyebrow={project.code}
+          meta={
+            <>
+              <span>
+                {project.client.displayName} · {project.reportingCurrencyCode}
+              </span>
+              {project.notes ? (
+                <p className="mt-4 border-t pt-4 leading-6">{project.notes}</p>
+              ) : null}
+            </>
+          }
+          status={project.status}
+          title={project.name}
+        />
       )}
       {financialDashboard}
       {canEdit && addingBuilding ? (

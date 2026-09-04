@@ -49,6 +49,35 @@ export function formatDateOnly(value: string | null): string {
   return isDateOnly(value) ? `${day}/${month}/${year}` : value;
 }
 
+/** Formats a timestamp as a calendar date without exposing locale-dependent text. */
+export function formatTimestampDate(value: Date | string | null): string {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+  }).format(parsed);
+}
+
+/** Formats an audit timestamp separately from business date-only values. */
+export function formatTimestamp(value: Date | string | null): string {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    month: "2-digit",
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+  }).format(parsed);
+}
+
 export function dateOnlyToEuropeanInput(value: string | null): string {
   return value ? formatDateOnly(value) : "";
 }

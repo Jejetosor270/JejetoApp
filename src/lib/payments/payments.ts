@@ -40,6 +40,7 @@ import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
 import { paginationSkip, type PageInput } from "@/domain/listing/validation";
 import { getOrder, type OrderSummary } from "@/lib/procurement/orders";
+import { listClientCashInstallments } from "@/lib/billing/reporting";
 
 import { PaymentNotFoundError, PaymentValidationError } from "./errors";
 
@@ -795,6 +796,7 @@ export async function listPaymentInstallments(filters: {
   dueFrom?: string | undefined;
   dueTo?: string | undefined;
   projectId?: string | undefined;
+  projectIds?: readonly string[] | undefined;
   projectStatus?: ProjectStatus | undefined;
   status?: DerivedPaymentStatus | undefined;
   supplierId?: string | undefined;
@@ -814,7 +816,11 @@ export async function listPaymentInstallments(filters: {
           }
         : {}),
       order: {
-        ...(filters.projectId ? { projectId: filters.projectId } : {}),
+        ...(filters.projectIds
+          ? { projectId: { in: [...filters.projectIds] } }
+          : filters.projectId
+            ? { projectId: filters.projectId }
+            : {}),
         ...(filters.supplierId ? { supplierId: filters.supplierId } : {}),
         ...(filters.clientId || filters.projectStatus
           ? {
@@ -1038,8 +1044,13 @@ export async function getProcurementCalendarEvents(
   from: string,
   to: string,
 ): Promise<ProcurementCalendarEvent[]> {
-  const [installments, orders, items] = await Promise.all([
-    listPaymentInstallments({ dueFrom: from, dueTo: to }),
+  const [installments, clientInstallments, orders, items] = await Promise.all([
+    listPaymentInstallments({
+      direction: PaymentDirection.SUPPLIER_PAYMENT,
+      dueFrom: from,
+      dueTo: to,
+    }),
+    listClientCashInstallments(),
     getDatabase().procurementOrder.findMany({
       where: {
         OR: [
@@ -1114,23 +1125,41 @@ export async function getProcurementCalendarEvents(
     }),
   ]);
   return buildCalendarEvents({
-    installments: installments.map((item) => ({
-      currencyCode: item.currencyCode,
-      direction: item.direction,
-      dueDate: item.dueDate,
-      id: item.id,
-      isCancelled: item.isCancelled,
-      label: item.label,
-      orderId: item.orderId,
-      orderNumber: item.orderNumber,
-      partyName:
-        item.direction === PaymentDirection.SUPPLIER_PAYMENT
-          ? item.supplierName
-          : item.clientName,
-      paidAmount: item.paidAmount,
-      projectName: item.projectName,
-      scheduledAmount: item.scheduledAmount,
-    })),
+    installments: [
+      ...installments.map((item) => ({
+        currencyCode: item.currencyCode,
+        direction: item.direction,
+        dueDate: item.dueDate,
+        id: item.id,
+        isCancelled: item.isCancelled,
+        label: item.label,
+        orderId: item.orderId,
+        orderNumber: item.orderNumber,
+        partyName: item.supplierName,
+        paidAmount: item.paidAmount,
+        projectName: item.projectName,
+        scheduledAmount: item.scheduledAmount,
+      })),
+      ...clientInstallments
+        .filter((item) => item.dueDate >= from && item.dueDate <= to)
+        .map((item) => ({
+          currencyCode: item.currencyCode,
+          direction: PaymentDirection.CLIENT_RECEIPT,
+          dueDate: item.dueDate,
+          href: `/billing/${item.billingDocumentId}`,
+          id: item.id,
+          isCancelled: item.isCancelled,
+          label: item.label,
+          orderId: item.billingDocumentId,
+          orderNumber: item.billingReference,
+          partyName: item.clientName,
+          paidAmount: new Decimal(item.scheduledAmount)
+            .minus(item.outstandingAmount)
+            .toString(),
+          projectName: item.projectName,
+          scheduledAmount: item.scheduledAmount,
+        })),
+    ],
     orders: orders.map((order) => ({
       actualDeliveryDate: order.actualDeliveryDate
         ? dateToDateOnly(order.actualDeliveryDate)

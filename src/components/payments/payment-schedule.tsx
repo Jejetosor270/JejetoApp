@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import type { DirectionScheduleSummary } from "@/lib/payments/payments";
 
 import {
@@ -20,7 +21,7 @@ function StatusBadge({ status }: { status: string }) {
         : status === "PARTIALLY_PAID" || status === "DUE"
           ? "secondary"
           : "outline";
-  return <Badge variant={variant}>{status.replaceAll("_", " ")}</Badge>;
+  return <Badge variant={variant}>{formatEnumLabel(status)}</Badge>;
 }
 
 export function PaymentSchedule({

@@ -35,6 +35,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { minimumPasswordLength } from "@/domain/users/password-policy";
+import { formatRoleLabel } from "@/domain/presentation/labels";
+import { formatTimestampDate } from "@/domain/payments/dates";
 import { useRouter } from "next/navigation";
 
 type EmployeeRole = "ADMIN" | "MANAGER" | "USER";
@@ -51,18 +53,6 @@ interface EmployeeView {
 
 const inputClassName =
   "border-input bg-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-lg border px-3 text-sm outline-none focus-visible:ring-3";
-
-function roleLabel(role: EmployeeRole): string {
-  return role[0] + role.slice(1).toLowerCase();
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
-}
 
 function ActionFeedback({
   message,
@@ -469,7 +459,7 @@ function EmployeeInlineRow({
             <option value="ADMIN">Administrator</option>
           </InlineSelect>
         ) : (
-          roleLabel(saved.role)
+          formatRoleLabel(saved.role)
         )}
       </td>
       <td className="px-4 py-3">
@@ -491,7 +481,7 @@ function EmployeeInlineRow({
         )}
       </td>
       <td className="text-muted-foreground px-4 py-3 text-xs">
-        {formatDate(employee.createdAt)}
+        {formatTimestampDate(employee.createdAt)}
       </td>
       <td className="px-4 py-3 text-right">
         <InlineEditActions

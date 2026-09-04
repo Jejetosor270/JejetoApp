@@ -15,6 +15,7 @@ import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 import type { ManagedItem } from "@/lib/items/items";
 import { ItemActionForm } from "@/components/items/item-action-form";
 import { PercentageInput } from "@/components/master-data/form-ui";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 
 type Options = Awaited<
   ReturnType<typeof import("@/lib/items/items").listItemOptions>
@@ -371,7 +372,7 @@ export function ItemForm({
             <option value="">Not set</option>
             {vatTreatments.map((entry) => (
               <option key={entry} value={entry}>
-                {entry.replaceAll("_", " ")}
+                {formatEnumLabel(entry)}
               </option>
             ))}
           </select>
@@ -387,7 +388,7 @@ export function ItemForm({
               <option value="">Choose</option>
               {vatRecoverabilities.map((entry) => (
                 <option key={entry} value={entry}>
-                  {entry.replaceAll("_", " ")}
+                  {formatEnumLabel(entry)}
                 </option>
               ))}
             </select>
@@ -418,7 +419,7 @@ export function ItemForm({
           >
             {itemCommercialStatuses.map((entry) => (
               <option key={entry} value={entry}>
-                {entry.replaceAll("_", " ")}
+                {formatEnumLabel(entry)}
               </option>
             ))}
           </select>
@@ -431,7 +432,7 @@ export function ItemForm({
           >
             {itemLogisticsStatuses.map((entry) => (
               <option key={entry} value={entry}>
-                {entry.replaceAll("_", " ")}
+                {formatEnumLabel(entry)}
               </option>
             ))}
           </select>
@@ -490,7 +491,7 @@ export function ItemForm({
                 <option value="">Not set</option>
                 {options.locations.map((location) => (
                   <option key={location.id} value={location.id}>
-                    {location.type.replaceAll("_", " ")} · {location.name}
+                    {formatEnumLabel(location.type)} · {location.name}
                   </option>
                 ))}
               </select>

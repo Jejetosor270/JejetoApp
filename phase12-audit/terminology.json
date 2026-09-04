@@ -1,0 +1,314 @@
+[
+  {
+    "id": "TERM-001",
+    "currentTerm": "Project",
+    "recommendedTerm": "Project",
+    "reason": "Authoritative Client engagement and reporting scope.",
+    "locations": ["Global"],
+    "action": "KEEP"
+  },
+  {
+    "id": "TERM-002",
+    "currentTerm": "Client",
+    "recommendedTerm": "Client",
+    "reason": "Party receiving commercial quotes/invoices and making receipts.",
+    "locations": ["Global"],
+    "action": "KEEP"
+  },
+  {
+    "id": "TERM-003",
+    "currentTerm": "Supplier",
+    "recommendedTerm": "Supplier",
+    "reason": "Party providing procurement packages and receiving payments.",
+    "locations": ["Global"],
+    "action": "KEEP"
+  },
+  {
+    "id": "TERM-004",
+    "currentTerm": "Order / Procurement Order",
+    "recommendedTerm": "Supplier Order",
+    "reason": "Makes the supplier-side commercial package unambiguous without exposing a model name.",
+    "locations": ["Navigation", "Orders", "Projects", "Reports"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-005",
+    "currentTerm": "Client Billing",
+    "recommendedTerm": "Client Billing",
+    "reason": "Umbrella workspace for Client Quotes, Client Invoices, schedules, receipts, and allocations.",
+    "locations": ["Navigation", "Dashboard", "Projects"],
+    "action": "KEEP"
+  },
+  {
+    "id": "TERM-006",
+    "currentTerm": "Quote",
+    "recommendedTerm": "Client Quote",
+    "reason": "Distinguishes client-side proposals from Supplier quotes.",
+    "locations": ["Client Billing"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-007",
+    "currentTerm": "Invoice",
+    "recommendedTerm": "Client Invoice",
+    "reason": "Distinguishes client billing from supplier invoice VAT/payable concepts.",
+    "locations": ["Client Billing", "Projects", "VAT reports"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-008",
+    "currentTerm": "Receipt / settlement",
+    "recommendedTerm": "Client Receipt",
+    "reason": "Authoritative actual Client cash-in transaction.",
+    "locations": ["Client Billing", "Reports", "Projects"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-009",
+    "currentTerm": "Payment",
+    "recommendedTerm": "Supplier Payment",
+    "reason": "Authoritative actual supplier cash-out transaction; use generic Payment only when both directions are intentionally discussed.",
+    "locations": ["Payments", "Orders", "Calendar", "Reports"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-010",
+    "currentTerm": "Installment",
+    "recommendedTerm": "Installment",
+    "reason": "One scheduled amount/date in either a Supplier Payment or Client Billing schedule.",
+    "locations": ["Payments", "Billing", "Orders"],
+    "action": "KEEP"
+  },
+  {
+    "id": "TERM-011",
+    "currentTerm": "Purchase / Purchase cost",
+    "recommendedTerm": "Purchase Cost HT",
+    "reason": "Supplier product/package purchase amount before VAT and procurement extras.",
+    "locations": ["Orders", "Projects", "Reports"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-012",
+    "currentTerm": "Landed / Landed cost",
+    "recommendedTerm": "Landed Cost HT",
+    "reason": "Purchase Cost HT plus freight, customs/duties, and miscellaneous procurement costs, before non-deductible VAT.",
+    "locations": ["Orders", "Projects"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-013",
+    "currentTerm": "Economic cost / economic landed cost",
+    "recommendedTerm": "Economic Landed Cost HT",
+    "reason": "Landed Cost HT plus non-deductible input VAT; authoritative profitability cost.",
+    "locations": ["Dashboard", "Projects", "Orders", "Reports"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-014",
+    "currentTerm": "Selling revenue / package selling price",
+    "recommendedTerm": "Package Sell HT",
+    "reason": "Manual or markup-derived package selling amount excluding separately recharged freight.",
+    "locations": ["Orders"],
+    "action": "RENAME"
+  },
+  {
+    "id": "TERM-015",
+    "currentTerm": "Sales HT / planned sales HT",
+    "recommendedTerm": "Total Supplier Order Sell HT",
+    "reason": "Planned package sell plus separately recharged freight once; not Client invoiced revenue.",
+    "locations": ["Dashboard", "Projects", "Reports", "Orders"],
+    "action": "RENAME"
+  },
+  {
+    "id": "TERM-016",
+    "currentTerm": "Client Billing HT / invoiced HT",
+    "recommendedTerm": "Client Invoiced HT",
+    "reason": "Confirmed Client Invoice total HT used as actual Project revenue to date.",
+    "locations": ["Dashboard", "Projects", "Billing", "Reports"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-017",
+    "currentTerm": "Gross profit",
+    "recommendedTerm": "Actual Invoiced Gross Profit HT",
+    "reason": "When calculated from Client Invoiced HT less actual economic cost, explicitly identify it as actual-to-date.",
+    "locations": ["Project performance"],
+    "action": "RENAME"
+  },
+  {
+    "id": "TERM-018",
+    "currentTerm": "Planned gross profit",
+    "recommendedTerm": "Supplier Order Planned Gross Profit HT",
+    "reason": "Separates Order commercial planning from Invoice-based actual revenue.",
+    "locations": ["Dashboard", "Projects", "Reports"],
+    "action": "RENAME"
+  },
+  {
+    "id": "TERM-019",
+    "currentTerm": "Markup",
+    "recommendedTerm": "Markup",
+    "reason": "Gross profit divided by economic landed cost; never use interchangeably with margin.",
+    "locations": ["Global financial views"],
+    "action": "KEEP"
+  },
+  {
+    "id": "TERM-020",
+    "currentTerm": "Margin / gross margin",
+    "recommendedTerm": "Gross Margin",
+    "reason": "Gross profit divided by Sell HT; use Gross Margin when the measure is financial.",
+    "locations": ["Global financial views"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-021",
+    "currentTerm": "Funding Coverage",
+    "recommendedTerm": "Funding Coverage HT",
+    "reason": "Client Billing coverage HT less authoritative Supplier Order Sell HT; not cash coverage.",
+    "locations": ["Dashboard", "Projects"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-022",
+    "currentTerm": "Funding Gap",
+    "recommendedTerm": "Funding Gap HT",
+    "reason": "Negative Funding Coverage; remain distinct from negative cash position.",
+    "locations": ["Dashboard", "Projects"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-023",
+    "currentTerm": "Freight Estimate %",
+    "recommendedTerm": "Freight Estimate",
+    "reason": "Project planning rate applied to expected product purchase cost.",
+    "locations": ["Projects", "Freight report"],
+    "action": "KEEP"
+  },
+  {
+    "id": "TERM-024",
+    "currentTerm": "Expected Freight Allowance HT",
+    "recommendedTerm": "Expected Freight Allowance HT",
+    "reason": "Project planning value: expected Product Purchase Cost HT × Freight Estimate.",
+    "locations": ["Projects", "Freight report"],
+    "action": "KEEP"
+  },
+  {
+    "id": "TERM-025",
+    "currentTerm": "Actual Freight Cost HT",
+    "recommendedTerm": "Actual Freight Cost HT",
+    "reason": "Actual Supplier Order freight plus Project-level freight expenses.",
+    "locations": ["Projects", "Freight report"],
+    "action": "KEEP"
+  },
+  {
+    "id": "TERM-026",
+    "currentTerm": "Freight Recovery Target HT",
+    "recommendedTerm": "Freight Recovery Target HT",
+    "reason": "Actual freight cost marked up by applicable freight markup.",
+    "locations": ["Projects", "Freight report"],
+    "action": "KEEP"
+  },
+  {
+    "id": "TERM-027",
+    "currentTerm": "Freight Variance / Headroom",
+    "recommendedTerm": "Freight Headroom HT",
+    "reason": "Positive means expected allowance exceeds the recovery target; avoids ambiguous variance direction.",
+    "locations": ["Projects", "Freight report"],
+    "action": "RENAME"
+  },
+  {
+    "id": "TERM-028",
+    "currentTerm": "Input VAT",
+    "recommendedTerm": "Input VAT",
+    "reason": "VAT on supplier-side costs; recoverability is a separate management classification.",
+    "locations": ["Orders", "Freight", "VAT reports"],
+    "action": "KEEP"
+  },
+  {
+    "id": "TERM-029",
+    "currentTerm": "Recoverable / deductible VAT",
+    "recommendedTerm": "Deductible Input VAT",
+    "reason": "One canonical label for input VAT excluded from economic cost and available against output VAT.",
+    "locations": ["Orders", "Projects", "VAT reports"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-030",
+    "currentTerm": "Output VAT",
+    "recommendedTerm": "Client Invoice Output VAT",
+    "reason": "Use this label in VAT position to distinguish authoritative invoiced VAT from planned Order output VAT.",
+    "locations": ["Projects", "VAT reports"],
+    "action": "RENAME"
+  },
+  {
+    "id": "TERM-031",
+    "currentTerm": "VAT payable to State",
+    "recommendedTerm": "VAT Payable",
+    "reason": "Positive Invoice output VAT less deductible input VAT.",
+    "locations": ["Projects", "VAT reports"],
+    "action": "RENAME"
+  },
+  {
+    "id": "TERM-032",
+    "currentTerm": "VAT credit / deductible",
+    "recommendedTerm": "VAT Credit",
+    "reason": "Negative net VAT position; avoid conflating a position with the deductible input component.",
+    "locations": ["Projects", "VAT reports"],
+    "action": "RENAME"
+  },
+  {
+    "id": "TERM-033",
+    "currentTerm": "Expected cash in",
+    "recommendedTerm": "Expected Cash In",
+    "reason": "Outstanding Client Billing installments within the selected period.",
+    "locations": ["Dashboard", "Cash Flow", "Calendar"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-034",
+    "currentTerm": "Expected cash out",
+    "recommendedTerm": "Expected Cash Out",
+    "reason": "Outstanding Supplier Payment installments within the selected period.",
+    "locations": ["Dashboard", "Cash Flow", "Calendar"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-035",
+    "currentTerm": "Expected net / net cash flow",
+    "recommendedTerm": "Net Cash Flow",
+    "reason": "Cash In minus Cash Out for the selected period; keep separate from cumulative cash position.",
+    "locations": ["Dashboard", "Cash Flow"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-036",
+    "currentTerm": "Cash position",
+    "recommendedTerm": "Project Cash Position",
+    "reason": "Cumulative Client cash received minus Supplier cash paid for a Project.",
+    "locations": ["Projects", "Reports"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-037",
+    "currentTerm": "Client outstanding",
+    "recommendedTerm": "Client Outstanding TTC",
+    "reason": "Confirmed Client Invoice TTC less authoritative Client Receipts.",
+    "locations": ["Dashboard", "Billing", "Projects", "Reports"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-038",
+    "currentTerm": "Supplier outstanding",
+    "recommendedTerm": "Supplier Outstanding TTC",
+    "reason": "Supplier payable less actual Supplier Payments; currency and TTC basis should be explicit.",
+    "locations": ["Dashboard", "Payments", "Projects", "Reports"],
+    "action": "STANDARDIZE"
+  },
+  {
+    "id": "TERM-039",
+    "currentTerm": "Complete / Incomplete",
+    "recommendedTerm": "Complete / Incomplete FX",
+    "reason": "When incompleteness is caused by missing FX, name the cause instead of a generic state.",
+    "locations": ["Dashboard", "Projects", "Reports"],
+    "action": "STANDARDIZE"
+  }
+]

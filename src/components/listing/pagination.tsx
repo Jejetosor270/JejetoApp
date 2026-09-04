@@ -13,12 +13,14 @@ export function Pagination({
   pageSize,
   pathname,
   queryString,
+  selectionIsPageScoped = false,
   total,
 }: {
   page: number;
   pageSize: number;
   pathname: string;
   queryString: string;
+  selectionIsPageScoped?: boolean;
   total: number;
 }) {
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
@@ -28,7 +30,8 @@ export function Pagination({
   return (
     <footer className="bg-muted/20 flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-xs">
       <p className="text-muted-foreground">
-        {first}–{last} of {total}. Selection applies to this page only.
+        {first}–{last} of {total}.
+        {selectionIsPageScoped ? " Selection applies to this page only." : ""}
       </p>
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground">
@@ -65,17 +68,19 @@ export function Pagination({
 
 export function PageSizeField({ value }: { value: number }) {
   return (
-    <select
-      aria-label="Rows per page"
-      className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-      defaultValue={String(value)}
-      name="pageSize"
-    >
-      {PAGE_SIZE_OPTIONS.map((size) => (
-        <option key={size} value={size}>
-          {size} rows
-        </option>
-      ))}
-    </select>
+    <label className="text-muted-foreground grid min-w-0 gap-1 text-xs font-medium">
+      <span>Rows per page</span>
+      <select
+        className="border-input bg-background h-9 w-full min-w-0 rounded-lg border px-3 text-sm"
+        defaultValue={String(value)}
+        name="pageSize"
+      >
+        {PAGE_SIZE_OPTIONS.map((size) => (
+          <option key={size} value={size}>
+            {size} rows
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

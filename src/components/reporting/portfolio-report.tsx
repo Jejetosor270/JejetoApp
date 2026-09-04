@@ -7,6 +7,7 @@ import {
   formatSignedMoney,
 } from "@/domain/procurement/presentation";
 import type { PortfolioReportingSnapshot } from "@/lib/reporting/reports";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 
 export function CompanyFinancialSummary({
   report,
@@ -30,19 +31,19 @@ export function CompanyFinancialSummary({
       "/projects?status=ACTIVE",
     ],
     [
-      "Sales HT",
+      "Supplier Order Planned Sell HT",
       formatMoney(report.financial.totals.salesRevenue.value, currency),
       !report.financial.totals.salesRevenue.complete,
       "/orders",
     ],
     [
-      "Economic landed cost",
+      "Economic Landed Cost HT",
       formatMoney(report.financial.totals.economicLandedCost.value, currency),
       !report.financial.totals.economicLandedCost.complete,
       "/orders",
     ],
     [
-      "Gross profit",
+      "Supplier Order Planned Gross Profit HT",
       formatMoney(report.financial.grossProfit, currency),
       !report.financial.complete,
       "/orders",
@@ -184,11 +185,15 @@ export function ProjectPortfolioTable({
               <th className="px-3 py-2">Client</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Currency</th>
-              <th className="px-3 py-2 text-right">Sales HT</th>
-              <th className="px-3 py-2 text-right">Economic cost</th>
-              <th className="px-3 py-2 text-right">Gross profit</th>
-              <th className="px-3 py-2 text-right">Markup</th>
-              <th className="px-3 py-2 text-right">Margin</th>
+              <th className="px-3 py-2 text-right">
+                Total Supplier Order Sell HT
+              </th>
+              <th className="px-3 py-2 text-right">Economic Landed Cost HT</th>
+              <th className="px-3 py-2 text-right">
+                Supplier Order Planned Gross Profit HT
+              </th>
+              <th className="px-3 py-2 text-right">Planned Markup</th>
+              <th className="px-3 py-2 text-right">Planned Margin</th>
               <th className="px-3 py-2 text-right">Funding Coverage</th>
               <th className="px-3 py-2 text-right">Supplier outstanding</th>
               <th className="px-3 py-2 text-right">Client outstanding TTC</th>
@@ -211,7 +216,7 @@ export function ProjectPortfolioTable({
                 </td>
                 <td className="px-3 py-2">{project.clientName}</td>
                 <td className="px-3 py-2">
-                  {project.status.replaceAll("_", " ")}
+                  {formatEnumLabel(project.status)}
                   {!project.financialComplete ? (
                     <span className="text-destructive block">Incomplete</span>
                   ) : null}

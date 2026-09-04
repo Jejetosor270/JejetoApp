@@ -24,6 +24,7 @@ import {
 } from "@/domain/billing/calculations";
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
 
 interface BillingLinkDocument {
@@ -340,7 +341,7 @@ export function OrderBillingReconciliation({
                 <p className="text-muted-foreground text-xs">
                   {document.documentType} ·{" "}
                   {formatDateOnly(document.documentDate)} ·{" "}
-                  {document.status.replaceAll("_", " ")}
+                  {formatEnumLabel(document.status)}
                 </p>
               </div>
               <p className="financial-figure text-right">

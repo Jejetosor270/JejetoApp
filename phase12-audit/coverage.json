@@ -1,0 +1,322 @@
+[
+  {
+    "route": "/login",
+    "module": "Authentication",
+    "viewState": "Login form",
+    "editState": "Credential validation code-reviewed",
+    "runtimeVerified": true,
+    "notes": "Rendered after a temporary process-only local AUTH_SECRET; no credentials were submitted."
+  },
+  {
+    "route": "/",
+    "module": "Dashboard",
+    "viewState": "Active-project financial dashboard",
+    "editState": "Not applicable",
+    "runtimeVerified": true,
+    "notes": "ADMIN and read-only USER shells inspected; screenshot reviewed."
+  },
+  {
+    "route": "/projects",
+    "module": "Projects",
+    "viewState": "List, filters, pagination, funding coverage",
+    "editState": "ADMIN inline edit; USER read-only",
+    "runtimeVerified": true,
+    "notes": "Reference Directory experience; no mutation performed."
+  },
+  {
+    "route": "/projects/[projectId]",
+    "module": "Projects",
+    "viewState": "Detail, targets, freight, VAT, cash, Orders, buildings, rooms",
+    "editState": "Edit controls present; source-reviewed without save",
+    "runtimeVerified": true,
+    "notes": "Runtime sample had complete financial data and six tables."
+  },
+  {
+    "route": "/clients",
+    "module": "Clients",
+    "viewState": "List, filters, pagination",
+    "editState": "ADMIN controls present; USER read-only",
+    "runtimeVerified": true,
+    "notes": "No mutation performed."
+  },
+  {
+    "route": "/clients/[clientId]",
+    "module": "Clients",
+    "viewState": "Detail and related Projects",
+    "editState": "Source-reviewed",
+    "runtimeVerified": true,
+    "notes": "Existing record opened read-only."
+  },
+  {
+    "route": "/suppliers",
+    "module": "Suppliers",
+    "viewState": "List, filters, pagination",
+    "editState": "ADMIN controls present; USER read-only",
+    "runtimeVerified": true,
+    "notes": "No mutation performed."
+  },
+  {
+    "route": "/suppliers/[supplierId]",
+    "module": "Suppliers",
+    "viewState": "Detail, Orders, payment exposure",
+    "editState": "Source-reviewed",
+    "runtimeVerified": true,
+    "notes": "Existing record opened read-only."
+  },
+  {
+    "route": "/orders",
+    "module": "Supplier Orders",
+    "viewState": "General, Financial and Supplier Payments views; filters",
+    "editState": "ADMIN inline controls; USER read-only",
+    "runtimeVerified": true,
+    "notes": "Desktop wrapping and density visually verified."
+  },
+  {
+    "route": "/orders/[orderId]",
+    "module": "Supplier Orders",
+    "viewState": "Commercial, cost, VAT, dates, schedules and history",
+    "editState": "Edit shell and drafts source-reviewed; no save",
+    "runtimeVerified": true,
+    "notes": "Existing record opened; thirteen form elements counted."
+  },
+  {
+    "route": "/orders/import",
+    "module": "Supplier quote intake",
+    "viewState": "Project-first upload state",
+    "editState": "Review/confirmation code-reviewed",
+    "runtimeVerified": true,
+    "notes": "ADMIN upload UI rendered; no source document submitted."
+  },
+  {
+    "route": "/payments",
+    "module": "Supplier Payments",
+    "viewState": "Direction/status/date filters and installments",
+    "editState": "Editor source-reviewed; no settlement created",
+    "runtimeVerified": true,
+    "notes": "Legacy Client direction also inspected."
+  },
+  {
+    "route": "/calendar",
+    "module": "Calendar",
+    "viewState": "Month/list derived events and filters",
+    "editState": "Not applicable",
+    "runtimeVerified": true,
+    "notes": "Derived read-only event model inspected."
+  },
+  {
+    "route": "/billing",
+    "module": "Client Billing",
+    "viewState": "Quotes/Invoices list, filters, pagination",
+    "editState": "Intake entry point code-reviewed",
+    "runtimeVerified": true,
+    "notes": "Desktop clipping and action naming visually verified."
+  },
+  {
+    "route": "/billing/[billingId]",
+    "module": "Client Billing",
+    "viewState": "Document, schedules, receipts, allocations",
+    "editState": "View and edit mode rendered; no save",
+    "runtimeVerified": true,
+    "notes": "Existing document opened with ?edit=1 safely."
+  },
+  {
+    "route": "Client document intake",
+    "module": "Client Billing",
+    "viewState": "Upload/review workflow",
+    "editState": "Proposal/approval states",
+    "runtimeVerified": false,
+    "notes": "Code-reviewed only to avoid uploading or mutating data."
+  },
+  {
+    "route": "Billing installments",
+    "module": "Client Billing",
+    "viewState": "Schedule summary and rows",
+    "editState": "Add/edit/cancel code-reviewed",
+    "runtimeVerified": true,
+    "notes": "Detail page rendered; mutations not exercised."
+  },
+  {
+    "route": "Client Receipts",
+    "module": "Client Billing",
+    "viewState": "Paid/outstanding and receipt history",
+    "editState": "Add/edit/delete code-reviewed",
+    "runtimeVerified": true,
+    "notes": "Detail page rendered; mutations not exercised."
+  },
+  {
+    "route": "Billing allocations",
+    "module": "Client Billing",
+    "viewState": "Order allocation and reconciliation",
+    "editState": "Allocation editor code-reviewed",
+    "runtimeVerified": true,
+    "notes": "Detail page rendered where available."
+  },
+  {
+    "route": "/items",
+    "module": "Items Beta",
+    "viewState": "Feature-enabled list and filters",
+    "editState": "ADMIN/MANAGER controls and USER read-only code-reviewed",
+    "runtimeVerified": true,
+    "notes": "Enabled setting was observed; no mutation."
+  },
+  {
+    "route": "/items/[itemId]",
+    "module": "Items Beta",
+    "viewState": "Detail and financial/logistics fields",
+    "editState": "Inline editing source-reviewed",
+    "runtimeVerified": false,
+    "notes": "Code-reviewed because a stable sample ID was not required for safe coverage."
+  },
+  {
+    "route": "/items/new",
+    "module": "Items Beta",
+    "viewState": "Creation form",
+    "editState": "ADMIN/MANAGER role gate code-reviewed",
+    "runtimeVerified": true,
+    "notes": "ADMIN route rendered; USER redirect behavior verified in source."
+  },
+  {
+    "route": "/items/import",
+    "module": "Items Beta",
+    "viewState": "XLSX upload state",
+    "editState": "Review/proposed update code-reviewed",
+    "runtimeVerified": true,
+    "notes": "No workbook uploaded and no data persisted."
+  },
+  {
+    "route": "Rooms",
+    "module": "Projects / Items",
+    "viewState": "Project-building-room hierarchy",
+    "editState": "Create/edit/archive code-reviewed",
+    "runtimeVerified": true,
+    "notes": "Rendered as part of Project detail where data existed."
+  },
+  {
+    "route": "Locations",
+    "module": "Items Beta",
+    "viewState": "Location list",
+    "editState": "Create/edit code-reviewed",
+    "runtimeVerified": true,
+    "notes": "Rendered within Items workspace where enabled."
+  },
+  {
+    "route": "/reports",
+    "module": "Reports",
+    "viewState": "Project financial summary",
+    "editState": "Not applicable",
+    "runtimeVerified": true,
+    "notes": "Visually compared with Dashboard."
+  },
+  {
+    "route": "/reports?view=cash-flow",
+    "module": "Reports",
+    "viewState": "Cash-flow horizon and monthly table",
+    "editState": "Not applicable",
+    "runtimeVerified": true,
+    "notes": "Reached through runtime navigation and source-reviewed."
+  },
+  {
+    "route": "/reports?view=payments",
+    "module": "Reports",
+    "viewState": "Actual Payments/Receipts report",
+    "editState": "Not applicable",
+    "runtimeVerified": true,
+    "notes": "ADMIN runtime verified."
+  },
+  {
+    "route": "/reports?view=vat",
+    "module": "Reports",
+    "viewState": "VAT position report",
+    "editState": "Not applicable",
+    "runtimeVerified": true,
+    "notes": "ADMIN runtime verified; formula source traced."
+  },
+  {
+    "route": "/reports?view=freight",
+    "module": "Reports",
+    "viewState": "Freight planning/recovery report",
+    "editState": "Not applicable",
+    "runtimeVerified": true,
+    "notes": "ADMIN runtime verified; formula source traced."
+  },
+  {
+    "route": "/admin/activity",
+    "module": "Activity",
+    "viewState": "Audit event filters and results",
+    "editState": "Not applicable",
+    "runtimeVerified": true,
+    "notes": "ADMIN runtime verified; USER role gate code-reviewed."
+  },
+  {
+    "route": "/settings",
+    "module": "Settings",
+    "viewState": "Company/read-only reporting and Beta settings",
+    "editState": "ADMIN/MANAGER forms source-reviewed",
+    "runtimeVerified": true,
+    "notes": "No setting changed."
+  },
+  {
+    "route": "/admin/users",
+    "module": "Employee management",
+    "viewState": "Employee list and role/status fields",
+    "editState": "ADMIN editing/destructive rules source-reviewed",
+    "runtimeVerified": true,
+    "notes": "No employee mutation; self/final-admin guards reviewed in tests/code."
+  },
+  {
+    "route": "/search",
+    "module": "Global search",
+    "viewState": "Empty query and result grouping",
+    "editState": "Not applicable",
+    "runtimeVerified": true,
+    "notes": "No sensitive search terms used."
+  },
+  {
+    "route": "Empty states",
+    "module": "Global",
+    "viewState": "Source-reviewed list/report empty branches",
+    "editState": "Not applicable",
+    "runtimeVerified": false,
+    "notes": "Not all production-like tables were empty; explicit empty branches inspected in source."
+  },
+  {
+    "route": "Validation errors",
+    "module": "Global",
+    "viewState": "Schema and server-action errors",
+    "editState": "Invalid-state rendering code-reviewed",
+    "runtimeVerified": false,
+    "notes": "No invalid mutation was submitted; tests and components reviewed."
+  },
+  {
+    "route": "Incomplete FX",
+    "module": "Financial reporting",
+    "viewState": "Incomplete badges/messages and null propagation",
+    "editState": "Manual FX inputs source-reviewed",
+    "runtimeVerified": true,
+    "notes": "Runtime shell plus Decimal-safe aggregation and tests reviewed."
+  },
+  {
+    "route": "Destructive confirmations",
+    "module": "Global",
+    "viewState": "Archive/delete dialog implementations",
+    "editState": "Confirmation and authorization code-reviewed",
+    "runtimeVerified": false,
+    "notes": "Dialogs were not confirmed to avoid any database mutation."
+  },
+  {
+    "route": "Read-only USER state",
+    "module": "Authorization",
+    "viewState": "Primary list routes without edit controls",
+    "editState": "Role redirects and server action authorization",
+    "runtimeVerified": true,
+    "notes": "Five stable USER list routes rendered; redirecting routes were additionally code-reviewed due automation navigation aborts."
+  },
+  {
+    "route": "ADMIN/MANAGER edit state",
+    "module": "Authorization",
+    "viewState": "ADMIN controls runtime-inspected",
+    "editState": "MANAGER equivalence code-reviewed",
+    "runtimeVerified": true,
+    "notes": "Database had no active MANAGER sample; role helpers and action guards provide code-level coverage."
+  }
+]

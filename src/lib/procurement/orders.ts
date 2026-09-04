@@ -234,6 +234,194 @@ export interface ProjectProcurementSummary {
   totalSellingRevenue: string;
 }
 
+export interface OrderFundingRow {
+  id: string;
+  projectId: string;
+  sellingHt: string | null;
+  status: ProcurementOrderStatus;
+}
+
+const fundingOrderSelect = {
+  costLines: { select: { category: true, originalAmount: true } },
+  freightMarkupOverrideRate: true,
+  freightResaleAmount: true,
+  freightTreatment: true,
+  id: true,
+  orderCurrencyCode: true,
+  otherCostMarkupOverrideRate: true,
+  pricingMode: true,
+  productMarkupOverrideRate: true,
+  project: {
+    select: {
+      defaultFreightMarkupRate: true,
+      defaultOtherCostMarkupRate: true,
+      defaultProductMarkupRate: true,
+      id: true,
+      reportingCurrencyCode: true,
+    },
+  },
+  purchaseFxRateToReporting: true,
+  sellingCurrencyCode: true,
+  sellingFxRateToReporting: true,
+  sellingPriceAmount: true,
+  status: true,
+  targetMarginRate: true,
+  vatEntries: {
+    where: { direction: VatDirection.INPUT },
+    select: {
+      recoverability: true,
+      recoverableRate: true,
+      vatAmount: true,
+    },
+  },
+} satisfies Prisma.ProcurementOrderSelect;
+
+type FundingOrderRecord = Prisma.ProcurementOrderGetPayload<{
+  select: typeof fundingOrderSelect;
+}>;
+
+function fundingCost(
+  order: FundingOrderRecord,
+  category: ProcurementCostCategory,
+): Decimal {
+  return new Decimal(
+    order.costLines.find((line) => line.category === category)
+      ?.originalAmount ?? 0,
+  );
+}
+
+function fundingSellingHt(order: FundingOrderRecord): Decimal | null {
+  const reportingCurrency = order.project.reportingCurrencyCode;
+  const sellingFx = fxRate(
+    order.sellingCurrencyCode,
+    reportingCurrency,
+    order.sellingFxRateToReporting,
+  );
+  if (
+    order.pricingMode === PricingMode.PROJECT_MARKUP ||
+    order.pricingMode === PricingMode.ORDER_MARKUP ||
+    order.pricingMode === PricingMode.COMPONENT_MARKUP
+  ) {
+    const purchaseFx = fxRate(
+      order.orderCurrencyCode,
+      reportingCurrency,
+      order.purchaseFxRateToReporting,
+    );
+    const converted = (category: ProcurementCostCategory) =>
+      reportingAmount({
+        fxRateToReporting: purchaseFx,
+        originalAmount: fundingCost(order, category),
+        originalCurrencyCode: order.orderCurrencyCode,
+        reportingCurrencyCode: reportingCurrency,
+      });
+    const product = converted(ProcurementCostCategory.SUPPLIER_PURCHASE);
+    const freight = converted(ProcurementCostCategory.FREIGHT);
+    const customs = converted(ProcurementCostCategory.CUSTOMS_DUTIES);
+    const miscellaneous = converted(ProcurementCostCategory.MISCELLANEOUS);
+    if (!product || !freight || !customs || !miscellaneous) return null;
+    return new Decimal(
+      calculateComponentMarkup({
+        freightCost: freight.toString(),
+        freightMarkupRate: resolveMarkup(
+          order.project.defaultFreightMarkupRate.toString(),
+          order.pricingMode === PricingMode.PROJECT_MARKUP
+            ? null
+            : order.freightMarkupOverrideRate?.toString(),
+        ).rate,
+        otherCost: customs.plus(miscellaneous).toString(),
+        otherMarkupRate: resolveMarkup(
+          order.project.defaultOtherCostMarkupRate.toString(),
+          order.pricingMode === PricingMode.PROJECT_MARKUP
+            ? null
+            : order.otherCostMarkupOverrideRate?.toString(),
+        ).rate,
+        productCost: product.toString(),
+        productMarkupRate: resolveMarkup(
+          order.project.defaultProductMarkupRate.toString(),
+          order.pricingMode === PricingMode.PROJECT_MARKUP
+            ? null
+            : order.productMarkupOverrideRate?.toString(),
+        ).rate,
+      }).totalSell,
+    );
+  }
+  let packageSell = order.sellingPriceAmount
+    ? new Decimal(order.sellingPriceAmount)
+    : null;
+  if (!packageSell && order.targetMarginRate) {
+    const baseLanded = landedCost({
+      customsDuties: fundingCost(order, ProcurementCostCategory.CUSTOMS_DUTIES),
+      freight: fundingCost(order, ProcurementCostCategory.FREIGHT),
+      miscellaneous: fundingCost(order, ProcurementCostCategory.MISCELLANEOUS),
+      supplierPurchase: fundingCost(
+        order,
+        ProcurementCostCategory.SUPPLIER_PURCHASE,
+      ),
+    });
+    const inputVat = order.vatEntries[0];
+    const economic = economicLandedCost(
+      baseLanded,
+      inputVat
+        ? vatEconomicCostContribution({
+            recoverability: inputVat.recoverability,
+            recoverableRate: inputVat.recoverableRate,
+            vatAmount: inputVat.vatAmount,
+          })
+        : "0",
+    );
+    const reportingEconomic = reportingAmount({
+      fxRateToReporting: fxRate(
+        order.orderCurrencyCode,
+        reportingCurrency,
+        order.purchaseFxRateToReporting,
+      ),
+      originalAmount: economic,
+      originalCurrencyCode: order.orderCurrencyCode,
+      reportingCurrencyCode: reportingCurrency,
+    });
+    const sellingUnit = reportingAmount({
+      fxRateToReporting: sellingFx,
+      originalAmount: "1",
+      originalCurrencyCode: order.sellingCurrencyCode,
+      reportingCurrencyCode: reportingCurrency,
+    });
+    if (!reportingEconomic || !sellingUnit) return null;
+    packageSell = sellingPriceFromTargetMargin(
+      reportingEconomic,
+      order.targetMarginRate,
+    ).dividedBy(sellingUnit);
+  }
+  if (!packageSell) return null;
+  const originalTotal = totalSellingRevenue(
+    packageSell,
+    order.freightTreatment,
+    order.freightResaleAmount?.toString() ?? "0",
+  );
+  return reportingAmount({
+    fxRateToReporting: sellingFx,
+    originalAmount: originalTotal,
+    originalCurrencyCode: order.sellingCurrencyCode,
+    reportingCurrencyCode: reportingCurrency,
+  });
+}
+
+/** Focused projection used by Project-list Funding Coverage. */
+export async function listOrderFundingRows(
+  projectIds: readonly string[],
+): Promise<OrderFundingRow[]> {
+  if (projectIds.length === 0) return [];
+  const records = await getDatabase().procurementOrder.findMany({
+    where: { projectId: { in: [...projectIds] } },
+    select: fundingOrderSelect,
+  });
+  return records.map((order) => ({
+    id: order.id,
+    projectId: order.project.id,
+    sellingHt: fundingSellingHt(order)?.toString() ?? null,
+    status: order.status,
+  }));
+}
+
 function costAmount(
   order: OrderRecord,
   category: ProcurementCostCategory,

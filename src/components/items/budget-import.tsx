@@ -20,6 +20,7 @@ import { initialQuoteSupplierCreationState } from "@/domain/quote-intake/action-
 import { rateToPercentInput } from "@/domain/procurement/presentation";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
 import { PercentageInput } from "@/components/master-data/form-ui";
+import { IntakeStageHeader } from "@/components/intake/intake-stage";
 
 type Options = Awaited<
   ReturnType<typeof import("@/lib/items/items").listItemOptions>
@@ -505,6 +506,11 @@ function ReviewGrid({
           </tbody>
         </table>
       </div>
+      <IntakeStageHeader
+        description="Only the reviewed create and update rows below will be persisted."
+        stage={3}
+        title="Confirm and save"
+      />
       <div className="flex items-center gap-3">
         <button
           className="bg-primary text-primary-foreground h-9 rounded-lg px-4 text-sm font-medium disabled:opacity-50"
@@ -554,6 +560,11 @@ export function BudgetImport({ options }: { options: Options }) {
   const [currency, setCurrency] = useState("");
   return (
     <div className="space-y-5">
+      <IntakeStageHeader
+        description="XLSX only, up to 500 Item rows and 4 MB. The source is processed for this request and discarded."
+        stage={1}
+        title="Upload and parse"
+      />
       <form
         action={action}
         className="grid gap-3 rounded-lg border p-4 md:grid-cols-2 xl:grid-cols-5"
@@ -651,6 +662,7 @@ export function BudgetImport({ options }: { options: Options }) {
       ) : null}
       {state.review ? (
         <>
+          <IntakeStageHeader stage={2} title="Review and correct" />
           <InlineImportMasterData
             options={options}
             projectId={state.review.projectId}

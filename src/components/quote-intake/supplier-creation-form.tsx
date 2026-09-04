@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { countries } from "@/config/countries";
 import { initialQuoteSupplierCreationState } from "@/domain/quote-intake/action-state";
 import type { SupplierQuoteExtraction } from "@/domain/quote-intake/extraction";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import {
   buildQuoteSupplierDraft,
   type QuoteSupplierDraftField,
@@ -245,7 +246,7 @@ export function QuoteSupplierCreationForm({
                     variant="outline"
                   >
                     Use {candidate.displayName} ·{" "}
-                    {candidate.basis.replaceAll("_", " ").toLowerCase()}
+                    {formatEnumLabel(candidate.basis).toLowerCase()}
                   </Button>
                 ))}
               </div>

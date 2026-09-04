@@ -26,7 +26,11 @@ function OverdueTable({
           <table className="w-full min-w-[36rem] text-left text-xs">
             <thead className="text-muted-foreground border-b">
               <tr>
-                <th className="px-3 py-2">Project / Supplier Order</th>
+                <th className="px-3 py-2">
+                  {supplier
+                    ? "Project / Supplier Order"
+                    : "Project / Client Billing"}
+                </th>
                 <th className="px-3 py-2">Party</th>
                 <th className="px-3 py-2">Installment</th>
                 <th className="px-3 py-2">Due</th>
@@ -39,7 +43,11 @@ function OverdueTable({
                   <td className="px-3 py-2">
                     <Link
                       className="font-medium hover:underline"
-                      href={`/orders/${item.orderId}#payments`}
+                      href={
+                        supplier
+                          ? `/orders/${item.orderId}#payments`
+                          : `/billing/${item.orderId}`
+                      }
                     >
                       {item.projectName}
                     </Link>
@@ -79,24 +87,31 @@ function OverdueTable({
 
 export function OverdueItems({
   items,
+  showClientReceipts = true,
 }: {
   items: readonly OverdueReportingItem[];
+  showClientReceipts?: boolean;
 }) {
   return (
     <section className="bg-card rounded-lg border p-4" id="overdue">
       <h2 className="text-sm font-semibold">Overdue items</h2>
       <p className="text-muted-foreground mt-1 text-xs">
-        Derived from current outstanding installment balances and due dates.
+        Derived from authoritative Supplier Payment and Client Billing
+        installment balances and due dates.
       </p>
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+      <div
+        className={`mt-4 grid gap-4 ${showClientReceipts ? "xl:grid-cols-2" : ""}`}
+      >
         <OverdueTable
           direction={PaymentDirection.SUPPLIER_PAYMENT}
           items={items}
         />
-        <OverdueTable
-          direction={PaymentDirection.CLIENT_RECEIPT}
-          items={items}
-        />
+        {showClientReceipts ? (
+          <OverdueTable
+            direction={PaymentDirection.CLIENT_RECEIPT}
+            items={items}
+          />
+        ) : null}
       </div>
     </section>
   );

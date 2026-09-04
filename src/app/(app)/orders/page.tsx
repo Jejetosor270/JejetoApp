@@ -7,6 +7,10 @@ import {
   type OrderViewMode,
 } from "@/components/procurement/order-table";
 import { PageSizeField, Pagination } from "@/components/listing/pagination";
+import {
+  FilterField,
+  filterControlClassName,
+} from "@/components/listing/filter-field";
 import { ExportLink } from "@/components/export/export-link";
 import {
   firstQueryValue,
@@ -18,6 +22,7 @@ import {
   selectedValue,
 } from "@/domain/listing/validation";
 import { isDateOnly } from "@/domain/payments/dates";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import {
   ProcurementOrderStatus,
   VatTreatment,
@@ -106,7 +111,7 @@ export default async function OrdersPage({
           [
             ["general", "General"],
             ["financial", "Financial"],
-            ["supplier-payment", "Supplier Payment"],
+            ["supplier-payment", "Supplier Payments"],
             ["delivery", "Delivery / Status"],
           ] as const
         ).map(([value, label]) => (
@@ -123,120 +128,140 @@ export default async function OrdersPage({
           </Link>
         ))}
       </nav>
-      <form className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
-        <input
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={query}
-          name="query"
-          placeholder="Search reference, package, supplier"
-        />
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={projectId ?? ""}
-          name="projectId"
-        >
-          <option value="">All projects</option>
-          {options.projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={buildingId ?? ""}
-          name="buildingId"
-        >
-          <option value="">All Buildings</option>
-          {options.projects.flatMap((project) =>
-            project.buildings.map((building) => (
-              <option key={building.id} value={building.id}>
-                {project.name} · {building.shortCode}
+      <form className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-6">
+        <FilterField label="Search">
+          <input
+            className={filterControlClassName}
+            defaultValue={query}
+            name="query"
+            placeholder="Search reference, package, supplier"
+          />
+        </FilterField>
+        <FilterField label="Project">
+          <select
+            className={filterControlClassName}
+            defaultValue={projectId ?? ""}
+            name="projectId"
+          >
+            <option value="">All projects</option>
+            {options.projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
               </option>
-            )),
-          )}
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={supplierId ?? ""}
-          name="supplierId"
-        >
-          <option value="">All suppliers</option>
-          {options.suppliers.map((supplier) => (
-            <option key={supplier.id} value={supplier.id}>
-              {supplier.displayName}
-            </option>
-          ))}
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={firstQueryValue(params, "currencyCode") ?? ""}
-          name="currencyCode"
-        >
-          <option value="">All purchase currencies</option>
-          {options.currencies.map((currency) => (
-            <option key={currency.code} value={currency.code}>
-              {currency.code}
-            </option>
-          ))}
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={vatTreatment ?? ""}
-          name="vatTreatment"
-        >
-          <option value="">All VAT treatments</option>
-          {options.vatTreatments.map((treatment) => (
-            <option key={treatment} value={treatment}>
-              {treatment.replaceAll("_", " ")}
-            </option>
-          ))}
-        </select>
-        <input
-          aria-label="Supplier Order date from"
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={dateFrom ?? ""}
-          name="dateFrom"
-          type="date"
-        />
-        <input
-          aria-label="Supplier Order date to"
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={dateTo ?? ""}
-          name="dateTo"
-          type="date"
-        />
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={sort}
-          name="sort"
-        >
-          <option value="updated">Updated date</option>
-          <option value="reference">Reference</option>
-          <option value="orderDate">Supplier Order date</option>
-          <option value="status">Status</option>
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={direction}
-          name="direction"
-        >
-          <option value="desc">Descending</option>
-          <option value="asc">Ascending</option>
-        </select>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Building">
+          <select
+            className={filterControlClassName}
+            defaultValue={buildingId ?? ""}
+            name="buildingId"
+          >
+            <option value="">All Buildings</option>
+            {options.projects.flatMap((project) =>
+              project.buildings.map((building) => (
+                <option key={building.id} value={building.id}>
+                  {project.name} · {building.shortCode}
+                </option>
+              )),
+            )}
+          </select>
+        </FilterField>
+        <FilterField label="Supplier">
+          <select
+            className={filterControlClassName}
+            defaultValue={supplierId ?? ""}
+            name="supplierId"
+          >
+            <option value="">All suppliers</option>
+            {options.suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.displayName}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Purchase currency">
+          <select
+            className={filterControlClassName}
+            defaultValue={firstQueryValue(params, "currencyCode") ?? ""}
+            name="currencyCode"
+          >
+            <option value="">All purchase currencies</option>
+            {options.currencies.map((currency) => (
+              <option key={currency.code} value={currency.code}>
+                {currency.code}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="VAT treatment">
+          <select
+            className={filterControlClassName}
+            defaultValue={vatTreatment ?? ""}
+            name="vatTreatment"
+          >
+            <option value="">All VAT treatments</option>
+            {options.vatTreatments.map((treatment) => (
+              <option key={treatment} value={treatment}>
+                {formatEnumLabel(treatment)}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Order date from">
+          <input
+            className={filterControlClassName}
+            defaultValue={dateFrom ?? ""}
+            name="dateFrom"
+            type="date"
+          />
+        </FilterField>
+        <FilterField label="Order date to">
+          <input
+            className={filterControlClassName}
+            defaultValue={dateTo ?? ""}
+            name="dateTo"
+            type="date"
+          />
+        </FilterField>
+        <FilterField label="Sort by">
+          <select
+            className={filterControlClassName}
+            defaultValue={sort}
+            name="sort"
+          >
+            <option value="updated">Updated date</option>
+            <option value="reference">Reference</option>
+            <option value="orderDate">Supplier Order date</option>
+            <option value="status">Status</option>
+          </select>
+        </FilterField>
+        <FilterField label="Sort direction">
+          <select
+            className={filterControlClassName}
+            defaultValue={direction}
+            name="direction"
+          >
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+          </select>
+        </FilterField>
         <PageSizeField value={pageInput.pageSize} />
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={status ?? ""}
-          name="status"
-        >
-          <option value="">All statuses</option>
-          {options.statuses.map((item) => (
-            <option key={item} value={item}>
-              {item.replaceAll("_", " ")}
-            </option>
-          ))}
-        </select>
+        <FilterField label="Status">
+          <select
+            className={filterControlClassName}
+            defaultValue={status ?? ""}
+            name="status"
+          >
+            <option value="">All statuses</option>
+            {options.statuses.map((item) => (
+              <option key={item} value={item}>
+                {formatEnumLabel(item)}
+              </option>
+            ))}
+          </select>
+        </FilterField>
         <button
           className="border-input h-9 rounded-lg border px-3 text-sm font-medium"
           type="submit"
@@ -273,6 +298,7 @@ export default async function OrdersPage({
         pageSize={pageInput.pageSize}
         pathname="/orders"
         queryString={queryStringFromParams(params)}
+        selectionIsPageScoped={canEditMasterData(user.role)}
         total={result.total}
       />
     </div>

@@ -45,7 +45,9 @@ import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 import {
   dateOnlyToEuropeanInput,
   europeanInputToDateOnly,
+  formatTimestampDate,
 } from "@/domain/payments/dates";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 
 type Options = Awaited<
   ReturnType<typeof import("@/lib/items/items").listItemOptions>
@@ -208,7 +210,7 @@ function FinancialRow({
           <option value="">—</option>
           {vatTreatments.map((value) => (
             <option key={value} value={value}>
-              {value.replaceAll("_", " ")}
+              {formatEnumLabel(value)}
             </option>
           ))}
         </select>
@@ -240,7 +242,7 @@ function FinancialRow({
             <option value="">—</option>
             {vatRecoverabilities.map((value) => (
               <option key={value} value={value}>
-                {value.replaceAll("_", " ")}
+                {formatEnumLabel(value)}
               </option>
             ))}
           </select>
@@ -377,7 +379,7 @@ function StatusRow({ canEdit, item }: { canEdit: boolean; item: ManagedItem }) {
         >
           {itemCommercialStatuses.map((status) => (
             <option key={status} value={status}>
-              {status.replaceAll("_", " ")}
+              {formatEnumLabel(status)}
             </option>
           ))}
         </select>
@@ -395,13 +397,13 @@ function StatusRow({ canEdit, item }: { canEdit: boolean; item: ManagedItem }) {
         >
           {itemLogisticsStatuses.map((status) => (
             <option key={status} value={status}>
-              {status.replaceAll("_", " ")}
+              {formatEnumLabel(status)}
             </option>
           ))}
         </select>
       </td>
       <td className="px-3 py-2 font-medium">
-        {item.vendorPaymentStatus.replaceAll("_", " ")}
+        {formatEnumLabel(item.vendorPaymentStatus)}
       </td>
       {canEdit ? (
         <td className="px-3 py-2">
@@ -497,7 +499,7 @@ function TrackingRow({
         >
           {itemLogisticsStatuses.map((status) => (
             <option key={status} value={status}>
-              {status.replaceAll("_", " ")}
+              {formatEnumLabel(status)}
             </option>
           ))}
         </select>
@@ -825,7 +827,7 @@ function GeneralRow({
           saved.category || "—"
         )}
       </td>
-      <td className="px-3 py-2">{item.updatedAt.toISOString().slice(0, 10)}</td>
+      <td className="px-3 py-2">{formatTimestampDate(item.updatedAt)}</td>
       {canEdit ? (
         <td className="px-3 py-2">
           <InlineEditActions
@@ -867,14 +869,8 @@ export function ItemTable({
   const [pending, startTransition] = useTransition();
   const values =
     field === "commercialStatus"
-      ? itemCommercialStatuses.map((value) => [
-          value,
-          value.replaceAll("_", " "),
-        ])
-      : itemLogisticsStatuses.map((value) => [
-          value,
-          value.replaceAll("_", " "),
-        ]);
+      ? itemCommercialStatuses.map((value) => [value, formatEnumLabel(value)])
+      : itemLogisticsStatuses.map((value) => [value, formatEnumLabel(value)]);
   const headers = [...itemViewColumns[view], ...(canEdit ? ["Edit"] : [])];
   return (
     <section className="bg-card overflow-hidden rounded-lg border">

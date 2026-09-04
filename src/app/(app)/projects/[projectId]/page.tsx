@@ -11,7 +11,7 @@ import { projectItemSummary } from "@/lib/items/items";
 import { formatMoney } from "@/domain/procurement/presentation";
 import { getProjectReportingSnapshot } from "@/lib/reporting/reports";
 import { getApplicationSettings } from "@/lib/settings/application-settings";
-import { getProjectClientBillingSummary } from "@/lib/billing/billing";
+import { getProjectClientBillingSummary } from "@/lib/billing/reporting";
 import { ProjectFreightExpenses } from "@/components/freight/project-freight-expenses";
 import {
   getProjectFreightReconciliation,

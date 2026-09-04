@@ -21,6 +21,7 @@ import type { ExtractionStatus } from "@/domain/quote-intake/extraction";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import { calculateQuoteSupplierPayable } from "@/domain/quote-intake/payment-schedule";
 import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import {
   dateOnlyToEuropeanInput,
   formatDateOnly,
@@ -38,6 +39,10 @@ import type { QuoteIntakeOptions } from "@/lib/quote-intake/options";
 import { PaymentScheduleEditor } from "@/components/quote-intake/payment-schedule-editor";
 import { QuoteSupplierCreationForm } from "@/components/quote-intake/supplier-creation-form";
 import { QuoteItemReview } from "@/components/quote-intake/quote-item-review";
+import {
+  IntakeStageHeader,
+  IntakeWarning,
+} from "@/components/intake/intake-stage";
 
 function statusLabel(status: ExtractionStatus): string {
   return status.toLowerCase().replace(/^./, (value) => value.toUpperCase());
@@ -258,12 +263,11 @@ function QuoteReview({
     <div className="space-y-5">
       <section className="bg-card rounded-lg border p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold">Extraction review</h2>
-            <p className="text-muted-foreground mt-1 text-xs">
-              {review.originalFilename} · {review.provider} / {review.model}
-            </p>
-          </div>
+          <IntakeStageHeader
+            description={`${review.originalFilename} · ${review.provider} / ${review.model}`}
+            stage={2}
+            title="Review and correct"
+          />
           <p className="text-positive text-sm" role="status">
             Source file released after processing
           </p>
@@ -399,14 +403,13 @@ function QuoteReview({
           </div>
         ) : null}
         {review.proposal.warnings.length ? (
-          <div className="bg-warning-muted mt-4 rounded-md border p-3">
-            <h3 className="text-sm font-semibold">Review warnings</h3>
+          <IntakeWarning>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
               {review.proposal.warnings.map((warning) => (
                 <li key={warning}>{warning}</li>
               ))}
             </ul>
-          </div>
+          </IntakeWarning>
         ) : null}
       </section>
 
@@ -533,9 +536,9 @@ function QuoteReview({
               </select>
             </Field>
             <div className="text-muted-foreground self-end pb-2 text-xs">
-              Match: {review.supplierMatch.status.replaceAll("_", " ")}
+              Match: {formatEnumLabel(review.supplierMatch.status)}
               {review.supplierMatch.basis
-                ? ` by ${review.supplierMatch.basis.replaceAll("_", " ").toLowerCase()}`
+                ? ` by ${formatEnumLabel(review.supplierMatch.basis).toLowerCase()}`
                 : ""}
             </div>
           </div>
@@ -786,7 +789,7 @@ function QuoteReview({
                   <option value="">Choose</option>
                   {options.vatTreatments.map((item) => (
                     <option key={item} value={item}>
-                      {item.replaceAll("_", " ").toLowerCase()}
+                      {formatEnumLabel(item)}
                     </option>
                   ))}
                 </select>
@@ -1039,6 +1042,12 @@ function QuoteReview({
           supplierPayable={supplierPayable}
         />
 
+        <IntakeStageHeader
+          description="No authoritative record is changed until this confirmation is submitted."
+          stage={3}
+          title="Confirm and save"
+        />
+
         {state.message ? (
           <p
             className="text-destructive text-sm"
@@ -1048,7 +1057,9 @@ function QuoteReview({
           </p>
         ) : null}
         <SubmitButton pending={pending}>
-          {pending ? "Saving reviewed quote…" : "Confirm reviewed quote"}
+          {pending
+            ? "Saving reviewed quote…"
+            : "Confirm and save Supplier Order"}
         </SubmitButton>
       </form>
     </div>
@@ -1064,11 +1075,11 @@ export function QuoteIntake({ options }: { options: QuoteIntakeOptions }) {
   return (
     <div className="space-y-6">
       <section className="bg-card rounded-lg border p-4 sm:p-5">
-        <h2 className="text-sm font-semibold">1. Process one quote</h2>
-        <p className="text-muted-foreground mt-1 text-xs">
-          PDF, JPG, JPEG, or PNG up to {MAX_QUOTE_FILE_LABEL}. The source is
-          held only for this extraction request and is not saved.
-        </p>
+        <IntakeStageHeader
+          description={`PDF, JPG, JPEG, or PNG up to ${MAX_QUOTE_FILE_LABEL}. The source is held only for this extraction request and is not saved.`}
+          stage={1}
+          title="Upload and extract"
+        />
         <form
           action={action}
           className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end"

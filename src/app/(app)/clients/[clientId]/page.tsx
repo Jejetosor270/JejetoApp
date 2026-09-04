@@ -5,8 +5,10 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 
 import { ClientDetailEditor } from "@/app/(app)/clients/client-management";
-import { formatDateOnly } from "@/domain/payments/dates";
+import { DetailPageHeader } from "@/components/layout/detail-page-header";
+import { formatDateOnly, formatTimestamp } from "@/domain/payments/dates";
 import { formatMoney } from "@/domain/procurement/presentation";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listClientBillingPage } from "@/lib/billing/billing";
 import { getDatabase } from "@/lib/db";
@@ -71,17 +73,14 @@ export default async function ClientDetailPage({
   }
   return (
     <div className="space-y-6">
-      <header>
-        <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-          Directory · Client
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          {client.displayName}
-        </h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          {client.legalName} · {client.isActive ? "Active" : "Archived"}
-        </p>
-      </header>
+      <DetailPageHeader
+        backHref="/clients"
+        backLabel="Clients"
+        eyebrow="Directory · Client"
+        meta={client.legalName}
+        status={client.isActive ? "ACTIVE" : "ARCHIVED"}
+        title={client.displayName}
+      />
 
       <ClientDetailEditor
         canEdit={canEditMasterData(user.role)}
@@ -103,7 +102,7 @@ export default async function ClientDetailPage({
                   {project.name} · {project.code}
                 </span>
                 <span className="text-muted-foreground">
-                  {project.status.replaceAll("_", " ")} ·{" "}
+                  {formatEnumLabel(project.status)} ·{" "}
                   {project.reportingCurrencyCode}
                 </span>
               </Link>
@@ -184,7 +183,7 @@ export default async function ClientDetailPage({
             <p className="py-2" key={event.id}>
               {event.summary}{" "}
               <span className="text-muted-foreground">
-                · {event.actorName} · {event.occurredAt.toLocaleString("en-GB")}
+                · {event.actorName} · {formatTimestamp(event.occurredAt)}
               </span>
             </p>
           ))}

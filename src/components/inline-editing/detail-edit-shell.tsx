@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -17,9 +17,22 @@ export function DetailEditShell({
   label: string;
 }) {
   const [editing, setEditing] = useState(false);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (editing) {
+      shellRef.current
+        ?.querySelector<HTMLElement>("input, select, textarea")
+        ?.focus();
+    } else if (wasEditing.current) {
+      editButtonRef.current?.focus();
+    }
+    wasEditing.current = editing;
+  }, [editing]);
   if (editing) {
     return (
-      <div>
+      <div ref={shellRef}>
         {editor}
         <Button
           className="mt-3"
@@ -38,6 +51,7 @@ export function DetailEditShell({
         <Button
           className="absolute top-4 right-4 z-10"
           onClick={() => setEditing(true)}
+          ref={editButtonRef}
           type="button"
           variant="outline"
         >

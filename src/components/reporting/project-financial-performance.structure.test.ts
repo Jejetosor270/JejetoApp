@@ -14,7 +14,7 @@ const projectPage = readFileSync(
 describe("Project financial performance presentation", () => {
   it("uses one target, actual-to-date, and variance table", () => {
     expect(dashboard).toContain("Project financial performance");
-    expect(dashboard).toContain("Actual to date");
+    expect(dashboard).toContain("Actual invoiced to date");
     expect(dashboard).toContain('"Client Sell / Billing HT"');
     expect(dashboard).toContain('"Gross Profit HT"');
     expect(dashboard).toContain("formatSignedMoney");

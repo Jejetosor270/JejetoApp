@@ -5,8 +5,10 @@ import { z } from "zod";
 
 import { SupplierDetailEditor } from "@/app/(app)/suppliers/supplier-management";
 import { Badge } from "@/components/ui/badge";
-import { formatDateOnly } from "@/domain/payments/dates";
+import { DetailPageHeader } from "@/components/layout/detail-page-header";
+import { formatDateOnly, formatTimestamp } from "@/domain/payments/dates";
 import { formatMoney } from "@/domain/procurement/presentation";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import { PaymentDirection } from "@/generated/prisma/client";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { getDatabase } from "@/lib/db";
@@ -43,17 +45,14 @@ export default async function SupplierDetailPage({
   if (!supplier) notFound();
   return (
     <div className="space-y-6">
-      <header>
-        <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-          Directory · Supplier
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          {supplier.displayName}
-        </h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          {supplier.legalName} · {supplier.isActive ? "Active" : "Archived"}
-        </p>
-      </header>
+      <DetailPageHeader
+        backHref="/suppliers"
+        backLabel="Suppliers"
+        eyebrow="Directory · Supplier"
+        meta={supplier.legalName}
+        status={supplier.isActive ? "ACTIVE" : "ARCHIVED"}
+        title={supplier.displayName}
+      />
       <SupplierDetailEditor
         canEdit={canEditMasterData(user.role)}
         currencies={currencies}
@@ -70,7 +69,7 @@ export default async function SupplierDetailPage({
             >
               <span className="font-mono">{order.orderNumber}</span>
               <span>{order.project.name}</span>
-              <span>{order.status.replaceAll("_", " ")}</span>
+              <span>{formatEnumLabel(order.status)}</span>
               <span className="financial-figure text-right">
                 {formatMoney(order.costs.purchaseCost, order.orderCurrencyCode)}
               </span>
@@ -113,7 +112,7 @@ export default async function SupplierDetailPage({
                   installment.status === "OVERDUE" ? "destructive" : "outline"
                 }
               >
-                {installment.status.replaceAll("_", " ")}
+                {formatEnumLabel(installment.status)}
               </Badge>
             </div>
           ))}
@@ -131,7 +130,7 @@ export default async function SupplierDetailPage({
             <p className="py-2" key={event.id}>
               {event.summary}{" "}
               <span className="text-muted-foreground">
-                · {event.actorName} · {event.occurredAt.toLocaleString("en-GB")}
+                · {event.actorName} · {formatTimestamp(event.occurredAt)}
               </span>
             </p>
           ))}

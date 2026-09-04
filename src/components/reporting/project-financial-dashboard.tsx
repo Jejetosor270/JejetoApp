@@ -19,22 +19,8 @@ import type {
 import type { ProjectFinancialPerformance } from "@/domain/projects/targets";
 import type { ProjectVatPosition } from "@/domain/vat/position";
 import type { ProjectFundingCoverage } from "@/domain/billing/funding-coverage";
-
-interface Phase11BillingSummary {
-  complete: boolean;
-  invoicedComplete: boolean;
-  invoicedHt: string;
-  invoicedTtc: string;
-  nextDueDate: string | null;
-  outstandingTtc: string;
-  overdueTtc: string;
-  outputVat: string;
-  outputVatComplete: boolean;
-  paidTtc: string;
-  quotedHt: string;
-  scheduleComplete: boolean;
-  upcomingScheduledTtc: string | null;
-}
+import type { ClientBillingSummary } from "@/lib/billing/reporting";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 
 interface FreightReconciliationView {
   actualComplete: boolean;
@@ -135,8 +121,8 @@ function FinancialPerformanceTable({
           <thead className="bg-muted/40 text-muted-foreground">
             <tr>
               <th className="px-4 py-2">Metric</th>
-              <th className="px-4 py-2 text-right">Target</th>
-              <th className="px-4 py-2 text-right">Actual to date</th>
+              <th className="px-4 py-2 text-right">Project target</th>
+              <th className="px-4 py-2 text-right">Actual invoiced to date</th>
               <th className="px-4 py-2 text-right">Variance</th>
             </tr>
           </thead>
@@ -312,7 +298,7 @@ function ClientCollectionSummary({
   currencyCode,
   projectId,
 }: {
-  billing: Phase11BillingSummary | null;
+  billing: ClientBillingSummary | null;
   currencyCode: string;
   projectId: string;
 }) {
@@ -379,7 +365,7 @@ export function ProjectFinancialDashboard({
   report,
   vatPosition,
 }: {
-  billing: Phase11BillingSummary | null;
+  billing: ClientBillingSummary | null;
   financialPerformance: ProjectFinancialPerformance;
   freight: FreightReconciliationView | null;
   fundingCoverage: ProjectFundingCoverage;
@@ -407,229 +393,279 @@ export function ProjectFinancialDashboard({
         coverage={fundingCoverage}
         currencyCode={currency}
       />
-      <section className="bg-card rounded-lg border p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">Freight reconciliation</h2>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Project planning allowance versus recovery required by actual
-              Supplier Order and Project-level freight costs.
-            </p>
+      <details className="bg-card rounded-lg border p-4">
+        <summary className="cursor-pointer text-sm font-semibold">
+          Freight reconciliation
+        </summary>
+        <section className="mt-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Freight reconciliation</h2>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Project planning allowance versus recovery required by actual
+                Supplier Order and Project-level freight costs.
+              </p>
+            </div>
+            <Badge variant={freight?.complete ? "outline" : "destructive"}>
+              {freight?.complete
+                ? "Complete"
+                : "Incomplete · check planning / FX"}
+            </Badge>
           </div>
-          <Badge variant={freight?.complete ? "outline" : "destructive"}>
-            {freight?.complete
-              ? "Complete"
-              : "Incomplete · check planning / FX"}
-          </Badge>
-        </div>
-        <h3 className="text-muted-foreground mt-4 text-xs font-semibold tracking-wide uppercase">
-          Planning
-        </h3>
-        <dl className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {(
-            [
+          <h3 className="text-muted-foreground mt-4 text-xs font-semibold tracking-wide uppercase">
+            Planning
+          </h3>
+          <dl className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {(
               [
-                "Expected Product Purchase Cost HT",
-                freight?.expectedProductPurchaseCostHt ?? null,
-                "money",
-              ],
-              [
-                "Freight Estimate %",
-                freight?.freightEstimateRate ?? null,
-                "rate",
-              ],
-              [
-                "Expected Freight Allowance HT",
-                freight?.expectedFreightAllowanceHt ?? null,
-                "money",
-              ],
-            ] as const
-          ).map(([label, value, kind]) => (
-            <div className="bg-muted/25 rounded-md border p-3" key={label}>
-              <dt className="text-muted-foreground text-xs">{label}</dt>
-              <dd className="financial-figure mt-1 text-sm font-semibold">
-                {kind === "rate"
-                  ? formatRate(value)
-                  : formatMoney(value, currency)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-        <h3 className="text-muted-foreground mt-4 text-xs font-semibold tracking-wide uppercase">
-          Actual
-        </h3>
-        <dl className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {(
-            [
-              ["Actual Freight Cost HT", freight?.actualCostHt ?? null],
-              ["Freight Recovery Target HT", freight?.recoveryTargetHt ?? null],
-              [
-                "Freight Gross Profit HT",
-                freight?.freightGrossProfitHt ?? null,
-              ],
-              ["Freight Variance / Headroom", freight?.headroomHt ?? null],
-            ] as const
-          ).map(([label, value]) => (
-            <div className="bg-muted/25 rounded-md border p-3" key={label}>
-              <dt className="text-muted-foreground text-xs">{label}</dt>
-              <dd className="financial-figure mt-1 text-sm font-semibold">
-                {formatMoney(value, currency)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-        <p className="text-muted-foreground mt-3 text-xs">
-          Default Freight Markup:{" "}
-          {formatRate(freight?.defaultFreightMarkupRate ?? null)}. Cash timing
-          remains in Supplier Payments.
-        </p>
-      </section>
-      <section className="grid gap-4 xl:grid-cols-3">
-        <article className="bg-card rounded-lg border p-4">
-          <h2 className="text-sm font-semibold">
-            Supplier Order commercial plan
-          </h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Supplier Order costs and planned selling values; Invoice billing
-            remains the actual revenue source above.
-          </p>
-          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-            {[
-              ["Purchase cost HT", report.financial.totals.purchaseCost],
-              ["Freight", report.financial.totals.freight],
-              ["Customs / duties", report.financial.totals.customsDuties],
-              ["Miscellaneous", report.financial.totals.miscellaneous],
-              ["Landed cost HT", report.financial.totals.landedCost],
-              [
-                "Supplier Order economic landed cost",
-                report.financial.totals.economicLandedCost,
-              ],
-              [
-                "Package selling price HT",
-                report.financial.totals.packageSellingPrice,
-              ],
-              [
-                "Separately recharged freight",
-                report.financial.totals.rechargedFreight,
-              ],
-              [
-                "Supplier Order planned sales HT",
-                report.financial.totals.salesRevenue,
-              ],
-            ].map(([label, aggregate]) => (
-              <div className="contents" key={label as string}>
-                <dt className="text-muted-foreground py-1">
-                  {label as string}
+                [
+                  "Expected Product Purchase Cost HT",
+                  freight?.expectedProductPurchaseCostHt ?? null,
+                  "money",
+                ],
+                [
+                  "Freight Estimate %",
+                  freight?.freightEstimateRate ?? null,
+                  "rate",
+                ],
+                [
+                  "Expected Freight Allowance HT",
+                  freight?.expectedFreightAllowanceHt ?? null,
+                  "money",
+                ],
+              ] as const
+            ).map(([label, value, kind]) => (
+              <div className="bg-muted/25 rounded-md border p-3" key={label}>
+                <dt
+                  className="text-muted-foreground text-xs"
+                  title={
+                    label === "Expected Freight Allowance HT"
+                      ? "Project Expected Product Purchase Cost HT × Freight Estimate %. This is a planning allowance, not live Order freight."
+                      : undefined
+                  }
+                >
+                  {label}
                 </dt>
-                <dd className="py-1 text-right font-medium">
-                  <AggregateMoney
-                    aggregate={aggregate as SerializedAggregateAmount}
-                    currencyCode={currency}
-                  />
+                <dd className="financial-figure mt-1 text-sm font-semibold">
+                  {kind === "rate"
+                    ? formatRate(value)
+                    : formatMoney(value, currency)}
                 </dd>
               </div>
             ))}
-            <dt className="border-t pt-2 font-medium">
-              Supplier Order planned gross profit
-            </dt>
-            <dd className="financial-figure border-t pt-2 text-right font-semibold">
-              {formatMoney(report.financial.grossProfit, currency)}
-            </dd>
-            <dt>Markup / analytical margin</dt>
-            <dd className="financial-figure text-right font-semibold">
-              {formatRate(report.financial.markupRate)} /{" "}
-              {formatRate(report.financial.grossMarginRate)}
-            </dd>
           </dl>
-        </article>
-        <article className="bg-card rounded-lg border p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
-                Project VAT position
-              </p>
-              <h2 className="mt-0.5 text-sm font-semibold">
-                Invoice output VAT vs deductible input VAT
-              </h2>
-            </div>
-            <Badge variant={vatPosition.complete ? "outline" : "destructive"}>
-              {vatPosition.status ?? "INCOMPLETE"}
-            </Badge>
-          </div>
-          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-            <dt className="text-muted-foreground">Output VAT</dt>
-            <dd className="financial-figure text-right font-medium">
-              {formatMoney(vatPosition.outputVat, currency)}
-            </dd>
-            <dt className="text-muted-foreground">Deductible input VAT</dt>
-            <dd className="financial-figure text-right font-medium">
-              {formatMoney(vatPosition.deductibleInputVat, currency)}
-            </dd>
-            <dt className="border-t pt-3 font-medium">{vatPositionLabel}</dt>
-            <dd className="financial-figure border-t pt-3 text-right text-base font-semibold">
-              {formatMoney(vatPosition.positionAmount, currency)}
-            </dd>
+          <h3 className="text-muted-foreground mt-4 text-xs font-semibold tracking-wide uppercase">
+            Actual
+          </h3>
+          <dl className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {(
+              [
+                ["Actual Freight Cost HT", freight?.actualCostHt ?? null],
+                [
+                  "Freight Recovery Target HT",
+                  freight?.recoveryTargetHt ?? null,
+                ],
+                [
+                  "Freight Gross Profit HT",
+                  freight?.freightGrossProfitHt ?? null,
+                ],
+                ["Freight Headroom HT", freight?.headroomHt ?? null],
+              ] as const
+            ).map(([label, value]) => (
+              <div className="bg-muted/25 rounded-md border p-3" key={label}>
+                <dt
+                  className="text-muted-foreground text-xs"
+                  title={
+                    label === "Actual Freight Cost HT"
+                      ? "Actual Supplier Order freight plus Project-level freight expenses."
+                      : undefined
+                  }
+                >
+                  {label}
+                </dt>
+                <dd className="financial-figure mt-1 text-sm font-semibold">
+                  {formatMoney(value, currency)}
+                </dd>
+              </div>
+            ))}
           </dl>
-          <details className="mt-4 border-t pt-3 text-xs">
-            <summary className="cursor-pointer font-medium">VAT detail</summary>
-            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
-              <dt className="text-muted-foreground">
-                Supplier Order deductible input VAT
+          <p className="text-muted-foreground mt-3 text-xs">
+            Positive Freight Headroom means the Project planning allowance
+            exceeds the recovery target. Negative headroom signals a shortfall.{" "}
+            Default Freight Markup:{" "}
+            {formatRate(freight?.defaultFreightMarkupRate ?? null)}. Cash timing
+            remains in Supplier Payments.
+          </p>
+        </section>
+      </details>
+      <details className="bg-card rounded-lg border p-4">
+        <summary className="cursor-pointer text-sm font-semibold">
+          Supplier Order plan, VAT & cash position
+        </summary>
+        <section className="mt-4 grid gap-4 xl:grid-cols-3">
+          <article className="bg-card rounded-lg border p-4">
+            <h2 className="text-sm font-semibold">
+              Supplier Order commercial plan
+            </h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Supplier Order costs and planned selling values; Invoice billing
+              remains the actual revenue source above.
+            </p>
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+              {[
+                ["Purchase Cost HT", report.financial.totals.purchaseCost],
+                ["Freight", report.financial.totals.freight],
+                ["Customs / duties", report.financial.totals.customsDuties],
+                ["Miscellaneous", report.financial.totals.miscellaneous],
+                [
+                  "Economic Landed Cost HT",
+                  report.financial.totals.economicLandedCost,
+                ],
+                [
+                  "Package Sell HT",
+                  report.financial.totals.packageSellingPrice,
+                ],
+                [
+                  "Separately recharged freight",
+                  report.financial.totals.rechargedFreight,
+                ],
+                [
+                  "Total Supplier Order Sell HT",
+                  report.financial.totals.salesRevenue,
+                ],
+              ].map(([label, aggregate]) => (
+                <div className="contents" key={label as string}>
+                  <dt className="text-muted-foreground py-1">
+                    {label as string}
+                  </dt>
+                  <dd className="py-1 text-right font-medium">
+                    <AggregateMoney
+                      aggregate={aggregate as SerializedAggregateAmount}
+                      currencyCode={currency}
+                    />
+                  </dd>
+                </div>
+              ))}
+              <dt className="border-t pt-2 font-medium">
+                Supplier Order Planned Gross Profit HT
               </dt>
-              <dd className="text-right">
-                <AggregateMoney
-                  aggregate={report.financial.totals.recoverableInputVat}
-                  currencyCode={currency}
-                />
+              <dd className="financial-figure border-t pt-2 text-right font-semibold">
+                {formatMoney(report.financial.grossProfit, currency)}
               </dd>
-              <dt className="text-muted-foreground">
-                Freight-expense deductible VAT
-              </dt>
-              <dd className="text-right">
-                {freight ? (
-                  <AggregateMoney
-                    aggregate={freight.projectExpenseDeductibleInputVat}
-                    currencyCode={currency}
-                  />
-                ) : (
-                  "—"
-                )}
-              </dd>
-              <dt className="text-muted-foreground">
-                Supplier Order non-deductible input VAT
-              </dt>
-              <dd className="text-right">
-                <AggregateMoney
-                  aggregate={report.financial.totals.nonRecoverableInputVat}
-                  currencyCode={currency}
-                />
+              <dt>Markup / analytical margin</dt>
+              <dd className="financial-figure text-right font-semibold">
+                {formatRate(report.financial.markupRate)} /{" "}
+                {formatRate(report.financial.grossMarginRate)}
               </dd>
             </dl>
-          </details>
-          {!vatPosition.complete ? (
-            <p className="text-destructive mt-3 text-xs">
-              VAT position is incomplete because a required Invoice, Supplier
-              Order, or freight-expense FX rate is missing.
+            <details className="mt-4 border-t pt-3 text-xs">
+              <summary className="cursor-pointer font-medium">
+                Advanced cost detail
+              </summary>
+              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+                <dt className="text-muted-foreground">Landed Cost HT</dt>
+                <dd className="text-right">
+                  <AggregateMoney
+                    aggregate={report.financial.totals.landedCost}
+                    currencyCode={currency}
+                  />
+                </dd>
+              </dl>
+            </details>
+          </article>
+          <article className="bg-card rounded-lg border p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
+                  Project VAT position
+                </p>
+                <h2 className="mt-0.5 text-sm font-semibold">
+                  Confirmed Client Invoice output VAT vs deductible input VAT
+                </h2>
+              </div>
+              <Badge variant={vatPosition.complete ? "outline" : "destructive"}>
+                {vatPosition.status ?? "INCOMPLETE"}
+              </Badge>
+            </div>
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+              <dt className="text-muted-foreground">
+                Client Invoice Output VAT
+              </dt>
+              <dd className="financial-figure text-right font-medium">
+                {formatMoney(vatPosition.outputVat, currency)}
+              </dd>
+              <dt className="text-muted-foreground">Deductible input VAT</dt>
+              <dd className="financial-figure text-right font-medium">
+                {formatMoney(vatPosition.deductibleInputVat, currency)}
+              </dd>
+              <dt className="border-t pt-3 font-medium">{vatPositionLabel}</dt>
+              <dd className="financial-figure border-t pt-3 text-right text-base font-semibold">
+                {formatMoney(vatPosition.positionAmount, currency)}
+              </dd>
+            </dl>
+            <details className="mt-4 border-t pt-3 text-xs">
+              <summary className="cursor-pointer font-medium">
+                VAT detail
+              </summary>
+              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+                <dt className="text-muted-foreground">
+                  Supplier Order deductible input VAT
+                </dt>
+                <dd className="text-right">
+                  <AggregateMoney
+                    aggregate={report.financial.totals.recoverableInputVat}
+                    currencyCode={currency}
+                  />
+                </dd>
+                <dt className="text-muted-foreground">
+                  Freight-expense deductible VAT
+                </dt>
+                <dd className="text-right">
+                  {freight ? (
+                    <AggregateMoney
+                      aggregate={freight.projectExpenseDeductibleInputVat}
+                      currencyCode={currency}
+                    />
+                  ) : (
+                    "—"
+                  )}
+                </dd>
+                <dt className="text-muted-foreground">
+                  Supplier Order non-deductible input VAT
+                </dt>
+                <dd className="text-right">
+                  <AggregateMoney
+                    aggregate={report.financial.totals.nonRecoverableInputVat}
+                    currencyCode={currency}
+                  />
+                </dd>
+              </dl>
+            </details>
+            {!vatPosition.complete ? (
+              <p className="text-destructive mt-3 text-xs">
+                VAT position is incomplete because a required Invoice, Supplier
+                Order, or freight-expense FX rate is missing.
+              </p>
+            ) : null}
+          </article>
+          <article className="bg-card rounded-lg border p-4">
+            <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
+              Cash position
             </p>
-          ) : null}
-        </article>
-        <article className="bg-card rounded-lg border p-4">
-          <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
-            Cash position
-          </p>
-          <h2 className="mt-0.5 text-sm font-semibold">
-            Client cash received minus Supplier cash paid
-          </h2>
-          <p className="financial-figure mt-4 text-lg font-semibold">
-            {formatMoney(phase11CashPosition, currency)}
-          </p>
-          <p className="text-muted-foreground mt-2 text-xs leading-5">
-            A negative value means the company has financed more Supplier cash
-            than it has received from the Client. Cash timing does not change
-            Project VAT or HT profit.
-          </p>
-        </article>
-      </section>
+            <h2 className="mt-0.5 text-sm font-semibold">
+              Client cash received minus Supplier cash paid
+            </h2>
+            <p className="financial-figure mt-4 text-lg font-semibold">
+              {formatMoney(phase11CashPosition, currency)}
+            </p>
+            <p className="text-muted-foreground mt-2 text-xs leading-5">
+              A negative value means the company has financed more Supplier cash
+              than it has received from the Client. Cash timing does not change
+              Project VAT or HT profit.
+            </p>
+          </article>
+        </section>
+      </details>
 
       <section className="bg-card rounded-lg border p-4">
         <div className="flex items-start justify-between gap-3">
@@ -662,92 +698,97 @@ export function ProjectFinancialDashboard({
         </div>
       </section>
 
-      <section className="bg-card overflow-hidden rounded-lg border">
-        <header className="border-b px-4 py-3">
-          <h2 className="text-sm font-semibold">
-            Supplier Order financial breakdown
-          </h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Comparable values are shown in {currency}; effective markup is
-            calculated from monetary totals, never averaged.
-          </p>
-        </header>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[78rem] text-left text-xs">
-            <thead className="bg-muted/40 text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2">Supplier Order</th>
-                <th className="px-3 py-2">Supplier</th>
-                <th className="px-3 py-2 text-right">Purchase</th>
-                <th className="px-3 py-2 text-right">Landed</th>
-                <th className="px-3 py-2 text-right">Selling</th>
-                <th className="px-3 py-2 text-right">Gross profit</th>
-                <th className="px-3 py-2 text-right">Markup</th>
-                <th className="px-3 py-2 text-right">Margin</th>
-                <th className="px-3 py-2 text-right">Supplier outstanding</th>
-                <th className="px-3 py-2 text-right">
-                  Legacy Supplier Order plan remaining
-                </th>
-                <th className="px-3 py-2">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {report.orderRows.map((order) => (
-                <tr key={order.id}>
-                  <td className="px-3 py-2">
-                    <Link
-                      className="font-medium hover:underline"
-                      href={`/orders/${order.id}`}
-                    >
-                      {order.packageName}
-                    </Link>
-                    <span className="text-muted-foreground block font-mono">
-                      {order.orderNumber}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">{order.supplierName}</td>
-                  {[
-                    order.purchaseCost,
-                    order.landedCost,
-                    order.salesRevenue,
-                    order.grossProfit,
-                  ].map((value, index) => (
-                    <td
-                      className="financial-figure px-3 py-2 text-right"
-                      key={`${order.id}-financial-${index}`}
-                    >
-                      {formatMoney(value, currency)}
-                    </td>
-                  ))}
-                  <td className="financial-figure px-3 py-2 text-right">
-                    {formatRate(order.markupRate)}
-                  </td>
-                  <td className="financial-figure px-3 py-2 text-right">
-                    {formatRate(order.grossMarginRate)}
-                  </td>
-                  <td className="financial-figure px-3 py-2 text-right">
-                    {formatMoney(order.supplierOutstanding, currency)}
-                  </td>
-                  <td className="financial-figure px-3 py-2 text-right">
-                    {formatMoney(order.clientOutstanding, currency)}
-                  </td>
-                  <td className="px-3 py-2">
-                    {order.status.replaceAll("_", " ")}
-                    {!order.complete ? (
-                      <span className="text-destructive block">Incomplete</span>
-                    ) : null}
-                  </td>
+      <details className="bg-card rounded-lg border p-4">
+        <summary className="cursor-pointer text-sm font-semibold">
+          Supplier Order financial breakdown
+        </summary>
+        <section className="mt-4 overflow-hidden rounded-lg border">
+          <header className="border-b px-4 py-3">
+            <h2 className="text-sm font-semibold">
+              Supplier Order financial breakdown
+            </h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Comparable values are shown in {currency}; effective markup is
+              calculated from monetary totals, never averaged.
+            </p>
+          </header>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[78rem] text-left text-xs">
+              <thead className="bg-muted/40 text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">Supplier Order</th>
+                  <th className="px-3 py-2">Supplier</th>
+                  <th className="px-3 py-2 text-right">Purchase Cost HT</th>
+                  <th className="px-3 py-2 text-right">Landed Cost HT</th>
+                  <th className="px-3 py-2 text-right">
+                    Total Supplier Order Sell HT
+                  </th>
+                  <th className="px-3 py-2 text-right">
+                    Supplier Order Planned Gross Profit HT
+                  </th>
+                  <th className="px-3 py-2 text-right">Planned Markup</th>
+                  <th className="px-3 py-2 text-right">Planned Margin</th>
+                  <th className="px-3 py-2 text-right">Supplier outstanding</th>
+                  <th className="px-3 py-2">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {report.orderRows.length === 0 ? (
-          <p className="text-muted-foreground px-4 py-8 text-center text-sm">
-            No Supplier Orders have been added to this Project.
-          </p>
-        ) : null}
-      </section>
+              </thead>
+              <tbody className="divide-y">
+                {report.orderRows.map((order) => (
+                  <tr key={order.id}>
+                    <td className="px-3 py-2">
+                      <Link
+                        className="font-medium hover:underline"
+                        href={`/orders/${order.id}`}
+                      >
+                        {order.packageName}
+                      </Link>
+                      <span className="text-muted-foreground block font-mono">
+                        {order.orderNumber}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">{order.supplierName}</td>
+                    {[
+                      order.purchaseCost,
+                      order.landedCost,
+                      order.salesRevenue,
+                      order.grossProfit,
+                    ].map((value, index) => (
+                      <td
+                        className="financial-figure px-3 py-2 text-right"
+                        key={`${order.id}-financial-${index}`}
+                      >
+                        {formatMoney(value, currency)}
+                      </td>
+                    ))}
+                    <td className="financial-figure px-3 py-2 text-right">
+                      {formatRate(order.markupRate)}
+                    </td>
+                    <td className="financial-figure px-3 py-2 text-right">
+                      {formatRate(order.grossMarginRate)}
+                    </td>
+                    <td className="financial-figure px-3 py-2 text-right">
+                      {formatMoney(order.supplierOutstanding, currency)}
+                    </td>
+                    <td className="px-3 py-2">
+                      {formatEnumLabel(order.status)}
+                      {!order.complete ? (
+                        <span className="text-destructive block">
+                          Incomplete
+                        </span>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {report.orderRows.length === 0 ? (
+            <p className="text-muted-foreground px-4 py-8 text-center text-sm">
+              No Supplier Orders have been added to this Project.
+            </p>
+          ) : null}
+        </section>
+      </details>
 
       <CashFlowPanel
         baseHref={`/projects/${projectId}`}

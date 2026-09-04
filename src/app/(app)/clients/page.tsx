@@ -3,6 +3,10 @@ import type { Metadata } from "next";
 import { ClientManagement } from "@/app/(app)/clients/client-management";
 import { ExportLink } from "@/components/export/export-link";
 import { PageSizeField, Pagination } from "@/components/listing/pagination";
+import {
+  FilterField,
+  filterControlClassName,
+} from "@/components/listing/filter-field";
 import { countries } from "@/config/countries";
 import {
   firstQueryValue,
@@ -70,63 +74,75 @@ export default async function ClientsPage({
           queryString={queryStringFromParams(params)}
         />
       </header>
-      <form className="grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
-        <input
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm sm:w-80"
-          defaultValue={query}
-          name="query"
-          placeholder="Search name, contact, or VAT"
-        />
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={active}
-          name="active"
-        >
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="all">All clients</option>
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={firstQueryValue(params, "countryCode") ?? ""}
-          name="countryCode"
-        >
-          <option value="">All countries</option>
-          {countries.map((country) => (
-            <option key={country.code} value={country.code}>
-              {country.label}
-            </option>
-          ))}
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={firstQueryValue(params, "currencyCode") ?? ""}
-          name="currencyCode"
-        >
-          <option value="">All currencies</option>
-          {currencies.map((currency) => (
-            <option key={currency.code} value={currency.code}>
-              {currency.code}
-            </option>
-          ))}
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={sort}
-          name="sort"
-        >
-          <option value="name">Name</option>
-          <option value="updated">Updated date</option>
-          <option value="created">Created date</option>
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={direction}
-          name="direction"
-        >
-          <option value="asc">Ascending</option>
-          <option value="desc">Descending</option>
-        </select>
+      <form className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-7">
+        <FilterField label="Search">
+          <input
+            className={filterControlClassName}
+            defaultValue={query}
+            name="query"
+            placeholder="Search name, contact, or VAT"
+          />
+        </FilterField>
+        <FilterField label="Activity">
+          <select
+            className={filterControlClassName}
+            defaultValue={active}
+            name="active"
+          >
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="all">All clients</option>
+          </select>
+        </FilterField>
+        <FilterField label="Country">
+          <select
+            className={filterControlClassName}
+            defaultValue={firstQueryValue(params, "countryCode") ?? ""}
+            name="countryCode"
+          >
+            <option value="">All countries</option>
+            {countries.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.label}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Default currency">
+          <select
+            className={filterControlClassName}
+            defaultValue={firstQueryValue(params, "currencyCode") ?? ""}
+            name="currencyCode"
+          >
+            <option value="">All currencies</option>
+            {currencies.map((currency) => (
+              <option key={currency.code} value={currency.code}>
+                {currency.code}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Sort by">
+          <select
+            className={filterControlClassName}
+            defaultValue={sort}
+            name="sort"
+          >
+            <option value="name">Name</option>
+            <option value="updated">Updated date</option>
+            <option value="created">Created date</option>
+          </select>
+        </FilterField>
+        <FilterField label="Sort direction">
+          <select
+            className={filterControlClassName}
+            defaultValue={direction}
+            name="direction"
+          >
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </select>
+        </FilterField>
         <PageSizeField value={pageInput.pageSize} />
         <button
           className="border-input h-9 rounded-lg border px-3 text-sm font-medium"
@@ -145,6 +161,7 @@ export default async function ClientsPage({
         pageSize={pageInput.pageSize}
         pathname="/clients"
         queryString={queryStringFromParams(params)}
+        selectionIsPageScoped={canEditMasterData(user.role)}
         total={result.total}
       />
     </div>

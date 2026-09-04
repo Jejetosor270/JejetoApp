@@ -5,9 +5,13 @@ const database = vi.hoisted(() => ({
   paymentInstallment: { findMany: vi.fn() },
   procurementOrder: { findMany: vi.fn() },
 }));
+const billing = vi.hoisted(() => ({
+  listClientCashInstallments: vi.fn(),
+}));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
+vi.mock("@/lib/billing/reporting", () => billing);
 
 import { getProcurementCalendarEvents } from "@/lib/payments/payments";
 
@@ -54,16 +58,28 @@ describe("calendar events from authoritative installments", () => {
     vi.clearAllMocks();
     database.procurementOrder.findMany.mockResolvedValue([]);
     database.item.findMany.mockResolvedValue([]);
+    billing.listClientCashInstallments.mockResolvedValue([]);
   });
 
   it("includes Supplier Payment and Client Receipt due dates with their parties", async () => {
-    database.paymentInstallment.findMany.mockResolvedValue([
-      installment(),
-      installment({
-        direction: "CLIENT_RECEIPT",
+    database.paymentInstallment.findMany.mockResolvedValue([installment()]);
+    billing.listClientCashInstallments.mockResolvedValue([
+      {
+        billingDocumentId: "billing-1",
+        billingReference: "INV-001",
+        clientName: "Example Client",
+        currencyCode: "EUR",
+        dueDate: "2026-09-15",
+        expectedFxRate: null,
         id: "installment-2",
+        isCancelled: false,
         label: "Client deposit",
-      }),
+        outstandingAmount: "30000.0000",
+        projectId: "project-1",
+        projectName: "Example Project",
+        scheduledAmount: "30000.0000",
+        status: "UPCOMING",
+      },
     ]);
 
     const events = await getProcurementCalendarEvents(

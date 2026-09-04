@@ -140,7 +140,7 @@ export function GlobalVatReport({
     <section className="bg-card overflow-hidden rounded-lg border">
       <header className="grid gap-3 border-b p-4 sm:grid-cols-3">
         {[
-          ["Output VAT", report.position.outputVat],
+          ["Confirmed Client Invoice Output VAT", report.position.outputVat],
           ["Deductible Input VAT", report.position.deductibleInputVat],
           [
             report.position.status
@@ -168,7 +168,9 @@ export function GlobalVatReport({
           <thead className="bg-muted/40 text-muted-foreground text-xs">
             <tr>
               <th className="px-3 py-2">Project</th>
-              <th className="px-3 py-2 text-right">Output VAT</th>
+              <th className="px-3 py-2 text-right">
+                Client Invoice Output VAT
+              </th>
               <th className="px-3 py-2 text-right">Deductible Input VAT</th>
               <th className="px-3 py-2 text-right">Position</th>
               <th className="px-3 py-2">Status</th>

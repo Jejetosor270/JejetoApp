@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, type ChangeEventHandler, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEventHandler,
+  type ReactNode,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { formatPercentageInput } from "@/domain/procurement/presentation";
@@ -139,8 +145,26 @@ export function InlineEditActions({
   onSave: () => void;
   pending: boolean;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const wasEditing = useRef(editing);
+  useEffect(() => {
+    if (editing && !wasEditing.current) {
+      containerRef.current
+        ?.closest("tr")
+        ?.querySelector<HTMLElement>(
+          'input:not([type="checkbox"]), select, textarea',
+        )
+        ?.focus();
+    }
+    if (!editing && wasEditing.current) {
+      containerRef.current
+        ?.querySelector<HTMLButtonElement>('[data-inline-edit="start"]')
+        ?.focus();
+    }
+    wasEditing.current = editing;
+  }, [editing]);
   return (
-    <div className="flex min-w-28 flex-col items-end gap-1">
+    <div className="flex min-w-28 flex-col items-end gap-1" ref={containerRef}>
       <div className="flex gap-1">
         {editing ? (
           <>
@@ -158,7 +182,13 @@ export function InlineEditActions({
             </Button>
           </>
         ) : (
-          <Button onClick={onEdit} size="sm" type="button" variant="outline">
+          <Button
+            data-inline-edit="start"
+            onClick={onEdit}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
             Edit
           </Button>
         )}

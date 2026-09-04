@@ -3,10 +3,9 @@ import Link from "next/link";
 
 import { OverdueItems } from "@/components/reporting/overdue-items";
 import {
-  CompanyFinancialSummary,
-  ProjectPortfolioTable,
-} from "@/components/reporting/portfolio-report";
-import { formatMoney } from "@/domain/procurement/presentation";
+  formatMoney,
+  formatSignedMoney,
+} from "@/domain/procurement/presentation";
 import { ProjectStatus } from "@/generated/prisma/client";
 import { requireUser } from "@/lib/auth/current-user";
 import { getPortfolioReportingSnapshot } from "@/lib/reporting/reports";
@@ -47,7 +46,65 @@ export default async function DashboardPage() {
         </Link>
       </header>
 
-      <CompanyFinancialSummary report={report} />
+      <section className="bg-card rounded-lg border p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Operational exceptions</h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              The few portfolio signals that need attention now. Full financial
+              analysis remains in Reports.
+            </p>
+          </div>
+          <Link
+            className="text-primary text-xs hover:underline"
+            href="/reports"
+          >
+            View full portfolio
+          </Link>
+        </div>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {(
+            [
+              [
+                "Active Projects",
+                report.activeProjectCount.toString(),
+                "/projects?status=ACTIVE",
+              ],
+              [
+                "Supplier overdue",
+                formatMoney(report.payments.supplier.overdue.value, currency),
+                "/payments?status=OVERDUE",
+              ],
+              [
+                "Projects with Funding Gap",
+                report.fundingCoverage.gapProjectCount.toString(),
+                "/projects",
+              ],
+              [
+                "Total Funding Coverage",
+                formatSignedMoney(
+                  report.fundingCoverage.fundingCoverageHt,
+                  currency,
+                ),
+                "/projects",
+              ],
+            ] as const
+          ).map(([label, value, href]) => (
+            <div className="bg-muted/25 rounded-md border p-3" key={label}>
+              <dt className="text-muted-foreground text-xs">
+                <Link className="hover:underline" href={href}>
+                  {label}
+                </Link>
+              </dt>
+              <dd className="financial-figure mt-1 font-semibold">
+                <Link className="hover:underline" href={href}>
+                  {value}
+                </Link>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
 
       <section className="bg-card rounded-lg border p-4">
         <div className="flex items-start justify-between gap-3">
@@ -131,8 +188,7 @@ export default async function DashboardPage() {
         ) : null}
       </section>
 
-      <OverdueItems items={report.overdueItems} />
-      <ProjectPortfolioTable report={report} />
+      <OverdueItems items={report.overdueItems} showClientReceipts={false} />
     </div>
   );
 }

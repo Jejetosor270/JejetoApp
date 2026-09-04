@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney } from "@/domain/procurement/presentation";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import type { ClientBillingView } from "@/lib/billing/billing";
+import {
+  tableContainerClassName,
+  tableHeaderClassName,
+} from "@/components/listing/table-styles";
 
 function BillingRow({
   canEdit,
@@ -58,7 +63,7 @@ function BillingRow({
       <td className="financial-figure px-3 py-3 text-right">
         {formatMoney(document.outstanding, document.currencyCode)}
       </td>
-      <td className="px-3 py-3">{document.status.replaceAll("_", " ")}</td>
+      <td className="px-3 py-3">{formatEnumLabel(document.status)}</td>
       <td className="px-3 py-3 whitespace-nowrap">
         <Link
           className="text-primary mr-3 text-xs font-medium underline"
@@ -87,10 +92,10 @@ export function BillingTable({
   documents: ClientBillingView[];
 }) {
   return (
-    <section className="bg-card overflow-hidden rounded-lg border">
+    <section className={tableContainerClassName}>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[78rem] text-left text-sm">
-          <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
+          <thead className={tableHeaderClassName}>
             <tr>
               <th className="px-3 py-3">Reference</th>
               <th className="px-3 py-3">Client</th>

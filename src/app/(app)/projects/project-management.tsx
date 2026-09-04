@@ -38,6 +38,8 @@ import {
 } from "@/domain/procurement/presentation";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
 import type { ProjectFundingCoverage } from "@/domain/billing/funding-coverage";
+import { formatDateOnly } from "@/domain/payments/dates";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 
 interface ClientOption {
   displayName: string;
@@ -78,23 +80,6 @@ interface ProjectView {
   status: string;
   targetMarkupRate: string | null;
   targetMode: string;
-}
-
-const statusLabels: Record<string, string> = {
-  ACTIVE: "Active",
-  ARCHIVED: "Archived",
-  COMPLETED: "Completed",
-  ON_HOLD: "On hold",
-  PLANNING: "Planning",
-};
-function dateLabel(value: string | null): string {
-  return value
-    ? new Intl.DateTimeFormat("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }).format(new Date(value))
-    : "—";
 }
 
 function CreateProjectForm({
@@ -190,7 +175,7 @@ function CreateProjectForm({
           >
             {statuses.map((status) => (
               <option key={status} value={status}>
-                {statusLabels[status] ?? status}
+                {formatEnumLabel(status)}
               </option>
             ))}
           </select>
@@ -360,15 +345,17 @@ function ProjectInlineRow({
           >
             {statuses.map((status) => (
               <option key={status} value={status}>
-                {statusLabels[status] ?? status}
+                {formatEnumLabel(status)}
               </option>
             ))}
           </InlineSelect>
         ) : (
-          (statusLabels[saved.status] ?? saved.status)
+          formatEnumLabel(saved.status)
         )}
       </td>
-      <td className="px-4 py-3">{dateLabel(project.expectedCompletionDate)}</td>
+      <td className="px-4 py-3">
+        {formatDateOnly(project.expectedCompletionDate)}
+      </td>
       <td className="px-4 py-3">
         {editing ? (
           <InlinePercentInput

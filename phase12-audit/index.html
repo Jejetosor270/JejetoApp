@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MB Procurement ERP — Phase 12 Audit</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">MB Procurement ERP · Phase 12</p>
+        <h1>Product consistency audit</h1>
+        <p class="lede">
+          Review recommendations. Nothing here changes the ERP or its database.
+        </p>
+      </div>
+      <div class="header-actions">
+        <button class="button secondary" id="export-json">Export JSON</button>
+        <button class="button primary" id="export-md">Export Markdown</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="progress-panel" aria-label="Review progress">
+        <div class="progress-copy">
+          <strong id="reviewed-count">0 / 0 reviewed</strong>
+          <span id="remaining-count">0 remaining</span>
+        </div>
+        <div class="progress-track" aria-hidden="true">
+          <span id="progress-bar"></span>
+        </div>
+        <div class="decision-counts" id="decision-counts"></div>
+      </section>
+
+      <nav class="tabs" aria-label="Audit views">
+        <button class="tab active" data-view="top">Top issues</button>
+        <button class="tab" data-view="findings">All findings</button>
+        <button class="tab" data-view="terminology">Terminology</button>
+        <button class="tab" data-view="authorities">Financial sources</button>
+        <button class="tab" data-view="coverage">Coverage</button>
+        <button class="tab" data-view="batches">Batches</button>
+      </nav>
+
+      <section id="findings-tools" class="tools" aria-label="Finding filters">
+        <label class="search"
+          ><span>Search</span
+          ><input
+            id="search"
+            type="search"
+            placeholder="Finding, page, source, recommendation…"
+        /></label>
+        <div id="filters" class="filter-grid"></div>
+        <button class="button tertiary" id="clear-filters">
+          Clear filters
+        </button>
+      </section>
+
+      <section id="summary" class="summary"></section>
+      <section id="content" aria-live="polite"></section>
+    </main>
+
+    <dialog id="issue-dialog">
+      <div class="dialog-shell">
+        <button class="dialog-close" aria-label="Close issue detail">×</button>
+        <div id="dialog-content"></div>
+      </div>
+    </dialog>
+
+    <template id="decision-template">
+      <div class="review-box">
+        <fieldset>
+          <legend>Reviewer decision</legend>
+          <div class="decision-options">
+            <label
+              ><input type="radio" value="ACCEPT" /> Accept
+              recommendation</label
+            >
+            <label><input type="radio" value="KEEP" /> Keep as-is</label>
+            <label
+              ><input type="radio" value="MODIFY" /> Modify
+              recommendation</label
+            >
+            <label><input type="radio" value="DEFER" /> Defer</label>
+          </div>
+        </fieldset>
+        <label
+          >Reviewer note<textarea
+            data-field="note"
+            rows="3"
+            placeholder="Why this decision? Context for implementation?"
+          ></textarea>
+        </label>
+        <label
+          >Proposed replacement text<input
+            data-field="replacementText"
+            placeholder="Optional exact wording"
+        /></label>
+        <label
+          >Custom requested change<textarea
+            data-field="customChange"
+            rows="3"
+            placeholder="Optional change that supersedes the recommendation"
+          ></textarea>
+        </label>
+      </div>
+    </template>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

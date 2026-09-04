@@ -3,7 +3,7 @@ import {
   BarChart3,
   Building2,
   CalendarDays,
-  FileText,
+  CircleDollarSign,
   FolderKanban,
   History,
   LayoutDashboard,
@@ -56,6 +56,12 @@ export const navigationGroups: readonly NavigationGroup[] = [
         label: "Client Billing",
       },
       {
+        href: "/payments",
+        icon: CircleDollarSign,
+        isAvailable: true,
+        label: "Supplier Payments",
+      },
+      {
         href: "/calendar",
         icon: CalendarDays,
         isAvailable: true,
@@ -103,17 +109,6 @@ export const navigationGroups: readonly NavigationGroup[] = [
         icon: Truck,
         isAvailable: true,
         label: "Suppliers",
-      },
-    ],
-  },
-  {
-    label: "Reserved",
-    items: [
-      {
-        href: "/documents",
-        icon: FileText,
-        isAvailable: false,
-        label: "Documents",
       },
     ],
   },

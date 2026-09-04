@@ -4,6 +4,10 @@ import Link from "next/link";
 import { BillingTable } from "@/components/billing/billing-table";
 import { ClientDocumentIntake } from "@/components/billing/client-document-intake";
 import { PageSizeField, Pagination } from "@/components/listing/pagination";
+import {
+  FilterField,
+  filterControlClassName,
+} from "@/components/listing/filter-field";
 import { ExportLink } from "@/components/export/export-link";
 import {
   firstQueryValue,
@@ -87,89 +91,104 @@ export default async function BillingPage({
       {canEdit ? (
         <details>
           <summary className="bg-primary text-primary-foreground inline-flex h-9 cursor-pointer list-none items-center rounded-lg px-3 text-sm font-medium">
-            Import Client PDF
+            Import Client Document
           </summary>
           <div className="mt-4">
             <ClientDocumentIntake options={options} />
           </div>
         </details>
       ) : null}
-      <form className="grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
-        <input
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={firstQueryValue(params, "query") ?? ""}
-          name="query"
-          placeholder="Search reference, Client, Project"
-        />
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={clientId ?? ""}
-          name="clientId"
-        >
-          <option value="">All Clients</option>
-          {options.clients.map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.displayName}
-            </option>
-          ))}
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={projectId ?? ""}
-          name="projectId"
-        >
-          <option value="">All Projects</option>
-          {options.projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={documentType ?? ""}
-          name="documentType"
-        >
-          <option value="">Quotes and Invoices</option>
-          <option value="QUOTE">Quote / Devis</option>
-          <option value="INVOICE">Invoice</option>
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={firstQueryValue(params, "currencyCode") ?? ""}
-          name="currencyCode"
-        >
-          <option value="">All currencies</option>
-          {options.currencies.map((currency) => (
-            <option key={currency.code} value={currency.code}>
-              {currency.code}
-            </option>
-          ))}
-        </select>
-        <select
-          className="border-input bg-background h-9 rounded-lg border px-3 text-sm"
-          defaultValue={sort}
-          name="sort"
-        >
-          <option value="updated">Updated</option>
-          <option value="date">Document date</option>
-          <option value="dueDate">Due date</option>
-          <option value="reference">Reference</option>
-        </select>
-        <div className="flex gap-2">
+      <form className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-7">
+        <FilterField label="Search">
+          <input
+            className={filterControlClassName}
+            defaultValue={firstQueryValue(params, "query") ?? ""}
+            name="query"
+            placeholder="Search reference, Client, Project"
+          />
+        </FilterField>
+        <FilterField label="Client">
           <select
-            className="border-input bg-background h-9 min-w-0 flex-1 rounded-lg border px-3 text-sm"
+            className={filterControlClassName}
+            defaultValue={clientId ?? ""}
+            name="clientId"
+          >
+            <option value="">All Clients</option>
+            {options.clients.map((client) => (
+              <option key={client.id} value={client.id}>
+                {client.displayName}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Project">
+          <select
+            className={filterControlClassName}
+            defaultValue={projectId ?? ""}
+            name="projectId"
+          >
+            <option value="">All Projects</option>
+            {options.projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Document type">
+          <select
+            className={filterControlClassName}
+            defaultValue={documentType ?? ""}
+            name="documentType"
+          >
+            <option value="">Quotes and Invoices</option>
+            <option value="QUOTE">Quote / Devis</option>
+            <option value="INVOICE">Invoice</option>
+          </select>
+        </FilterField>
+        <FilterField label="Currency">
+          <select
+            className={filterControlClassName}
+            defaultValue={firstQueryValue(params, "currencyCode") ?? ""}
+            name="currencyCode"
+          >
+            <option value="">All currencies</option>
+            {options.currencies.map((currency) => (
+              <option key={currency.code} value={currency.code}>
+                {currency.code}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Sort by">
+          <select
+            className={filterControlClassName}
+            defaultValue={sort}
+            name="sort"
+          >
+            <option value="updated">Updated</option>
+            <option value="date">Document date</option>
+            <option value="dueDate">Due date</option>
+            <option value="reference">Reference</option>
+          </select>
+        </FilterField>
+        <FilterField label="Sort direction">
+          <select
+            className={filterControlClassName}
             defaultValue={direction}
             name="direction"
           >
             <option value="desc">Descending</option>
             <option value="asc">Ascending</option>
           </select>
-          <button className="border-input h-9 rounded-lg border px-3 text-sm font-medium">
-            Filter
-          </button>
-        </div>
+        </FilterField>
         <PageSizeField value={pageInput.pageSize} />
+        <button
+          className="border-input h-9 rounded-lg border px-3 text-sm font-medium"
+          type="submit"
+        >
+          Filter
+        </button>
       </form>
       <BillingTable canEdit={canEdit} documents={result.items} />
       <Pagination
@@ -177,6 +196,7 @@ export default async function BillingPage({
         pageSize={pageInput.pageSize}
         pathname="/billing"
         queryString={queryStringFromParams(params)}
+        selectionIsPageScoped={canEdit}
         total={result.total}
       />
     </div>

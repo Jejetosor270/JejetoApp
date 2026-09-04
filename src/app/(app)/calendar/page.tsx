@@ -13,6 +13,7 @@ import {
   monthGrid,
 } from "@/domain/payments/dates";
 import { formatMoney } from "@/domain/procurement/presentation";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import { requireUser } from "@/lib/auth/current-user";
 import { getProcurementCalendarEvents } from "@/lib/payments/payments";
 
@@ -161,7 +162,8 @@ export default async function CalendarPage({
                     <p className="mt-1 truncate font-medium">{event.title}</p>
                     {event.partyName ? (
                       <p className="text-muted-foreground mt-0.5 truncate">
-                        {event.partyName} · {event.status?.replaceAll("_", " ")}
+                        {event.partyName} ·{" "}
+                        {event.status ? formatEnumLabel(event.status) : ""}
                       </p>
                     ) : null}
                     {event.amount && event.currencyCode ? (
@@ -209,7 +211,7 @@ export default async function CalendarPage({
                       {event.partyName ? (
                         <span className="text-muted-foreground mt-0.5 block text-xs">
                           {event.partyName} ·{" "}
-                          {event.status?.replaceAll("_", " ")}
+                          {event.status ? formatEnumLabel(event.status) : ""}
                         </span>
                       ) : null}
                     </span>

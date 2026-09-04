@@ -9,7 +9,7 @@ export function AppBrand({ companyName }: { companyName: string }) {
           {companyName}
         </span>
         <span className="text-muted-foreground block truncate text-xs">
-          Finance operations
+          Procurement ERP
         </span>
       </span>
     </div>

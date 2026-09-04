@@ -6,13 +6,14 @@ const database = vi.hoisted(() => ({
 }));
 const billing = vi.hoisted(() => ({
   getProjectsClientBillingSummaries: vi.fn(),
+  listClientCashInstallments: vi.fn(),
 }));
 const orders = vi.hoisted(() => ({ listOrders: vi.fn() }));
 const payments = vi.hoisted(() => ({ listPaymentInstallments: vi.fn() }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
-vi.mock("@/lib/billing/billing", () => billing);
+vi.mock("@/lib/billing/reporting", () => billing);
 vi.mock("@/lib/procurement/orders", () => orders);
 vi.mock("@/lib/payments/payments", () => payments);
 
@@ -34,6 +35,7 @@ describe("portfolio Client financial integrity", () => {
     orders.listOrders.mockResolvedValue([]);
     payments.listPaymentInstallments.mockResolvedValue([]);
     database.clientReceipt.findMany.mockResolvedValue([]);
+    billing.listClientCashInstallments.mockResolvedValue([]);
   });
 
   it("uses actual Billing receipts for outstanding and cash position", async () => {

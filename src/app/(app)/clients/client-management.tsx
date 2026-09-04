@@ -505,7 +505,7 @@ export function ClientManagement({
                   <th className="px-4 py-3">Contact</th>
                   <th className="px-4 py-3">Status</th>
                   {canEdit ? (
-                    <th className="px-4 py-3 text-right">Action</th>
+                    <th className="px-4 py-3 text-right">Edit</th>
                   ) : null}
                 </tr>
               </thead>

@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { updateItemAction } from "@/app/(app)/items/actions";
 import { ItemForm } from "@/components/items/item-form";
 import { DetailEditShell } from "@/components/inline-editing/detail-edit-shell";
+import { DetailPageHeader } from "@/components/layout/detail-page-header";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { getItem, listItemOptions } from "@/lib/items/items";
 import { isItemManagementEnabled } from "@/lib/settings/application-settings";
@@ -34,23 +36,31 @@ export default async function ItemPage({
         }
         label="Edit item"
       >
-        <header>
-          <p className="text-primary text-xs font-medium uppercase">
-            Item detail
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold">
-            {item.itemReference ? `${item.itemReference} · ` : ""}
-            {item.name}
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            {item.project.name}
-            {item.building ? ` · ${item.building.name}` : " · Unallocated"}
-            {item.room ? ` · ${item.room.name}` : ""}
-          </p>
-        </header>
+        <DetailPageHeader
+          backHref="/items"
+          backLabel="Back to Items"
+          eyebrow="Item detail"
+          meta={
+            <>
+              {item.project.name}
+              {item.building ? ` · ${item.building.name}` : " · Unallocated"}
+              {item.room ? ` · ${item.room.name}` : ""}
+            </>
+          }
+          status={item.commercialStatus}
+          title={
+            <>
+              {item.itemReference ? `${item.itemReference} · ` : ""}
+              {item.name}
+            </>
+          }
+        />
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            ["Purchase HT", formatMoney(item.totalPurchasePriceHt, currency)],
+            [
+              "Purchase Cost HT",
+              formatMoney(item.totalPurchasePriceHt, currency),
+            ],
             ["Budget HT", formatMoney(item.totalSellingPriceHt, currency)],
             ["Markup", formatRate(item.financial.markupRate)],
             [
@@ -75,7 +85,7 @@ export default async function ItemPage({
         ) : null}
       </DetailEditShell>
       <footer className="text-muted-foreground text-xs">
-        Source: {item.sourceType.replaceAll("_", " ")}
+        Source: {formatEnumLabel(item.sourceType)}
         {item.itemImport ? ` · ${item.itemImport.originalFilename}` : ""} ·
         Created by {item.createdBy?.name ?? "deleted employee"} · Updated by{" "}
         {item.updatedBy?.name ?? "deleted employee"}

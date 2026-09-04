@@ -30,6 +30,7 @@ import {
   formatRate,
   rateToPercentInput,
 } from "@/domain/procurement/presentation";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
 import type { ClientBillingView } from "@/lib/billing/billing";
 
@@ -341,7 +342,7 @@ export function BillingInstallmentEditor({
               </span>
             </p>
             <p className="text-muted-foreground text-right">
-              {status.replaceAll("_", " ")}
+              {formatEnumLabel(status)}
             </p>
             {deleteMessage ? (
               <p className="text-destructive text-right" role="alert">

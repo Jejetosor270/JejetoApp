@@ -4,8 +4,8 @@ import {
   calculateProjectFundingCoverage,
   type ProjectFundingCoverage,
 } from "@/domain/billing/funding-coverage";
-import { getProjectsClientBillingSummaries } from "@/lib/billing/billing";
-import { listOrders } from "@/lib/procurement/orders";
+import { getProjectsClientBillingSummaries } from "@/lib/billing/reporting";
+import { listOrderFundingRows } from "@/lib/procurement/orders";
 
 export async function getProjectsFundingCoverage(
   projects: readonly { id: string; reportingCurrencyCode: string }[],
@@ -14,7 +14,7 @@ export async function getProjectsFundingCoverage(
   const projectIds = projects.map((project) => project.id);
   const [billingByProject, orders] = await Promise.all([
     getProjectsClientBillingSummaries(projects),
-    listOrders({ projectIds, query: "" }),
+    listOrderFundingRows(projectIds),
   ]);
 
   return new Map(
@@ -26,10 +26,10 @@ export async function getProjectsFundingCoverage(
           clientBillingCoverageComplete: billing?.coverageComplete ?? false,
           clientBillingCoverageHt: billing?.coverageHt ?? "0",
           supplierOrders: orders
-            .filter((order) => order.project.id === project.id)
+            .filter((order) => order.projectId === project.id)
             .map((order) => ({
               id: order.id,
-              sellingHt: order.costs.reportingSellingRevenue,
+              sellingHt: order.sellingHt,
               status: order.status,
             })),
         }),
