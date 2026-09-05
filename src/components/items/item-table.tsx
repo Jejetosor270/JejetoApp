@@ -1,5 +1,8 @@
 "use client";
+import { ListEmptyState } from "@/components/listing/empty-state";
 
+import { EditorDrawer } from "@/components/forms/editor-drawer";
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
@@ -35,6 +38,7 @@ import {
 } from "@/domain/items/calculations";
 import {
   formatMoney,
+  formatPercentageInput,
   formatQuantity,
   rateToPercentInput,
 } from "@/domain/procurement/presentation";
@@ -160,192 +164,324 @@ function FinancialRow({
     />
   );
   return (
-    <tr className="hover:bg-muted/25 align-top">
+    <tr className="hover:bg-muted/40">
       <ItemIdentity item={item} />
-      <td className="p-2">
-        {moneyInput("Quantity", "quantity", "QUANTITY")}
-        <span className="text-muted-foreground ml-1">{item.unitOfMeasure}</span>
+      <td className="px-3 py-3 text-right text-xs tabular-nums">
+        {formatQuantity(saved.quantity)}
       </td>
-      <td className="p-2">
-        {moneyInput("Unit purchase HT", "unitPurchase", "UNIT_PURCHASE")}
+      <td className="px-3 py-3 text-right text-xs tabular-nums">
+        {formatMoney(saved.unitPurchase || null, currency)}
       </td>
-      <td className="p-2">
-        {moneyInput("Purchase total HT", "totalPurchase", "TOTAL_PURCHASE")}
+      <td className="px-3 py-3 text-right text-xs tabular-nums">
+        {formatMoney(saved.totalPurchase || null, currency)}
       </td>
-      <td className="p-2">
-        {moneyInput("Budget unit HT", "budgetUnit", "BUDGET_UNIT")}
+      <td className="px-3 py-3 text-right text-xs tabular-nums">
+        {formatMoney(saved.budgetUnit || null, currency)}
       </td>
-      <td className="p-2">
-        {moneyInput("Budget total HT", "budgetTotal", "BUDGET_TOTAL")}
+      <td className="px-3 py-3 text-right text-xs tabular-nums">
+        {formatMoney(saved.budgetTotal || null, currency)}
       </td>
-      <td className="p-2">
-        <InlinePercentInput
-          ariaLabel={`Markup percentage for ${item.itemReference ?? item.name}`}
-          disabled={!editing}
-          onChange={(value) =>
-            updateFinancial("MARKUP", "markupPercent", value)
-          }
-          value={draft.markupPercent}
-        />
+      <td className="px-3 py-3 text-right text-xs tabular-nums">
+        {formatPercentageInput(saved.markupPercent) + "%"}
       </td>
-      <td className="p-2">
-        <select
-          aria-label={`VAT treatment for ${item.itemReference ?? item.name}`}
-          className={control}
-          disabled={!editing}
-          onChange={(event) =>
-            setDraft((current) => {
-              const vatTreatment = event.target.value;
-              return {
-                ...current,
-                vatRecoverability: inputVatRecoverabilityApplies(vatTreatment)
-                  ? current.vatRecoverability
-                  : "",
-                vatTreatment,
-              };
-            })
-          }
-          value={draft.vatTreatment}
-        >
-          <option value="">—</option>
-          {vatTreatments.map((value) => (
-            <option key={value} value={value}>
-              {formatEnumLabel(value)}
-            </option>
-          ))}
-        </select>
+      <td className="px-3 py-3 text-right text-xs tabular-nums">
+        {formatEnumLabel(saved.vatTreatment) || "—"}
       </td>
-      <td className="p-2">
-        <InlinePercentInput
-          ariaLabel={`VAT percentage for ${item.itemReference ?? item.name}`}
-          disabled={!editing}
-          onChange={(value) =>
-            setDraft((current) => ({ ...current, vatRate: value }))
-          }
-          value={draft.vatRate}
-        />
+      <td className="px-3 py-3 text-right text-xs tabular-nums">
+        {formatPercentageInput(saved.vatRate) + "%"}
       </td>
-      <td className="p-2">
-        {inputVatRecoverabilityApplies(draft.vatTreatment) ? (
-          <select
-            aria-label={`VAT recoverability for ${item.itemReference ?? item.name}`}
-            className={control}
-            disabled={!editing}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                vatRecoverability: event.target.value,
-              }))
-            }
-            value={draft.vatRecoverability}
-          >
-            <option value="">—</option>
-            {vatRecoverabilities.map((value) => (
-              <option key={value} value={value}>
-                {formatEnumLabel(value)}
-              </option>
-            ))}
-          </select>
-        ) : (
-          "—"
-        )}
+      <td className="px-3 py-3 text-right text-xs tabular-nums">
+        {formatEnumLabel(saved.vatRecoverability) || "—"}
       </td>
-      <td className="p-2 tabular-nums">
-        {item.budgetPurchaseTotalPriceHt ? (
-          <>
-            <span className="block">
-              Baseline {formatMoney(item.budgetPurchaseTotalPriceHt, currency)}
-            </span>
-            <span
-              className={
-                variance?.status === "OVER_BUDGET"
-                  ? "text-destructive"
-                  : "text-positive"
-              }
-            >
-              {variance
-                ? `${formatMoney(variance.amount, currency)} ${variance.status
-                    .replace("_BUDGET", "")
-                    .toLowerCase()} budget`
-                : "—"}
-            </span>
-          </>
-        ) : (
-          "No purchase baseline"
-        )}
+      <td className="px-3 py-3 text-right text-xs tabular-nums">
+        {variance ? formatMoney(variance.amount, currency) : "—"}
       </td>
-      <td className="p-2">
-        <input
-          aria-label={`Variance comment for ${item.itemReference ?? item.name}`}
-          className={`${control} w-52`}
-          disabled={!editing}
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              budgetVarianceComment: event.target.value,
-            }))
-          }
-          value={draft.budgetVarianceComment}
-        />
+      <td className="px-3 py-3 text-right text-xs tabular-nums">
+        {saved.budgetVarianceComment || "—"}
       </td>
-      <td className="p-2 text-right tabular-nums">
+      <td className="px-3 py-3 text-right text-xs tabular-nums">
         {shippingAllowance ? formatMoney(shippingAllowance, currency) : "—"}
       </td>
-      {canEdit ? (
+      {canEdit && (
         <td className="p-2">
-          <InlineEditActions
-            editing={editing}
-            feedback={feedback}
-            onCancel={() => {
-              setDraft(saved);
-              setFeedback("");
-              setEditing(false);
-            }}
-            onEdit={() => {
+          <Button
+            size="sm"
+            variant="outline"
+            type="button"
+            onClick={() => {
               setDraft(saved);
               setFeedback("");
               setEditing(true);
             }}
-            onSave={() => {
-              const data = new FormData();
-              data.set("id", item.id);
-              data.set("basis", basis);
-              data.set("quantity", draft.quantity);
-              data.set("unitPurchase", draft.unitPurchase);
-              data.set("totalPurchase", draft.totalPurchase);
-              data.set("budgetUnit", draft.budgetUnit);
-              data.set("budgetTotal", draft.budgetTotal);
-              data.set("markupRate", draft.markupPercent);
-              data.set("budgetVarianceComment", draft.budgetVarianceComment);
-              data.set("vatRate", draft.vatRate);
-              data.set("vatRecoverability", draft.vatRecoverability);
-              data.set("vatTreatment", draft.vatTreatment);
-              startTransition(async () => {
-                const result = await updateItemFinancialInlineAction(data);
-                setFeedback(result.message);
-                if (result.status === "success" && result.values) {
-                  const next = {
-                    ...draft,
-                    budgetTotal: result.values.budgetTotal ?? "",
-                    budgetUnit: result.values.budgetUnit ?? "",
-                    markupPercent: rateToPercentInput(result.values.markupRate),
-                    quantity: result.values.quantity,
-                    totalPurchase: result.values.totalPurchase ?? "",
-                    unitPurchase: result.values.unitPurchase ?? "",
-                    vatRate: rateToPercentInput(result.values.vatRate),
-                    vatRecoverability: result.values.vatRecoverability ?? "",
-                    vatTreatment: result.values.vatTreatment ?? "",
-                  };
-                  setSaved(next);
-                  setDraft(next);
+          >
+            Edit financials
+          </Button>
+          {editing && (
+            <EditorDrawer
+              open
+              title="Item financials"
+              onOpenChange={(open) => {
+                if (!open) {
+                  setDraft(saved);
+                  setFeedback("");
                   setEditing(false);
                 }
-              });
-            }}
-            pending={pending}
-          />
+              }}
+            >
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  (() => {
+                    const data = new FormData();
+                    data.set("id", item.id);
+                    data.set("basis", basis);
+                    data.set("quantity", draft.quantity);
+                    data.set("unitPurchase", draft.unitPurchase);
+                    data.set("totalPurchase", draft.totalPurchase);
+                    data.set("budgetUnit", draft.budgetUnit);
+                    data.set("budgetTotal", draft.budgetTotal);
+                    data.set("markupRate", draft.markupPercent);
+                    data.set(
+                      "budgetVarianceComment",
+                      draft.budgetVarianceComment,
+                    );
+                    data.set("vatRate", draft.vatRate);
+                    data.set("vatRecoverability", draft.vatRecoverability);
+                    data.set("vatTreatment", draft.vatTreatment);
+                    startTransition(async () => {
+                      const result =
+                        await updateItemFinancialInlineAction(data);
+                      setFeedback(result.message);
+                      if (result.status === "success" && result.values) {
+                        const next = {
+                          ...draft,
+                          budgetTotal: result.values.budgetTotal ?? "",
+                          budgetUnit: result.values.budgetUnit ?? "",
+                          markupPercent: rateToPercentInput(
+                            result.values.markupRate,
+                          ),
+                          quantity: result.values.quantity,
+                          totalPurchase: result.values.totalPurchase ?? "",
+                          unitPurchase: result.values.unitPurchase ?? "",
+                          vatRate: rateToPercentInput(result.values.vatRate),
+                          vatRecoverability:
+                            result.values.vatRecoverability ?? "",
+                          vatTreatment: result.values.vatTreatment ?? "",
+                        };
+                        setSaved(next);
+                        setDraft(next);
+                        setEditing(false);
+                      }
+                    });
+                  })();
+                }}
+                className="space-y-4"
+              >
+                <p className="text-sm font-medium">
+                  {item.itemReference} · {item.name} · {currency}
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium">
+                      Quantity
+                    </p>
+                    {moneyInput("Quantity", "quantity", "QUANTITY")}
+                    <span className="text-muted-foreground ml-1">
+                      {item.unitOfMeasure}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium">
+                      Unit purchase HT
+                    </p>
+                    {moneyInput(
+                      "Unit purchase HT",
+                      "unitPurchase",
+                      "UNIT_PURCHASE",
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium">
+                      Purchase total HT
+                    </p>
+                    {moneyInput(
+                      "Purchase total HT",
+                      "totalPurchase",
+                      "TOTAL_PURCHASE",
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium">
+                      Budget unit HT
+                    </p>
+                    {moneyInput("Budget unit HT", "budgetUnit", "BUDGET_UNIT")}
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium">
+                      Budget total HT
+                    </p>
+                    {moneyInput(
+                      "Budget total HT",
+                      "budgetTotal",
+                      "BUDGET_TOTAL",
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium">
+                      Markup %
+                    </p>
+                    <InlinePercentInput
+                      ariaLabel={`Markup percentage for ${item.itemReference ?? item.name}`}
+                      disabled={!editing}
+                      onChange={(value) =>
+                        updateFinancial("MARKUP", "markupPercent", value)
+                      }
+                      value={draft.markupPercent}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium">
+                      VAT treatment
+                    </p>
+                    <select
+                      aria-label={`VAT treatment for ${item.itemReference ?? item.name}`}
+                      className={control}
+                      disabled={!editing}
+                      onChange={(event) =>
+                        setDraft((current) => {
+                          const vatTreatment = event.target.value;
+                          return {
+                            ...current,
+                            vatRecoverability: inputVatRecoverabilityApplies(
+                              vatTreatment,
+                            )
+                              ? current.vatRecoverability
+                              : "",
+                            vatTreatment,
+                          };
+                        })
+                      }
+                      value={draft.vatTreatment}
+                    >
+                      <option value="">—</option>
+                      {vatTreatments.map((value) => (
+                        <option key={value} value={value}>
+                          {formatEnumLabel(value)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium">
+                      VAT %
+                    </p>
+                    <InlinePercentInput
+                      ariaLabel={`VAT percentage for ${item.itemReference ?? item.name}`}
+                      disabled={!editing}
+                      onChange={(value) =>
+                        setDraft((current) => ({ ...current, vatRate: value }))
+                      }
+                      value={draft.vatRate}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium">
+                      Recoverability
+                    </p>
+                    {inputVatRecoverabilityApplies(draft.vatTreatment) ? (
+                      <select
+                        aria-label={`VAT recoverability for ${item.itemReference ?? item.name}`}
+                        className={control}
+                        disabled={!editing}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            vatRecoverability: event.target.value,
+                          }))
+                        }
+                        value={draft.vatRecoverability}
+                      >
+                        <option value="">—</option>
+                        {vatRecoverabilities.map((value) => (
+                          <option key={value} value={value}>
+                            {formatEnumLabel(value)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      "—"
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium">
+                      Variance
+                    </p>
+                    {item.budgetPurchaseTotalPriceHt ? (
+                      <>
+                        <span className="block">
+                          Baseline{" "}
+                          {formatMoney(
+                            item.budgetPurchaseTotalPriceHt,
+                            currency,
+                          )}
+                        </span>
+                        <span
+                          className={
+                            variance?.status === "OVER_BUDGET"
+                              ? "text-destructive"
+                              : "text-positive"
+                          }
+                        >
+                          {variance
+                            ? `${formatMoney(variance.amount, currency)} ${variance.status
+                                .replace("_BUDGET", "")
+                                .toLowerCase()} budget`
+                            : "—"}
+                        </span>
+                      </>
+                    ) : (
+                      "No purchase baseline"
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium">
+                      Variance comment
+                    </p>
+                    <input
+                      aria-label={`Variance comment for ${item.itemReference ?? item.name}`}
+                      className={`${control} w-52`}
+                      disabled={!editing}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          budgetVarianceComment: event.target.value,
+                        }))
+                      }
+                      value={draft.budgetVarianceComment}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium">
+                      Purchase-based freight allowance
+                    </p>
+                    {shippingAllowance
+                      ? formatMoney(shippingAllowance, currency)
+                      : "—"}
+                  </div>
+                </div>
+                <Button type="submit" disabled={pending}>
+                  {pending ? "Saving…" : "Save financials"}
+                </Button>
+                {feedback && (
+                  <p role="alert" className="text-destructive text-sm">
+                    {feedback}
+                  </p>
+                )}
+              </form>
+            </EditorDrawer>
+          )}
         </td>
-      ) : null}
+      )}
     </tr>
   );
 }
@@ -930,13 +1066,19 @@ export function ItemTable({
           ) : null}
         </>
       ) : null}
-      <div className="overflow-x-auto">
+      <div
+        className="max-h-[70svh] overflow-auto"
+        role="region"
+        aria-label="Project Items table"
+        tabIndex={0}
+      >
         <table className="w-full min-w-max text-left text-xs">
           <thead className="bg-muted/40 text-muted-foreground border-b">
             <tr>
               {canEdit && view === "general" ? (
                 <SelectionHeader
                   checked={selection.allSelected}
+                  indeterminate={selection.someSelected}
                   disabled={!items.length}
                   onChange={selection.toggleAll}
                 />
@@ -974,11 +1116,7 @@ export function ItemTable({
           </tbody>
         </table>
       </div>
-      {!items.length ? (
-        <p className="text-muted-foreground px-4 py-10 text-sm">
-          No Items match these filters.
-        </p>
-      ) : null}
+      {!items.length ? <ListEmptyState entity="Items" /> : null}
     </section>
   );
 }

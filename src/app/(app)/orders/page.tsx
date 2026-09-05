@@ -1,5 +1,8 @@
+import { CreateOrderActions } from "@/components/procurement/create-order-actions";
+import { ViewShortcuts } from "@/components/listing/view-shortcuts";
+import { PageHeader } from "@/components/layout/page-header";
+import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { OrderForm } from "@/components/procurement/order-form";
 import {
@@ -89,46 +92,38 @@ export default async function OrdersPage({
   });
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-            Procurement
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            Supplier Orders
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Supplier-level packages, cost progression, and commercial markup.
-          </p>
-        </div>
-        <ExportLink
-          entity="orders"
-          queryString={queryStringFromParams(params)}
-        />
-      </header>
-      <nav className="flex flex-wrap gap-2" aria-label="Supplier Order view">
-        {(
-          [
-            ["general", "General"],
-            ["financial", "Financial"],
-            ["supplier-payment", "Supplier Payments"],
-            ["delivery", "Delivery / Status"],
-          ] as const
-        ).map(([value, label]) => (
-          <Link
-            className={
-              view === value
-                ? "bg-primary text-primary-foreground rounded-md px-3 py-2 text-sm font-medium"
-                : "border-input rounded-md border px-3 py-2 text-sm font-medium"
-            }
-            href={`/orders?${new URLSearchParams({ view: value }).toString()}`}
-            key={value}
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
-      <form className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-6">
+      <PageHeader
+        title="Supplier Orders"
+        description={
+          <>Supplier-level packages, cost progression, and commercial markup.</>
+        }
+        actions={
+          <>
+            <ExportLink
+              entity="orders"
+              queryString={queryStringFromParams(params)}
+            />
+            {canEditMasterData(user.role) ? (
+              <CreateOrderActions>
+                <OrderForm options={options} />
+              </CreateOrderActions>
+            ) : null}
+          </>
+        }
+      />
+      <ViewShortcuts
+        pathname="/orders"
+        queryString={queryStringFromParams(params)}
+        field="view"
+        defaultValue="general"
+        options={[
+          { label: "Overview", value: "general" },
+          { label: "Commercial", value: "financial" },
+          { label: "Payments", value: "supplier-payment" },
+          { label: "Delivery", value: "delivery" },
+        ]}
+      />
+      <FilterBar>
         <FilterField label="Search">
           <input
             className={filterControlClassName}
@@ -268,25 +263,8 @@ export default async function OrdersPage({
         >
           Filter
         </button>
-      </form>
-      {canEditMasterData(user.role) ? (
-        <div className="flex flex-wrap items-start gap-2">
-          <details className="group">
-            <summary className="bg-primary text-primary-foreground inline-flex h-9 cursor-pointer list-none items-center rounded-lg px-3 text-sm font-medium">
-              Create Supplier Order
-            </summary>
-            <div className="mt-4">
-              <OrderForm options={options} />
-            </div>
-          </details>
-          <Link
-            className="border-input bg-background hover:bg-muted inline-flex h-9 items-center rounded-lg border px-3 text-sm font-medium"
-            href="/orders/import"
-          >
-            Import supplier quote
-          </Link>
-        </div>
-      ) : null}
+      </FilterBar>
+
       <OrderTable
         canEdit={canEditMasterData(user.role)}
         orders={result.items}

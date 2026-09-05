@@ -1,5 +1,9 @@
 "use client";
+import { ListEmptyState } from "@/components/listing/empty-state";
 
+import { SortHeader } from "@/components/listing/sort-header";
+import { Button } from "@/components/ui/button";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
@@ -82,7 +86,7 @@ interface ProjectView {
   targetMode: string;
 }
 
-function CreateProjectForm({
+export function CreateProjectForm({
   clients,
   currencies,
   managers,
@@ -98,15 +102,18 @@ function CreateProjectForm({
     initialMasterDataActionState,
   );
   return (
-    <details className="bg-card rounded-lg border">
-      <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold">
-        <span className="inline-flex items-center gap-2">
-          <Plus className="size-4" /> Add project
-        </span>
-      </summary>
+    <EditorDrawer
+      title="Add project"
+      trigger={
+        <Button type="button">
+          <Plus data-icon="inline-start" />
+          Add project
+        </Button>
+      }
+    >
       <form
         onSubmit={onSubmit}
-        className="grid gap-3 border-t p-4 md:grid-cols-2 xl:grid-cols-4"
+        className="grid gap-3 border-t p-4 md:grid-cols-2 xl:grid-cols-2"
       >
         <Field label="Project name">
           <input className={inputClassName} name="name" required />
@@ -195,16 +202,16 @@ function CreateProjectForm({
           />
         </Field>
         <input name="defaultOtherCostMarkupRate" type="hidden" value="0" />
-        <label className="grid gap-1.5 text-sm font-medium md:col-span-2 xl:col-span-3">
+        <label className="grid gap-1.5 text-sm font-medium md:col-span-2 xl:col-span-2">
           Notes
           <textarea className={`${inputClassName} h-20 py-2`} name="notes" />
         </label>
-        <div className="flex items-end gap-3 md:col-span-2 xl:col-span-4">
+        <div className="flex items-end gap-3 md:col-span-2 xl:col-span-2">
           <SubmitButton pending={pending}>Create project</SubmitButton>
           <ActionFeedback state={state} />
         </div>
       </form>
-    </details>
+    </EditorDrawer>
   );
 }
 
@@ -303,38 +310,37 @@ function ProjectInlineRow({
             {saved.name}
           </Link>
         )}
-      </td>
-      <td className="px-4 py-3 font-mono text-xs">
-        {editing ? (
-          <InlineTextInput
-            ariaLabel="Project code"
-            onChange={(value) => set("code", value)}
-            value={draft.code}
-          />
-        ) : (
-          saved.code
-        )}
+        <div className="text-muted-foreground mt-1 font-mono text-xs">
+          {editing ? (
+            <InlineTextInput
+              ariaLabel="Project code"
+              onChange={(value) => set("code", value)}
+              value={draft.code}
+            />
+          ) : (
+            saved.code
+          )}
+        </div>
+        <div className="text-muted-foreground mt-1 text-xs">
+          {editing ? (
+            <InlineSelect
+              ariaLabel="Project country"
+              onChange={(value) => set("countryCode", value)}
+              value={draft.countryCode}
+            >
+              <option value="">Not specified</option>
+              {countries.map((country) => (
+                <option key={country.code} value={country.code}>
+                  {country.label}
+                </option>
+              ))}
+            </InlineSelect>
+          ) : (
+            countryLabel(saved.countryCode)
+          )}
+        </div>
       </td>
       <td className="px-4 py-3">{project.client.displayName}</td>
-      <td className="px-4 py-3">
-        {editing ? (
-          <InlineSelect
-            ariaLabel="Project country"
-            onChange={(value) => set("countryCode", value)}
-            value={draft.countryCode}
-          >
-            <option value="">Not specified</option>
-            {countries.map((country) => (
-              <option key={country.code} value={country.code}>
-                {country.label}
-              </option>
-            ))}
-          </InlineSelect>
-        ) : (
-          countryLabel(saved.countryCode)
-        )}
-      </td>
-      <td className="px-4 py-3 font-mono">{project.reportingCurrencyCode}</td>
       <td className="px-4 py-3">{project.projectManager?.name ?? "—"}</td>
       <td className="px-4 py-3">
         {editing ? (
@@ -374,7 +380,7 @@ function ProjectInlineRow({
             project.reportingCurrencyCode,
           )
         ) : (
-          <span className="text-destructive">Incomplete</span>
+          <span className="text-warning-foreground">Incomplete</span>
         )}
       </td>
       {canEdit ? (
@@ -403,9 +409,6 @@ function ProjectInlineRow({
 
 export function ProjectManagement({
   canEdit,
-  clients,
-  currencies,
-  managers,
   projects,
   statuses,
 }: {
@@ -430,14 +433,6 @@ export function ProjectManagement({
   );
   return (
     <div className="space-y-5">
-      {canEdit ? (
-        <CreateProjectForm
-          clients={clients}
-          currencies={currencies}
-          managers={managers}
-          statuses={statuses}
-        />
-      ) : null}
       <section className="bg-card overflow-hidden rounded-lg border">
         {canEdit ? (
           <BulkActionBar
@@ -449,24 +444,37 @@ export function ProjectManagement({
             selectedIds={selection.selectedIds}
           />
         ) : null}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[66rem] text-left text-sm">
-            <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
+        <div
+          className="max-h-[70svh] overflow-auto"
+          role="region"
+          aria-label="Projects table"
+          tabIndex={0}
+        >
+          <table className="w-full min-w-[52rem] text-left text-sm">
+            <thead className="bg-muted text-muted-foreground sticky top-0 z-10 border-b text-xs">
               <tr>
                 {canEdit ? (
                   <SelectionHeader
                     checked={selection.allSelected}
+                    indeterminate={selection.someSelected}
                     disabled={projects.length === 0}
                     onChange={selection.toggleAll}
                   />
                 ) : null}
-                <th className="px-4 py-3">Project</th>
-                <th className="px-4 py-3">Code</th>
+                <SortHeader
+                  className="px-4 py-3"
+                  label="Project"
+                  field="name"
+                  defaultSort="name"
+                />
                 <th className="px-4 py-3">Client</th>
-                <th className="px-4 py-3">Country</th>
-                <th className="px-4 py-3">Currency</th>
                 <th className="px-4 py-3">Project manager</th>
-                <th className="px-4 py-3">Status</th>
+                <SortHeader
+                  className="px-4 py-3"
+                  label="Status"
+                  field="status"
+                  defaultSort="name"
+                />
                 <th className="px-4 py-3">Expected completion</th>
                 <th className="px-4 py-3">Target Markup</th>
                 <th className="px-4 py-3 text-right">Funding Coverage</th>
@@ -489,11 +497,7 @@ export function ProjectManagement({
             </tbody>
           </table>
         </div>
-        {projects.length === 0 ? (
-          <p className="text-muted-foreground px-4 py-8 text-sm">
-            No projects yet.
-          </p>
-        ) : null}
+        {projects.length === 0 ? <ListEmptyState entity="Projects" /> : null}
       </section>
     </div>
   );

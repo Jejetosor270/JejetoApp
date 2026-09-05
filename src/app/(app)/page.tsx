@@ -1,16 +1,16 @@
+import { PageHeader } from "@/components/layout/page-header";
+import { OverflowList } from "@/components/layout/overflow-list";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import type { Metadata } from "next";
 import Link from "next/link";
 
 import { OverdueItems } from "@/components/reporting/overdue-items";
-import {
-  formatMoney,
-  formatSignedMoney,
-} from "@/domain/procurement/presentation";
+import { formatMoney } from "@/domain/procurement/presentation";
 import { ProjectStatus } from "@/generated/prisma/client";
 import { requireUser } from "@/lib/auth/current-user";
 import { getPortfolioReportingSnapshot } from "@/lib/reporting/reports";
 
-export const metadata: Metadata = { title: "Dashboard" };
+export const metadata: Metadata = { title: "Home" };
 
 export default async function DashboardPage() {
   const [, report] = await Promise.all([
@@ -24,133 +24,132 @@ export default async function DashboardPage() {
   const currency = report.companyCurrencyCode;
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-            Portfolio
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            Financial dashboard
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Profitability, payment exposure, and upcoming cash across active
-            Projects.
-          </p>
-        </div>
-        <Link
-          className="border-input rounded-md border px-3 py-2 text-sm font-medium"
-          href="/reports"
-        >
-          Open reports
-        </Link>
-      </header>
-
-      <section className="bg-card rounded-lg border p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">Operational exceptions</h2>
-            <p className="text-muted-foreground mt-1 text-xs">
-              The few portfolio signals that need attention now. Full financial
-              analysis remains in Reports.
-            </p>
-          </div>
+    <div className="space-y-8">
+      <PageHeader
+        title="Home"
+        description="What needs attention across your active Projects."
+        actions={
           <Link
-            className="text-primary text-xs hover:underline"
+            className="rounded-md border px-3 py-2 text-sm font-medium"
             href="/reports"
           >
-            View full portfolio
+            Open Reports
           </Link>
-        </div>
-        <dl className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {(
-            [
-              [
-                "Active Projects",
-                report.activeProjectCount.toString(),
-                "/projects?status=ACTIVE",
-              ],
-              [
-                "Supplier overdue",
-                formatMoney(report.payments.supplier.overdue.value, currency),
-                "/payments?status=OVERDUE",
-              ],
-              [
-                "Projects with Funding Gap",
-                report.fundingCoverage.gapProjectCount.toString(),
-                "/projects",
-              ],
-              [
-                "Total Funding Coverage",
-                formatSignedMoney(
-                  report.fundingCoverage.fundingCoverageHt,
-                  currency,
-                ),
-                "/projects",
-              ],
-            ] as const
-          ).map(([label, value, href]) => (
-            <div className="bg-muted/25 rounded-md border p-3" key={label}>
-              <dt className="text-muted-foreground text-xs">
-                <Link className="hover:underline" href={href}>
-                  {label}
-                </Link>
-              </dt>
-              <dd className="financial-figure mt-1 font-semibold">
-                <Link className="hover:underline" href={href}>
-                  {value}
-                </Link>
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-
-      <section className="bg-card rounded-lg border p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">Client Billing</h2>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Actual Client Invoices and receipts across active {currency}
-              -reporting Projects.
-            </p>
-          </div>
+        }
+      />
+      <section className="space-y-4">
+        <h2 className="text-base font-semibold">Needs attention</h2>
+        <div className="divide-y rounded-lg border">
           <Link
-            className="text-primary text-xs hover:underline"
-            href="/billing"
+            href="/payments?status=OVERDUE"
+            className="hover:bg-muted flex items-center justify-between gap-4 p-4"
           >
-            Open Client Billing
+            <span className="text-sm">Overdue Supplier Payments</span>
+            <span className="financial-figure text-destructive text-sm font-semibold">
+              {formatMoney(
+                report.payments.supplier.overdue.complete
+                  ? report.payments.supplier.overdue.value
+                  : null,
+                currency,
+              )}
+            </span>
+          </Link>
+          <Link
+            href="/billing?status=OVERDUE"
+            className="hover:bg-muted flex items-center justify-between gap-4 p-4"
+          >
+            <span className="text-sm">Overdue Client Billing</span>
+            <span className="financial-figure text-destructive text-sm font-semibold">
+              {formatMoney(
+                billing.complete ? billing.overdueTtc : null,
+                currency,
+              )}
+            </span>
+          </Link>
+          <div className="flex items-center justify-between gap-4 p-4 text-sm">
+            <span>Projects with a commercial funding gap</span>
+            <span className="font-semibold">
+              {report.fundingCoverage.gapProjectCount}
+            </span>
+          </div>
+        </div>
+        {(!billing.complete ||
+          !report.fundingCoverage.complete ||
+          !report.payments.supplier.overdue.complete) && (
+          <p
+            role="status"
+            className="bg-warning-muted text-warning rounded-md p-3 text-sm"
+          >
+            Some balances are incomplete. Review missing manual FX in the
+            relevant Project.
+          </p>
+        )}
+        <details>
+          <summary className="text-muted-foreground text-sm">
+            Overdue Supplier installment detail
+          </summary>
+          <div className="mt-3">
+            <OverdueItems
+              items={report.overdueItems}
+              showClientReceipts={false}
+            />
+          </div>
+        </details>
+      </section>
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold">
+            Active Projects{" "}
+            <span className="text-muted-foreground text-sm font-normal">
+              {report.activeProjectCount}
+            </span>
+          </h2>
+          <Link
+            className="text-primary text-sm hover:underline"
+            href="/projects?status=ACTIVE"
+          >
+            View all Projects
           </Link>
         </div>
-        <dl className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {(
-            [
-              ["Client invoiced HT", billing.invoicedHt],
-              ["Client received TTC", billing.paidTtc],
-              ["Client outstanding TTC", billing.outstandingTtc],
-              ["Client overdue TTC", billing.overdueTtc],
-            ] as const
-          ).map(([label, value]) => (
-            <div className="bg-muted/25 rounded-md border p-3" key={label}>
-              <dt className="text-muted-foreground text-xs">{label}</dt>
-              <dd className="financial-figure mt-1 font-semibold">
-                {formatMoney(value, currency)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-        {!billing.complete ? (
-          <p className="text-destructive mt-3 text-xs">
-            Billing totals are incomplete because required FX is missing.
-          </p>
-        ) : null}
+        <div className="divide-y rounded-lg border">
+          <OverflowList limit={6} title="Active Projects">
+            {report.projects.map((project) => (
+              <Link
+                key={project.id}
+                href={`/projects/${project.id}`}
+                className="hover:bg-muted flex items-center justify-between gap-4 p-4"
+              >
+                <span>
+                  <span className="block text-sm font-medium">
+                    {project.name}
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    {project.code} · {project.clientName}
+                  </span>
+                </span>
+                <span className="text-muted-foreground text-right text-xs">
+                  {project.reportingCurrencyCode}
+                  <span className="mt-1 block">
+                    {project.fundingCoverage.complete
+                      ? formatEnumLabel(project.fundingCoverage.status ?? "")
+                      : "Funding coverage incomplete"}
+                  </span>
+                </span>
+              </Link>
+            ))}
+          </OverflowList>
+          {report.projects.length === 0 && (
+            <p className="text-muted-foreground p-6 text-sm">
+              No active Projects. Open Projects to review or create one.
+            </p>
+          )}
+        </div>
       </section>
-
       <section className="bg-card rounded-lg border p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold">
-              Upcoming cash requirements
+              Upcoming cash · next 30 days
             </h2>
             <p className="text-muted-foreground mt-1 text-xs">
               Outstanding scheduled installments due in the next 30 days.
@@ -171,7 +170,10 @@ export default async function DashboardPage() {
               ["Expected net", report.cashFlow.totals.expectedNet],
             ] as const
           ).map(([label, value]) => (
-            <div className="bg-muted/25 rounded-md border p-3" key={label}>
+            <div
+              className="border-l pl-4 first:border-l-0 first:pl-0"
+              key={label}
+            >
               <dt className="text-muted-foreground text-xs">{label}</dt>
               <dd className="financial-figure mt-1 text-base font-semibold">
                 {formatMoney(value, currency)}
@@ -187,8 +189,13 @@ export default async function DashboardPage() {
           </p>
         ) : null}
       </section>
-
-      <OverdueItems items={report.overdueItems} showClientReceipts={false} />
+      {report.excludedCurrencyProjects.length > 0 && (
+        <p className="text-warning text-xs">
+          Company totals include comparable {currency} values.{" "}
+          {report.excludedCurrencyProjects.length} Project(s) in another
+          reporting currency are excluded.
+        </p>
+      )}
     </div>
   );
 }

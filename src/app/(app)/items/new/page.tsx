@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/layout/page-header";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
@@ -15,10 +16,7 @@ export default async function NewItemPage() {
   if (!canEditMasterData(user.role)) redirect("/items");
   return (
     <div className="space-y-5">
-      <header>
-        <p className="text-primary text-xs font-medium uppercase">Items</p>
-        <h1 className="mt-2 text-2xl font-semibold">Create Item</h1>
-      </header>
+      <PageHeader title="Create Item" />
       <ItemForm action={createItemAction} options={options} />
     </div>
   );

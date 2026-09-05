@@ -2,6 +2,8 @@
 
 import Decimal from "decimal.js";
 import Link from "next/link";
+import { IntakeReviewLayout } from "@/components/intake/intake-review-layout";
+import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import { useActionState, useMemo, useState } from "react";
 
 import {
@@ -17,6 +19,7 @@ import {
   MAX_CLIENT_DOCUMENT_LABEL,
 } from "@/config/client-document-extraction";
 import {
+  Field,
   inputClassName,
   PercentageInput,
   SubmitButton,
@@ -122,18 +125,9 @@ function ReviewField({
   required?: boolean;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium">
-      <span>
-        {label}
-        {required ? <span className="text-destructive"> *</span> : null}
-      </span>
+    <Field error={error} label={label} required={required}>
       {children}
-      {error ? (
-        <span className="text-destructive text-xs" role="alert">
-          {error}
-        </span>
-      ) : null}
-    </label>
+    </Field>
   );
 }
 
@@ -168,7 +162,7 @@ function ClientDocumentReview({
   review: ProcessedClientDocumentReview;
 }) {
   const proposal = review.proposal;
-  const [state, action, pending] = useActionState(
+  const { state, onSubmit, pending } = usePersistentActionState(
     confirmClientDocumentAction,
     initialConfirmation,
   );
@@ -269,7 +263,7 @@ function ClientDocumentReview({
   }
 
   return (
-    <form action={action} className="space-y-5">
+    <form onSubmit={onSubmit} className="space-y-5">
       <input
         name="action"
         type="hidden"
@@ -312,498 +306,706 @@ function ClientDocumentReview({
         type="hidden"
         value={proposal.paymentTermsRaw ?? ""}
       />
-      <section className="bg-card rounded-lg border p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <IntakeStageHeader
-            description={`${review.originalFilename} · ${review.provider} / ${review.model}`}
-            stage={2}
-            title="Review and correct"
-          />
-          <span className="text-positive text-xs">Source PDF released</span>
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <div className="rounded-md border p-3 text-sm">
-            <span className="text-muted-foreground text-xs">
-              Extracted Client
-            </span>
-            <p className="mt-1">
-              {review.extraction.clientName.value ?? "Missing"}
-            </p>
-          </div>
-          <div className="rounded-md border p-3 text-sm">
-            <span className="text-muted-foreground text-xs">
-              Extracted Project
-            </span>
-            <p className="mt-1">
-              {review.extraction.projectReference.value ?? "Missing"}
-            </p>
-          </div>
-          <div className="rounded-md border p-3 text-sm">
-            <span className="text-muted-foreground text-xs">
-              Document classification
-            </span>
-            <p className="mt-1">{proposal.documentType ?? "Missing"}</p>
-          </div>
-        </div>
-        {proposal.warnings.length ? (
-          <IntakeWarning>
-            <ul className="list-disc pl-5">
-              {proposal.warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
-          </IntakeWarning>
-        ) : null}
-      </section>
-
-      {review.duplicateCandidates.length ? (
-        <section className="border-warning bg-warning-muted rounded-lg border p-4">
-          <h2 className="text-sm font-semibold">Possible duplicate document</h2>
-          <p className="mt-1 text-xs">
-            This warning does not block creation. Choose one record only when
-            you explicitly intend to update it.
-          </p>
-          <select
-            className={`${inputClassName} mt-3 max-w-xl`}
-            onChange={(event) => {
-              setExistingDocumentId(event.target.value);
-              if (!event.target.value) setReplaceSchedule(false);
-            }}
-            value={existingDocumentId}
-          >
-            <option value="">Create a new billing document</option>
-            {review.duplicateCandidates.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                Update {candidate.reference} · HT {candidate.totalHt} →{" "}
-                {totalHt || "review value"} ·{" "}
-                {candidate.reasons.join(", ") || "possible match"}
-              </option>
-            ))}
-          </select>
-          {existingDocumentId ? (
-            <label className="mt-3 flex items-center gap-2 text-xs font-medium">
-              <input
-                checked={replaceSchedule}
-                name="replaceSchedule"
-                onChange={(event) => setReplaceSchedule(event.target.checked)}
-                type="checkbox"
+      <IntakeReviewLayout
+        evidence={
+          <section className="bg-card rounded-lg border p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <IntakeStageHeader
+                description={review.originalFilename}
+                stage={2}
+                title="Review and correct"
               />
-              Replace the existing proposed schedule with the reviewed schedule
-            </label>
-          ) : null}
-        </section>
-      ) : null}
-
-      <section className="bg-card rounded-lg border p-5">
-        <h2 className="text-sm font-semibold">Required authoritative fields</h2>
-        <p className="text-muted-foreground mt-1 text-xs">
-          The AI suggestions remain non-authoritative until you save this
-          review.
-        </p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <ReviewField
-            error={state.fieldErrors?.clientId}
-            label="Client"
-            required
-          >
+              <span className="text-positive text-xs">Source PDF released</span>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="rounded-md border p-3 text-sm">
+                <span className="text-muted-foreground text-xs">
+                  Extracted Client
+                </span>
+                <p className="mt-1">
+                  {review.extraction.clientName.value ?? "Missing"}
+                </p>
+              </div>
+              <div className="rounded-md border p-3 text-sm">
+                <span className="text-muted-foreground text-xs">
+                  Extracted Project
+                </span>
+                <p className="mt-1">
+                  {review.extraction.projectReference.value ?? "Missing"}
+                </p>
+              </div>
+              <div className="rounded-md border p-3 text-sm">
+                <span className="text-muted-foreground text-xs">
+                  Document classification
+                </span>
+                <p className="mt-1">{proposal.documentType ?? "Missing"}</p>
+              </div>
+            </div>
+            {proposal.warnings.length ? (
+              <IntakeWarning>
+                <ul className="list-disc pl-5">
+                  {proposal.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </IntakeWarning>
+            ) : null}
+          </section>
+        }
+      >
+        {review.duplicateCandidates.length ? (
+          <section className="border-warning bg-warning-muted rounded-lg border p-4">
+            <h2 className="text-sm font-semibold">
+              Possible duplicate document
+            </h2>
+            <p className="mt-1 text-xs">
+              This warning does not block creation. Choose one record only when
+              you explicitly intend to update it.
+            </p>
             <select
-              className={inputClassName}
-              name="clientId"
+              className={`${inputClassName} mt-3 max-w-xl`}
               onChange={(event) => {
-                setClientId(event.target.value);
-                setProjectId("");
-                setAllocations([]);
-                setExistingDocumentId("");
-                setMatchedInstallmentId("");
-                setReplaceSchedule(false);
+                setExistingDocumentId(event.target.value);
+                if (!event.target.value) setReplaceSchedule(false);
               }}
-              required
-              value={clientId}
+              value={existingDocumentId}
             >
-              <option value="">Confirm Client</option>
-              {options.clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.displayName}
+              <option value="">Create a new billing document</option>
+              {review.duplicateCandidates.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  Update {candidate.reference} · HT {candidate.totalHt} →{" "}
+                  {totalHt || "review value"} ·{" "}
+                  {candidate.reasons.join(", ") || "possible match"}
                 </option>
               ))}
             </select>
-          </ReviewField>
-          <ReviewField
-            error={state.fieldErrors?.projectId}
-            label="Project"
-            required
-          >
-            <select
-              className={inputClassName}
-              name="projectId"
-              onChange={(event) => {
-                setProjectId(event.target.value);
-                setAllocations([]);
-                setExistingDocumentId("");
-                setMatchedInstallmentId("");
-                setReplaceSchedule(false);
-              }}
-              required
-              value={projectId}
-            >
-              <option value="">Confirm Project</option>
-              {projects.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.code} · {item.name}
-                </option>
-              ))}
-            </select>
-          </ReviewField>
-          <ReviewField
-            error={state.fieldErrors?.documentType}
-            label="Document type"
-            required
-          >
-            <select
-              className={inputClassName}
-              name="documentType"
-              onChange={(event) => {
-                const next = event.target.value as "QUOTE" | "INVOICE";
-                setDocumentType(next);
-                if (next !== "INVOICE") setMatchedInstallmentId("");
-              }}
-              value={documentType}
-            >
-              <option value="QUOTE">Quote / Devis</option>
-              <option value="INVOICE">Invoice</option>
-            </select>
-          </ReviewField>
-          <ReviewField
-            error={state.fieldErrors?.reference}
-            label="Reference / document number"
-            required
-          >
-            <input
-              className={inputClassName}
-              name="reference"
-              onChange={(event) => setReference(event.target.value)}
-              required
-              value={reference}
-            />
-          </ReviewField>
-          <ReviewField
-            error={state.fieldErrors?.documentDate}
-            label="Document date"
-            required
-          >
-            <input
-              className={inputClassName}
-              name="documentDate"
-              onChange={(event) => setDocumentDate(event.target.value)}
-              required
-              type="date"
-              value={documentDate}
-            />
-          </ReviewField>
-          <ReviewField error={state.fieldErrors?.dueDate} label="Due date">
-            <input
-              className={inputClassName}
-              name="dueDate"
-              onChange={(event) => setDueDate(event.target.value)}
-              type="date"
-              value={dueDate}
-            />
-          </ReviewField>
-          <ReviewField
-            error={state.fieldErrors?.currencyCode}
-            label="Currency"
-            required
-          >
-            <select
-              className={inputClassName}
-              name="currencyCode"
-              onChange={(event) => setCurrencyCode(event.target.value)}
-              required
-              value={currencyCode}
-            >
-              <option value="">Confirm currency</option>
-              {options.currencies.map((currency) => (
-                <option key={currency.code} value={currency.code}>
-                  {currency.code}
-                </option>
-              ))}
-            </select>
-          </ReviewField>
-          <ReviewField
-            error={state.fieldErrors?.fxRate}
-            label={`FX: 1 ${currencyCode || "transaction currency"} = Project currency`}
-            required={Boolean(
-              project &&
-              currencyCode &&
-              currencyCode !== project.reportingCurrencyCode,
-            )}
-          >
-            <input
-              className={inputClassName}
-              inputMode="decimal"
-              name="fxRate"
-              onChange={(event) => setFxRate(event.target.value)}
-              value={fxRate}
-            />
-          </ReviewField>
-          <ReviewField
-            error={state.fieldErrors?.totalHt}
-            label="Total HT"
-            required
-          >
-            <input
-              className={inputClassName}
-              inputMode="decimal"
-              name="totalHt"
-              onChange={(event) => {
-                const next = event.target.value;
-                setTotalHt(next);
-                setAllocations((current) =>
-                  current.map((row) =>
-                    row.basis === "PERCENTAGE"
-                      ? {
-                          ...row,
-                          amount:
-                            amountFromPercentage(next || "0", row.percentage) ??
-                            row.amount,
-                        }
-                      : {
-                          ...row,
-                          percentage:
-                            percentageFromAmount(next || "0", row.amount) ??
-                            row.percentage,
-                        },
-                  ),
-                );
-              }}
-              required
-              value={totalHt}
-            />
-          </ReviewField>
-          <ReviewField
-            error={state.fieldErrors?.vatTreatment}
-            label="VAT treatment"
-          >
-            <select
-              className={inputClassName}
-              name="vatTreatment"
-              onChange={(event) => setVatTreatment(event.target.value)}
-              value={vatTreatment}
-            >
-              <option value="">Confirm separately</option>
-              {[
-                "DOMESTIC",
-                "INTRA_EU_SUPPLY",
-                "REVERSE_CHARGE",
-                "EXPORT",
-                "EXEMPT",
-                "OUT_OF_SCOPE",
-                "CUSTOM",
-              ].map((item) => (
-                <option key={item} value={item}>
-                  {formatEnumLabel(item)}
-                </option>
-              ))}
-            </select>
-          </ReviewField>
-          <ReviewField error={state.fieldErrors?.vatRate} label="VAT rate %">
-            <PercentageInput
-              className={inputClassName}
-              onValueChange={setVatRate}
-              value={vatRate}
-            />
-            <input
-              name="vatRate"
-              type="hidden"
-              value={
-                vatRate
-                  ? (humanPercentageToFraction(vatRate, {
-                      maximumPercent: "100",
-                    }) ?? vatRate)
-                  : ""
-              }
-            />
-          </ReviewField>
-          <ReviewField
-            error={state.fieldErrors?.vatAmount}
-            label="VAT amount"
-            required
-          >
-            <input
-              className={inputClassName}
-              inputMode="decimal"
-              name="vatAmount"
-              onChange={(event) => setVatAmount(event.target.value)}
-              required
-              value={vatAmount}
-            />
-          </ReviewField>
-          <ReviewField
-            error={state.fieldErrors?.totalTtc}
-            label="Total TTC"
-            required
-          >
-            <input
-              className={inputClassName}
-              inputMode="decimal"
-              name="totalTtc"
-              onChange={(event) => {
-                const next = event.target.value;
-                setTotalTtc(next);
-                setSchedule((current) =>
-                  current.map((row) =>
-                    row.basis === "PERCENTAGE"
-                      ? {
-                          ...row,
-                          fixedAmount:
-                            amountFromPercentage(next || "0", row.percentage) ??
-                            row.fixedAmount,
-                        }
-                      : {
-                          ...row,
-                          percentage:
-                            percentageFromAmount(
-                              next || "0",
-                              row.fixedAmount,
-                            ) ?? row.percentage,
-                        },
-                  ),
-                );
-              }}
-              required
-              value={totalTtc}
-            />
-          </ReviewField>
-          <ReviewField error={state.fieldErrors?.notes} label="Notes">
-            <input
-              className={inputClassName}
-              name="notes"
-              onChange={(event) => setNotes(event.target.value)}
-              value={notes}
-            />
-          </ReviewField>
-        </div>
-      </section>
-
-      {documentType === "INVOICE" ? (
+            {existingDocumentId ? (
+              <label className="mt-3 flex items-center gap-2 text-xs font-medium">
+                <input
+                  checked={replaceSchedule}
+                  name="replaceSchedule"
+                  onChange={(event) => setReplaceSchedule(event.target.checked)}
+                  type="checkbox"
+                />
+                Replace the existing proposed schedule with the reviewed
+                schedule
+              </label>
+            ) : null}
+          </section>
+        ) : null}
         <section className="bg-card rounded-lg border p-5">
-          <h2 className="text-sm font-semibold">Invoice reconciliation</h2>
+          <h2 className="text-sm font-semibold">
+            Required authoritative fields
+          </h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            Choose explicitly whether this Invoice links to a planned Client
-            payment. Leaving it blank creates a new billing event.
+            The AI suggestions remain non-authoritative until you save this
+            review.
           </p>
-          <div className="mt-3 max-w-2xl">
-            <ReviewField label="Planned Client payment">
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-2">
+            <ReviewField
+              error={state.fieldErrors?.clientId}
+              label="Client"
+              required
+            >
               <select
                 className={inputClassName}
-                onChange={(event) =>
-                  setMatchedInstallmentId(event.target.value)
-                }
-                value={matchedInstallmentId}
+                name="clientId"
+                onChange={(event) => {
+                  setClientId(event.target.value);
+                  setProjectId("");
+                  setAllocations([]);
+                  setExistingDocumentId("");
+                  setMatchedInstallmentId("");
+                  setReplaceSchedule(false);
+                }}
+                required
+                value={clientId}
               >
-                <option value="">
-                  Create as a new billing event / no match
-                </option>
-                {matchable.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.billingDocument.reference} · {item.label} ·{" "}
-                    {item.scheduledAmount} {item.currencyCode} · due{" "}
-                    {item.dueDate}
+                <option value="">Confirm Client</option>
+                {options.clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.displayName}
                   </option>
                 ))}
               </select>
             </ReviewField>
+            <ReviewField
+              error={state.fieldErrors?.projectId}
+              label="Project"
+              required
+            >
+              <select
+                className={inputClassName}
+                name="projectId"
+                onChange={(event) => {
+                  setProjectId(event.target.value);
+                  setAllocations([]);
+                  setExistingDocumentId("");
+                  setMatchedInstallmentId("");
+                  setReplaceSchedule(false);
+                }}
+                required
+                value={projectId}
+              >
+                <option value="">Confirm Project</option>
+                {projects.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.code} · {item.name}
+                  </option>
+                ))}
+              </select>
+            </ReviewField>
+            <ReviewField
+              error={state.fieldErrors?.documentType}
+              label="Document type"
+              required
+            >
+              <select
+                className={inputClassName}
+                name="documentType"
+                onChange={(event) => {
+                  const next = event.target.value as "QUOTE" | "INVOICE";
+                  setDocumentType(next);
+                  if (next !== "INVOICE") setMatchedInstallmentId("");
+                }}
+                value={documentType}
+              >
+                <option value="QUOTE">Quote / Devis</option>
+                <option value="INVOICE">Invoice</option>
+              </select>
+            </ReviewField>
+            <ReviewField
+              error={state.fieldErrors?.reference}
+              label="Reference / document number"
+              required
+            >
+              <input
+                className={inputClassName}
+                name="reference"
+                onChange={(event) => setReference(event.target.value)}
+                required
+                value={reference}
+              />
+            </ReviewField>
+            <ReviewField
+              error={state.fieldErrors?.documentDate}
+              label="Document date"
+              required
+            >
+              <input
+                className={inputClassName}
+                name="documentDate"
+                onChange={(event) => setDocumentDate(event.target.value)}
+                required
+                type="date"
+                value={documentDate}
+              />
+            </ReviewField>
+            <ReviewField error={state.fieldErrors?.dueDate} label="Due date">
+              <input
+                className={inputClassName}
+                name="dueDate"
+                onChange={(event) => setDueDate(event.target.value)}
+                type="date"
+                value={dueDate}
+              />
+            </ReviewField>
+            <ReviewField
+              error={state.fieldErrors?.currencyCode}
+              label="Currency"
+              required
+            >
+              <select
+                className={inputClassName}
+                name="currencyCode"
+                onChange={(event) => setCurrencyCode(event.target.value)}
+                required
+                value={currencyCode}
+              >
+                <option value="">Confirm currency</option>
+                {options.currencies.map((currency) => (
+                  <option key={currency.code} value={currency.code}>
+                    {currency.code}
+                  </option>
+                ))}
+              </select>
+            </ReviewField>
+            <ReviewField
+              error={state.fieldErrors?.fxRate}
+              label={`FX: 1 ${currencyCode || "transaction currency"} = Project currency`}
+              required={Boolean(
+                project &&
+                currencyCode &&
+                currencyCode !== project.reportingCurrencyCode,
+              )}
+            >
+              <input
+                className={inputClassName}
+                inputMode="decimal"
+                name="fxRate"
+                onChange={(event) => setFxRate(event.target.value)}
+                value={fxRate}
+              />
+            </ReviewField>
+            <ReviewField
+              error={state.fieldErrors?.totalHt}
+              label="Total HT"
+              required
+            >
+              <input
+                className={inputClassName}
+                inputMode="decimal"
+                name="totalHt"
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setTotalHt(next);
+                  setAllocations((current) =>
+                    current.map((row) =>
+                      row.basis === "PERCENTAGE"
+                        ? {
+                            ...row,
+                            amount:
+                              amountFromPercentage(
+                                next || "0",
+                                row.percentage,
+                              ) ?? row.amount,
+                          }
+                        : {
+                            ...row,
+                            percentage:
+                              percentageFromAmount(next || "0", row.amount) ??
+                              row.percentage,
+                          },
+                    ),
+                  );
+                }}
+                required
+                value={totalHt}
+              />
+            </ReviewField>
+            <ReviewField
+              error={state.fieldErrors?.vatTreatment}
+              label="VAT treatment"
+            >
+              <select
+                className={inputClassName}
+                name="vatTreatment"
+                onChange={(event) => setVatTreatment(event.target.value)}
+                value={vatTreatment}
+              >
+                <option value="">Confirm separately</option>
+                {[
+                  "DOMESTIC",
+                  "INTRA_EU_SUPPLY",
+                  "REVERSE_CHARGE",
+                  "EXPORT",
+                  "EXEMPT",
+                  "OUT_OF_SCOPE",
+                  "CUSTOM",
+                ].map((item) => (
+                  <option key={item} value={item}>
+                    {formatEnumLabel(item)}
+                  </option>
+                ))}
+              </select>
+            </ReviewField>
+            <ReviewField error={state.fieldErrors?.vatRate} label="VAT rate %">
+              <PercentageInput
+                className={inputClassName}
+                onValueChange={setVatRate}
+                value={vatRate}
+              />
+              <input
+                name="vatRate"
+                type="hidden"
+                value={
+                  vatRate
+                    ? (humanPercentageToFraction(vatRate, {
+                        maximumPercent: "100",
+                      }) ?? vatRate)
+                    : ""
+                }
+              />
+            </ReviewField>
+            <ReviewField
+              error={state.fieldErrors?.vatAmount}
+              label="VAT amount"
+              required
+            >
+              <input
+                className={inputClassName}
+                inputMode="decimal"
+                name="vatAmount"
+                onChange={(event) => setVatAmount(event.target.value)}
+                required
+                value={vatAmount}
+              />
+            </ReviewField>
+            <ReviewField
+              error={state.fieldErrors?.totalTtc}
+              label="Total TTC"
+              required
+            >
+              <input
+                className={inputClassName}
+                inputMode="decimal"
+                name="totalTtc"
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setTotalTtc(next);
+                  setSchedule((current) =>
+                    current.map((row) =>
+                      row.basis === "PERCENTAGE"
+                        ? {
+                            ...row,
+                            fixedAmount:
+                              amountFromPercentage(
+                                next || "0",
+                                row.percentage,
+                              ) ?? row.fixedAmount,
+                          }
+                        : {
+                            ...row,
+                            percentage:
+                              percentageFromAmount(
+                                next || "0",
+                                row.fixedAmount,
+                              ) ?? row.percentage,
+                          },
+                    ),
+                  );
+                }}
+                required
+                value={totalTtc}
+              />
+            </ReviewField>
+            <ReviewField error={state.fieldErrors?.notes} label="Notes">
+              <input
+                className={inputClassName}
+                name="notes"
+                onChange={(event) => setNotes(event.target.value)}
+                value={notes}
+              />
+            </ReviewField>
           </div>
         </section>
-      ) : null}
-
-      {matchedInstallmentId ? (
-        <section className="bg-card rounded-lg border p-5 text-sm">
-          <h2 className="font-semibold">Payment schedule matched</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            This Invoice will use the explicitly selected planned payment. No
-            second schedule will be created.
-          </p>
-        </section>
-      ) : (
+        {documentType === "INVOICE" ? (
+          <section className="bg-card rounded-lg border p-5">
+            <h2 className="text-sm font-semibold">Invoice reconciliation</h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Choose explicitly whether this Invoice links to a planned Client
+              payment. Leaving it blank creates a new billing event.
+            </p>
+            <div className="mt-3 max-w-2xl">
+              <ReviewField label="Planned Client payment">
+                <select
+                  className={inputClassName}
+                  onChange={(event) =>
+                    setMatchedInstallmentId(event.target.value)
+                  }
+                  value={matchedInstallmentId}
+                >
+                  <option value="">
+                    Create as a new billing event / no match
+                  </option>
+                  {matchable.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.billingDocument.reference} · {item.label} ·{" "}
+                      {item.scheduledAmount} {item.currencyCode} · due{" "}
+                      {item.dueDate}
+                    </option>
+                  ))}
+                </select>
+              </ReviewField>
+            </div>
+          </section>
+        ) : null}
+        {matchedInstallmentId ? (
+          <section className="bg-card rounded-lg border p-5 text-sm">
+            <h2 className="font-semibold">Payment schedule matched</h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              This Invoice will use the explicitly selected planned payment. No
+              second schedule will be created.
+            </p>
+          </section>
+        ) : (
+          <section className="bg-card rounded-lg border p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">
+                  Proposed Client payment schedule
+                </h2>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Cash installments use TTC and are saved only with this
+                  confirmation.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setSchedule((current) => [
+                    ...current,
+                    {
+                      basis: "FIXED_AMOUNT",
+                      dueDate: dueDate,
+                      fixedAmount: "",
+                      label: `Installment ${current.length + 1}`,
+                      notes: "",
+                      percentage: "",
+                    },
+                  ])
+                }
+              >
+                Add installment
+              </Button>
+            </div>
+            <div className="mt-3 space-y-2">
+              {schedule.map((item, index) => (
+                <div
+                  className="grid gap-2 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-6"
+                  key={index}
+                >
+                  <ReviewField
+                    error={state.fieldErrors?.[`installments.${index}.label`]}
+                    label="Installment label"
+                    required
+                  >
+                    <input
+                      className={inputClassName}
+                      onChange={(event) =>
+                        setSchedule((current) =>
+                          current.map((row, rowIndex) =>
+                            rowIndex === index
+                              ? { ...row, label: event.target.value }
+                              : row,
+                          ),
+                        )
+                      }
+                      value={item.label}
+                    />
+                  </ReviewField>
+                  <ReviewField
+                    error={
+                      state.fieldErrors?.[
+                        `installments.${index}.percentageRate`
+                      ]
+                    }
+                    label="Installment %"
+                    required
+                  >
+                    <PercentageInput
+                      className={inputClassName}
+                      onValueChange={(percentage) => {
+                        setSchedule((current) =>
+                          current.map((row, rowIndex) =>
+                            rowIndex === index
+                              ? {
+                                  ...row,
+                                  basis: "PERCENTAGE",
+                                  fixedAmount:
+                                    amountFromPercentage(
+                                      totalTtc || "0",
+                                      percentage,
+                                    ) ?? row.fixedAmount,
+                                  percentage,
+                                }
+                              : row,
+                          ),
+                        );
+                      }}
+                      value={item.percentage}
+                    />
+                  </ReviewField>
+                  <ReviewField
+                    error={
+                      state.fieldErrors?.[`installments.${index}.fixedAmount`]
+                    }
+                    label={`Installment amount (${currencyCode || "currency"})`}
+                    required
+                  >
+                    <input
+                      className={inputClassName}
+                      inputMode="decimal"
+                      onChange={(event) => {
+                        const fixedAmount = event.target.value;
+                        setSchedule((current) =>
+                          current.map((row, rowIndex) =>
+                            rowIndex === index
+                              ? {
+                                  ...row,
+                                  basis: "FIXED_AMOUNT",
+                                  fixedAmount,
+                                  percentage:
+                                    percentageFromAmount(
+                                      totalTtc || "0",
+                                      fixedAmount,
+                                    ) ?? row.percentage,
+                                }
+                              : row,
+                          ),
+                        );
+                      }}
+                      value={item.fixedAmount}
+                    />
+                  </ReviewField>
+                  <ReviewField
+                    error={state.fieldErrors?.[`installments.${index}.dueDate`]}
+                    label="Due date"
+                    required
+                  >
+                    <input
+                      className={inputClassName}
+                      onChange={(event) =>
+                        setSchedule((current) =>
+                          current.map((row, rowIndex) =>
+                            rowIndex === index
+                              ? { ...row, dueDate: event.target.value }
+                              : row,
+                          ),
+                        )
+                      }
+                      type="date"
+                      value={item.dueDate}
+                    />
+                  </ReviewField>
+                  <ReviewField label="Notes">
+                    <input
+                      className={inputClassName}
+                      onChange={(event) =>
+                        setSchedule((current) =>
+                          current.map((row, rowIndex) =>
+                            rowIndex === index
+                              ? { ...row, notes: event.target.value }
+                              : row,
+                          ),
+                        )
+                      }
+                      value={item.notes}
+                    />
+                  </ReviewField>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() =>
+                      setSchedule((current) =>
+                        current.filter((_, rowIndex) => rowIndex !== index),
+                      )
+                    }
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+              {schedule.length === 0 ? (
+                <p className="text-muted-foreground text-xs">
+                  No schedule will be created unless you add one.
+                </p>
+              ) : null}
+              {schedule.length ? (
+                <div className="rounded-md border p-3 text-xs">
+                  <p>
+                    Document TTC: {totalTtc || "—"} {currencyCode}
+                  </p>
+                  <p>
+                    Scheduled TTC: {scheduled.allocated} {currencyCode}
+                  </p>
+                  <p>
+                    {scheduleOverallocated
+                      ? `Over-allocated: ${scheduled.overallocated}`
+                      : `Remaining TTC: ${scheduled.remaining}`}{" "}
+                    {currencyCode}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        )}
         <section className="bg-card rounded-lg border p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold">
-                Proposed Client payment schedule
+                Optional Supplier Order allocation (HT)
               </h2>
               <p className="text-muted-foreground mt-1 text-xs">
-                Cash installments use TTC and are saved only with this
-                confirmation.
+                Project-level billing is valid. Allocations never overwrite
+                planned Supplier Order selling prices.
               </p>
             </div>
             <Button
+              disabled={!projectId}
               type="button"
               variant="outline"
               size="sm"
               onClick={() =>
-                setSchedule((current) => [
+                setAllocations((current) => [
                   ...current,
                   {
+                    amount: "",
                     basis: "FIXED_AMOUNT",
-                    dueDate: dueDate,
-                    fixedAmount: "",
-                    label: `Installment ${current.length + 1}`,
-                    notes: "",
+                    orderId: "",
                     percentage: "",
                   },
                 ])
               }
             >
-              Add installment
+              Add allocation
             </Button>
           </div>
           <div className="mt-3 space-y-2">
-            {schedule.map((item, index) => (
+            {allocations.map((item, index) => (
               <div
-                className="grid gap-2 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-6"
+                className="grid gap-2 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-2"
                 key={index}
               >
                 <ReviewField
-                  error={state.fieldErrors?.[`installments.${index}.label`]}
-                  label="Installment label"
+                  error={state.fieldErrors?.[`allocations.${index}.orderId`]}
+                  label="Project Supplier Order"
                   required
                 >
-                  <input
+                  <select
                     className={inputClassName}
                     onChange={(event) =>
-                      setSchedule((current) =>
+                      setAllocations((current) =>
                         current.map((row, rowIndex) =>
                           rowIndex === index
-                            ? { ...row, label: event.target.value }
+                            ? { ...row, orderId: event.target.value }
                             : row,
                         ),
                       )
                     }
-                    value={item.label}
-                  />
+                    value={item.orderId}
+                  >
+                    <option value="">Choose Project Supplier Order</option>
+                    {orders.map((order) => (
+                      <option key={order.id} value={order.id}>
+                        {order.orderNumber}
+                      </option>
+                    ))}
+                  </select>
                 </ReviewField>
                 <ReviewField
                   error={
-                    state.fieldErrors?.[`installments.${index}.percentageRate`]
+                    state.fieldErrors?.[`allocations.${index}.percentageRate`]
                   }
-                  label="Installment %"
+                  label="% of Billing"
                   required
                 >
                   <PercentageInput
                     className={inputClassName}
                     onValueChange={(percentage) => {
-                      setSchedule((current) =>
+                      setAllocations((current) =>
                         current.map((row, rowIndex) =>
                           rowIndex === index
                             ? {
                                 ...row,
-                                basis: "PERCENTAGE",
-                                fixedAmount:
+                                amount:
                                   amountFromPercentage(
-                                    totalTtc || "0",
+                                    totalHt || "0",
                                     percentage,
-                                  ) ?? row.fixedAmount,
+                                  ) ?? row.amount,
+                                basis: "PERCENTAGE",
                                 percentage,
                               }
                             : row,
@@ -815,76 +1017,41 @@ function ClientDocumentReview({
                 </ReviewField>
                 <ReviewField
                   error={
-                    state.fieldErrors?.[`installments.${index}.fixedAmount`]
+                    state.fieldErrors?.[`allocations.${index}.allocatedAmount`]
                   }
-                  label={`Installment amount (${currencyCode || "currency"})`}
+                  label={`Supplier Order allocation HT (${currencyCode || "currency"})`}
                   required
                 >
                   <input
                     className={inputClassName}
                     inputMode="decimal"
                     onChange={(event) => {
-                      const fixedAmount = event.target.value;
-                      setSchedule((current) =>
+                      const amount = event.target.value;
+                      setAllocations((current) =>
                         current.map((row, rowIndex) =>
                           rowIndex === index
                             ? {
                                 ...row,
+                                amount,
                                 basis: "FIXED_AMOUNT",
-                                fixedAmount,
                                 percentage:
                                   percentageFromAmount(
-                                    totalTtc || "0",
-                                    fixedAmount,
+                                    totalHt || "0",
+                                    amount,
                                   ) ?? row.percentage,
                               }
                             : row,
                         ),
                       );
                     }}
-                    value={item.fixedAmount}
-                  />
-                </ReviewField>
-                <ReviewField
-                  error={state.fieldErrors?.[`installments.${index}.dueDate`]}
-                  label="Due date"
-                  required
-                >
-                  <input
-                    className={inputClassName}
-                    onChange={(event) =>
-                      setSchedule((current) =>
-                        current.map((row, rowIndex) =>
-                          rowIndex === index
-                            ? { ...row, dueDate: event.target.value }
-                            : row,
-                        ),
-                      )
-                    }
-                    type="date"
-                    value={item.dueDate}
-                  />
-                </ReviewField>
-                <ReviewField label="Notes">
-                  <input
-                    className={inputClassName}
-                    onChange={(event) =>
-                      setSchedule((current) =>
-                        current.map((row, rowIndex) =>
-                          rowIndex === index
-                            ? { ...row, notes: event.target.value }
-                            : row,
-                        ),
-                      )
-                    }
-                    value={item.notes}
+                    value={item.amount}
                   />
                 </ReviewField>
                 <Button
                   type="button"
                   variant="ghost"
                   onClick={() =>
-                    setSchedule((current) =>
+                    setAllocations((current) =>
                       current.filter((_, rowIndex) => rowIndex !== index),
                     )
                   }
@@ -893,217 +1060,58 @@ function ClientDocumentReview({
                 </Button>
               </div>
             ))}
-            {schedule.length === 0 ? (
-              <p className="text-muted-foreground text-xs">
-                No schedule will be created unless you add one.
+          </div>
+          {allocations.length ? (
+            <div className="mt-3 rounded-md border p-3 text-xs">
+              <p>Document HT: {totalHt || "—"}</p>
+              <p>Allocated HT: {allocation.allocated}</p>
+              <p>
+                {allocationOverallocated
+                  ? `Over-allocated: ${allocation.overallocated}`
+                  : `Project-level remainder: ${allocation.remaining}`}
               </p>
-            ) : null}
-            {schedule.length ? (
-              <div className="rounded-md border p-3 text-xs">
-                <p>
-                  Document TTC: {totalTtc || "—"} {currencyCode}
-                </p>
-                <p>
-                  Scheduled TTC: {scheduled.allocated} {currencyCode}
-                </p>
-                <p>
-                  {scheduleOverallocated
-                    ? `Over-allocated: ${scheduled.overallocated}`
-                    : `Remaining TTC: ${scheduled.remaining}`}{" "}
-                  {currencyCode}
-                </p>
-              </div>
-            ) : null}
-          </div>
-        </section>
-      )}
-
-      <section className="bg-card rounded-lg border p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">
-              Optional Supplier Order allocation (HT)
-            </h2>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Project-level billing is valid. Allocations never overwrite
-              planned Supplier Order selling prices.
-            </p>
-          </div>
-          <Button
-            disabled={!projectId}
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setAllocations((current) => [
-                ...current,
-                {
-                  amount: "",
-                  basis: "FIXED_AMOUNT",
-                  orderId: "",
-                  percentage: "",
-                },
-              ])
-            }
-          >
-            Add allocation
-          </Button>
-        </div>
-        <div className="mt-3 space-y-2">
-          {allocations.map((item, index) => (
-            <div
-              className="grid gap-2 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-4"
-              key={index}
-            >
-              <ReviewField
-                error={state.fieldErrors?.[`allocations.${index}.orderId`]}
-                label="Project Supplier Order"
-                required
-              >
-                <select
-                  className={inputClassName}
-                  onChange={(event) =>
-                    setAllocations((current) =>
-                      current.map((row, rowIndex) =>
-                        rowIndex === index
-                          ? { ...row, orderId: event.target.value }
-                          : row,
-                      ),
-                    )
-                  }
-                  value={item.orderId}
-                >
-                  <option value="">Choose Project Supplier Order</option>
-                  {orders.map((order) => (
-                    <option key={order.id} value={order.id}>
-                      {order.orderNumber}
-                    </option>
-                  ))}
-                </select>
-              </ReviewField>
-              <ReviewField
-                error={
-                  state.fieldErrors?.[`allocations.${index}.percentageRate`]
-                }
-                label="% of Billing"
-                required
-              >
-                <PercentageInput
-                  className={inputClassName}
-                  onValueChange={(percentage) => {
-                    setAllocations((current) =>
-                      current.map((row, rowIndex) =>
-                        rowIndex === index
-                          ? {
-                              ...row,
-                              amount:
-                                amountFromPercentage(
-                                  totalHt || "0",
-                                  percentage,
-                                ) ?? row.amount,
-                              basis: "PERCENTAGE",
-                              percentage,
-                            }
-                          : row,
-                      ),
-                    );
-                  }}
-                  value={item.percentage}
-                />
-              </ReviewField>
-              <ReviewField
-                error={
-                  state.fieldErrors?.[`allocations.${index}.allocatedAmount`]
-                }
-                label={`Supplier Order allocation HT (${currencyCode || "currency"})`}
-                required
-              >
-                <input
-                  className={inputClassName}
-                  inputMode="decimal"
-                  onChange={(event) => {
-                    const amount = event.target.value;
-                    setAllocations((current) =>
-                      current.map((row, rowIndex) =>
-                        rowIndex === index
-                          ? {
-                              ...row,
-                              amount,
-                              basis: "FIXED_AMOUNT",
-                              percentage:
-                                percentageFromAmount(totalHt || "0", amount) ??
-                                row.percentage,
-                            }
-                          : row,
-                      ),
-                    );
-                  }}
-                  value={item.amount}
-                />
-              </ReviewField>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() =>
-                  setAllocations((current) =>
-                    current.filter((_, rowIndex) => rowIndex !== index),
-                  )
-                }
-              >
-                Remove
-              </Button>
+              {new Decimal(allocation.remaining).greaterThan(0) ? (
+                <label className="mt-2 flex items-center gap-2 font-medium">
+                  <input
+                    checked={isProjectRemainderApproved}
+                    name="isProjectRemainderApproved"
+                    onChange={(event) =>
+                      setProjectRemainderApproved(event.target.checked)
+                    }
+                    type="checkbox"
+                  />
+                  Leave this remainder unallocated at Project level
+                </label>
+              ) : null}
             </div>
-          ))}
-        </div>
-        {allocations.length ? (
-          <div className="mt-3 rounded-md border p-3 text-xs">
-            <p>Document HT: {totalHt || "—"}</p>
-            <p>Allocated HT: {allocation.allocated}</p>
-            <p>
-              {allocationOverallocated
-                ? `Over-allocated: ${allocation.overallocated}`
-                : `Project-level remainder: ${allocation.remaining}`}
-            </p>
-            {new Decimal(allocation.remaining).greaterThan(0) ? (
-              <label className="mt-2 flex items-center gap-2 font-medium">
-                <input
-                  checked={isProjectRemainderApproved}
-                  name="isProjectRemainderApproved"
-                  onChange={(event) =>
-                    setProjectRemainderApproved(event.target.checked)
-                  }
-                  type="checkbox"
-                />
-                Leave this remainder unallocated at Project level
-              </label>
-            ) : null}
-          </div>
-        ) : null}
-      </section>
-
-      <IntakeStageHeader
-        description="No authoritative Billing Event is changed until this confirmation is submitted."
-        stage={3}
-        title="Confirm and save"
-      />
-      <div className="flex items-center gap-3">
-        <SubmitButton
-          disabled={scheduleOverallocated || allocationOverallocated}
-          pending={pending}
-        >
-          Confirm and save Client Billing
-        </SubmitButton>
-        {state.message ? (
-          <p
-            className={
-              state.status === "error" ? "text-destructive text-sm" : "text-sm"
-            }
-            role="status"
+          ) : null}
+        </section>
+        <IntakeStageHeader
+          description="No authoritative Billing Event is changed until this confirmation is submitted."
+          stage={3}
+          title="Confirm and save"
+        />
+        <div className="flex items-center gap-3">
+          <SubmitButton
+            disabled={scheduleOverallocated || allocationOverallocated}
+            pending={pending}
           >
-            {state.message}
-          </p>
-        ) : null}
-      </div>
+            Confirm and save Client Billing
+          </SubmitButton>
+          {state.message ? (
+            <p
+              className={
+                state.status === "error"
+                  ? "text-destructive text-sm"
+                  : "text-sm"
+              }
+              role="status"
+            >
+              {state.message}
+            </p>
+          ) : null}
+        </div>
+      </IntakeReviewLayout>
     </form>
   );
 }
@@ -1120,6 +1128,7 @@ export function ClientDocumentIntake({ options }: { options: BillingOptions }) {
     <section className="bg-card rounded-lg border p-5">
       <IntakeStageHeader
         description="Upload one temporary PDF. AI proposes structured values; an ADMIN or MANAGER must review before anything is saved."
+        processing={pending}
         stage={1}
         title="Upload and extract"
       />

@@ -1,6 +1,7 @@
 "use client";
 
 import Decimal from "decimal.js";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -69,6 +70,26 @@ export function BillingScheduleManager({
   const [receiptState, setReceiptState] =
     useState<BillingActionState>(initialState);
   const [receiptPending, startReceipt] = useTransition();
+  function closeInstallment() {
+    setShowInstallmentForm(false);
+    setAmount("");
+    setBasis("FIXED_AMOUNT");
+    setDueDate(document.dueDate ?? "");
+    setLabel("");
+    setNotes("");
+    setPercentage("");
+    setCreateState(initialState);
+  }
+  function closeReceipt() {
+    setShowReceiptForm(false);
+    setReceiptAmount("");
+    setReceivedAt("");
+    setReference("");
+    setReceiptNotes("");
+    setFxRate("");
+    setInstallmentId("");
+    setReceiptState(initialState);
+  }
   const activeInstallments = document.paymentInstallments.filter(
     (installment) => !installment.isCancelled,
   );
@@ -154,128 +175,140 @@ export function BillingScheduleManager({
         </div>
 
         {showInstallmentForm && canEdit && !document.matchedInstallmentId ? (
-          <form
-            className="mt-3 grid gap-3 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const formData = new FormData(event.currentTarget);
-              startCreate(async () => {
-                const result = await createClientBillingInstallmentAction(
-                  initialState,
-                  formData,
-                );
-                setCreateState(result);
-                if (result.status !== "success") return;
-                setShowInstallmentForm(false);
-                setAmount("");
-                setBasis("FIXED_AMOUNT");
-                setLabel("");
-                setNotes("");
-                setPercentage("");
-                router.refresh();
-              });
+          <EditorDrawer
+            open
+            title="Add Billing installment"
+            onOpenChange={(open) => {
+              if (!open) closeInstallment();
             }}
           >
-            <input name="basis" type="hidden" value={basis} />
-            <input name="billingDocumentId" type="hidden" value={document.id} />
-            <Field
-              error={createState.fieldErrors?.label}
-              label="Label"
-              required
-            >
-              <input
-                className={inputClassName}
-                name="label"
-                onChange={(event) => setLabel(event.target.value)}
-                required
-                value={label}
-              />
-            </Field>
-            <Field
-              error={createState.fieldErrors?.dueDate}
-              label="Due date"
-              required
-            >
-              <input
-                className={inputClassName}
-                name="dueDate"
-                onChange={(event) => setDueDate(event.target.value)}
-                required
-                type="date"
-                value={dueDate}
-              />
-            </Field>
-            <Field
-              error={createState.fieldErrors?.percentageRate}
-              label="Installment %"
-              required
-            >
-              <PercentageInput
-                className={inputClassName}
-                name="percentageRate"
-                onValueChange={(value) => {
-                  setPercentage(value);
-                  setBasis("PERCENTAGE");
-                  setAmount(
-                    amountFromPercentage(document.totalTtc, value) ?? amount,
+            <form
+              className="mt-3 grid gap-3 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const formData = new FormData(event.currentTarget);
+                startCreate(async () => {
+                  const result = await createClientBillingInstallmentAction(
+                    initialState,
+                    formData,
                   );
-                }}
-                required
-                value={percentage}
-              />
-            </Field>
-            <Field
-              error={createState.fieldErrors?.scheduledAmount}
-              label={`Scheduled TTC (${document.currencyCode})`}
-              required
-            >
-              <MoneyInput
-                name="scheduledAmount"
-                onValueChange={(value) => {
-                  setAmount(value);
+                  setCreateState(result);
+                  if (result.status !== "success") return;
+                  setShowInstallmentForm(false);
+                  setAmount("");
                   setBasis("FIXED_AMOUNT");
-                  setPercentage(
-                    percentageFromAmount(document.totalTtc, value) ??
-                      percentage,
-                  );
-                }}
-                required
-                value={amount}
-              />
-            </Field>
-            <Field error={createState.fieldErrors?.notes} label="Notes">
+                  setLabel("");
+                  setNotes("");
+                  setPercentage("");
+                  router.refresh();
+                });
+              }}
+            >
+              <input name="basis" type="hidden" value={basis} />
               <input
-                className={inputClassName}
-                name="notes"
-                onChange={(event) => setNotes(event.target.value)}
-                value={notes}
+                name="billingDocumentId"
+                type="hidden"
+                value={document.id}
               />
-            </Field>
-            <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
-              <SubmitButton pending={createPending}>
-                Save installment
-              </SubmitButton>
-              <Button
-                disabled={remaining.isZero() || createPending}
-                onClick={() => {
-                  setAmount(remaining.toFixed(4));
-                  setPercentage(
-                    percentageFromAmount(
-                      document.totalTtc,
-                      remaining.toString(),
-                    ) ?? "",
-                  );
-                  setBasis("FIXED_AMOUNT");
-                  setLabel("Remaining balance");
-                }}
-                type="button"
-                variant="ghost"
+              <Field
+                error={createState.fieldErrors?.label}
+                label="Label"
+                required
               >
-                Use remaining
-              </Button>
-            </div>
-            <ActionFeedback state={createState} />
-          </form>
+                <input
+                  className={inputClassName}
+                  name="label"
+                  onChange={(event) => setLabel(event.target.value)}
+                  required
+                  value={label}
+                />
+              </Field>
+              <Field
+                error={createState.fieldErrors?.dueDate}
+                label="Due date"
+                required
+              >
+                <input
+                  className={inputClassName}
+                  name="dueDate"
+                  onChange={(event) => setDueDate(event.target.value)}
+                  required
+                  type="date"
+                  value={dueDate}
+                />
+              </Field>
+              <Field
+                error={createState.fieldErrors?.percentageRate}
+                label="Installment %"
+                required
+              >
+                <PercentageInput
+                  className={inputClassName}
+                  name="percentageRate"
+                  onValueChange={(value) => {
+                    setPercentage(value);
+                    setBasis("PERCENTAGE");
+                    setAmount(
+                      amountFromPercentage(document.totalTtc, value) ?? amount,
+                    );
+                  }}
+                  required
+                  value={percentage}
+                />
+              </Field>
+              <Field
+                error={createState.fieldErrors?.scheduledAmount}
+                label={`Scheduled TTC (${document.currencyCode})`}
+                required
+              >
+                <MoneyInput
+                  name="scheduledAmount"
+                  onValueChange={(value) => {
+                    setAmount(value);
+                    setBasis("FIXED_AMOUNT");
+                    setPercentage(
+                      percentageFromAmount(document.totalTtc, value) ??
+                        percentage,
+                    );
+                  }}
+                  required
+                  value={amount}
+                />
+              </Field>
+              <Field error={createState.fieldErrors?.notes} label="Notes">
+                <input
+                  className={inputClassName}
+                  name="notes"
+                  onChange={(event) => setNotes(event.target.value)}
+                  value={notes}
+                />
+              </Field>
+              <div className="flex items-end gap-2 sm:col-span-2">
+                <SubmitButton pending={createPending}>
+                  Save installment
+                </SubmitButton>
+                <Button
+                  disabled={remaining.isZero() || createPending}
+                  onClick={() => {
+                    setAmount(remaining.toFixed(4));
+                    setPercentage(
+                      percentageFromAmount(
+                        document.totalTtc,
+                        remaining.toString(),
+                      ) ?? "",
+                    );
+                    setBasis("FIXED_AMOUNT");
+                    setLabel("Remaining balance");
+                  }}
+                  type="button"
+                  variant="ghost"
+                >
+                  Use remaining
+                </Button>
+              </div>
+              <ActionFeedback state={createState} />
+            </form>
+          </EditorDrawer>
         ) : null}
 
         <div className="mt-3 grid gap-2 lg:grid-cols-2">
@@ -319,120 +352,134 @@ export function BillingScheduleManager({
         </div>
 
         {showReceiptForm && canEdit ? (
-          <form
-            className="mt-3 grid gap-3 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const formData = new FormData(event.currentTarget);
-              startReceipt(async () => {
-                const result = await recordClientReceiptAction(
-                  initialState,
-                  formData,
-                );
-                setReceiptState(result);
-                if (result.status !== "success") return;
-                setShowReceiptForm(false);
-                setReceiptAmount("");
-                setReceivedAt("");
-                setReference("");
-                setReceiptNotes("");
-                setFxRate("");
-                setInstallmentId("");
-                router.refresh();
-              });
+          <EditorDrawer
+            open
+            title="Record Client receipt"
+            onOpenChange={(open) => {
+              if (!open) closeReceipt();
             }}
           >
-            <input name="billingDocumentId" type="hidden" value={document.id} />
-            <Field
-              error={receiptState.fieldErrors?.receivedAt}
-              label="Receipt date"
-              required
+            <form
+              className="mt-3 grid gap-3 sm:grid-cols-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const formData = new FormData(event.currentTarget);
+                startReceipt(async () => {
+                  const result = await recordClientReceiptAction(
+                    initialState,
+                    formData,
+                  );
+                  setReceiptState(result);
+                  if (result.status !== "success") return;
+                  setShowReceiptForm(false);
+                  setReceiptAmount("");
+                  setReceivedAt("");
+                  setReference("");
+                  setReceiptNotes("");
+                  setFxRate("");
+                  setInstallmentId("");
+                  router.refresh();
+                });
+              }}
             >
               <input
-                className={inputClassName}
-                name="receivedAt"
-                onChange={(event) => setReceivedAt(event.target.value)}
-                required
-                type="date"
-                value={receivedAt}
+                name="billingDocumentId"
+                type="hidden"
+                value={document.id}
               />
-            </Field>
-            <Field
-              error={receiptState.fieldErrors?.amount}
-              label={`Amount (${document.currencyCode})`}
-              required
-            >
-              <MoneyInput
-                name="amount"
-                onValueChange={setReceiptAmount}
-                required
-                value={receiptAmount}
-              />
-            </Field>
-            <Field
-              error={receiptState.fieldErrors?.installmentId}
-              label="Apply to installment (optional)"
-            >
-              <select
-                className={inputClassName}
-                name="installmentId"
-                onChange={(event) => setInstallmentId(event.target.value)}
-                value={installmentId}
-              >
-                <option value="">Billing level</option>
-                {ownedInstallments.map((installment) => (
-                  <option key={installment.id} value={installment.id}>
-                    {installment.label} ·{" "}
-                    {formatMoney(
-                      installment.scheduledAmount,
-                      installment.currencyCode,
-                    )}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field
-              error={receiptState.fieldErrors?.reference}
-              label="Reference"
-            >
-              <input
-                className={inputClassName}
-                name="reference"
-                onChange={(event) => setReference(event.target.value)}
-                value={reference}
-              />
-            </Field>
-            {needsFx ? (
               <Field
-                error={receiptState.fieldErrors?.fxRate}
-                label={`FX: 1 ${document.currencyCode} in ${document.project.reportingCurrencyCode}`}
+                error={receiptState.fieldErrors?.receivedAt}
+                label="Receipt date"
                 required
               >
                 <input
                   className={inputClassName}
-                  inputMode="decimal"
-                  name="fxRate"
-                  onChange={(event) => setFxRate(event.target.value)}
+                  name="receivedAt"
+                  onChange={(event) => setReceivedAt(event.target.value)}
                   required
-                  value={fxRate}
+                  type="date"
+                  value={receivedAt}
                 />
               </Field>
-            ) : (
-              <input name="fxRate" type="hidden" value="" />
-            )}
-            <Field error={receiptState.fieldErrors?.notes} label="Notes">
-              <input
-                className={inputClassName}
-                name="notes"
-                onChange={(event) => setReceiptNotes(event.target.value)}
-                value={receiptNotes}
-              />
-            </Field>
-            <div className="flex items-end gap-3 sm:col-span-2 lg:col-span-3">
-              <SubmitButton pending={receiptPending}>Save receipt</SubmitButton>
-              <ActionFeedback state={receiptState} />
-            </div>
-          </form>
+              <Field
+                error={receiptState.fieldErrors?.amount}
+                label={`Amount (${document.currencyCode})`}
+                required
+              >
+                <MoneyInput
+                  name="amount"
+                  onValueChange={setReceiptAmount}
+                  required
+                  value={receiptAmount}
+                />
+              </Field>
+              <Field
+                error={receiptState.fieldErrors?.installmentId}
+                label="Apply to installment (optional)"
+              >
+                <select
+                  className={inputClassName}
+                  name="installmentId"
+                  onChange={(event) => setInstallmentId(event.target.value)}
+                  value={installmentId}
+                >
+                  <option value="">Billing level</option>
+                  {ownedInstallments.map((installment) => (
+                    <option key={installment.id} value={installment.id}>
+                      {installment.label} ·{" "}
+                      {formatMoney(
+                        installment.scheduledAmount,
+                        installment.currencyCode,
+                      )}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field
+                error={receiptState.fieldErrors?.reference}
+                label="Reference"
+              >
+                <input
+                  className={inputClassName}
+                  name="reference"
+                  onChange={(event) => setReference(event.target.value)}
+                  value={reference}
+                />
+              </Field>
+              {needsFx ? (
+                <Field
+                  error={receiptState.fieldErrors?.fxRate}
+                  label={`FX: 1 ${document.currencyCode} in ${document.project.reportingCurrencyCode}`}
+                  required
+                >
+                  <input
+                    className={inputClassName}
+                    inputMode="decimal"
+                    name="fxRate"
+                    onChange={(event) => setFxRate(event.target.value)}
+                    required
+                    value={fxRate}
+                  />
+                </Field>
+              ) : (
+                <input name="fxRate" type="hidden" value="" />
+              )}
+              <Field error={receiptState.fieldErrors?.notes} label="Notes">
+                <input
+                  className={inputClassName}
+                  name="notes"
+                  onChange={(event) => setReceiptNotes(event.target.value)}
+                  value={receiptNotes}
+                />
+              </Field>
+              <div className="flex items-end gap-3 sm:col-span-2">
+                <SubmitButton pending={receiptPending}>
+                  Save receipt
+                </SubmitButton>
+                <ActionFeedback state={receiptState} />
+              </div>
+            </form>
+          </EditorDrawer>
         ) : null}
 
         <div className="mt-3 grid gap-2 lg:grid-cols-2">

@@ -15,8 +15,10 @@ function monthLabel(month: string): string {
 }
 
 function horizonHref(baseHref: string, horizon: CashFlowHorizon): string {
-  const separator = baseHref.includes("?") ? "&" : "?";
-  return `${baseHref}${separator}horizon=${horizon}`;
+  const [pathname, queryString] = baseHref.split("?");
+  const query = new URLSearchParams(queryString);
+  query.set("horizon", horizon);
+  return `${pathname}?${query}`;
 }
 
 export function CashFlowPanel({

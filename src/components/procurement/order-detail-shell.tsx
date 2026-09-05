@@ -1,5 +1,6 @@
 "use client";
 
+import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
 import { Pencil } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
@@ -25,7 +26,13 @@ export function OrderDetailShell({
   if (editing) {
     return (
       <OrderForm
-        onCancel={() => setEditing(false)}
+        onCancel={() => {
+          if (
+            !hasUnsavedDrafts() ||
+            window.confirm("Discard your unsaved Order changes?")
+          )
+            setEditing(false);
+        }}
         onSaved={() => setEditing(false)}
         options={options}
         order={order}
@@ -36,7 +43,7 @@ export function OrderDetailShell({
     <div className="relative space-y-6">
       {canEdit ? (
         <Button
-          className="absolute top-4 right-4 z-10"
+          className="float-right ml-4"
           onClick={() => setEditing(true)}
           type="button"
           variant="outline"

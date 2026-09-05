@@ -2,6 +2,7 @@
 
 import Decimal from "decimal.js";
 import Link from "next/link";
+import { IntakeReviewLayout } from "@/components/intake/intake-review-layout";
 import { useActionState, useCallback, useState } from "react";
 
 import {
@@ -251,7 +252,7 @@ export function QuoteReview({
   if (state.status === "success" && state.orderId) {
     return (
       <section className="bg-card rounded-lg border p-5">
-        <h2 className="text-base font-semibold">Quote import saved</h2>
+        <h2 className="text-base font-semibold">Supplier Order import saved</h2>
         <p className="text-muted-foreground mt-2 text-sm">{state.message}</p>
         <Button asChild className="mt-4">
           <Link href={`/orders/${state.orderId}`}>Open Supplier Order</Link>
@@ -261,810 +262,833 @@ export function QuoteReview({
   }
 
   return (
-    <div className="space-y-5">
-      <section className="bg-card rounded-lg border p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <IntakeStageHeader
-            description={`${review.originalFilename} · ${review.provider} / ${review.model}`}
-            stage={2}
-            title="Review and correct"
-          />
-          <p className="text-positive text-sm" role="status">
-            Source file released after processing
-          </p>
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <ExtractedFact
-            label="Supplier legal name"
-            observation={extraction.supplier.legalName}
-          />
-          <ExtractedFact
-            label="Supplier display name"
-            observation={extraction.supplier.displayName}
-          />
-          <ExtractedFact
-            label="Supplier VAT number"
-            observation={extraction.supplier.vatNumber}
-          />
-          <ExtractedFact
-            label="Supplier address"
-            observation={extraction.supplier.address}
-          />
-          <ExtractedFact
-            label="Supplier email"
-            observation={extraction.supplier.email}
-          />
-          <ExtractedFact
-            label="Supplier phone"
-            observation={extraction.supplier.phone}
-          />
-          <ExtractedFact
-            label="Supplier document reference"
-            observation={extraction.quote.reference}
-          />
-          <ExtractedFact
-            displayValue={formatDateOnly(extraction.quote.quoteDate.value)}
-            label="Supplier document date"
-            observation={extraction.quote.quoteDate}
-          />
-          <ExtractedFact
-            displayValue={formatDateOnly(extraction.quote.validityDate.value)}
-            label="Validity date"
-            observation={extraction.quote.validityDate}
-          />
-          <ExtractedFact
-            label="Currency"
-            observation={extraction.quote.currencyCode}
-          />
-          <ExtractedFact
-            label="Lead-time wording"
-            observation={extraction.leadTime.raw}
-          />
-          <ExtractedFact
-            label="Production-time wording"
-            observation={extraction.leadTime.productionTimeRaw}
-          />
-          <ExtractedFact
-            label="Expected-delivery wording"
-            observation={extraction.leadTime.expectedDeliveryRaw}
-          />
-          <ExtractedFact
-            displayValue={formatDateOnly(
-              extraction.leadTime.expectedDeliveryDate.value,
-            )}
-            label="Expected-delivery date"
-            observation={extraction.leadTime.expectedDeliveryDate}
-          />
-          <ExtractedFact
-            displayValue={moneyDisplay(extraction.financials.goodsSubtotalHt)}
-            label="Goods subtotal HT"
-            observation={extraction.financials.goodsSubtotalHt}
-          />
-          <ExtractedFact
-            displayValue={moneyDisplay(extraction.financials.freightHt)}
-            label="Freight HT"
-            observation={extraction.financials.freightHt}
-          />
-          <ExtractedFact
-            label="Freight relationship to total"
-            observation={extraction.financials.freightRelationToTotal}
-          />
-          <ExtractedFact
-            displayValue={moneyDisplay(extraction.financials.otherChargesHt)}
-            label="Other charges HT"
-            observation={extraction.financials.otherChargesHt}
-          />
-          <ExtractedFact
-            displayValue={moneyDisplay(extraction.financials.totalHt)}
-            label="Total HT"
-            observation={extraction.financials.totalHt}
-          />
-          <ExtractedFact
-            displayValue={moneyDisplay(extraction.financials.totalVat)}
-            label="Total VAT"
-            observation={extraction.financials.totalVat}
-          />
-          <ExtractedFact
-            displayValue={moneyDisplay(extraction.financials.totalTtc)}
-            label="Total TTC"
-            observation={extraction.financials.totalTtc}
-          />
-          <ExtractedFact
-            label="Payment terms wording"
-            observation={extraction.paymentTerms.raw}
-          />
-        </div>
-        {extraction.financials.vatLines.length > 0 ? (
-          <div className="mt-4">
-            <h3 className="text-sm font-semibold">Observed VAT lines</h3>
-            <div className="mt-2 grid gap-3 md:grid-cols-3">
-              {extraction.financials.vatLines.map((line, index) => (
-                <div
-                  className="bg-background grid gap-2 rounded-md border p-3"
-                  key={`${line.label.value ?? "VAT"}-${index}`}
-                >
-                  <p className="text-xs font-semibold">
-                    {line.label.value ?? `VAT line ${index + 1}`}
-                  </p>
-                  <p className="text-sm">
-                    Base: {moneyDisplay(line.taxableBase) ?? "—"}
-                  </p>
-                  <p className="text-sm">
-                    Rate:{" "}
-                    {line.rate.status === "EXTRACTED" && line.rate.value
-                      ? formatRate(line.rate.value)
-                      : "—"}
-                  </p>
-                  <p className="text-sm">
-                    Amount: {moneyDisplay(line.amount) ?? "—"}
-                  </p>
-                </div>
-              ))}
+    <IntakeReviewLayout
+      evidence={
+        <>
+          <section className="bg-card rounded-lg border p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <IntakeStageHeader
+                description={review.originalFilename}
+                stage={2}
+                title="Review and correct"
+              />
+              <p className="text-positive text-sm" role="status">
+                Source file released after processing
+              </p>
             </div>
-          </div>
-        ) : null}
-        {review.proposal.warnings.length ? (
-          <IntakeWarning>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-              {review.proposal.warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
-          </IntakeWarning>
-        ) : null}
-      </section>
-
-      <QuoteSupplierCreationForm
-        currencies={options.currencies}
-        extraction={extraction}
-        fallbackCurrencyCode={
-          project?.reportingCurrencyCode ?? options.currencies[0]?.code ?? "EUR"
-        }
-        onSupplierSelected={selectSupplier}
-      />
-
-      <form className="space-y-5" onSubmit={onSubmit}>
-        <input name="importRequestId" type="hidden" value={review.requestId} />
-        <input name="projectId" type="hidden" value={review.projectId} />
-        <input
-          name="originalFilename"
-          type="hidden"
-          value={review.originalFilename}
-        />
-        <input
-          name="leadTimeRaw"
-          type="hidden"
-          value={extraction.leadTime.raw.value ?? ""}
-        />
-        <input
-          name="paymentTermsRaw"
-          type="hidden"
-          value={extraction.paymentTerms.raw.value ?? ""}
-        />
-        <section className="bg-card rounded-lg border p-4 sm:p-5">
-          <h2 className="text-sm font-semibold">Destination</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Project
-            <span aria-hidden="true" className="text-destructive ml-1">
-              *
-            </span>{" "}
-            is locked to {project?.name ?? "the selected Project"}. Choose
-            explicitly whether to create or update.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-4 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                checked={actionType === "CREATE"}
-                name="action"
-                onChange={() => {
-                  setActionType("CREATE");
-                  setApplyBuildings(true);
-                  setApplyCurrency(true);
-                }}
-                type="radio"
-                value="CREATE"
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+              <ExtractedFact
+                label="Supplier legal name"
+                observation={extraction.supplier.legalName}
               />
-              Create Draft Supplier Order
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                checked={actionType === "UPDATE"}
-                name="action"
-                onChange={() => {
-                  setActionType("UPDATE");
-                  setApplyBuildings(false);
-                  setApplyCurrency(financial.currencyCode !== null);
-                }}
-                type="radio"
-                value="UPDATE"
+              <ExtractedFact
+                label="Supplier display name"
+                observation={extraction.supplier.displayName}
               />
-              Update existing Supplier Order
-            </label>
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {actionType === "CREATE" ? (
-              <Field
-                error={fieldErrors.orderNumber}
-                label="Internal Supplier Order reference"
-                required
-              >
+              <ExtractedFact
+                label="Supplier VAT number"
+                observation={extraction.supplier.vatNumber}
+              />
+              <ExtractedFact
+                label="Supplier address"
+                observation={extraction.supplier.address}
+              />
+              <ExtractedFact
+                label="Supplier email"
+                observation={extraction.supplier.email}
+              />
+              <ExtractedFact
+                label="Supplier phone"
+                observation={extraction.supplier.phone}
+              />
+              <ExtractedFact
+                label="Supplier document reference"
+                observation={extraction.quote.reference}
+              />
+              <ExtractedFact
+                displayValue={formatDateOnly(extraction.quote.quoteDate.value)}
+                label="Supplier document date"
+                observation={extraction.quote.quoteDate}
+              />
+              <ExtractedFact
+                displayValue={formatDateOnly(
+                  extraction.quote.validityDate.value,
+                )}
+                label="Validity date"
+                observation={extraction.quote.validityDate}
+              />
+              <ExtractedFact
+                label="Currency"
+                observation={extraction.quote.currencyCode}
+              />
+              <ExtractedFact
+                label="Lead-time wording"
+                observation={extraction.leadTime.raw}
+              />
+              <ExtractedFact
+                label="Production-time wording"
+                observation={extraction.leadTime.productionTimeRaw}
+              />
+              <ExtractedFact
+                label="Expected-delivery wording"
+                observation={extraction.leadTime.expectedDeliveryRaw}
+              />
+              <ExtractedFact
+                displayValue={formatDateOnly(
+                  extraction.leadTime.expectedDeliveryDate.value,
+                )}
+                label="Expected-delivery date"
+                observation={extraction.leadTime.expectedDeliveryDate}
+              />
+              <ExtractedFact
+                displayValue={moneyDisplay(
+                  extraction.financials.goodsSubtotalHt,
+                )}
+                label="Goods subtotal HT"
+                observation={extraction.financials.goodsSubtotalHt}
+              />
+              <ExtractedFact
+                displayValue={moneyDisplay(extraction.financials.freightHt)}
+                label="Freight HT"
+                observation={extraction.financials.freightHt}
+              />
+              <ExtractedFact
+                label="Freight relationship to total"
+                observation={extraction.financials.freightRelationToTotal}
+              />
+              <ExtractedFact
+                displayValue={moneyDisplay(
+                  extraction.financials.otherChargesHt,
+                )}
+                label="Other charges HT"
+                observation={extraction.financials.otherChargesHt}
+              />
+              <ExtractedFact
+                displayValue={moneyDisplay(extraction.financials.totalHt)}
+                label="Total HT"
+                observation={extraction.financials.totalHt}
+              />
+              <ExtractedFact
+                displayValue={moneyDisplay(extraction.financials.totalVat)}
+                label="Total VAT"
+                observation={extraction.financials.totalVat}
+              />
+              <ExtractedFact
+                displayValue={moneyDisplay(extraction.financials.totalTtc)}
+                label="Total TTC"
+                observation={extraction.financials.totalTtc}
+              />
+              <ExtractedFact
+                label="Payment terms wording"
+                observation={extraction.paymentTerms.raw}
+              />
+            </div>
+            {extraction.financials.vatLines.length > 0 ? (
+              <div className="mt-4">
+                <h3 className="text-sm font-semibold">Observed VAT lines</h3>
+                <div className="mt-2 grid gap-3 md:grid-cols-3">
+                  {extraction.financials.vatLines.map((line, index) => (
+                    <div
+                      className="bg-background grid gap-2 rounded-md border p-3"
+                      key={`${line.label.value ?? "VAT"}-${index}`}
+                    >
+                      <p className="text-xs font-semibold">
+                        {line.label.value ?? `VAT line ${index + 1}`}
+                      </p>
+                      <p className="text-sm">
+                        Base: {moneyDisplay(line.taxableBase) ?? "—"}
+                      </p>
+                      <p className="text-sm">
+                        Rate:{" "}
+                        {line.rate.status === "EXTRACTED" && line.rate.value
+                          ? formatRate(line.rate.value)
+                          : "—"}
+                      </p>
+                      <p className="text-sm">
+                        Amount: {moneyDisplay(line.amount) ?? "—"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {review.proposal.warnings.length ? (
+              <IntakeWarning>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                  {review.proposal.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </IntakeWarning>
+            ) : null}
+          </section>
+          <QuoteSupplierCreationForm
+            currencies={options.currencies}
+            extraction={extraction}
+            fallbackCurrencyCode={
+              project?.reportingCurrencyCode ??
+              options.currencies[0]?.code ??
+              "EUR"
+            }
+            onSupplierSelected={selectSupplier}
+          />
+        </>
+      }
+    >
+      {
+        <form className="space-y-5" onSubmit={onSubmit}>
+          <input
+            name="importRequestId"
+            type="hidden"
+            value={review.requestId}
+          />
+          <input name="projectId" type="hidden" value={review.projectId} />
+          <input
+            name="originalFilename"
+            type="hidden"
+            value={review.originalFilename}
+          />
+          <input
+            name="leadTimeRaw"
+            type="hidden"
+            value={extraction.leadTime.raw.value ?? ""}
+          />
+          <input
+            name="paymentTermsRaw"
+            type="hidden"
+            value={extraction.paymentTerms.raw.value ?? ""}
+          />
+          <section className="bg-card rounded-lg border p-4 sm:p-5">
+            <h2 className="text-sm font-semibold">Destination</h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Project
+              <span aria-hidden="true" className="text-destructive ml-1">
+                *
+              </span>{" "}
+              is locked to {project?.name ?? "the selected Project"}. Choose
+              explicitly whether to create or update.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-4 text-sm">
+              <label className="flex items-center gap-2">
                 <input
-                  aria-invalid={Boolean(fieldErrors.orderNumber) || undefined}
-                  className={inputWithError("orderNumber")}
-                  name="orderNumber"
-                  onChange={(event) => setOrderNumber(event.target.value)}
-                  required
-                  value={orderNumber}
+                  checked={actionType === "CREATE"}
+                  name="action"
+                  onChange={() => {
+                    setActionType("CREATE");
+                    setApplyBuildings(true);
+                    setApplyCurrency(true);
+                  }}
+                  type="radio"
+                  value="CREATE"
                 />
-              </Field>
-            ) : (
-              <div className="md:col-span-2">
+                Create Draft Supplier Order
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  checked={actionType === "UPDATE"}
+                  name="action"
+                  onChange={() => {
+                    setActionType("UPDATE");
+                    setApplyBuildings(false);
+                    setApplyCurrency(financial.currencyCode !== null);
+                  }}
+                  type="radio"
+                  value="UPDATE"
+                />
+                Update existing Supplier Order
+              </label>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-2">
+              {actionType === "CREATE" ? (
                 <Field
-                  error={fieldErrors.orderId}
-                  label="Existing Supplier Order in this Project"
+                  error={fieldErrors.orderNumber}
+                  label="Internal Supplier Order reference"
                   required
                 >
-                  <select
-                    aria-invalid={Boolean(fieldErrors.orderId) || undefined}
-                    className={inputWithError("orderId")}
-                    name="orderId"
+                  <input
+                    aria-invalid={Boolean(fieldErrors.orderNumber) || undefined}
+                    className={inputWithError("orderNumber")}
+                    name="orderNumber"
+                    onChange={(event) => setOrderNumber(event.target.value)}
+                    required
+                    value={orderNumber}
+                  />
+                </Field>
+              ) : (
+                <div className="md:col-span-2">
+                  <Field
+                    error={fieldErrors.orderId}
+                    label="Existing Supplier Order in this Project"
                     required
                   >
-                    <option value="">Choose Supplier Order</option>
-                    {review.orders.map((order) => (
-                      <option key={order.id} value={order.id}>
-                        {order.orderNumber} · {order.packageName}
+                    <select
+                      aria-invalid={Boolean(fieldErrors.orderId) || undefined}
+                      className={inputWithError("orderId")}
+                      name="orderId"
+                      required
+                    >
+                      <option value="">Choose Supplier Order</option>
+                      {review.orders.map((order) => (
+                        <option key={order.id} value={order.id}>
+                          {order.orderNumber} · {order.packageName}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              )}
+              <Field error={fieldErrors.supplierId} label="Supplier" required>
+                <select
+                  aria-invalid={Boolean(fieldErrors.supplierId) || undefined}
+                  className={inputWithError("supplierId")}
+                  name="supplierId"
+                  onChange={(event) =>
+                    setSelectedSupplierId(event.target.value)
+                  }
+                  required
+                  value={selectedSupplierId}
+                >
+                  <option value="">Choose Supplier</option>
+                  {selectableSuppliers.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.displayName}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <div className="text-muted-foreground self-end pb-2 text-xs">
+                Match: {formatEnumLabel(review.supplierMatch.status)}
+                {review.supplierMatch.basis
+                  ? ` by ${formatEnumLabel(review.supplierMatch.basis).toLowerCase()}`
+                  : ""}
+              </div>
+            </div>
+            {project?.buildings.length ? (
+              <fieldset className="mt-4">
+                <legend className="text-sm font-medium">Buildings</legend>
+                <label className="mt-2 flex items-center gap-2 text-xs font-medium">
+                  <input
+                    checked={applyBuildings}
+                    name="applyBuildings"
+                    onChange={(event) =>
+                      setApplyBuildings(event.target.checked)
+                    }
+                    type="checkbox"
+                  />
+                  Apply this Building selection (leave unchecked on update to
+                  preserve existing Buildings)
+                </label>
+                <div className="mt-2 flex flex-wrap gap-3">
+                  {project.buildings
+                    .filter((building) => building.isActive)
+                    .map((building) => (
+                      <label
+                        className="flex items-center gap-2 text-sm"
+                        key={building.id}
+                      >
+                        <input
+                          name="buildingIds"
+                          type="checkbox"
+                          value={building.id}
+                        />
+                        {building.shortCode || building.name}
+                      </label>
+                    ))}
+                </div>
+              </fieldset>
+            ) : null}
+          </section>
+
+          <section className="bg-card rounded-lg border p-4 sm:p-5">
+            <h2 className="text-sm font-semibold">
+              Reviewed Supplier Order values
+            </h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Unchecked fields are ignored. On update, ignored or missing fields
+              preserve the existing authoritative value.
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-2">
+              <ApplyField
+                checked={financial.supplierQuoteReference !== null}
+                error={fieldErrors.supplierQuoteReference}
+                label="quote reference"
+                name="applyQuoteReference"
+              >
+                <input
+                  aria-invalid={
+                    Boolean(fieldErrors.supplierQuoteReference) || undefined
+                  }
+                  className={inputWithError("supplierQuoteReference")}
+                  defaultValue={financial.supplierQuoteReference ?? ""}
+                  name="supplierQuoteReference"
+                />
+              </ApplyField>
+              <ApplyField
+                checked={financial.quoteDate !== null}
+                error={fieldErrors.quoteDate}
+                label="quote date"
+                name="applyQuoteDate"
+              >
+                <input
+                  aria-invalid={Boolean(fieldErrors.quoteDate) || undefined}
+                  className={inputWithError("quoteDate")}
+                  defaultValue={dateOnlyToEuropeanInput(financial.quoteDate)}
+                  inputMode="numeric"
+                  maxLength={10}
+                  name="quoteDate"
+                  pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
+                  placeholder="DD/MM/YYYY"
+                  title="Enter a date as DD/MM/YYYY"
+                  type="text"
+                />
+              </ApplyField>
+              <ApplyField
+                checked={applyCurrency}
+                error={fieldErrors.orderCurrencyCode}
+                label="purchase currency"
+                name="applyCurrency"
+                onCheckedChange={(checked) =>
+                  setApplyCurrency(actionType === "CREATE" ? true : checked)
+                }
+                required={actionType === "CREATE"}
+              >
+                <select
+                  aria-invalid={
+                    Boolean(fieldErrors.orderCurrencyCode) || undefined
+                  }
+                  className={inputWithError("orderCurrencyCode")}
+                  name="orderCurrencyCode"
+                  onChange={(event) => setOrderCurrencyCode(event.target.value)}
+                  required={actionType === "CREATE"}
+                  value={orderCurrencyCode}
+                >
+                  <option value="">Choose currency</option>
+                  {options.currencies.map((currency) => (
+                    <option key={currency.code} value={currency.code}>
+                      {currency.code} · {currency.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className={`${inputClassName} mt-2`}
+                  inputMode="decimal"
+                  name="purchaseFxRate"
+                  placeholder={`FX to ${project?.reportingCurrencyCode ?? "reporting currency"}`}
+                />
+              </ApplyField>
+              <ApplyField
+                checked={applyPurchaseCost}
+                error={fieldErrors.purchaseCost}
+                label="supplier purchase HT"
+                name="applyPurchaseCost"
+                onCheckedChange={setApplyPurchaseCost}
+              >
+                <MoneyInput
+                  invalid={Boolean(fieldErrors.purchaseCost)}
+                  name="purchaseCost"
+                  onValueChange={(purchaseCost) =>
+                    setFinancialValues((current) => ({
+                      ...current,
+                      purchaseCost,
+                    }))
+                  }
+                  value={financialValues.purchaseCost}
+                />
+              </ApplyField>
+              <ApplyField
+                checked={financial.freight !== null}
+                label="freight HT"
+                name="applyFreight"
+              >
+                <MoneyInput
+                  name="freight"
+                  onValueChange={(freight) =>
+                    setFinancialValues((current) => ({ ...current, freight }))
+                  }
+                  value={financialValues.freight}
+                />
+                <input
+                  name="freightTreatment"
+                  type="hidden"
+                  value="NOT_APPLICABLE"
+                />
+                <input name="freightResaleAmount" type="hidden" value="" />
+                <p className="text-muted-foreground mt-2 text-xs">
+                  Enter 0.00 when freight is included in the Supplier price.
+                </p>
+              </ApplyField>
+              <ApplyField
+                checked={financial.miscellaneous !== null}
+                label="other procurement costs HT"
+                name="applyMiscellaneous"
+              >
+                <MoneyInput
+                  name="miscellaneous"
+                  onValueChange={(miscellaneous) =>
+                    setFinancialValues((current) => ({
+                      ...current,
+                      miscellaneous,
+                    }))
+                  }
+                  value={financialValues.miscellaneous}
+                />
+              </ApplyField>
+              <ApplyField
+                checked={financial.leadTimeWeeks !== null}
+                label="lead time"
+                name="applyLeadTime"
+              >
+                <input
+                  className={inputClassName}
+                  defaultValue={financial.leadTimeWeeks ?? ""}
+                  inputMode="numeric"
+                  name="leadTimeWeeks"
+                />
+              </ApplyField>
+              <ApplyField
+                checked={financial.expectedDeliveryDate !== null}
+                label="expected delivery date"
+                name="applyExpectedDeliveryDate"
+              >
+                <input
+                  className={inputClassName}
+                  defaultValue={dateOnlyToEuropeanInput(
+                    financial.expectedDeliveryDate,
+                  )}
+                  inputMode="numeric"
+                  maxLength={10}
+                  name="expectedDeliveryDate"
+                  pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
+                  placeholder="DD/MM/YYYY"
+                  title="Enter a date as DD/MM/YYYY"
+                  type="text"
+                />
+              </ApplyField>
+            </div>
+
+            <div className="bg-background mt-4 rounded-md border p-3">
+              <label className="flex items-center gap-2 text-xs font-medium">
+                <input
+                  checked={applyInputVat}
+                  name="applyInputVat"
+                  onChange={(event) => setApplyInputVat(event.target.checked)}
+                  type="checkbox"
+                />
+                Apply reviewed INPUT VAT
+              </label>
+              <p className="text-muted-foreground mt-1 text-xs">
+                The AI does not select legal treatment or recoverability. Those
+                management classifications require your decision.
+              </p>
+              {applyInputVat ? (
+                <p className="text-muted-foreground mt-1 text-xs">
+                  <span aria-hidden="true" className="text-destructive mr-1">
+                    *
+                  </span>
+                  Enter either a VAT rate or a VAT amount override.
+                </p>
+              ) : null}
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <Field
+                  error={fieldErrors.inputVatTreatment}
+                  label="Treatment"
+                  required={applyInputVat}
+                >
+                  <select
+                    aria-invalid={
+                      Boolean(fieldErrors.inputVatTreatment) || undefined
+                    }
+                    className={inputWithError("inputVatTreatment")}
+                    name="inputVatTreatment"
+                    onChange={(event) => {
+                      const treatment = event.target.value;
+                      setInputVatTreatment(treatment);
+                      if (!inputVatRecoverabilityApplies(treatment))
+                        setInputVatRecoverablePercent("");
+                    }}
+                    required={applyInputVat}
+                    value={inputVatTreatment}
+                  >
+                    <option value="">Choose</option>
+                    {options.vatTreatments.map((item) => (
+                      <option key={item} value={item}>
+                        {formatEnumLabel(item)}
                       </option>
                     ))}
                   </select>
                 </Field>
-              </div>
-            )}
-            <Field error={fieldErrors.supplierId} label="Supplier" required>
-              <select
-                aria-invalid={Boolean(fieldErrors.supplierId) || undefined}
-                className={inputWithError("supplierId")}
-                name="supplierId"
-                onChange={(event) => setSelectedSupplierId(event.target.value)}
-                required
-                value={selectedSupplierId}
-              >
-                <option value="">Choose Supplier</option>
-                {selectableSuppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.displayName}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <div className="text-muted-foreground self-end pb-2 text-xs">
-              Match: {formatEnumLabel(review.supplierMatch.status)}
-              {review.supplierMatch.basis
-                ? ` by ${formatEnumLabel(review.supplierMatch.basis).toLowerCase()}`
-                : ""}
-            </div>
-          </div>
-          {project?.buildings.length ? (
-            <fieldset className="mt-4">
-              <legend className="text-sm font-medium">Buildings</legend>
-              <label className="mt-2 flex items-center gap-2 text-xs font-medium">
-                <input
-                  checked={applyBuildings}
-                  name="applyBuildings"
-                  onChange={(event) => setApplyBuildings(event.target.checked)}
-                  type="checkbox"
-                />
-                Apply this Building selection (leave unchecked on update to
-                preserve existing Buildings)
-              </label>
-              <div className="mt-2 flex flex-wrap gap-3">
-                {project.buildings
-                  .filter((building) => building.isActive)
-                  .map((building) => (
-                    <label
-                      className="flex items-center gap-2 text-sm"
-                      key={building.id}
-                    >
-                      <input
-                        name="buildingIds"
-                        type="checkbox"
-                        value={building.id}
-                      />
-                      {building.shortCode || building.name}
-                    </label>
-                  ))}
-              </div>
-            </fieldset>
-          ) : null}
-        </section>
-
-        <section className="bg-card rounded-lg border p-4 sm:p-5">
-          <h2 className="text-sm font-semibold">
-            Reviewed Supplier Order values
-          </h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Unchecked fields are ignored. On update, ignored or missing fields
-            preserve the existing authoritative value.
-          </p>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <ApplyField
-              checked={financial.supplierQuoteReference !== null}
-              error={fieldErrors.supplierQuoteReference}
-              label="quote reference"
-              name="applyQuoteReference"
-            >
-              <input
-                aria-invalid={
-                  Boolean(fieldErrors.supplierQuoteReference) || undefined
-                }
-                className={inputWithError("supplierQuoteReference")}
-                defaultValue={financial.supplierQuoteReference ?? ""}
-                name="supplierQuoteReference"
-              />
-            </ApplyField>
-            <ApplyField
-              checked={financial.quoteDate !== null}
-              error={fieldErrors.quoteDate}
-              label="quote date"
-              name="applyQuoteDate"
-            >
-              <input
-                aria-invalid={Boolean(fieldErrors.quoteDate) || undefined}
-                className={inputWithError("quoteDate")}
-                defaultValue={dateOnlyToEuropeanInput(financial.quoteDate)}
-                inputMode="numeric"
-                maxLength={10}
-                name="quoteDate"
-                pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
-                placeholder="DD/MM/YYYY"
-                title="Enter a date as DD/MM/YYYY"
-                type="text"
-              />
-            </ApplyField>
-            <ApplyField
-              checked={applyCurrency}
-              error={fieldErrors.orderCurrencyCode}
-              label="purchase currency"
-              name="applyCurrency"
-              onCheckedChange={(checked) =>
-                setApplyCurrency(actionType === "CREATE" ? true : checked)
-              }
-              required={actionType === "CREATE"}
-            >
-              <select
-                aria-invalid={
-                  Boolean(fieldErrors.orderCurrencyCode) || undefined
-                }
-                className={inputWithError("orderCurrencyCode")}
-                name="orderCurrencyCode"
-                onChange={(event) => setOrderCurrencyCode(event.target.value)}
-                required={actionType === "CREATE"}
-                value={orderCurrencyCode}
-              >
-                <option value="">Choose currency</option>
-                {options.currencies.map((currency) => (
-                  <option key={currency.code} value={currency.code}>
-                    {currency.code} · {currency.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                className={`${inputClassName} mt-2`}
-                inputMode="decimal"
-                name="purchaseFxRate"
-                placeholder={`FX to ${project?.reportingCurrencyCode ?? "reporting currency"}`}
-              />
-            </ApplyField>
-            <ApplyField
-              checked={applyPurchaseCost}
-              error={fieldErrors.purchaseCost}
-              label="supplier purchase HT"
-              name="applyPurchaseCost"
-              onCheckedChange={setApplyPurchaseCost}
-            >
-              <MoneyInput
-                invalid={Boolean(fieldErrors.purchaseCost)}
-                name="purchaseCost"
-                onValueChange={(purchaseCost) =>
-                  setFinancialValues((current) => ({
-                    ...current,
-                    purchaseCost,
-                  }))
-                }
-                value={financialValues.purchaseCost}
-              />
-            </ApplyField>
-            <ApplyField
-              checked={financial.freight !== null}
-              label="freight HT"
-              name="applyFreight"
-            >
-              <MoneyInput
-                name="freight"
-                onValueChange={(freight) =>
-                  setFinancialValues((current) => ({ ...current, freight }))
-                }
-                value={financialValues.freight}
-              />
-              <input
-                name="freightTreatment"
-                type="hidden"
-                value="NOT_APPLICABLE"
-              />
-              <input name="freightResaleAmount" type="hidden" value="" />
-              <p className="text-muted-foreground mt-2 text-xs">
-                Enter 0.00 when freight is included in the Supplier price.
-              </p>
-            </ApplyField>
-            <ApplyField
-              checked={financial.miscellaneous !== null}
-              label="other procurement costs HT"
-              name="applyMiscellaneous"
-            >
-              <MoneyInput
-                name="miscellaneous"
-                onValueChange={(miscellaneous) =>
-                  setFinancialValues((current) => ({
-                    ...current,
-                    miscellaneous,
-                  }))
-                }
-                value={financialValues.miscellaneous}
-              />
-            </ApplyField>
-            <ApplyField
-              checked={financial.leadTimeWeeks !== null}
-              label="lead time"
-              name="applyLeadTime"
-            >
-              <input
-                className={inputClassName}
-                defaultValue={financial.leadTimeWeeks ?? ""}
-                inputMode="numeric"
-                name="leadTimeWeeks"
-              />
-            </ApplyField>
-            <ApplyField
-              checked={financial.expectedDeliveryDate !== null}
-              label="expected delivery date"
-              name="applyExpectedDeliveryDate"
-            >
-              <input
-                className={inputClassName}
-                defaultValue={dateOnlyToEuropeanInput(
-                  financial.expectedDeliveryDate,
-                )}
-                inputMode="numeric"
-                maxLength={10}
-                name="expectedDeliveryDate"
-                pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
-                placeholder="DD/MM/YYYY"
-                title="Enter a date as DD/MM/YYYY"
-                type="text"
-              />
-            </ApplyField>
-          </div>
-
-          <div className="bg-background mt-4 rounded-md border p-3">
-            <label className="flex items-center gap-2 text-xs font-medium">
-              <input
-                checked={applyInputVat}
-                name="applyInputVat"
-                onChange={(event) => setApplyInputVat(event.target.checked)}
-                type="checkbox"
-              />
-              Apply reviewed INPUT VAT
-            </label>
-            <p className="text-muted-foreground mt-1 text-xs">
-              The AI does not select legal treatment or recoverability. Those
-              management classifications require your decision.
-            </p>
-            {applyInputVat ? (
-              <p className="text-muted-foreground mt-1 text-xs">
-                <span aria-hidden="true" className="text-destructive mr-1">
-                  *
-                </span>
-                Enter either a VAT rate or a VAT amount override.
-              </p>
-            ) : null}
-            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <Field
-                error={fieldErrors.inputVatTreatment}
-                label="Treatment"
-                required={applyInputVat}
-              >
-                <select
-                  aria-invalid={
-                    Boolean(fieldErrors.inputVatTreatment) || undefined
-                  }
-                  className={inputWithError("inputVatTreatment")}
-                  name="inputVatTreatment"
-                  onChange={(event) => {
-                    const treatment = event.target.value;
-                    setInputVatTreatment(treatment);
-                    if (!inputVatRecoverabilityApplies(treatment))
-                      setInputVatRecoverablePercent("");
-                  }}
-                  required={applyInputVat}
-                  value={inputVatTreatment}
-                >
-                  <option value="">Choose</option>
-                  {options.vatTreatments.map((item) => (
-                    <option key={item} value={item}>
-                      {formatEnumLabel(item)}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {showInputVatRecoverability ? (
-                <Field
-                  error={fieldErrors.inputVatRecoverableRate}
-                  label="Recoverability %"
-                  required={applyInputVat}
-                >
-                  <PercentageInput
-                    className={inputWithError("inputVatRecoverableRate")}
-                    invalid={Boolean(fieldErrors.inputVatRecoverableRate)}
-                    name="inputVatRecoverablePercent"
-                    onValueChange={setInputVatRecoverablePercent}
-                    placeholder="100.00"
+                {showInputVatRecoverability ? (
+                  <Field
+                    error={fieldErrors.inputVatRecoverableRate}
+                    label="Recoverability %"
                     required={applyInputVat}
-                    value={inputVatRecoverablePercent}
-                  />
-                </Field>
-              ) : (
-                <input
-                  name="inputVatRecoverablePercent"
-                  type="hidden"
-                  value=""
-                />
-              )}
-              <Field
-                error={fieldErrors.inputVatTaxableBase}
-                label="Taxable base HT"
-                required={applyInputVat}
-              >
-                <MoneyInput
-                  invalid={Boolean(fieldErrors.inputVatTaxableBase)}
-                  name="inputVatTaxableBase"
-                  onValueChange={(inputVatTaxableBase) =>
-                    setFinancialValues((current) => ({
-                      ...current,
-                      inputVatTaxableBase,
-                    }))
-                  }
-                  value={financialValues.inputVatTaxableBase}
-                />
-              </Field>
-              <Field error={fieldErrors.inputVatRate} label="VAT rate %">
-                <PercentageInput
-                  className={inputWithError("inputVatRate")}
-                  invalid={Boolean(fieldErrors.inputVatRate)}
-                  name="inputVatRate"
-                  onValueChange={setInputVatRate}
-                  value={inputVatRate}
-                />
-              </Field>
-              <Field
-                error={fieldErrors.inputVatAmount}
-                label="VAT amount override"
-              >
-                <MoneyInput
-                  invalid={Boolean(fieldErrors.inputVatAmount)}
-                  name="inputVatAmount"
-                  onValueChange={(inputVatAmount) =>
-                    setFinancialValues((current) => ({
-                      ...current,
-                      inputVatAmount,
-                    }))
-                  }
-                  value={financialValues.inputVatAmount}
-                />
-              </Field>
-              <Field label="VAT country">
-                <select className={inputClassName} name="inputVatCountryCode">
-                  <option value="">Not specified</option>
-                  {countries.map((country) => (
-                    <option key={country.code} value={country.code}>
-                      {country.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {inputVatTreatment === "CUSTOM" ? (
-                <div className="md:col-span-2 xl:col-span-4">
-                  <Field
-                    error={fieldErrors.inputVatCustomTreatmentNote}
-                    label="Custom VAT treatment note"
-                    required
-                  >
-                    <input
-                      aria-invalid={
-                        Boolean(fieldErrors.inputVatCustomTreatmentNote) ||
-                        undefined
-                      }
-                      className={inputWithError("inputVatCustomTreatmentNote")}
-                      name="inputVatCustomTreatmentNote"
-                      required
-                    />
-                  </Field>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </section>
-
-        {billingDocuments.length ? (
-          <section className="bg-card rounded-lg border p-4 sm:p-5">
-            <h2 className="text-sm font-semibold">
-              Optional Client Billing reconciliation
-            </h2>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Link the reviewed Supplier Order to an existing Billing Event from
-              this Project, or skip and reconcile later.
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <Field label="Client Billing Event">
-                <select
-                  className={inputClassName}
-                  name="billingDocumentId"
-                  onChange={(event) => {
-                    const selected = options.billingDocuments.find(
-                      (document) => document.id === event.target.value,
-                    );
-                    setBillingDocumentId(event.target.value);
-                    setBillingAllocatedAmount("");
-                    setBillingPercentage("");
-                    setBillingRemainderApproved(
-                      selected?.isProjectRemainderApproved ?? false,
-                    );
-                  }}
-                  value={billingDocumentId}
-                >
-                  <option value="">Skip for now</option>
-                  {billingDocuments.map((document) => (
-                    <option key={document.id} value={document.id}>
-                      {document.reference} · {document.documentType} ·{" "}
-                      {document.totalHt} {document.currencyCode}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {selectedBillingDocument ? (
-                <>
-                  <Field label="Allocation basis">
-                    <select
-                      className={inputClassName}
-                      name="billingAllocationBasis"
-                      onChange={(event) =>
-                        setBillingAllocationBasis(
-                          event.target.value as "FIXED_AMOUNT" | "PERCENTAGE",
-                        )
-                      }
-                      value={billingAllocationBasis}
-                    >
-                      <option value="FIXED_AMOUNT">Amount</option>
-                      <option value="PERCENTAGE">Percentage</option>
-                    </select>
-                  </Field>
-                  <Field
-                    error={fieldErrors.billingPercentageRate}
-                    label="% of Supplier Order"
                   >
                     <PercentageInput
-                      className={inputClassName}
-                      disabled={billingAllocationBasis !== "PERCENTAGE"}
-                      name="billingPercentageRate"
-                      onValueChange={(next) => {
-                        setBillingPercentage(next);
-                        setBillingAllocatedAmount("");
-                      }}
-                      value={billingPercentage}
+                      className={inputWithError("inputVatRecoverableRate")}
+                      invalid={Boolean(fieldErrors.inputVatRecoverableRate)}
+                      name="inputVatRecoverablePercent"
+                      onValueChange={setInputVatRecoverablePercent}
+                      placeholder="100.00"
+                      required={applyInputVat}
+                      value={inputVatRecoverablePercent}
                     />
                   </Field>
-                  <Field
-                    error={fieldErrors.billingAllocatedAmount}
-                    label={`Allocation HT (${selectedBillingDocument.currencyCode})`}
-                  >
-                    <MoneyInput
-                      disabled={billingAllocationBasis === "PERCENTAGE"}
-                      invalid={Boolean(fieldErrors.billingAllocatedAmount)}
-                      name="billingAllocatedAmount"
-                      onValueChange={(next) => {
-                        setBillingAllocatedAmount(next);
-                      }}
-                      placeholder={
-                        billingAllocationBasis === "PERCENTAGE"
-                          ? "Calculated from Supplier Order Sell HT on approval"
-                          : "0.00"
-                      }
-                      value={billingAllocatedAmount}
-                    />
-                  </Field>
-                  <div className="bg-background grid gap-2 rounded-md border p-3 text-xs sm:col-span-2 sm:grid-cols-3 xl:col-span-4">
-                    <p>
-                      Billing HT:{" "}
-                      {formatMoney(
-                        selectedBillingDocument.totalHt,
-                        selectedBillingDocument.currencyCode,
-                      )}
-                    </p>
-                    <p>
-                      Already allocated:{" "}
-                      {formatMoney(
-                        selectedBillingDocument.allocatedHt,
-                        selectedBillingDocument.currencyCode,
-                      )}
-                    </p>
-                    <p>
-                      Available:{" "}
-                      {formatMoney(
-                        Decimal.max(
-                          new Decimal(selectedBillingDocument.totalHt).minus(
-                            selectedBillingDocument.allocatedHt,
-                          ),
-                          0,
-                        ).toFixed(4),
-                        selectedBillingDocument.currencyCode,
-                      )}
-                    </p>
-                    {billingAllocationBasis === "PERCENTAGE" ? (
-                      <p className="text-muted-foreground sm:col-span-3">
-                        The percentage is of the reviewed Supplier Order Sell
-                        HT. Its allocation amount is calculated again from
-                        authoritative Supplier Order pricing when you approve.
-                      </p>
-                    ) : null}
+                ) : (
+                  <input
+                    name="inputVatRecoverablePercent"
+                    type="hidden"
+                    value=""
+                  />
+                )}
+                <Field
+                  error={fieldErrors.inputVatTaxableBase}
+                  label="Taxable base HT"
+                  required={applyInputVat}
+                >
+                  <MoneyInput
+                    invalid={Boolean(fieldErrors.inputVatTaxableBase)}
+                    name="inputVatTaxableBase"
+                    onValueChange={(inputVatTaxableBase) =>
+                      setFinancialValues((current) => ({
+                        ...current,
+                        inputVatTaxableBase,
+                      }))
+                    }
+                    value={financialValues.inputVatTaxableBase}
+                  />
+                </Field>
+                <Field error={fieldErrors.inputVatRate} label="VAT rate %">
+                  <PercentageInput
+                    className={inputWithError("inputVatRate")}
+                    invalid={Boolean(fieldErrors.inputVatRate)}
+                    name="inputVatRate"
+                    onValueChange={setInputVatRate}
+                    value={inputVatRate}
+                  />
+                </Field>
+                <Field
+                  error={fieldErrors.inputVatAmount}
+                  label="VAT amount override"
+                >
+                  <MoneyInput
+                    invalid={Boolean(fieldErrors.inputVatAmount)}
+                    name="inputVatAmount"
+                    onValueChange={(inputVatAmount) =>
+                      setFinancialValues((current) => ({
+                        ...current,
+                        inputVatAmount,
+                      }))
+                    }
+                    value={financialValues.inputVatAmount}
+                  />
+                </Field>
+                <Field label="VAT country">
+                  <select className={inputClassName} name="inputVatCountryCode">
+                    <option value="">Not specified</option>
+                    {countries.map((country) => (
+                      <option key={country.code} value={country.code}>
+                        {country.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {inputVatTreatment === "CUSTOM" ? (
+                  <div className="md:col-span-2 xl:col-span-4">
+                    <Field
+                      error={fieldErrors.inputVatCustomTreatmentNote}
+                      label="Custom VAT treatment note"
+                      required
+                    >
+                      <input
+                        aria-invalid={
+                          Boolean(fieldErrors.inputVatCustomTreatmentNote) ||
+                          undefined
+                        }
+                        className={inputWithError(
+                          "inputVatCustomTreatmentNote",
+                        )}
+                        name="inputVatCustomTreatmentNote"
+                        required
+                      />
+                    </Field>
                   </div>
-                  <label className="flex items-center gap-2 text-xs sm:col-span-2 xl:col-span-4">
-                    <input
-                      checked={billingRemainderApproved}
-                      name="billingRemainderApproved"
-                      onChange={(event) =>
-                        setBillingRemainderApproved(event.target.checked)
-                      }
-                      type="checkbox"
-                    />
-                    Approve any remaining Billing HT at Project level
-                  </label>
-                </>
-              ) : null}
+                ) : null}
+              </div>
             </div>
           </section>
-        ) : null}
 
-        {review.itemReview ? (
-          <QuoteItemReview options={options} review={review.itemReview} />
-        ) : null}
+          {billingDocuments.length ? (
+            <section className="bg-card rounded-lg border p-4 sm:p-5">
+              <h2 className="text-sm font-semibold">
+                Optional Client Billing reconciliation
+              </h2>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Link the reviewed Supplier Order to an existing Billing Event
+                from this Project, or skip and reconcile later.
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+                <Field label="Client Billing Event">
+                  <select
+                    className={inputClassName}
+                    name="billingDocumentId"
+                    onChange={(event) => {
+                      const selected = options.billingDocuments.find(
+                        (document) => document.id === event.target.value,
+                      );
+                      setBillingDocumentId(event.target.value);
+                      setBillingAllocatedAmount("");
+                      setBillingPercentage("");
+                      setBillingRemainderApproved(
+                        selected?.isProjectRemainderApproved ?? false,
+                      );
+                    }}
+                    value={billingDocumentId}
+                  >
+                    <option value="">Skip for now</option>
+                    {billingDocuments.map((document) => (
+                      <option key={document.id} value={document.id}>
+                        {document.reference} · {document.documentType} ·{" "}
+                        {document.totalHt} {document.currencyCode}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {selectedBillingDocument ? (
+                  <>
+                    <Field label="Allocation basis">
+                      <select
+                        className={inputClassName}
+                        name="billingAllocationBasis"
+                        onChange={(event) =>
+                          setBillingAllocationBasis(
+                            event.target.value as "FIXED_AMOUNT" | "PERCENTAGE",
+                          )
+                        }
+                        value={billingAllocationBasis}
+                      >
+                        <option value="FIXED_AMOUNT">Amount</option>
+                        <option value="PERCENTAGE">Percentage</option>
+                      </select>
+                    </Field>
+                    <Field
+                      error={fieldErrors.billingPercentageRate}
+                      label="% of Supplier Order"
+                    >
+                      <PercentageInput
+                        className={inputClassName}
+                        disabled={billingAllocationBasis !== "PERCENTAGE"}
+                        name="billingPercentageRate"
+                        onValueChange={(next) => {
+                          setBillingPercentage(next);
+                          setBillingAllocatedAmount("");
+                        }}
+                        value={billingPercentage}
+                      />
+                    </Field>
+                    <Field
+                      error={fieldErrors.billingAllocatedAmount}
+                      label={`Allocation HT (${selectedBillingDocument.currencyCode})`}
+                    >
+                      <MoneyInput
+                        disabled={billingAllocationBasis === "PERCENTAGE"}
+                        invalid={Boolean(fieldErrors.billingAllocatedAmount)}
+                        name="billingAllocatedAmount"
+                        onValueChange={(next) => {
+                          setBillingAllocatedAmount(next);
+                        }}
+                        placeholder={
+                          billingAllocationBasis === "PERCENTAGE"
+                            ? "Calculated from Supplier Order Sell HT on approval"
+                            : "0.00"
+                        }
+                        value={billingAllocatedAmount}
+                      />
+                    </Field>
+                    <div className="bg-background grid gap-2 rounded-md border p-3 text-xs sm:col-span-2 sm:grid-cols-3 xl:col-span-4">
+                      <p>
+                        Billing HT:{" "}
+                        {formatMoney(
+                          selectedBillingDocument.totalHt,
+                          selectedBillingDocument.currencyCode,
+                        )}
+                      </p>
+                      <p>
+                        Already allocated:{" "}
+                        {formatMoney(
+                          selectedBillingDocument.allocatedHt,
+                          selectedBillingDocument.currencyCode,
+                        )}
+                      </p>
+                      <p>
+                        Available:{" "}
+                        {formatMoney(
+                          Decimal.max(
+                            new Decimal(selectedBillingDocument.totalHt).minus(
+                              selectedBillingDocument.allocatedHt,
+                            ),
+                            0,
+                          ).toFixed(4),
+                          selectedBillingDocument.currencyCode,
+                        )}
+                      </p>
+                      {billingAllocationBasis === "PERCENTAGE" ? (
+                        <p className="text-muted-foreground sm:col-span-3">
+                          The percentage is of the reviewed Supplier Order Sell
+                          HT. Its allocation amount is calculated again from
+                          authoritative Supplier Order pricing when you approve.
+                        </p>
+                      ) : null}
+                    </div>
+                    <label className="flex items-center gap-2 text-xs sm:col-span-2 xl:col-span-4">
+                      <input
+                        checked={billingRemainderApproved}
+                        name="billingRemainderApproved"
+                        onChange={(event) =>
+                          setBillingRemainderApproved(event.target.checked)
+                        }
+                        type="checkbox"
+                      />
+                      Approve any remaining Billing HT at Project level
+                    </label>
+                  </>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
 
-        <PaymentScheduleEditor
-          currencyCode={paymentCurrency}
-          fieldErrors={fieldErrors}
-          initialPayments={review.proposal.payments}
-          supplierPayable={supplierPayable}
-        />
+          {review.itemReview ? (
+            <QuoteItemReview options={options} review={review.itemReview} />
+          ) : null}
 
-        <IntakeStageHeader
-          description="No authoritative record is changed until this confirmation is submitted."
-          stage={3}
-          title="Confirm and save"
-        />
+          <PaymentScheduleEditor
+            currencyCode={paymentCurrency}
+            fieldErrors={fieldErrors}
+            initialPayments={review.proposal.payments}
+            supplierPayable={supplierPayable}
+          />
 
-        {state.message ? (
-          <p
-            className="text-destructive text-sm"
-            role={state.status === "error" ? "alert" : "status"}
-          >
-            {state.message}
-          </p>
-        ) : null}
-        <SubmitButton pending={pending}>
-          {pending
-            ? "Saving reviewed quote…"
-            : "Confirm and save Supplier Order"}
-        </SubmitButton>
-      </form>
-    </div>
+          <IntakeStageHeader
+            description="No authoritative record is changed until this confirmation is submitted."
+            stage={3}
+            title="Confirm and save"
+          />
+
+          {state.message ? (
+            <p
+              className="text-destructive text-sm"
+              role={state.status === "error" ? "alert" : "status"}
+            >
+              {state.message}
+            </p>
+          ) : null}
+          <SubmitButton pending={pending}>
+            {pending
+              ? "Saving reviewed quote…"
+              : "Confirm and save Supplier Order"}
+          </SubmitButton>
+        </form>
+      }
+    </IntakeReviewLayout>
   );
 }
 
@@ -1079,6 +1103,7 @@ export function QuoteIntake({ options }: { options: QuoteIntakeOptions }) {
       <section className="bg-card rounded-lg border p-4 sm:p-5">
         <IntakeStageHeader
           description={`PDF, JPG, JPEG, or PNG up to ${MAX_QUOTE_FILE_LABEL}. The source is held only for this extraction request and is not saved.`}
+          processing={pending}
           stage={1}
           title="Upload and extract"
         />

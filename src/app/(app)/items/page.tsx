@@ -1,3 +1,5 @@
+import { PageHeader } from "@/components/layout/page-header";
+import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -86,39 +88,38 @@ export default async function ItemsPage({
   const canEdit = canEditMasterData(user.role);
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-            Operations
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">Items</h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Project-specific procurement, pricing, and logistics lines.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <ExportLink
-            entity="items"
-            queryString={queryStringFromParams(params)}
-          />
-          {canEdit ? (
-            <>
-              <Link
-                className="border-input bg-background inline-flex h-9 items-center rounded-lg border px-3 text-sm font-medium"
-                href="/items/import"
-              >
-                Import Project budget
-              </Link>
-              <Link
-                className="bg-primary text-primary-foreground inline-flex h-9 items-center rounded-lg px-3 text-sm font-medium"
-                href="/items/new"
-              >
-                Create Item
-              </Link>
-            </>
-          ) : null}
-        </div>
-      </header>
+      <PageHeader
+        title="Items"
+        description={
+          <>Project-specific procurement, pricing, and logistics lines.</>
+        }
+        actions={
+          <>
+            <div className="flex gap-2">
+              <ExportLink
+                entity="items"
+                queryString={queryStringFromParams(params)}
+              />
+              {canEdit ? (
+                <>
+                  <Link
+                    className="border-input bg-background inline-flex h-9 items-center rounded-lg border px-3 text-sm font-medium"
+                    href="/items/import"
+                  >
+                    Import Project budget
+                  </Link>
+                  <Link
+                    className="bg-primary text-primary-foreground inline-flex h-9 items-center rounded-lg px-3 text-sm font-medium"
+                    href="/items/new"
+                  >
+                    Create Item
+                  </Link>
+                </>
+              ) : null}
+            </div>
+          </>
+        }
+      />
       <nav aria-label="Item view" className="flex flex-wrap gap-2">
         {(
           [
@@ -142,7 +143,7 @@ export default async function ItemsPage({
           </Link>
         ))}
       </nav>
-      <form className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-6">
+      <FilterBar>
         <input name="view" type="hidden" value={view} />
         <FilterField label="Search">
           <input
@@ -324,7 +325,7 @@ export default async function ItemsPage({
         >
           Filter
         </button>
-      </form>
+      </FilterBar>
       <ItemTable
         canEdit={canEdit}
         items={result.items}

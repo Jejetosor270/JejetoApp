@@ -1,5 +1,7 @@
 "use client";
 
+import { EditorDrawer } from "@/components/forms/editor-drawer";
+import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
@@ -102,143 +104,160 @@ export function BillingReceiptEditor({
   return (
     <article className="rounded-md border p-3 text-sm">
       {editing ? (
-        <form
-          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
-          onSubmit={(event) => {
-            submittedDraft.current = draft;
-            onSubmit(event);
+        <EditorDrawer
+          open
+          title="Edit Client receipt"
+          onOpenChange={(open) => {
+            if (!open) {
+              setDraft(saved);
+              setEditing(false);
+            }
           }}
         >
-          <input
-            name="billingDocumentId"
-            type="hidden"
-            value={billingDocumentId}
-          />
-          <input name="id" type="hidden" value={receipt.id} />
-          <Field error={fieldErrors.receivedAt} label="Receipt date" required>
-            <input
-              className={inputClassName}
-              name="receivedAt"
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  receivedAt: event.target.value,
-                }))
-              }
-              required
-              type="date"
-              value={draft.receivedAt}
-            />
-          </Field>
-          <Field
-            error={fieldErrors.amount}
-            label={`Amount (${currencyCode})`}
-            required
+          {" "}
+          <form
+            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2"
+            onSubmit={(event) => {
+              submittedDraft.current = draft;
+              onSubmit(event);
+            }}
           >
-            <MoneyInput
-              name="amount"
-              onValueChange={(amount) =>
-                setDraft((current) => ({ ...current, amount }))
-              }
-              required
-              value={draft.amount}
-            />
-          </Field>
-          <Field
-            error={fieldErrors.installmentId}
-            label="Apply to installment (optional)"
-          >
-            <select
-              className={inputClassName}
-              name="installmentId"
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  installmentId: event.target.value,
-                }))
-              }
-              value={draft.installmentId}
-            >
-              <option value="">Billing level</option>
-              {installments.map((installment) => (
-                <option key={installment.id} value={installment.id}>
-                  {installment.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field error={fieldErrors.reference} label="Reference">
             <input
-              className={inputClassName}
-              name="reference"
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  reference: event.target.value,
-                }))
-              }
-              value={draft.reference}
+              name="billingDocumentId"
+              type="hidden"
+              value={billingDocumentId}
             />
-          </Field>
-          {needsFx ? (
-            <Field
-              error={fieldErrors.fxRate}
-              label={`FX: 1 ${currencyCode} in ${reportingCurrencyCode}`}
-              required
-            >
+            <input name="id" type="hidden" value={receipt.id} />
+            <Field error={fieldErrors.receivedAt} label="Receipt date" required>
               <input
                 className={inputClassName}
-                inputMode="decimal"
-                name="fxRate"
+                name="receivedAt"
                 onChange={(event) =>
                   setDraft((current) => ({
                     ...current,
-                    fxRate: event.target.value,
+                    receivedAt: event.target.value,
                   }))
                 }
                 required
-                value={draft.fxRate}
+                type="date"
+                value={draft.receivedAt}
               />
             </Field>
-          ) : (
-            <input name="fxRate" type="hidden" value="" />
-          )}
-          <Field error={fieldErrors.notes} label="Notes">
-            <input
-              className={inputClassName}
-              name="notes"
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  notes: event.target.value,
-                }))
-              }
-              value={draft.notes}
-            />
-          </Field>
-          <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
-            <SubmitButton pending={pending}>Save receipt</SubmitButton>
-            <Button
-              disabled={pending}
-              onClick={() => {
-                setDraft(saved);
-                setEditing(false);
-              }}
-              type="button"
-              variant="ghost"
+            <Field
+              error={fieldErrors.amount}
+              label={`Amount (${currencyCode})`}
+              required
             >
-              Cancel
-            </Button>
-          </div>
-          {state.status === "error" ? (
-            <p
-              className="text-destructive text-xs sm:col-span-2 lg:col-span-3"
-              role="alert"
+              <MoneyInput
+                name="amount"
+                onValueChange={(amount) =>
+                  setDraft((current) => ({ ...current, amount }))
+                }
+                required
+                value={draft.amount}
+              />
+            </Field>
+            <Field
+              error={fieldErrors.installmentId}
+              label="Apply to installment (optional)"
             >
-              {state.message}
-            </p>
-          ) : null}
-        </form>
+              <select
+                className={inputClassName}
+                name="installmentId"
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    installmentId: event.target.value,
+                  }))
+                }
+                value={draft.installmentId}
+              >
+                <option value="">Billing level</option>
+                {installments.map((installment) => (
+                  <option key={installment.id} value={installment.id}>
+                    {installment.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field error={fieldErrors.reference} label="Reference">
+              <input
+                className={inputClassName}
+                name="reference"
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    reference: event.target.value,
+                  }))
+                }
+                value={draft.reference}
+              />
+            </Field>
+            {needsFx ? (
+              <Field
+                error={fieldErrors.fxRate}
+                label={`FX: 1 ${currencyCode} in ${reportingCurrencyCode}`}
+                required
+              >
+                <input
+                  className={inputClassName}
+                  inputMode="decimal"
+                  name="fxRate"
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      fxRate: event.target.value,
+                    }))
+                  }
+                  required
+                  value={draft.fxRate}
+                />
+              </Field>
+            ) : (
+              <input name="fxRate" type="hidden" value="" />
+            )}
+            <Field error={fieldErrors.notes} label="Notes">
+              <input
+                className={inputClassName}
+                name="notes"
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    notes: event.target.value,
+                  }))
+                }
+                value={draft.notes}
+              />
+            </Field>
+            <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-2">
+              <SubmitButton pending={pending}>Save receipt</SubmitButton>
+              <Button
+                disabled={pending}
+                onClick={() => {
+                  if (
+                    hasUnsavedDrafts() &&
+                    !window.confirm("Discard your unsaved changes?")
+                  )
+                    return;
+                  setDraft(saved);
+                  setEditing(false);
+                }}
+                type="button"
+                variant="ghost"
+              >
+                Cancel
+              </Button>
+            </div>
+            {state.status === "error" ? (
+              <p
+                className="text-destructive text-xs sm:col-span-2 lg:col-span-3"
+                role="alert"
+              >
+                {state.message}
+              </p>
+            ) : null}
+          </form>
+        </EditorDrawer>
       ) : (
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

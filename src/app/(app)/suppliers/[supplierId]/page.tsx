@@ -1,3 +1,4 @@
+import { WorkspaceTabs } from "@/components/layout/workspace-tabs";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -53,92 +54,132 @@ export default async function SupplierDetailPage({
         status={supplier.isActive ? "ACTIVE" : "ARCHIVED"}
         title={supplier.displayName}
       />
-      <SupplierDetailEditor
-        canEdit={canEditMasterData(user.role)}
-        currencies={currencies}
-        supplier={supplier}
+      <WorkspaceTabs
+        label="Supplier"
+        tabs={[
+          {
+            id: "overview",
+            label: "Overview",
+            content: (
+              <div className="space-y-6">
+                <SupplierDetailEditor
+                  canEdit={canEditMasterData(user.role)}
+                  currencies={currencies}
+                  supplier={supplier}
+                />
+                <details className="border-t pt-4">
+                  <summary className="text-sm font-semibold">
+                    Recent activity
+                  </summary>
+                  <div className="mt-3 divide-y text-sm">
+                    {activity.map((event) => (
+                      <p className="py-2" key={event.id}>
+                        {event.summary}{" "}
+                        <span className="text-muted-foreground">
+                          · {event.actorName} ·{" "}
+                          {formatTimestamp(event.occurredAt)}
+                        </span>
+                      </p>
+                    ))}
+                    {activity.length === 0 ? (
+                      <p className="text-muted-foreground py-4">
+                        No activity recorded.
+                      </p>
+                    ) : null}
+                  </div>
+                </details>
+              </div>
+            ),
+          },
+          {
+            id: "orders",
+            label: "Supplier Orders",
+            content: (
+              <section className="bg-card rounded-lg border p-4">
+                <h2 className="text-sm font-semibold">Supplier Orders</h2>
+                <div className="mt-3 divide-y text-sm">
+                  {orders.map((order) => (
+                    <Link
+                      className="grid gap-2 py-2 hover:underline sm:grid-cols-4"
+                      href={`/orders/${order.id}`}
+                      key={order.id}
+                    >
+                      <span className="font-mono">{order.orderNumber}</span>
+                      <span>{order.project.name}</span>
+                      <span>{formatEnumLabel(order.status)}</span>
+                      <span className="financial-figure text-right">
+                        {formatMoney(
+                          order.costs.purchaseCost,
+                          order.orderCurrencyCode,
+                        )}
+                      </span>
+                    </Link>
+                  ))}
+                  {orders.length === 0 ? (
+                    <p className="text-muted-foreground py-4">
+                      No Supplier Orders.
+                    </p>
+                  ) : null}
+                </div>
+              </section>
+            ),
+          },
+          {
+            id: "payments",
+            label: "Payments",
+            content: (
+              <section className="bg-card rounded-lg border p-4">
+                <h2 className="text-sm font-semibold">Payments</h2>
+                <div className="mt-3 divide-y text-sm">
+                  {installments.map((installment) => (
+                    <div
+                      className="grid gap-2 py-2 sm:grid-cols-6"
+                      key={installment.id}
+                    >
+                      <Link
+                        className="font-mono hover:underline"
+                        href={`/orders/${installment.orderId}#payments`}
+                      >
+                        {installment.orderNumber}
+                      </Link>
+                      <span>{installment.label}</span>
+                      <span>{formatDateOnly(installment.dueDate)}</span>
+                      <span className="financial-figure text-right">
+                        {formatMoney(
+                          installment.paidAmount,
+                          installment.currencyCode,
+                        )}{" "}
+                        paid
+                      </span>
+                      <span className="financial-figure text-right">
+                        {formatMoney(
+                          installment.outstandingAmount,
+                          installment.currencyCode,
+                        )}{" "}
+                        outstanding
+                      </span>
+                      <Badge
+                        variant={
+                          installment.status === "OVERDUE"
+                            ? "destructive"
+                            : "outline"
+                        }
+                      >
+                        {formatEnumLabel(installment.status)}
+                      </Badge>
+                    </div>
+                  ))}
+                  {installments.length === 0 ? (
+                    <p className="text-muted-foreground py-4">
+                      No Supplier payment schedule.
+                    </p>
+                  ) : null}
+                </div>
+              </section>
+            ),
+          },
+        ]}
       />
-      <section className="bg-card rounded-lg border p-4">
-        <h2 className="text-sm font-semibold">Supplier Orders</h2>
-        <div className="mt-3 divide-y text-sm">
-          {orders.map((order) => (
-            <Link
-              className="grid gap-2 py-2 hover:underline sm:grid-cols-4"
-              href={`/orders/${order.id}`}
-              key={order.id}
-            >
-              <span className="font-mono">{order.orderNumber}</span>
-              <span>{order.project.name}</span>
-              <span>{formatEnumLabel(order.status)}</span>
-              <span className="financial-figure text-right">
-                {formatMoney(order.costs.purchaseCost, order.orderCurrencyCode)}
-              </span>
-            </Link>
-          ))}
-          {orders.length === 0 ? (
-            <p className="text-muted-foreground py-4">No Supplier Orders.</p>
-          ) : null}
-        </div>
-      </section>
-      <section className="bg-card rounded-lg border p-4">
-        <h2 className="text-sm font-semibold">Payments</h2>
-        <div className="mt-3 divide-y text-sm">
-          {installments.map((installment) => (
-            <div
-              className="grid gap-2 py-2 sm:grid-cols-6"
-              key={installment.id}
-            >
-              <Link
-                className="font-mono hover:underline"
-                href={`/orders/${installment.orderId}#payments`}
-              >
-                {installment.orderNumber}
-              </Link>
-              <span>{installment.label}</span>
-              <span>{formatDateOnly(installment.dueDate)}</span>
-              <span className="financial-figure text-right">
-                {formatMoney(installment.paidAmount, installment.currencyCode)}{" "}
-                paid
-              </span>
-              <span className="financial-figure text-right">
-                {formatMoney(
-                  installment.outstandingAmount,
-                  installment.currencyCode,
-                )}{" "}
-                outstanding
-              </span>
-              <Badge
-                variant={
-                  installment.status === "OVERDUE" ? "destructive" : "outline"
-                }
-              >
-                {formatEnumLabel(installment.status)}
-              </Badge>
-            </div>
-          ))}
-          {installments.length === 0 ? (
-            <p className="text-muted-foreground py-4">
-              No Supplier payment schedule.
-            </p>
-          ) : null}
-        </div>
-      </section>
-      <section className="bg-card rounded-lg border p-4">
-        <h2 className="text-sm font-semibold">Activity</h2>
-        <div className="mt-3 divide-y text-sm">
-          {activity.map((event) => (
-            <p className="py-2" key={event.id}>
-              {event.summary}{" "}
-              <span className="text-muted-foreground">
-                · {event.actorName} · {formatTimestamp(event.occurredAt)}
-              </span>
-            </p>
-          ))}
-          {activity.length === 0 ? (
-            <p className="text-muted-foreground py-4">No activity recorded.</p>
-          ) : null}
-        </div>
-      </section>
     </div>
   );
 }

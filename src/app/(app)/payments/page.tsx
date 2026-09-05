@@ -1,3 +1,6 @@
+import { PageHeader } from "@/components/layout/page-header";
+import { ViewShortcuts } from "@/components/listing/view-shortcuts";
+import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
 
 import { PaymentInstallmentTable } from "@/components/payments/payment-installment-table";
@@ -80,22 +83,36 @@ export default async function PaymentsPage({
   exportQuery.set("direction", PaymentDirection.SUPPLIER_PAYMENT);
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-            Operations
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            Supplier Payments
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
+      <PageHeader
+        title="Supplier Payments"
+        description={
+          <>
             Supplier cash-out installments, settlements, and outstanding
             balances.
-          </p>
-        </div>
-        <ExportLink entity="payments" queryString={exportQuery.toString()} />
-      </header>
-      <form className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          </>
+        }
+        actions={
+          <>
+            <ExportLink
+              entity="payments"
+              queryString={exportQuery.toString()}
+            />
+          </>
+        }
+      />
+      <ViewShortcuts
+        pathname="/payments"
+        queryString={queryStringFromParams(params)}
+        field="status"
+        options={[
+          { label: "All", value: "" },
+          { label: "Overdue", value: "OVERDUE" },
+          { label: "Due", value: "DUE" },
+          { label: "Upcoming", value: "UPCOMING" },
+          { label: "Paid", value: "PAID" },
+        ]}
+      />
+      <FilterBar>
         <FilterField label="Supplier Order">
           <select
             className={filterControlClassName}
@@ -211,7 +228,7 @@ export default async function PaymentsPage({
             Filter
           </button>
         </div>
-      </form>
+      </FilterBar>
       <PaymentInstallmentTable
         canEdit={canEditMasterData(user.role)}
         installments={result.items.map((item) => ({

@@ -54,41 +54,41 @@
 }
 
 :root {
-  --background: oklch(0.985 0.003 264);
-  --foreground: oklch(0.23 0.018 264);
+  --background: #ffffff;
+  --foreground: #20242c;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.23 0.018 264);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.23 0.018 264);
-  --primary: oklch(0.39 0.11 255);
-  --primary-foreground: oklch(0.985 0.004 255);
+  --primary: #315b85;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.955 0.008 264);
   --secondary-foreground: oklch(0.31 0.025 264);
-  --muted: oklch(0.96 0.006 264);
-  --muted-foreground: oklch(0.53 0.018 264);
-  --accent: oklch(0.945 0.018 255);
-  --accent-foreground: oklch(0.34 0.08 255);
-  --destructive: oklch(0.577 0.245 27.325);
-  --positive: oklch(0.49 0.13 155);
+  --muted: #f7f8fa;
+  --muted-foreground: #5b6472;
+  --accent: #eaf0f7;
+  --accent-foreground: #315b85;
+  --destructive: #a63232;
+  --positive: #24634a;
   --positive-muted: oklch(0.96 0.03 155);
-  --warning: oklch(0.57 0.13 72);
+  --warning: #805500;
   --warning-muted: oklch(0.97 0.035 85);
-  --border: oklch(0.9 0.01 264);
-  --input: oklch(0.9 0.01 264);
-  --ring: oklch(0.58 0.12 255);
+  --border: #e5e7eb;
+  --input: #838d9c;
+  --ring: #315b85;
   --chart-1: oklch(0.55 0.14 255);
   --chart-2: oklch(0.58 0.13 155);
   --chart-3: oklch(0.64 0.13 75);
   --chart-4: oklch(0.52 0.11 310);
   --chart-5: oklch(0.56 0.1 25);
   --radius: 0.5rem;
-  --sidebar: oklch(0.965 0.008 264);
+  --sidebar: #f7f8fa;
   --sidebar-foreground: oklch(0.28 0.02 264);
   --sidebar-primary: oklch(0.39 0.11 255);
   --sidebar-primary-foreground: oklch(0.985 0.004 255);
-  --sidebar-accent: oklch(0.925 0.018 255);
-  --sidebar-accent-foreground: oklch(0.34 0.08 255);
-  --sidebar-border: oklch(0.885 0.012 264);
+  --sidebar-accent: #eaf0f7;
+  --sidebar-accent-foreground: #315b85;
+  --sidebar-border: #e5e7eb;
   --sidebar-ring: oklch(0.58 0.12 255);
 }
 
@@ -137,8 +137,24 @@
     @apply font-sans;
   }
   button,
-  a {
-    @apply focus-visible:outline-none;
+  a,
+  summary,
+  input,
+  select,
+  textarea {
+    @apply focus-visible:outline-ring focus-visible:outline-2 focus-visible:outline-offset-2;
+  }
+  h1 {
+    @apply text-[26px] leading-8;
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+  summary {
+    cursor: pointer;
+  }
+  [hidden] {
+    display: none !important;
   }
   ::selection {
     @apply bg-primary/15 text-foreground;

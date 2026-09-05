@@ -12,7 +12,7 @@ export default function WorkspaceError({
 }) {
   return (
     <div className="flex min-h-[28rem] items-center justify-center">
-      <section className="bg-card w-full max-w-lg rounded-lg border p-6 text-center shadow-sm">
+      <section className="bg-card w-full max-w-lg rounded-lg border p-6 text-center">
         <span className="bg-destructive/10 text-destructive mx-auto flex size-10 items-center justify-center rounded-full">
           <AlertTriangle aria-hidden="true" className="size-5" />
         </span>
@@ -20,8 +20,8 @@ export default function WorkspaceError({
           This view could not be loaded
         </h1>
         <p className="text-muted-foreground mt-2 text-sm leading-6">
-          The error was contained. Try the request again; no financial data was
-          changed.
+          Try loading this view again. If this followed a save, review the
+          record before repeating the action.
         </p>
         <Button type="button" className="mt-5" onClick={reset}>
           <RotateCcw aria-hidden="true" data-icon="inline-start" />

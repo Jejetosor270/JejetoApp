@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/layout/page-header";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
@@ -15,13 +16,14 @@ export default async function BudgetImportPage() {
   if (!canEditMasterData(user.role)) redirect("/items");
   return (
     <div className="space-y-5">
-      <header>
-        <p className="text-primary text-xs font-medium uppercase">Items</p>
-        <h1 className="mt-2 text-2xl font-semibold">Import Project budget</h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Parse, match, review, and explicitly confirm up to 500 XLSX lines.
-        </p>
-      </header>
+      <PageHeader
+        title="Import Project budget"
+        description={
+          <>
+            Parse, match, review, and explicitly confirm up to 500 XLSX lines.
+          </>
+        }
+      />
       <BudgetImport options={options} />
     </div>
   );

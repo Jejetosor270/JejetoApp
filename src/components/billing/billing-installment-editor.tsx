@@ -1,6 +1,8 @@
 "use client";
 
 import Decimal from "decimal.js";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
+import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
@@ -142,127 +144,149 @@ export function BillingInstallmentEditor({
   return (
     <article className="rounded-md border p-3 text-sm">
       {editing ? (
-        <form
-          className="grid gap-3 sm:grid-cols-2"
-          onSubmit={(event) => {
-            submittedDraft.current = draft;
-            onSubmit(event);
+        <EditorDrawer
+          open
+          title="Edit Billing installment"
+          onOpenChange={(open) => {
+            if (!open) {
+              setDraft(saved);
+              setEditing(false);
+            }
           }}
         >
-          <input name="basis" type="hidden" value={draft.basis} />
-          <input
-            name="billingDocumentId"
-            type="hidden"
-            value={billingDocumentId}
-          />
-          <input name="id" type="hidden" value={installment.id} />
-          <Field error={fieldErrors.label} label="Label" required>
-            <input
-              className={inputClassName}
-              name="label"
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  label: event.target.value,
-                }))
-              }
-              required
-              value={draft.label}
-            />
-          </Field>
-          <Field error={fieldErrors.dueDate} label="Due date" required>
-            <input
-              className={inputClassName}
-              name="dueDate"
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  dueDate: event.target.value,
-                }))
-              }
-              required
-              type="date"
-              value={draft.dueDate}
-            />
-          </Field>
-          <Field
-            error={fieldErrors.percentageRate}
-            label="Installment %"
-            required
+          {" "}
+          <form
+            className="grid gap-3 sm:grid-cols-2"
+            onSubmit={(event) => {
+              submittedDraft.current = draft;
+              onSubmit(event);
+            }}
           >
-            <PercentageInput
-              className={inputClassName}
-              name="percentageRate"
-              onValueChange={(percentage) => {
-                setDraft((current) => ({
-                  ...current,
-                  amount:
-                    amountFromPercentage(
-                      installment.billingTotalTtc,
-                      percentage,
-                    ) ?? current.amount,
-                  basis: "PERCENTAGE",
-                  percentage,
-                }));
-              }}
-              required
-              value={draft.percentage}
-            />
-          </Field>
-          <Field
-            error={fieldErrors.scheduledAmount}
-            label="Scheduled amount"
-            required
-          >
-            <MoneyInput
-              name="scheduledAmount"
-              onValueChange={(amount) =>
-                setDraft((current) => ({
-                  ...current,
-                  amount,
-                  basis: "FIXED_AMOUNT",
-                  percentage:
-                    percentageFromAmount(installment.billingTotalTtc, amount) ??
-                    current.percentage,
-                }))
-              }
-              required
-              value={draft.amount}
-            />
-          </Field>
-          <Field error={fieldErrors.notes} label="Notes">
+            <input name="basis" type="hidden" value={draft.basis} />
             <input
-              className={inputClassName}
-              name="notes"
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  notes: event.target.value,
-                }))
-              }
-              value={draft.notes}
+              name="billingDocumentId"
+              type="hidden"
+              value={billingDocumentId}
             />
-          </Field>
-          <div className="flex items-end gap-2 sm:col-span-2">
-            <SubmitButton pending={pending}>Save installment</SubmitButton>
-            <Button
-              disabled={pending}
-              onClick={() => {
-                setDraft(saved);
-                setEditing(false);
-              }}
-              type="button"
-              variant="ghost"
+            <input name="id" type="hidden" value={installment.id} />
+            <Field error={fieldErrors.label} label="Label" required>
+              <input
+                className={inputClassName}
+                name="label"
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    label: event.target.value,
+                  }))
+                }
+                required
+                value={draft.label}
+              />
+            </Field>
+            <Field error={fieldErrors.dueDate} label="Due date" required>
+              <input
+                className={inputClassName}
+                name="dueDate"
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    dueDate: event.target.value,
+                  }))
+                }
+                required
+                type="date"
+                value={draft.dueDate}
+              />
+            </Field>
+            <Field
+              error={fieldErrors.percentageRate}
+              label="Installment %"
+              required
             >
-              Cancel
-            </Button>
-          </div>
-          {state.status === "error" ? (
-            <p className="text-destructive text-xs sm:col-span-2" role="alert">
-              {state.message}
-            </p>
-          ) : null}
-        </form>
+              <PercentageInput
+                className={inputClassName}
+                name="percentageRate"
+                onValueChange={(percentage) => {
+                  setDraft((current) => ({
+                    ...current,
+                    amount:
+                      amountFromPercentage(
+                        installment.billingTotalTtc,
+                        percentage,
+                      ) ?? current.amount,
+                    basis: "PERCENTAGE",
+                    percentage,
+                  }));
+                }}
+                required
+                value={draft.percentage}
+              />
+            </Field>
+            <Field
+              error={fieldErrors.scheduledAmount}
+              label="Scheduled amount"
+              required
+            >
+              <MoneyInput
+                name="scheduledAmount"
+                onValueChange={(amount) =>
+                  setDraft((current) => ({
+                    ...current,
+                    amount,
+                    basis: "FIXED_AMOUNT",
+                    percentage:
+                      percentageFromAmount(
+                        installment.billingTotalTtc,
+                        amount,
+                      ) ?? current.percentage,
+                  }))
+                }
+                required
+                value={draft.amount}
+              />
+            </Field>
+            <Field error={fieldErrors.notes} label="Notes">
+              <input
+                className={inputClassName}
+                name="notes"
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    notes: event.target.value,
+                  }))
+                }
+                value={draft.notes}
+              />
+            </Field>
+            <div className="flex items-end gap-2 sm:col-span-2">
+              <SubmitButton pending={pending}>Save installment</SubmitButton>
+              <Button
+                disabled={pending}
+                onClick={() => {
+                  if (
+                    hasUnsavedDrafts() &&
+                    !window.confirm("Discard your unsaved changes?")
+                  )
+                    return;
+                  setDraft(saved);
+                  setEditing(false);
+                }}
+                type="button"
+                variant="ghost"
+              >
+                Cancel
+              </Button>
+            </div>
+            {state.status === "error" ? (
+              <p
+                className="text-destructive text-xs sm:col-span-2"
+                role="alert"
+              >
+                {state.message}
+              </p>
+            ) : null}
+          </form>
+        </EditorDrawer>
       ) : (
         <>
           <div className="flex justify-between gap-3">

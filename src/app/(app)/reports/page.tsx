@@ -1,3 +1,6 @@
+import { PageHeader } from "@/components/layout/page-header";
+import { FilterBar } from "@/components/listing/filter-bar";
+import { queryStringFromParams } from "@/domain/listing/validation";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -34,9 +37,9 @@ import {
 export const metadata: Metadata = { title: "Reports" };
 
 const views = [
-  { label: "Project financial summary", value: "projects" },
-  { label: "Cash flow", value: "cash-flow" },
-  { label: "Payments / Receipts", value: "payments" },
+  { label: "Portfolio", value: "projects" },
+  { label: "Cash", value: "cash-flow" },
+  { label: "Transactions", value: "payments" },
   { label: "VAT", value: "vat" },
   { label: "Freight", value: "freight" },
 ] as const;
@@ -63,7 +66,15 @@ function viewHref(
 ): string {
   const query = new URLSearchParams();
   query.set("view", view);
-  for (const key of ["projectId", "clientId", "supplierId", "projectStatus"]) {
+  for (const key of [
+    "projectId",
+    "clientId",
+    "supplierId",
+    "projectStatus",
+    "horizon",
+    "direction",
+    "portfolioView",
+  ]) {
     const value = first(params, key);
     if (value) query.set(key, value);
   }
@@ -85,7 +96,15 @@ function cashFlowHref(
 ): string {
   const query = new URLSearchParams();
   query.set("view", "cash-flow");
-  for (const key of ["projectId", "clientId", "supplierId", "projectStatus"]) {
+  for (const key of [
+    "projectId",
+    "clientId",
+    "supplierId",
+    "projectStatus",
+    "horizon",
+    "direction",
+    "portfolioView",
+  ]) {
     const value = first(params, key);
     if (value) query.set(key, value);
   }
@@ -102,8 +121,27 @@ function ReportingFilters({
   view: ReportView;
 }) {
   return (
-    <form className="bg-card grid items-end gap-2 rounded-lg border p-3 sm:grid-cols-2 xl:grid-cols-6">
+    <FilterBar>
       <input name="view" type="hidden" value={view} />
+      <input
+        name="portfolioView"
+        type="hidden"
+        value={first(params, "portfolioView") ?? "commercial"}
+      />
+      {view !== "payments" && (
+        <input
+          name="direction"
+          type="hidden"
+          value={first(params, "direction") ?? ""}
+        />
+      )}
+      {view !== "cash-flow" && (
+        <input
+          name="horizon"
+          type="hidden"
+          value={first(params, "horizon") ?? ""}
+        />
+      )}
       <FilterField label="Project">
         <select
           className={filterControlClassName}
@@ -222,7 +260,7 @@ function ReportingFilters({
       >
         Reset all
       </Link>
-    </form>
+    </FilterBar>
   );
 }
 
@@ -380,40 +418,72 @@ export default async function ReportsPage({
 
   return (
     <div className="space-y-6">
-      <header>
-        <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-          Management information
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Reports</h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Read-only Project financial, cash-flow, and payment reporting derived
-          from current operational records.
-        </p>
-      </header>
+      <PageHeader
+        title="Reports"
+        description={
+          <>
+            Read-only Project financial, cash-flow, and payment reporting
+            derived from current operational records.
+          </>
+        }
+      />
 
       <nav aria-label="Report view" className="flex flex-wrap gap-2">
-        {views.map((item) => (
-          <Link
-            className={`rounded-md border px-3 py-2 text-sm font-medium ${
-              item.value === view
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-input"
-            }`}
-            href={viewHref(item.value, params)}
-            key={item.value}
-          >
-            {item.label}
-          </Link>
-        ))}
+        {views
+          .filter((item) => item.value !== "payments")
+          .map((item) => (
+            <Link
+              className={`rounded-md border px-3 py-2 text-sm font-medium ${
+                item.value === view ||
+                (item.value === "cash-flow" && view === "payments")
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-input"
+              }`}
+              href={viewHref(item.value, params)}
+              key={item.value}
+            >
+              {item.label}
+            </Link>
+          ))}
       </nav>
 
+      {(view === "cash-flow" || view === "payments") && (
+        <nav aria-label="Cash report" className="flex gap-4 text-sm">
+          {[
+            { value: "cash-flow", label: "Forecast" },
+            { value: "payments", label: "Transactions" },
+          ].map((item) => (
+            <Link
+              key={item.value}
+              aria-current={view === item.value ? "page" : undefined}
+              className={
+                view === item.value
+                  ? "text-primary font-semibold underline underline-offset-8"
+                  : "text-muted-foreground"
+              }
+              href={viewHref(item.value as ReportView, params)}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      )}
       <ReportingFilters options={options} params={params} view={view} />
       <ActiveReportFilters options={options} params={params} view={view} />
 
       {view === "projects" && report ? (
         <>
           <CompanyFinancialSummary report={report} />
-          <ProjectPortfolioTable report={report} />
+          <ProjectPortfolioTable
+            report={report}
+            view={
+              selected(
+                ["commercial", "funding", "cash"] as const,
+                first(params, "portfolioView"),
+              ) ?? "commercial"
+            }
+            queryString={queryStringFromParams(params)}
+          />
         </>
       ) : null}
       {view === "cash-flow" && report ? (

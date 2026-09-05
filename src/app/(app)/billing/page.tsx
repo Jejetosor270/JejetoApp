@@ -1,5 +1,9 @@
+import { PageHeader } from "@/components/layout/page-header";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
+import { Button } from "@/components/ui/button";
+import { ViewShortcuts } from "@/components/listing/view-shortcuts";
+import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { BillingTable } from "@/components/billing/billing-table";
 import { ClientDocumentIntake } from "@/components/billing/client-document-intake";
@@ -64,41 +68,50 @@ export default async function BillingPage({
   const canEdit = canEditMasterData(user.role);
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-primary text-xs font-medium tracking-wide uppercase">
-            Client commercial control
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold">Client Billing</h1>
-          <p className="text-muted-foreground mt-2 text-sm">
+      <PageHeader
+        title="Client Billing"
+        description={
+          <>
             Quotes, Invoices, planned payments, actual receipts, and
             Project-level Supplier Order allocation.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <ExportLink
-            entity="billing"
-            queryString={queryStringFromParams(params)}
-          />
-          <Link
-            className="border-input rounded-md border px-3 py-2 text-sm font-medium"
-            href="/payments?direction=SUPPLIER_PAYMENT"
-          >
-            Supplier Payments
-          </Link>
-        </div>
-      </header>
-      {canEdit ? (
-        <details>
-          <summary className="bg-primary text-primary-foreground inline-flex h-9 cursor-pointer list-none items-center rounded-lg px-3 text-sm font-medium">
-            Import Client Document
-          </summary>
-          <div className="mt-4">
-            <ClientDocumentIntake options={options} />
-          </div>
-        </details>
-      ) : null}
-      <form className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-7">
+          </>
+        }
+        actions={
+          <>
+            <div className="flex gap-2">
+              <ExportLink
+                entity="billing"
+                queryString={queryStringFromParams(params)}
+              />
+              {canEdit ? (
+                <EditorDrawer
+                  title="Import Client Document"
+                  wide
+                  trigger={<Button>Import Client Document</Button>}
+                >
+                  <ClientDocumentIntake options={options} />
+                </EditorDrawer>
+              ) : null}
+            </div>
+          </>
+        }
+      />
+      <ViewShortcuts
+        pathname="/billing"
+        queryString={queryStringFromParams(params)}
+        field="documentType"
+        options={[
+          { label: "All", value: "" },
+          { label: "Invoices", value: "INVOICE" },
+          { label: "Quotes", value: "QUOTE" },
+        ]}
+      />
+      <FilterBar>
+        <input
+          name="view"
+          type="hidden"
+          value={firstQueryValue(params, "view") ?? "collection"}
+        />
         <FilterField label="Search">
           <input
             className={filterControlClassName}
@@ -189,14 +202,31 @@ export default async function BillingPage({
         >
           Filter
         </button>
-      </form>
-      <BillingTable canEdit={canEdit} documents={result.items} />
+      </FilterBar>
+      <ViewShortcuts
+        pathname="/billing"
+        queryString={queryStringFromParams(params)}
+        field="view"
+        defaultValue="collection"
+        options={[
+          { label: "Collection", value: "collection" },
+          { label: "Commercial", value: "commercial" },
+        ]}
+      />
+      <BillingTable
+        canEdit={canEdit}
+        documents={result.items}
+        view={
+          firstQueryValue(params, "view") === "commercial"
+            ? "commercial"
+            : "collection"
+        }
+      />
       <Pagination
         page={pageInput.page}
         pageSize={pageInput.pageSize}
         pathname="/billing"
         queryString={queryStringFromParams(params)}
-        selectionIsPageScoped={canEdit}
         total={result.total}
       />
     </div>

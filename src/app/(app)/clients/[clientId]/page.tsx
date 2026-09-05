@@ -116,6 +116,10 @@ export default async function ClientDetailPage({
           <h2 className="text-sm font-semibold">
             Billing & collection summary
           </h2>
+          <p className="text-muted-foreground mt-2 text-xs">
+            Active Invoices among the latest 100 Billing documents, grouped by
+            currency. Open Billing for the complete list.
+          </p>
           <div className="mt-3 space-y-2 text-sm">
             {[...invoiceTotals].map(([currency, totals]) => (
               <div
@@ -176,8 +180,8 @@ export default async function ClientDetailPage({
         </div>
       </section>
 
-      <section className="bg-card rounded-lg border p-4">
-        <h2 className="text-sm font-semibold">Activity</h2>
+      <details className="border-t pt-4">
+        <summary className="text-sm font-semibold">Recent activity</summary>
         <div className="mt-3 divide-y text-sm">
           {activity.map((event) => (
             <p className="py-2" key={event.id}>
@@ -191,7 +195,7 @@ export default async function ClientDetailPage({
             <p className="text-muted-foreground py-4">No activity recorded.</p>
           ) : null}
         </div>
-      </section>
+      </details>
     </div>
   );
 }

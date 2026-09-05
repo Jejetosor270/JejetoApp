@@ -1,7 +1,19 @@
 "use client";
 
 import { LoaderCircle } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import {
+  Children,
+  cloneElement,
+  createContext,
+  isValidElement,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+  type InputHTMLAttributes,
+} from "react";
 
 import type { MasterDataActionState } from "@/components/master-data/action-state";
 import { Button } from "@/components/ui/button";
@@ -12,7 +24,9 @@ import {
 } from "@/domain/procurement/presentation";
 
 export const inputClassName =
-  "border-input bg-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-lg border px-3 text-sm outline-none focus-visible:ring-3";
+  "border-input bg-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2";
+
+const FieldContext = createContext<{ errorId?: string; invalid?: boolean }>({});
 
 export function Field({
   children,
@@ -25,23 +39,38 @@ export function Field({
   label: string;
   required?: boolean | undefined;
 }) {
+  const errorId = useId();
   return (
-    <label className="grid gap-1.5 text-sm font-medium">
-      <span>
-        {label}
-        {required ? (
-          <span aria-hidden="true" className="text-destructive ml-1">
-            *
+    <FieldContext.Provider value={error ? { errorId, invalid: true } : {}}>
+      <label className="grid gap-1.5 text-sm font-medium">
+        <span>
+          {label}
+          {required ? (
+            <span aria-hidden="true" className="text-destructive ml-1">
+              *
+            </span>
+          ) : null}
+        </span>
+        {Children.map(children, (child) =>
+          isValidElement<InputHTMLAttributes<HTMLInputElement>>(child) &&
+          typeof child.type === "string" &&
+          ["input", "select", "textarea"].includes(child.type)
+            ? cloneElement(child, {
+                "aria-invalid": error ? true : child.props["aria-invalid"],
+                "aria-describedby":
+                  [child.props["aria-describedby"], error ? errorId : undefined]
+                    .filter(Boolean)
+                    .join(" ") || undefined,
+              })
+            : child,
+        )}
+        {error ? (
+          <span id={errorId} className="text-destructive text-xs" role="alert">
+            {error}
           </span>
         ) : null}
-      </span>
-      {children}
-      {error ? (
-        <span className="text-destructive text-xs" role="alert">
-          {error}
-        </span>
-      ) : null}
-    </label>
+      </label>
+    </FieldContext.Provider>
   );
 }
 
@@ -67,6 +96,7 @@ export function MoneyInput({
   value?: string | undefined;
 }) {
   const [internalValue, setInternalValue] = useState(defaultValue ?? "");
+  const field = useContext(FieldContext);
   const [focused, setFocused] = useState(false);
   const rawValue = value ?? internalValue;
   const [draftValue, setDraftValue] = useState(rawValue);
@@ -79,7 +109,8 @@ export function MoneyInput({
   return (
     <>
       <input
-        aria-invalid={invalid || undefined}
+        aria-invalid={invalid || field.invalid || undefined}
+        aria-describedby={field.errorId}
         className={`${className}${invalid ? "border-destructive focus-visible:border-destructive" : ""}`}
         disabled={disabled}
         inputMode="decimal"
@@ -132,6 +163,7 @@ export function PercentageInput({
   value?: string | undefined;
 }) {
   const [internalValue, setInternalValue] = useState(defaultValue ?? "");
+  const field = useContext(FieldContext);
   const [focused, setFocused] = useState(false);
   const rawValue = value ?? internalValue;
   const [draftValue, setDraftValue] = useState(rawValue);
@@ -144,7 +176,8 @@ export function PercentageInput({
     <>
       <input
         aria-label={ariaLabel}
-        aria-invalid={invalid || undefined}
+        aria-invalid={invalid || field.invalid || undefined}
+        aria-describedby={field.errorId}
         className={`${className}${invalid ? "border-destructive focus-visible:border-destructive" : ""}`}
         disabled={disabled}
         inputMode="decimal"
@@ -174,10 +207,17 @@ export function PercentageInput({
 }
 
 export function ActionFeedback({ state }: { state: MasterDataActionState }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (state.status === "success") {
+      const form = ref.current?.closest("form");
+      if (form) delete form.dataset.dirty;
+    }
+  }, [state]);
   const message = state.formError ?? state.message;
   if (!message || !state.status) return null;
   return (
-    <div role={state.status === "error" ? "alert" : "status"}>
+    <div ref={ref} role={state.status === "error" ? "alert" : "status"}>
       <p
         className={
           state.status === "error"

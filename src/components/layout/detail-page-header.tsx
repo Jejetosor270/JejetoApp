@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { ReturnLink } from "@/components/layout/return-navigation";
 import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -22,19 +22,19 @@ export function DetailPageHeader({
   title: ReactNode;
 }) {
   return (
-    <header className="bg-card rounded-lg border p-5">
-      <Link
+    <header className="pb-1">
+      <ReturnLink
         className="text-muted-foreground text-xs hover:underline"
         href={backHref}
       >
         ← {backLabel}
-      </Link>
-      <p className="text-primary mt-3 text-xs font-medium tracking-[0.08em] uppercase">
-        {eyebrow}
-      </p>
+      </ReturnLink>
+      <p className="text-muted-foreground mt-4 text-xs">{eyebrow}</p>
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-[26px] leading-8 font-semibold tracking-tight">
+            {title}
+          </h1>
           {status ? (
             <Badge variant="outline">{formatEnumLabel(status)}</Badge>
           ) : null}

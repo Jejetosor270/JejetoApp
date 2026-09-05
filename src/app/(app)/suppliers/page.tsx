@@ -1,6 +1,11 @@
+import { PageHeader } from "@/components/layout/page-header";
+import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
 
-import { SupplierManagement } from "@/app/(app)/suppliers/supplier-management";
+import {
+  SupplierManagement,
+  CreateSupplierForm,
+} from "@/app/(app)/suppliers/supplier-management";
 import { ExportLink } from "@/components/export/export-link";
 import { PageSizeField, Pagination } from "@/components/listing/pagination";
 import {
@@ -57,24 +62,26 @@ export default async function SuppliersPage({
   ]);
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-            Directory
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            Suppliers
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Supplier master data and future-order defaults.
-          </p>
-        </div>
-        <ExportLink
-          entity="suppliers"
-          queryString={queryStringFromParams(params)}
-        />
-      </header>
-      <form className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-7">
+      <PageHeader
+        title="Suppliers"
+        description={<>Supplier master data and future-order defaults.</>}
+        actions={
+          <>
+            {canEditMasterData(user.role) && (
+              <CreateSupplierForm currencies={currencies} />
+            )}
+            {
+              <>
+                <ExportLink
+                  entity="suppliers"
+                  queryString={queryStringFromParams(params)}
+                />
+              </>
+            }
+          </>
+        }
+      />
+      <FilterBar>
         <FilterField label="Search">
           <input
             className={filterControlClassName}
@@ -150,7 +157,7 @@ export default async function SuppliersPage({
         >
           Filter
         </button>
-      </form>
+      </FilterBar>
       <SupplierManagement
         canEdit={canEditMasterData(user.role)}
         currencies={currencies}

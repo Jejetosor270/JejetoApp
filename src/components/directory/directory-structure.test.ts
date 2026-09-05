@@ -27,10 +27,13 @@ describe("Phase 11.12 Directory structure", () => {
   it("provides full detail editing and operational sections", () => {
     expect(clientDetail).toContain("ClientDetailEditor");
     expect(clientDetail).toContain("Billing & collection summary");
-    expect(clientDetail).toContain("Activity");
+    expect(clientDetail).toContain("Recent activity");
+    expect(clientDetail).toContain("activity.map");
     expect(supplierDetail).toContain("SupplierDetailEditor");
     expect(supplierDetail).toContain("Orders");
     expect(supplierDetail).toContain("Payments");
-    expect(supplierDetail).toContain("Activity");
+    expect(supplierDetail).toContain("Recent activity");
+    expect(supplierDetail).toContain("activity.map");
+    expect(supplierDetail).toContain("WorkspaceTabs");
   });
 });

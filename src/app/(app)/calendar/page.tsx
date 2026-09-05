@@ -1,3 +1,5 @@
+import { PageHeader } from "@/components/layout/page-header";
+import { OverflowList } from "@/components/layout/overflow-list";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -92,41 +94,40 @@ export default async function CalendarPage({
   );
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-            Operations
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            Procurement calendar
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
+      <PageHeader
+        title="Procurement calendar"
+        description={
+          <>
             Derived automatically from payment due dates and Supplier Order
             timing.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            className="border-input rounded-lg border px-3 py-2 text-sm"
-            href={`/calendar?month=${previousMonth}`}
-          >
-            Previous
-          </Link>
-          <span className="min-w-32 text-center text-sm font-semibold">
-            {dateOnlyToDate(start).toLocaleDateString("en-GB", {
-              month: "long",
-              timeZone: "UTC",
-              year: "numeric",
-            })}
-          </span>
-          <Link
-            className="border-input rounded-lg border px-3 py-2 text-sm"
-            href={`/calendar?month=${followingMonth}`}
-          >
-            Next
-          </Link>
-        </div>
-      </header>
+          </>
+        }
+        actions={
+          <>
+            <div className="flex items-center gap-2">
+              <Link
+                className="border-input rounded-lg border px-3 py-2 text-sm"
+                href={`/calendar?month=${previousMonth}`}
+              >
+                Previous
+              </Link>
+              <span className="min-w-32 text-center text-sm font-semibold">
+                {dateOnlyToDate(start).toLocaleDateString("en-GB", {
+                  month: "long",
+                  timeZone: "UTC",
+                  year: "numeric",
+                })}
+              </span>
+              <Link
+                className="border-input rounded-lg border px-3 py-2 text-sm"
+                href={`/calendar?month=${followingMonth}`}
+              >
+                Next
+              </Link>
+            </div>
+          </>
+        }
+      />
       <section className="overflow-x-auto rounded-lg border">
         <div className="bg-muted/40 grid min-w-[58rem] grid-cols-7 text-xs font-medium">
           {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
@@ -147,32 +148,34 @@ export default async function CalendarPage({
                 {Number(day.date.slice(8, 10))}
               </p>
               <div className="mt-1 space-y-1">
-                {(byDate.get(day.date) ?? []).slice(0, 4).map((event) => (
-                  <Link
-                    className="hover:bg-muted block rounded border p-1.5 text-[0.6875rem] leading-tight"
-                    href={event.href}
-                    key={event.id}
-                  >
-                    <div className="flex items-center justify-between gap-1">
-                      <Badge variant={eventVariant(event)}>
-                        {eventLabel(event)}
-                      </Badge>
-                      <span className="font-mono">{event.orderNumber}</span>
-                    </div>
-                    <p className="mt-1 truncate font-medium">{event.title}</p>
-                    {event.partyName ? (
-                      <p className="text-muted-foreground mt-0.5 truncate">
-                        {event.partyName} ·{" "}
-                        {event.status ? formatEnumLabel(event.status) : ""}
-                      </p>
-                    ) : null}
-                    {event.amount && event.currencyCode ? (
-                      <p className="financial-figure mt-1">
-                        {formatMoney(event.amount, event.currencyCode)}
-                      </p>
-                    ) : null}
-                  </Link>
-                ))}
+                <OverflowList limit={4} title={formatDateOnly(day.date)}>
+                  {(byDate.get(day.date) ?? []).map((event) => (
+                    <Link
+                      className="hover:bg-muted block rounded border p-1.5 text-[0.6875rem] leading-tight"
+                      href={event.href}
+                      key={event.id}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <Badge variant={eventVariant(event)}>
+                          {eventLabel(event)}
+                        </Badge>
+                        <span className="font-mono">{event.orderNumber}</span>
+                      </div>
+                      <p className="mt-1 truncate font-medium">{event.title}</p>
+                      {event.partyName ? (
+                        <p className="text-muted-foreground mt-0.5 truncate">
+                          {event.partyName} ·{" "}
+                          {event.status ? formatEnumLabel(event.status) : ""}
+                        </p>
+                      ) : null}
+                      {event.amount && event.currencyCode ? (
+                        <p className="financial-figure mt-1">
+                          {formatMoney(event.amount, event.currencyCode)}
+                        </p>
+                      ) : null}
+                    </Link>
+                  ))}
+                </OverflowList>
               </div>
             </div>
           ))}
@@ -195,9 +198,8 @@ export default async function CalendarPage({
           >
             <h2 className="text-sm font-semibold">{title as string}</h2>
             <div className="mt-3 space-y-2">
-              {(events as ProcurementCalendarEvent[])
-                .slice(0, 12)
-                .map((event) => (
+              <OverflowList limit={12} title={title as string}>
+                {(events as ProcurementCalendarEvent[]).map((event) => (
                   <Link
                     className="hover:bg-muted/40 flex items-start justify-between gap-3 rounded-md border p-2 text-sm"
                     href={event.href}
@@ -225,6 +227,7 @@ export default async function CalendarPage({
                     </span>
                   </Link>
                 ))}
+              </OverflowList>
               {(events as ProcurementCalendarEvent[]).length === 0 ? (
                 <p className="text-muted-foreground text-xs">No events.</p>
               ) : null}
