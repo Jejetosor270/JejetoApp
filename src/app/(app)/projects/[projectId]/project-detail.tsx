@@ -2,6 +2,8 @@
 
 import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
 import { WorkspaceTabs } from "@/components/layout/workspace-tabs";
+import { FormSection } from "@/components/forms/form-section";
+import type { MasterDataActionState } from "@/components/master-data/action-state";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import Decimal from "decimal.js";
 import { Pencil, Plus } from "lucide-react";
@@ -22,6 +24,7 @@ import {
   ActionFeedback,
   Field,
   inputClassName,
+  MoneyInput,
   PercentageInput,
   StatusBadge,
   SubmitButton,
@@ -90,12 +93,14 @@ function inputDate(value: string | null): string {
 }
 
 function ProjectFields({
+  fieldErrors,
   clients,
   currencies,
   managers,
   project,
   statuses,
 }: {
+  fieldErrors?: MasterDataActionState["fieldErrors"];
   clients: { id: string; displayName: string }[];
   currencies: CurrencyOption[];
   managers: Option[];
@@ -104,206 +109,255 @@ function ProjectFields({
 }) {
   return (
     <>
-      <Field label="Project name">
-        <PercentageInput
-          className={inputClassName}
-          defaultValue={project.name}
-          name="name"
-          required
-        />
-      </Field>
-      <Field label="Project code">
-        <PercentageInput
-          className={inputClassName}
-          defaultValue={project.code}
-          name="code"
-          required
-        />
-      </Field>
-      <Field label="Client">
-        <select
-          className={inputClassName}
-          defaultValue={project.clientId}
-          name="clientId"
-          required
-        >
-          {clients.map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.displayName}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Country">
-        <select
-          className={inputClassName}
-          defaultValue={project.countryCode ?? ""}
-          name="countryCode"
-        >
-          <option value="">Not specified</option>
-          {countries.map((country) => (
-            <option key={country.code} value={country.code}>
-              {country.label}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Reporting currency">
-        {project.reportingCurrencyLocked ? (
+      <FormSection title="General">
+        <Field error={fieldErrors?.name} required label="Project name">
           <input
-            name="reportingCurrencyCode"
-            type="hidden"
-            value={project.reportingCurrencyCode}
+            className={inputClassName}
+            defaultValue={project.name}
+            name="name"
+            required
           />
-        ) : null}
-        <select
-          className={inputClassName}
-          defaultValue={project.reportingCurrencyCode}
-          disabled={project.reportingCurrencyLocked}
-          name="reportingCurrencyCode"
+        </Field>
+        <Field error={fieldErrors?.code} required label="Project code">
+          <input
+            className={inputClassName}
+            defaultValue={project.code}
+            name="code"
+            required
+          />
+        </Field>
+        <Field error={fieldErrors?.clientId} required label="Client">
+          <select
+            className={inputClassName}
+            defaultValue={project.clientId}
+            name="clientId"
+            required
+          >
+            {clients.map((client) => (
+              <option key={client.id} value={client.id}>
+                {client.displayName}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field error={fieldErrors?.countryCode} label="Country">
+          <select
+            className={inputClassName}
+            defaultValue={project.countryCode ?? ""}
+            name="countryCode"
+          >
+            <option value="">Not specified</option>
+            {countries.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field
+          error={fieldErrors?.reportingCurrencyCode}
+          label="Reporting currency"
         >
-          {currencies.map((currency) => (
-            <option key={currency.code} value={currency.code}>
-              {currency.code} — {currency.name}
-            </option>
-          ))}
-        </select>
-        {project.reportingCurrencyLocked ? (
-          <span className="text-muted-foreground text-xs leading-5 font-normal">
-            Locked after the first Supplier Order because historical FX and
-            reporting values depend on this currency.
-          </span>
-        ) : null}
-      </Field>
-      <Field label="Project manager">
-        <select
-          className={inputClassName}
-          defaultValue={project.projectManagerId ?? ""}
-          name="projectManagerId"
+          {project.reportingCurrencyLocked ? (
+            <input
+              name="reportingCurrencyCode"
+              type="hidden"
+              value={project.reportingCurrencyCode}
+            />
+          ) : null}
+          <select
+            className={inputClassName}
+            defaultValue={project.reportingCurrencyCode}
+            disabled={project.reportingCurrencyLocked}
+            name="reportingCurrencyCode"
+          >
+            {currencies.map((currency) => (
+              <option key={currency.code} value={currency.code}>
+                {currency.code} — {currency.name}
+              </option>
+            ))}
+          </select>
+          {project.reportingCurrencyLocked ? (
+            <span className="text-muted-foreground text-xs leading-5 font-normal">
+              Locked after the first Supplier Order because historical FX and
+              reporting values depend on this currency.
+            </span>
+          ) : null}
+        </Field>
+        <Field error={fieldErrors?.projectManagerId} label="Project manager">
+          <select
+            className={inputClassName}
+            defaultValue={project.projectManagerId ?? ""}
+            name="projectManagerId"
+          >
+            <option value="">Not assigned</option>
+            {managers.map((manager) => (
+              <option key={manager.id} value={manager.id}>
+                {manager.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field error={fieldErrors?.status} label="Status">
+          <select
+            className={inputClassName}
+            defaultValue={project.status}
+            name="status"
+          >
+            {statuses.map((status) => (
+              <option key={status} value={status}>
+                {formatEnumLabel(status)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </FormSection>
+      <FormSection title="Schedule">
+        <Field error={fieldErrors?.startDate} label="Start date">
+          <input
+            className={inputClassName}
+            defaultValue={inputDate(project.startDate)}
+            name="startDate"
+            type="date"
+          />
+        </Field>
+        <Field
+          error={fieldErrors?.expectedCompletionDate}
+          label="Expected completion"
         >
-          <option value="">Not assigned</option>
-          {managers.map((manager) => (
-            <option key={manager.id} value={manager.id}>
-              {manager.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Start date">
-        <input
-          className={inputClassName}
-          defaultValue={inputDate(project.startDate)}
-          name="startDate"
-          type="date"
-        />
-      </Field>
-      <Field label="Expected completion">
-        <input
-          className={inputClassName}
-          defaultValue={inputDate(project.expectedCompletionDate)}
-          name="expectedCompletionDate"
-          type="date"
-        />
-      </Field>
-      <Field label="Expected Freight Allowance % of Expected Product Purchase Cost HT">
-        <PercentageInput
-          className={inputClassName}
-          defaultValue={
-            project.freightEstimateRate
-              ? new Decimal(project.freightEstimateRate.toString())
-                  .times(100)
-                  .toString()
-              : ""
-          }
-          name="freightEstimateRate"
-        />
-      </Field>
-      <Field label="Client Budget Target HT">
-        <input
-          className={inputClassName}
-          defaultValue={project.clientBudgetTargetHt?.toString() ?? ""}
-          inputMode="decimal"
-          name="clientBudgetTargetHt"
-        />
-      </Field>
-      <Field label="Estimated Purchase Cost HT">
-        <input
-          className={inputClassName}
-          defaultValue={project.estimatedPurchaseCostHt?.toString() ?? ""}
-          inputMode="decimal"
-          name="estimatedPurchaseCostHt"
-        />
-      </Field>
-      <Field label="Estimated Freight / Logistics HT">
-        <input
-          className={inputClassName}
-          defaultValue={project.estimatedFreightCostHt?.toString() ?? ""}
-          inputMode="decimal"
-          name="estimatedFreightCostHt"
-        />
-      </Field>
-      <Field label="Default Product Markup %">
-        <PercentageInput
-          className={inputClassName}
-          defaultValue={new Decimal(project.defaultProductMarkupRate.toString())
-            .times(100)
-            .toString()}
-          name="defaultProductMarkupRate"
-        />
-      </Field>
-      <Field label="Default Freight Markup %">
-        <PercentageInput
-          className={inputClassName}
-          defaultValue={new Decimal(project.defaultFreightMarkupRate.toString())
-            .times(100)
-            .toString()}
-          name="defaultFreightMarkupRate"
-        />
-      </Field>
-      <Field label="Default Other Cost Markup %">
-        <PercentageInput
-          className={inputClassName}
-          defaultValue={new Decimal(
-            project.defaultOtherCostMarkupRate.toString(),
-          )
-            .times(100)
-            .toString()}
-          name="defaultOtherCostMarkupRate"
-        />
-      </Field>
+          <input
+            className={inputClassName}
+            defaultValue={inputDate(project.expectedCompletionDate)}
+            name="expectedCompletionDate"
+            type="date"
+          />
+        </Field>
+      </FormSection>
+      <FormSection
+        title="Planning / Budget"
+        description="Amounts are HT in the Project reporting currency. Freight allowance applies to expected Product Purchase Cost HT."
+      >
+        <Field
+          error={fieldErrors?.clientBudgetTargetHt}
+          label="Client Budget Target HT"
+        >
+          <MoneyInput
+            className={inputClassName}
+            defaultValue={project.clientBudgetTargetHt?.toString() ?? ""}
+            name="clientBudgetTargetHt"
+          />
+        </Field>
+        <Field
+          error={fieldErrors?.estimatedPurchaseCostHt}
+          label="Estimated Purchase Cost HT"
+        >
+          <MoneyInput
+            className={inputClassName}
+            defaultValue={project.estimatedPurchaseCostHt?.toString() ?? ""}
+            name="estimatedPurchaseCostHt"
+          />
+        </Field>
+        <Field
+          error={fieldErrors?.estimatedFreightCostHt}
+          label="Estimated Freight / Logistics HT"
+        >
+          <MoneyInput
+            className={inputClassName}
+            defaultValue={project.estimatedFreightCostHt?.toString() ?? ""}
+            name="estimatedFreightCostHt"
+          />
+        </Field>
+        <Field
+          error={fieldErrors?.freightEstimateRate}
+          label="Expected freight allowance %"
+        >
+          <PercentageInput
+            className={inputClassName}
+            defaultValue={
+              project.freightEstimateRate
+                ? new Decimal(project.freightEstimateRate.toString())
+                    .times(100)
+                    .toString()
+                : ""
+            }
+            name="freightEstimateRate"
+          />
+        </Field>
+      </FormSection>
+      <FormSection title="Default Pricing">
+        <Field
+          error={fieldErrors?.defaultProductMarkupRate}
+          label="Default Product Markup %"
+        >
+          <PercentageInput
+            className={inputClassName}
+            defaultValue={new Decimal(
+              project.defaultProductMarkupRate.toString(),
+            )
+              .times(100)
+              .toString()}
+            name="defaultProductMarkupRate"
+          />
+        </Field>
+        <Field
+          error={fieldErrors?.defaultFreightMarkupRate}
+          label="Default Freight Markup %"
+        >
+          <PercentageInput
+            className={inputClassName}
+            defaultValue={new Decimal(
+              project.defaultFreightMarkupRate.toString(),
+            )
+              .times(100)
+              .toString()}
+            name="defaultFreightMarkupRate"
+          />
+        </Field>
+        <Field
+          error={fieldErrors?.defaultOtherCostMarkupRate}
+          label="Default Other Cost Markup %"
+        >
+          <PercentageInput
+            className={inputClassName}
+            defaultValue={new Decimal(
+              project.defaultOtherCostMarkupRate.toString(),
+            )
+              .times(100)
+              .toString()}
+            name="defaultOtherCostMarkupRate"
+          />
+        </Field>
+      </FormSection>
       <input name="targetMode" type="hidden" value="MARKUP" />
-      <Field label="Expected freight allowance notes">
-        <input
-          className={inputClassName}
-          defaultValue={project.freightEstimateNotes ?? ""}
-          name="freightEstimateNotes"
-        />
-      </Field>
-      <Field label="Status">
-        <select
-          className={inputClassName}
-          defaultValue={project.status}
-          name="status"
-        >
-          {statuses.map((status) => (
-            <option key={status} value={status}>
-              {formatEnumLabel(status)}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <label className="grid gap-1.5 text-sm font-medium md:col-span-2 xl:col-span-3">
-        Notes
-        <textarea
-          className={`${inputClassName} h-20 py-2`}
-          defaultValue={project.notes ?? ""}
-          name="notes"
-        />
-      </label>
+      <FormSection title="Freight">
+        <div className="@min-[28rem]:col-span-2">
+          <Field
+            error={fieldErrors?.freightEstimateNotes}
+            label="Expected freight allowance notes"
+          >
+            <input
+              className={inputClassName}
+              defaultValue={project.freightEstimateNotes ?? ""}
+              name="freightEstimateNotes"
+            />
+          </Field>
+        </div>
+      </FormSection>
+      <FormSection title="Notes">
+        <div className="@min-[28rem]:col-span-2">
+          <Field label="Notes" error={fieldErrors?.notes}>
+            <textarea
+              className={`${inputClassName} h-24 py-2`}
+              defaultValue={project.notes ?? ""}
+              name="notes"
+            />
+          </Field>
+        </div>
+      </FormSection>
     </>
   );
 }
-function EditProject({
+export function EditProject({
   clients,
   currencies,
   managers,
@@ -326,42 +380,21 @@ function EditProject({
     if (state.status === "success") onClose();
   }, [onClose, state.status]);
   return (
-    <section className="bg-card rounded-lg border p-4">
-      <div className="mb-4 flex justify-between">
-        <h2 className="text-sm font-semibold">Edit project</h2>
-        <Button
-          onClick={() => {
-            if (
-              !hasUnsavedDrafts() ||
-              window.confirm("Discard your unsaved changes?")
-            )
-              onClose?.();
-          }}
-          size="sm"
-          type="button"
-          variant="ghost"
-        >
-          Close
-        </Button>
+    <form onSubmit={onSubmit} className="@container space-y-7">
+      <input name="id" type="hidden" value={project.id} />
+      <ProjectFields
+        fieldErrors={state.fieldErrors}
+        clients={clients}
+        currencies={currencies}
+        managers={managers}
+        project={project}
+        statuses={statuses}
+      />
+      <div className="flex flex-wrap items-center gap-3 border-t pt-5">
+        <SubmitButton pending={pending}>Save changes</SubmitButton>
+        <ActionFeedback state={state} />
       </div>
-      <form
-        onSubmit={onSubmit}
-        className="grid gap-3 md:grid-cols-2 xl:grid-cols-2"
-      >
-        <input name="id" type="hidden" value={project.id} />
-        <ProjectFields
-          clients={clients}
-          currencies={currencies}
-          managers={managers}
-          project={project}
-          statuses={statuses}
-        />
-        <div className="flex items-end gap-3 md:col-span-2 xl:col-span-2">
-          <SubmitButton pending={pending}>Save changes</SubmitButton>
-          <ActionFeedback state={state} />
-        </div>
-      </form>
-    </section>
+    </form>
   );
 }
 function BuildingForm({

@@ -30,7 +30,10 @@ const optionalMoney = z.preprocess(
   z
     .string()
     .trim()
-    .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
+    .regex(
+      /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/,
+      "Enter a non-negative amount with up to four decimal places.",
+    )
     .transform((value) => new Decimal(value).toFixed(4))
     .optional(),
 );
@@ -45,9 +48,19 @@ const optionalFx = z.preprocess(
   z
     .string()
     .trim()
-    .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,10})?$/)
-    .refine((value) => new Decimal(value).greaterThan(0))
-    .transform((value) => new Decimal(value).toFixed(10))
+    .regex(
+      /^(?:0|[1-9]\d*)(?:\.\d{1,10})?$/,
+      "Enter a positive FX rate with up to ten decimal places.",
+    )
+    .pipe(
+      z
+        .string()
+        .refine(
+          (value) => new Decimal(value).greaterThan(0),
+          "The FX rate must be greater than zero.",
+        )
+        .transform((value) => new Decimal(value).toFixed(10)),
+    )
     .optional(),
 );
 const optionalPercent = optionalPercentageFraction({
@@ -69,7 +82,10 @@ const nullableHumanDecimal = z.preprocess(
   },
   z
     .string()
-    .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/)
+    .regex(
+      /^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/,
+      "Enter a non-negative value with up to four decimal places.",
+    )
     .nullable(),
 );
 
@@ -78,7 +94,11 @@ const paymentSchema = z
     basis: z.enum(["PERCENTAGE", "FIXED_AMOUNT"]),
     dueDate: optionalDate,
     fixedAmount: optionalMoney,
-    label: z.string().trim().min(1).max(200),
+    label: z
+      .string()
+      .trim()
+      .min(1, "Enter a payment installment label.")
+      .max(200),
     percentageRate: optionalPercent,
     timingDescription: optionalString(500),
   })
@@ -115,7 +135,10 @@ const quoteItemSchema = z
     unitPriceHt: nullableHumanDecimal,
     vatRate: z
       .string()
-      .regex(/^(?:0(?:\.\d{1,6})?|1(?:\.0{1,6})?)$/)
+      .regex(
+        /^(?:0(?:\.\d{1,6})?|1(?:\.0{1,6})?)$/,
+        "Enter an Item VAT rate between 0% and 100%.",
+      )
       .nullable(),
     volumeEach: nullableHumanDecimal,
     weightEach: nullableHumanDecimal,
@@ -146,7 +169,9 @@ const confirmationSchema = z
     billingDocumentId: z.preprocess(
       (value) =>
         typeof value === "string" && value.trim() === "" ? undefined : value,
-      z.uuid().optional(),
+      z
+        .uuid("Choose a valid Client Billing event or skip the allocation.")
+        .optional(),
     ),
     billingPercentageRate: optionalPercent,
     billingRemainderApproved: z.boolean(),

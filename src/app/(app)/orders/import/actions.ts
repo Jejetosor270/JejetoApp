@@ -22,7 +22,12 @@ import {
   getItemExtractionProvider,
   ItemExtractionProviderError,
 } from "@/lib/items/extraction-provider";
-import { isDuplicateOrderReferenceError } from "@/lib/procurement/errors";
+import {
+  isDuplicateOrderReferenceError,
+  ProcurementNotFoundError,
+  ProcurementRelationError,
+} from "@/lib/procurement/errors";
+import { Prisma } from "@/generated/prisma/client";
 import {
   confirmSupplierQuote,
   QuoteConfirmationError,
@@ -227,7 +232,29 @@ export async function confirmSupplierQuoteAction(
     "supplier_order_import.confirmation_started",
     { requestId, stage: "confirmation" },
   );
-  const input = parseQuoteConfirmation(formData);
+  // A review can outlive an administrator disabling Items Beta. Aggregate
+  // confirmation remains available, without persisting disabled Item proposals.
+  let itemsSkipped = false;
+  if (formData.get("approveItems") === "on") {
+    try {
+      itemsSkipped = !(await isItemManagementEnabled());
+    } catch {
+      logSupplierOrderImportLifecycle("supplier_order_import.failed", {
+        errorClassification: "item_settings_unavailable",
+        requestId,
+        stage: "confirmation",
+      });
+      return {
+        status: "error",
+        message:
+          "Item availability could not be checked. Your review is still available; please try again.",
+      };
+    }
+  }
+  const confirmationData = new FormData();
+  for (const [key, value] of formData) confirmationData.append(key, value);
+  if (itemsSkipped) confirmationData.delete("approveItems");
+  const input = parseQuoteConfirmation(confirmationData);
   if (!input.success) {
     const fieldErrors = Object.fromEntries(
       input.error.issues.map((issue) => [
@@ -263,26 +290,47 @@ export async function confirmSupplierQuoteAction(
     );
     return {
       message:
-        input.data.action === "CREATE"
+        (input.data.action === "CREATE"
           ? "Draft Supplier Order created from the reviewed quote."
-          : "Supplier Order updated from the reviewed quote.",
+          : "Supplier Order updated from the reviewed quote.") +
+        (itemsSkipped
+          ? " Items were not imported because Items Beta is disabled."
+          : ""),
       orderId,
       status: "success",
     };
   } catch (error) {
-    const errorClassification = isDuplicateOrderReferenceError(error)
-      ? "duplicate_order_reference"
-      : error instanceof QuoteConfirmationError
-        ? "confirmation_business_rule"
-        : error instanceof ClientBillingValidationError ||
-            error instanceof ClientBillingNotFoundError
-          ? "optional_billing_link"
-          : "unexpected";
+    const vatConstraintMismatch =
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.message.includes("order_vat_entries_recoverability_check");
+    const errorClassification = vatConstraintMismatch
+      ? "vat_recoverability_constraint"
+      : isDuplicateOrderReferenceError(error)
+        ? "duplicate_order_reference"
+        : error instanceof QuoteConfirmationError
+          ? "confirmation_business_rule"
+          : error instanceof ProcurementRelationError ||
+              error instanceof ProcurementNotFoundError
+            ? "order_relation"
+            : error instanceof ClientBillingValidationError ||
+                error instanceof ClientBillingNotFoundError
+              ? "optional_billing_link"
+              : "unexpected";
     logSupplierOrderImportLifecycle("supplier_order_import.failed", {
       errorClassification,
+      ...(error instanceof Prisma.PrismaClientKnownRequestError
+        ? { databaseErrorCode: error.code }
+        : {}),
       requestId,
       stage: "confirmation",
     });
+    if (vatConstraintMismatch) {
+      return {
+        status: "error",
+        message:
+          "The VAT setup needs an administrator update before this Supplier Order can be saved. Your review is still available.",
+      };
+    }
     if (isDuplicateOrderReferenceError(error)) {
       return {
         message: "A Supplier Order already uses this internal reference.",
@@ -291,12 +339,13 @@ export async function confirmSupplierQuoteAction(
     }
     if (
       error instanceof QuoteConfirmationError ||
+      error instanceof ProcurementRelationError ||
+      error instanceof ProcurementNotFoundError ||
       error instanceof ClientBillingValidationError ||
       error instanceof ClientBillingNotFoundError
     ) {
       return { message: error.message, status: "error" };
     }
-    console.error("Unable to confirm supplier quote.", error);
     return {
       message:
         "The Supplier Order could not be saved. Your review is still available; please try again.",

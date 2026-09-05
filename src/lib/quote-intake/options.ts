@@ -8,11 +8,12 @@ import {
   VatTreatment,
 } from "@/generated/prisma/client";
 import { getDatabase } from "@/lib/db";
+import { isItemManagementEnabled } from "@/lib/settings/application-settings";
 
 export async function listQuoteIntakeOptions() {
   const database = getDatabase();
-  const [billingDocuments, projects, suppliers, currencies] = await Promise.all(
-    [
+  const [billingDocuments, projects, suppliers, currencies, itemsEnabled] =
+    await Promise.all([
       database.clientBillingDocument.findMany({
         where: { isCancelled: false },
         orderBy: [{ documentDate: "desc" }, { reference: "asc" }],
@@ -63,9 +64,10 @@ export async function listQuoteIntakeOptions() {
         where: { isActive: true },
         select: { code: true, name: true },
       }),
-    ],
-  );
+      isItemManagementEnabled(),
+    ]);
   return {
+    itemsEnabled,
     billingDocuments: billingDocuments.map((document) => ({
       allocatedHt: document.allocations
         .reduce(

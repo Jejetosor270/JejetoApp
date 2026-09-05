@@ -10,6 +10,7 @@ export type SupplierOrderImportLifecycleEvent =
   | "supplier_order_import.failed";
 
 interface SupplierOrderImportLifecycleMetadata {
+  databaseErrorCode?: string;
   errorClassification?: string;
   extractedItemCount?: number;
   extractionStatus?: string;

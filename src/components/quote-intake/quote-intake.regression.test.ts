@@ -31,6 +31,7 @@ import { QuoteReview } from "./quote-intake";
 const projectId = "a12b6b9b-10e9-4e42-b93f-38796de4f65a";
 
 const options = {
+  itemsEnabled: false,
   billingDocuments: [
     {
       allocatedHt: "0.0000",

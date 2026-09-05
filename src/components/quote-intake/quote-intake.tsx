@@ -1056,7 +1056,7 @@ export function QuoteReview({
             </section>
           ) : null}
 
-          {review.itemReview ? (
+          {options.itemsEnabled && review.itemReview ? (
             <QuoteItemReview options={options} review={review.itemReview} />
           ) : null}
 
