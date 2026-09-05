@@ -1,4 +1,6 @@
 "use client";
+import { DateInput } from "@/components/forms/date-input";
+
 import { ListEmptyState } from "@/components/listing/empty-state";
 
 import { SortHeader } from "@/components/listing/sort-header";
@@ -165,14 +167,10 @@ export function CreateProjectForm({
           </select>
         </Field>
         <Field label="Start date">
-          <input className={inputClassName} name="startDate" type="date" />
+          <DateInput className={inputClassName} name="startDate" />
         </Field>
         <Field label="Expected completion">
-          <input
-            className={inputClassName}
-            name="expectedCompletionDate"
-            type="date"
-          />
+          <DateInput className={inputClassName} name="expectedCompletionDate" />
         </Field>
         <Field label="Status">
           <select
@@ -439,8 +437,8 @@ export function ProjectManagement({
             action={deleteSelectedProjectsAction}
             clearSelection={selection.clear}
             entityName="Project"
-            impactSummary={`${affectedBuildingCount} Building${affectedBuildingCount === 1 ? "" : "s"} and ${affectedOrderCount} Supplier Order${affectedOrderCount === 1 ? "" : "s"} will also be deleted.`}
-            scope="Deleting the selected Projects will also permanently delete their Buildings, Supplier Orders, payments, settlements, quote-import history, and financial records. Clients and Suppliers are preserved."
+            impactSummary={`${affectedBuildingCount} Building${affectedBuildingCount === 1 ? "" : "s"} and ${affectedOrderCount} Order${affectedOrderCount === 1 ? "" : "s"} will also be deleted.`}
+            scope="Deleting the selected Projects will also permanently delete their Buildings, Orders, payments, settlements, quote-import history, and financial records. Clients and Suppliers are preserved."
             selectedIds={selection.selectedIds}
           />
         ) : null}

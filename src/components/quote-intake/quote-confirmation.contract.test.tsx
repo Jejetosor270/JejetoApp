@@ -133,10 +133,8 @@ describe("actual V2 review → FormData → action → Order/VAT/audit confirmat
       expect(form).not.toBeNull();
       const data = new FormData(form ?? undefined);
       expect(data.get("billingDocumentId")).toBe("");
-      await clickText("Confirm and save Supplier Order");
-      expect(view.container.textContent).toContain(
-        "Supplier Order import saved",
-      );
+      await clickText("Confirm and save Order");
+      expect(view.container.textContent).toContain("Order import saved");
       expect(
         view.container.querySelector('a[href="/orders/' + reviewOrderId + '"]'),
       ).not.toBeNull();
@@ -177,7 +175,7 @@ describe("actual V2 review → FormData → action → Order/VAT/audit confirmat
     await enter("inputVatAmount", "bad amount");
     const form = control("orderNumber").form;
     const before = [...new FormData(form ?? undefined)];
-    await clickText("Confirm and save Supplier Order");
+    await clickText("Confirm and save Order");
     expect(view.container.querySelector('[role="alert"]')).not.toBeNull();
     expect(view.container.textContent).toContain(
       "Enter a non-negative amount with up to four decimal places.",
@@ -211,7 +209,7 @@ describe("actual V2 review → FormData → action → Order/VAT/audit confirmat
         { code: "P2039", clientVersion: "test" },
       ),
     );
-    await clickText("Confirm and save Supplier Order");
+    await clickText("Confirm and save Order");
     expect(view.container.textContent).toContain(
       "Your review is still available",
     );
@@ -229,7 +227,7 @@ describe("actual V2 review → FormData → action → Order/VAT/audit confirmat
   it("returns a specific relation error without writing an Order or losing the review", async () => {
     await review(false);
     storage.currency.findFirst.mockResolvedValueOnce(null);
-    await clickText("Confirm and save Supplier Order");
+    await clickText("Confirm and save Order");
     expect(view.container.textContent).toContain(
       "Choose valid active project, supplier, and currencies.",
     );
@@ -241,7 +239,7 @@ describe("actual V2 review → FormData → action → Order/VAT/audit confirmat
   it("returns an actionable FX validation error instead of throwing during Decimal conversion", async () => {
     await review(false);
     await enter("purchaseFxRate", "invalid FX");
-    await clickText("Confirm and save Supplier Order");
+    await clickText("Confirm and save Order");
     expect(view.container.textContent).toContain(
       "Enter a positive FX rate with up to ten decimal places.",
     );
@@ -257,7 +255,7 @@ describe("actual V2 review → FormData → action → Order/VAT/audit confirmat
         { code: "P2039", clientVersion: "test" },
       ),
     );
-    await clickText("Confirm and save Supplier Order");
+    await clickText("Confirm and save Order");
     expect(view.container.textContent).toContain(
       "The VAT setup needs an administrator update",
     );

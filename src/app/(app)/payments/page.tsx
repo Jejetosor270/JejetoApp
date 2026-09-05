@@ -1,262 +1,399 @@
-import { PageHeader } from "@/components/layout/page-header";
-import { ViewShortcuts } from "@/components/listing/view-shortcuts";
-import { FilterBar } from "@/components/listing/filter-bar";
+import Link from "next/link";
+import Decimal from "decimal.js";
 import type { Metadata } from "next";
-
-import { PaymentInstallmentTable } from "@/components/payments/payment-installment-table";
-import { PageSizeField, Pagination } from "@/components/listing/pagination";
+import SupplierPaymentsPage from "./supplier-page";
+import { requireUser } from "@/lib/auth/current-user";
+import { getDatabase } from "@/lib/db";
+import { listClientCashInstallments } from "@/lib/billing/reporting";
+import { listPaymentInstallments } from "@/lib/payments/payments";
+import { listCashTransactions } from "@/lib/payments/transactions";
+import { CashTransactions } from "@/components/payments/cash-transactions";
+import { ClientCashTable } from "@/components/payments/client-cash-table";
+import { DateInput } from "@/components/forms/date-input";
+import { FilterBar } from "@/components/listing/filter-bar";
 import {
   FilterField,
   filterControlClassName,
 } from "@/components/listing/filter-field";
-import { ExportLink } from "@/components/export/export-link";
-import { PaymentDirection } from "@/generated/prisma/client";
-import type { DerivedPaymentStatus } from "@/domain/payments/calculations";
-import { isDateOnly } from "@/domain/payments/dates";
-import { formatEnumLabel } from "@/domain/presentation/labels";
+import { Pagination } from "@/components/listing/pagination";
 import {
   firstQueryValue,
   optionalUuid,
   parsePageInput,
-  parseSort,
-  parseSortDirection,
   queryStringFromParams,
 } from "@/domain/listing/validation";
-import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import {
-  listPaymentInstallmentsPage,
-  listPaymentOptions,
-} from "@/lib/payments/payments";
-
-export const metadata: Metadata = { title: "Supplier Payments" };
-
-const statuses: readonly DerivedPaymentStatus[] = [
-  "OVERDUE",
-  "DUE",
-  "PARTIALLY_PAID",
-  "UPCOMING",
-  "PAID",
-  "CANCELLED",
-];
-
-function selected<T extends string>(
-  values: readonly T[],
-  value: string | undefined,
-): T | undefined {
-  return values.find((item) => item === value);
-}
+  businessToday,
+  formatDateOnly,
+  isDateOnly,
+} from "@/domain/payments/dates";
+import { formatMoney } from "@/domain/procurement/presentation";
+export const metadata: Metadata = { title: "Payments" };
+type Params = Record<string, string | string[] | undefined>;
 
 export default async function PaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<Params>;
 }) {
+  await requireUser();
   const params = await searchParams;
-  const text = (name: string) => firstQueryValue(params, name);
-  const dueFrom = text("dueFrom");
-  const dueTo = text("dueTo");
-  const pageInput = parsePageInput(params);
-  const sort = parseSort(
-    ["dueDate", "amount"] as const,
-    text("sort"),
-    "dueDate",
+  const text = (key: string) => firstQueryValue(params, key);
+  const tab = ["supplier", "client", "transactions"].includes(text("tab") ?? "")
+    ? text("tab")
+    : "overview";
+  const projectId = optionalUuid(text("projectId"));
+  const tabs = (
+    <nav aria-label="Payments sections" className="flex gap-4 border-b pb-3">
+      {["overview", "supplier", "client", "transactions"].map((item) => {
+        const query = new URLSearchParams(queryStringFromParams(params));
+        query.set("tab", item);
+        query.delete("page");
+        return (
+          <Link
+            key={item}
+            aria-current={tab === item ? "page" : undefined}
+            className={
+              tab === item
+                ? "text-primary font-semibold"
+                : "text-muted-foreground"
+            }
+            href={`/payments?${query}`}
+          >
+            {item[0]?.toUpperCase()}
+            {item.slice(1)}
+          </Link>
+        );
+      })}
+    </nav>
   );
-  const sortDirection = parseSortDirection(text("sortDirection"));
-  const [user, options, result] = await Promise.all([
-    requireUser(),
-    listPaymentOptions(),
-    listPaymentInstallmentsPage({
-      currencyCode: text("currencyCode"),
-      direction: PaymentDirection.SUPPLIER_PAYMENT,
-      dueFrom: dueFrom && isDateOnly(dueFrom) ? dueFrom : undefined,
-      dueTo: dueTo && isDateOnly(dueTo) ? dueTo : undefined,
-      orderId: optionalUuid(text("orderId")),
-      projectId: optionalUuid(text("projectId")),
-      sort,
-      sortDirection,
-      status: selected(statuses, text("status")),
-      supplierId: optionalUuid(text("supplierId")),
-      ...pageInput,
+  if (tab === "supplier")
+    return (
+      <div className="space-y-5">
+        {tabs}
+        <SupplierPaymentsPage
+          searchParams={Promise.resolve({
+            ...params,
+            dueFrom: text("dueFrom") ?? text("dateFrom"),
+            dueTo: text("dueTo") ?? text("dateTo"),
+            supplierId: text("supplierId") ?? text("counterpartyId"),
+          })}
+        />
+      </div>
+    );
+  const db = getDatabase();
+  const [projects, clients, suppliers, orders, billing] = await Promise.all([
+    db.project.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.client.findMany({
+      select: { id: true, displayName: true },
+      orderBy: { displayName: "asc" },
+    }),
+    db.supplier.findMany({
+      select: { id: true, displayName: true },
+      orderBy: { displayName: "asc" },
+    }),
+    db.procurementOrder.findMany({
+      where: projectId ? { projectId } : {},
+      select: { id: true, orderNumber: true },
+      orderBy: { orderNumber: "asc" },
+    }),
+    db.clientBillingDocument.findMany({
+      where: projectId ? { projectId } : {},
+      select: { id: true, reference: true },
+      orderBy: { reference: "asc" },
     }),
   ]);
-  const exportQuery = new URLSearchParams(queryStringFromParams(params));
-  exportQuery.set("direction", PaymentDirection.SUPPLIER_PAYMENT);
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Supplier Payments"
-        description={
-          <>
-            Supplier cash-out installments, settlements, and outstanding
-            balances.
-          </>
-        }
-        actions={
-          <>
-            <ExportLink
-              entity="payments"
-              queryString={exportQuery.toString()}
-            />
-          </>
-        }
-      />
-      <ViewShortcuts
-        pathname="/payments"
-        queryString={queryStringFromParams(params)}
-        field="status"
-        options={[
-          { label: "All", value: "" },
-          { label: "Overdue", value: "OVERDUE" },
-          { label: "Due", value: "DUE" },
-          { label: "Upcoming", value: "UPCOMING" },
-          { label: "Paid", value: "PAID" },
-        ]}
-      />
-      <FilterBar>
-        <FilterField label="Supplier Order">
-          <select
-            className={filterControlClassName}
-            defaultValue={text("orderId") ?? ""}
-            name="orderId"
-          >
-            <option value="">All Supplier Orders</option>
-            {options.orders.map((order) => (
-              <option key={order.id} value={order.id}>
-                {order.orderNumber}
+  const filters = (
+    <FilterBar>
+      <input name="tab" type="hidden" value={tab} />
+      <FilterField label="Project">
+        <select
+          name="projectId"
+          className={filterControlClassName}
+          defaultValue={projectId ?? ""}
+        >
+          <option value="">All Projects</option>
+          {projects.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+      </FilterField>
+      <FilterField label="Counterparty">
+        <select
+          name="counterpartyId"
+          className={filterControlClassName}
+          defaultValue={text("counterpartyId") ?? ""}
+        >
+          <option value="">All counterparties</option>
+          <optgroup label="Clients">
+            {clients.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.displayName}
               </option>
             ))}
-          </select>
-        </FilterField>
-        <FilterField label="Status">
+          </optgroup>
+          {tab !== "client" ? (
+            <optgroup label="Suppliers">
+              {suppliers.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.displayName}
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
+        </select>
+      </FilterField>
+      <FilterField label="From">
+        <DateInput name="dateFrom" defaultValue={text("dateFrom") ?? ""} />
+      </FilterField>
+      <FilterField label="To">
+        <DateInput name="dateTo" defaultValue={text("dateTo") ?? ""} />
+      </FilterField>
+      {tab === "transactions" ? (
+        <>
+          <FilterField label="Direction">
+            <select
+              className={filterControlClassName}
+              name="direction"
+              defaultValue={text("direction") ?? ""}
+            >
+              <option value="">Both</option>
+              <option value="IN">Cash In</option>
+              <option value="OUT">Cash Out</option>
+            </select>
+          </FilterField>
+          <FilterField label="Order">
+            <select
+              name="orderId"
+              className={filterControlClassName}
+              defaultValue={text("orderId") ?? ""}
+            >
+              <option value="">All Orders</option>
+              {orders.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.orderNumber}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+        </>
+      ) : null}
+      <FilterField label="Billing">
+        <select
+          name="billingId"
+          className={filterControlClassName}
+          defaultValue={text("billingId") ?? ""}
+        >
+          <option value="">All Billing</option>
+          {billing.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.reference}
+            </option>
+          ))}
+        </select>
+      </FilterField>
+      <FilterField label="Reference">
+        <input
+          name="reference"
+          className={filterControlClassName}
+          defaultValue={text("reference") ?? ""}
+        />
+      </FilterField>
+      {tab !== "transactions" ? (
+        <FilterField label="Timing">
           <select
+            name="status"
             className={filterControlClassName}
             defaultValue={text("status") ?? ""}
-            name="status"
           >
-            <option value="">All statuses</option>
-            {statuses.map((status) => (
-              <option key={status} value={status}>
-                {formatEnumLabel(status)}
-              </option>
-            ))}
+            <option value="">All</option>
+            <option value="OVERDUE">Overdue</option>
+            <option value="UPCOMING">Upcoming</option>
+            <option value="PAID">Paid</option>
           </select>
         </FilterField>
-        <FilterField label="Sort by">
-          <select
-            className={filterControlClassName}
-            defaultValue={sort}
-            name="sort"
-          >
-            <option value="dueDate">Due date</option>
-            <option value="amount">Scheduled amount</option>
-          </select>
-        </FilterField>
-        <FilterField label="Sort direction">
-          <select
-            className={filterControlClassName}
-            defaultValue={sortDirection}
-            name="sortDirection"
-          >
-            <option value="asc">Ascending</option>
-            <option value="desc">Descending</option>
-          </select>
-        </FilterField>
-        <PageSizeField value={pageInput.pageSize} />
-        <FilterField label="Project">
-          <select
-            className={filterControlClassName}
-            defaultValue={text("projectId") ?? ""}
-            name="projectId"
-          >
-            <option value="">All projects</option>
-            {options.projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        </FilterField>
-        <FilterField label="Supplier">
-          <select
-            className={filterControlClassName}
-            defaultValue={text("supplierId") ?? ""}
-            name="supplierId"
-          >
-            <option value="">All suppliers</option>
-            {options.suppliers.map((supplier) => (
-              <option key={supplier.id} value={supplier.id}>
-                {supplier.displayName}
-              </option>
-            ))}
-          </select>
-        </FilterField>
-        <FilterField label="Currency">
-          <select
-            className={filterControlClassName}
-            defaultValue={text("currencyCode") ?? ""}
-            name="currencyCode"
-          >
-            <option value="">All currencies</option>
-            {options.currencies.map((currency) => (
-              <option key={currency.code} value={currency.code}>
-                {currency.code}
-              </option>
-            ))}
-          </select>
-        </FilterField>
-        <FilterField label="Due from">
-          <input
-            className={filterControlClassName}
-            defaultValue={dueFrom ?? ""}
-            name="dueFrom"
-            type="date"
+      ) : null}
+      <FilterField label="Date order">
+        <select
+          name="sortDirection"
+          className={filterControlClassName}
+          defaultValue={text("sortDirection") ?? "desc"}
+        >
+          <option value="desc">Newest first</option>
+          <option value="asc">Oldest first</option>
+        </select>
+      </FilterField>
+      <button className="rounded border px-3 py-2" type="submit">
+        Apply filters
+      </button>
+    </FilterBar>
+  );
+  const today = businessToday();
+  const from = text("dateFrom"),
+    to = text("dateTo");
+  const clientRows =
+    tab === "transactions"
+      ? []
+      : (await listClientCashInstallments(projectId ? [projectId] : undefined))
+          .filter(
+            (item) =>
+              (!text("counterpartyId") ||
+                item.clientId === text("counterpartyId")) &&
+              (!text("billingId") ||
+                item.billingDocumentId === text("billingId")) &&
+              (!from || !isDateOnly(from) || item.dueDate >= from) &&
+              (!to || !isDateOnly(to) || item.dueDate <= to) &&
+              (!text("reference") ||
+                item.billingReference
+                  .toLowerCase()
+                  .includes((text("reference") ?? "").toLowerCase())) &&
+              (!text("status") ||
+                (text("status") === "OVERDUE"
+                  ? !item.isCancelled &&
+                    item.dueDate < today &&
+                    new Decimal(item.outstandingAmount).isPositive()
+                  : text("status") === "UPCOMING"
+                    ? !item.isCancelled &&
+                      item.dueDate >= today &&
+                      new Decimal(item.outstandingAmount).isPositive()
+                    : item.status === text("status"))),
+          )
+          .sort(
+            (a, b) =>
+              (text("sortDirection") === "asc" ? 1 : -1) *
+                a.dueDate.localeCompare(b.dueDate) || a.id.localeCompare(b.id),
+          );
+  const { page, pageSize } = parsePageInput(params);
+  const actual =
+    tab === "client"
+      ? null
+      : await listCashTransactions(
+          tab === "overview"
+            ? { ...params, page: "1", pageSize: "10" }
+            : params,
+        );
+  const supplierRows =
+    tab === "overview" && !text("billingId")
+      ? (
+          await listPaymentInstallments({
+            projectId,
+            direction: "SUPPLIER_PAYMENT",
+            supplierId: optionalUuid(text("counterpartyId")),
+            dueFrom: from && isDateOnly(from) ? from : undefined,
+            dueTo: to && isDateOnly(to) ? to : undefined,
+          })
+        )
+          .filter(
+            (item) =>
+              !item.isCancelled &&
+              new Decimal(item.outstandingAmount).isPositive() &&
+              (!text("reference") ||
+                item.orderNumber
+                  .toLowerCase()
+                  .includes((text("reference") ?? "").toLowerCase())) &&
+              (!text("status") ||
+                (text("status") === "OVERDUE"
+                  ? item.dueDate < today
+                  : text("status") === "UPCOMING"
+                    ? item.dueDate >= today
+                    : item.status === text("status"))),
+          )
+          .sort(
+            (a, b) =>
+              a.dueDate.localeCompare(b.dueDate) || a.id.localeCompare(b.id),
+          )
+      : [];
+  return (
+    <div className="space-y-5">
+      <h1 className="text-2xl font-semibold">Payments</h1>
+      {tabs}
+      {filters}
+      {tab === "transactions" && actual ? (
+        <>
+          <p className="text-muted-foreground text-sm">
+            Actual Client receipts and Supplier settlements only. Original
+            transaction currencies are preserved.
+          </p>
+          <CashTransactions items={actual.items} />
+          <Pagination
+            pathname="/payments"
+            queryString={queryStringFromParams(params)}
+            {...actual}
           />
-        </FilterField>
-        <div className="flex items-end gap-2">
-          <FilterField label="Due to">
-            <input
-              className={filterControlClassName}
-              defaultValue={dueTo ?? ""}
-              name="dueTo"
-              type="date"
+        </>
+      ) : tab === "client" ? (
+        <>
+          <p className="text-muted-foreground text-sm">
+            Billing schedules and recorded Client receipts. Open Billing to
+            record or edit a receipt.
+          </p>
+          <ClientCashTable
+            items={clientRows.slice((page - 1) * pageSize, page * pageSize)}
+          />
+          <Pagination
+            pathname="/payments"
+            queryString={queryStringFromParams(params)}
+            page={page}
+            pageSize={pageSize}
+            total={clientRows.length}
+          />
+        </>
+      ) : (
+        <>
+          <section className="space-y-3">
+            <h2 className="font-semibold">
+              Expected Cash Out · Supplier installments
+            </h2>
+            <ul className="divide-y rounded border">
+              {supplierRows.slice(0, 10).map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-wrap justify-between gap-2 p-3"
+                >
+                  <Link
+                    className="text-primary"
+                    href={`/orders/${item.orderId}`}
+                  >
+                    {item.supplierName} · {item.orderNumber} · {item.label}
+                  </Link>
+                  <span>
+                    {item.dueDate < today ? "Overdue" : "Upcoming"} ·{" "}
+                    {formatDateOnly(item.dueDate)} ·{" "}
+                    {formatMoney(item.outstandingAmount, item.currencyCode)}
+                  </span>
+                </li>
+              ))}
+              {!supplierRows.length ? (
+                <li className="p-3">No outstanding Supplier installments.</li>
+              ) : null}
+            </ul>
+          </section>
+          <section className="space-y-3">
+            <h2 className="font-semibold">
+              Expected Cash In · Client collections
+            </h2>
+            <ClientCashTable
+              items={clientRows
+                .filter(
+                  (item) =>
+                    !item.isCancelled &&
+                    new Decimal(item.outstandingAmount).isPositive(),
+                )
+                .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+                .slice(0, 10)}
             />
-          </FilterField>
-          <button
-            className="border-input h-9 rounded-lg border px-3 text-sm font-medium"
-            type="submit"
-          >
-            Filter
-          </button>
-        </div>
-      </FilterBar>
-      <PaymentInstallmentTable
-        canEdit={canEditMasterData(user.role)}
-        installments={result.items.map((item) => ({
-          actualDate: item.actualDate,
-          currencyCode: item.currencyCode,
-          dueDate: item.dueDate,
-          id: item.id,
-          label: item.label,
-          notes: item.notes,
-          orderId: item.orderId,
-          orderNumber: item.orderNumber,
-          outstandingAmount: item.outstandingAmount,
-          paidAmount: item.paidAmount,
-          projectName: item.projectName,
-          scheduledAmount: item.scheduledAmount,
-          settlementCount: item.settlements.length,
-          status: item.status,
-          supplierName: item.supplierName,
-        }))}
-      />
-      <Pagination
-        page={pageInput.page}
-        pageSize={pageInput.pageSize}
-        pathname="/payments"
-        queryString={queryStringFromParams(params)}
-        selectionIsPageScoped={canEditMasterData(user.role)}
-        total={result.total}
-      />
+          </section>
+          <section className="space-y-3">
+            <h2 className="font-semibold">Recent actual cash</h2>
+            <CashTransactions items={actual?.items ?? []} />
+          </section>
+        </>
+      )}
     </div>
   );
 }

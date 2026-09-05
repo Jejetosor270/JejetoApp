@@ -1,6 +1,7 @@
 "use client";
 
 import Decimal from "decimal.js";
+import { AllocationInputs } from "@/components/billing/allocation-inputs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -8,24 +9,20 @@ import { useEffect, useState } from "react";
 import { updateOrderBillingLinkAction } from "@/app/(app)/billing/actions";
 import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import {
+  inputClassName,
   ActionFeedback,
   Field,
-  inputClassName,
-  PercentageInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
 import type { BillingActionState } from "@/domain/billing/action-state";
 import {
-  amountFromPercentage,
   fractionFromAmount,
   orderBillingCoverage,
-  percentageFromAmount,
 } from "@/domain/billing/calculations";
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import { formatEnumLabel } from "@/domain/presentation/labels";
-import { humanPercentageToFraction } from "@/domain/validation/percentage";
 
 interface BillingLinkDocument {
   allocatedToOtherOrdersHt: string;
@@ -58,17 +55,8 @@ function BillingLinkForm({
   orderId: string;
 }) {
   const router = useRouter();
-  const [basis, setBasis] = useState<"PERCENTAGE" | "FIXED_AMOUNT">(
-    document.allocation?.basis ?? "FIXED_AMOUNT",
-  );
   const [amount, setAmount] = useState(
     document.allocation?.allocatedAmount ?? "",
-  );
-  const [percentage, setPercentage] = useState(
-    percentageFromAmount(
-      document.orderSellingBasisHt ?? "",
-      document.allocation?.allocatedAmount ?? "",
-    ) ?? "",
   );
   const [approveRemainder, setApproveRemainder] = useState(
     document.isProjectRemainderApproved,
@@ -88,66 +76,15 @@ function BillingLinkForm({
       <input name="billingDocumentId" type="hidden" value={document.id} />
       <input name="orderId" type="hidden" value={orderId} />
       <input name="remove" type="hidden" value="false" />
-      <input
-        name="percentageRate"
-        type="hidden"
-        value={
-          basis === "PERCENTAGE"
-            ? (humanPercentageToFraction(percentage, {
-                maximumPercent: "100",
-              }) ?? percentage)
-            : ""
-        }
-      />
-      <Field label="Basis">
-        <select
-          className={inputClassName}
-          name="basis"
-          onChange={(event) =>
-            setBasis(event.target.value as "PERCENTAGE" | "FIXED_AMOUNT")
-          }
-          value={basis}
-        >
-          <option value="FIXED_AMOUNT">Amount</option>
-          <option value="PERCENTAGE">Percentage</option>
-        </select>
-      </Field>
-      <Field
-        error={state.fieldErrors?.percentageRate}
-        label="% of Supplier Order"
-      >
-        <PercentageInput
-          className={inputClassName}
-          disabled={basis !== "PERCENTAGE"}
-          onValueChange={(next) => {
-            setPercentage(next);
-            setAmount(
-              amountFromPercentage(document.orderSellingBasisHt ?? "", next) ??
-                "",
-            );
-          }}
-          value={percentage}
-        />
-      </Field>
-      <Field
+      <input name="basis" type="hidden" value="FIXED_AMOUNT" />
+      <AllocationInputs
+        amount={amount}
+        onAmountChange={setAmount}
+        billingTotalHt={document.totalHt}
+        orderSellHt={document.orderSellingBasisHt}
+        currencyCode={document.currencyCode}
         error={state.fieldErrors?.allocatedAmount}
-        label={`Allocation HT (${document.currencyCode})`}
-      >
-        <input
-          className={inputClassName}
-          inputMode="decimal"
-          name="allocatedAmount"
-          onChange={(event) => {
-            const next = event.target.value;
-            setAmount(next);
-            setPercentage(
-              percentageFromAmount(document.orderSellingBasisHt ?? "", next) ??
-                "",
-            );
-          }}
-          value={amount}
-        />
-      </Field>
+      />
       <div className="flex items-end gap-2">
         <SubmitButton pending={pending}>
           {document.allocation ? "Save allocation" : "Link Billing"}
@@ -155,21 +92,21 @@ function BillingLinkForm({
       </div>
       <div className="bg-muted/30 grid gap-2 rounded-md border p-3 text-xs sm:grid-cols-4 lg:col-span-4">
         <p>
-          Supplier Order Sell HT:{" "}
+          Order Sell HT:{" "}
           {formatMoney(document.orderSellingBasisHt, document.currencyCode)}
         </p>
         <p>
           Billing HT: {formatMoney(document.totalHt, document.currencyCode)}
         </p>
         <p>
-          Allocated to other Supplier Orders:{" "}
+          Allocated to other Orders:{" "}
           {formatMoney(
             document.allocatedToOtherOrdersHt,
             document.currencyCode,
           )}
         </p>
         <p>
-          Available for this Supplier Order:{" "}
+          Available for this Order:{" "}
           {formatMoney(document.availableForOrderHt, document.currencyCode)}
           {document.orderSellingBasisHt ? (
             <span className="text-muted-foreground block">
@@ -183,7 +120,7 @@ function BillingLinkForm({
                   ).toString(),
                 ),
               )}{" "}
-              of Supplier Order
+              of Order
             </span>
           ) : null}
         </p>
@@ -274,7 +211,7 @@ export function OrderBillingReconciliation({
     <section className="bg-card rounded-lg border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">Client Billing</h2>
+          <h2 className="text-sm font-semibold">Billing</h2>
           <p className="text-muted-foreground mt-1 text-xs">
             Commercial attribution only. Client receipts remain separate cash
             records.
@@ -282,7 +219,7 @@ export function OrderBillingReconciliation({
         </div>
         <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-right text-xs sm:grid-cols-3 xl:grid-cols-6">
           <p>
-            Supplier Order Sell HT{" "}
+            Order Sell HT{" "}
             <span className="financial-figure block font-medium">
               {formatMoney(plannedSell, reportingCurrencyCode)}
             </span>
@@ -300,7 +237,7 @@ export function OrderBillingReconciliation({
             </span>
           </p>
           <p>
-            % of Supplier Order invoiced{" "}
+            % of Order invoiced{" "}
             <span className="financial-figure block font-medium">
               {formatRate(coverage?.coverageRate ?? null)}
             </span>
@@ -352,7 +289,7 @@ export function OrderBillingReconciliation({
               </p>
               <p className="financial-figure text-right">
                 <span className="text-muted-foreground block text-[0.6875rem]">
-                  % of Supplier Order
+                  % of Order
                 </span>
                 {document.allocation
                   ? formatRate(
@@ -387,7 +324,7 @@ export function OrderBillingReconciliation({
         ))}
         {linked.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            No Client Billing Events are linked yet.
+            No Billing Events are linked yet.
           </p>
         ) : null}
       </div>

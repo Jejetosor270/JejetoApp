@@ -25,7 +25,7 @@ describe("Project Funding Coverage", () => {
     },
   );
 
-  it("excludes cancelled Supplier Orders", () => {
+  it("excludes cancelled Orders", () => {
     const result = calculateProjectFundingCoverage({
       clientBillingCoverageComplete: true,
       clientBillingCoverageHt: "100",
@@ -39,7 +39,7 @@ describe("Project Funding Coverage", () => {
     expect(result.fundingCoverageHt).toBe("0.0000");
   });
 
-  it("is incomplete when Billing FX or Supplier Order FX is missing", () => {
+  it("is incomplete when Billing FX or Order FX is missing", () => {
     expect(
       calculateProjectFundingCoverage({
         clientBillingCoverageComplete: false,

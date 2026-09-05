@@ -215,13 +215,13 @@ export default async function ItemsPage({
             ))}
           </select>
         </FilterField>
-        <FilterField label="Supplier Order">
+        <FilterField label="Order">
           <select
             className={filterControlClassName}
             defaultValue={filters.orderId ?? ""}
             name="orderId"
           >
-            <option value="">All Supplier Orders</option>
+            <option value="">All Orders</option>
             {options.projects.flatMap((p) =>
               p.orders.map((o) => (
                 <option key={o.id} value={o.id}>

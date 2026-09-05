@@ -242,6 +242,9 @@ export async function deleteProjects(
     await transaction.building.deleteMany({
       where: { projectId: { in: ids } },
     });
+    await transaction.orderPackage.deleteMany({
+      where: { projectId: { in: ids } },
+    });
     const deleted = await transaction.project.deleteMany({
       where: { id: { in: ids } },
     });
@@ -299,6 +302,9 @@ export async function deleteClients(
       where: { building: { projectId: { in: projectIds } } },
     });
     await transaction.building.deleteMany({
+      where: { projectId: { in: projectIds } },
+    });
+    await transaction.orderPackage.deleteMany({
       where: { projectId: { in: projectIds } },
     });
     await transaction.project.deleteMany({

@@ -140,6 +140,10 @@ const orderFields = {
     "Output VAT taxable base override",
   ),
   outputVatTreatment: optionalEnum(VatTreatment),
+  packageId: z.preprocess(
+    (value) => (value === "" ? null : value),
+    z.uuid().nullable().optional(),
+  ),
   packageName: z.string().trim().min(2).max(200),
   pricingMode: z.enum(orderPricingMethods),
   projectId: z.uuid("Choose a valid project."),

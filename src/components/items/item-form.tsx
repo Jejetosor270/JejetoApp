@@ -1,4 +1,7 @@
 "use client";
+import { MoneyInput } from "@/components/master-data/form-ui";
+
+import { DateInput } from "@/components/forms/date-input";
 
 import { useState, useTransition } from "react";
 
@@ -214,13 +217,13 @@ export function ItemForm({
             name="supplierSku"
           />
         </Field>
-        <Field label="Supplier Order">
+        <Field label="Order">
           <select
             className={input}
             defaultValue={value("procurementOrderId")}
             name="procurementOrderId"
           >
-            <option value="">No Supplier Order</option>
+            <option value="">No Order</option>
             {options.projects.flatMap((project) =>
               project.orders.map((order) => (
                 <option key={order.id} value={order.id}>
@@ -404,10 +407,10 @@ export function ItemForm({
           />
         </Field>
         <Field label="VAT amount">
-          <input
+          <MoneyInput
             className={input}
             defaultValue={value("vatAmount")}
-            inputMode="decimal"
+
             name="vatAmount"
           />
         </Field>
@@ -470,11 +473,10 @@ export function ItemForm({
             ] as const
           ).map((key) => (
             <Field key={key} label={key.replace(/([A-Z])/g, " $1")}>
-              <input
+              <DateInput
                 className={input}
                 defaultValue={value(key)}
                 name={key}
-                type="date"
               />
             </Field>
           ))}

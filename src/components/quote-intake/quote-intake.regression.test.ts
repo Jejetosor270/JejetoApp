@@ -110,7 +110,7 @@ describe("Supplier document review rendering", () => {
     expect(html).toContain("50 000.00");
     expect(html).toContain("10 000.00");
     expect(html).toContain("60 000.00");
-    expect(html).toContain("Confirm and save Supplier Order");
+    expect(html).toContain("Confirm and save Order");
     expect(html).toContain("Totals require employee confirmation.");
   });
 
@@ -130,7 +130,7 @@ describe("Supplier document review rendering", () => {
     );
 
     expect(html).toContain('name="importRequestId"');
-    expect(html).toContain("Optional Client Billing reconciliation");
+    expect(html).toContain("Optional Billing reconciliation");
     expect(html).toContain("Skip for now");
     expect(html).toContain("Optional payment proposal");
   });

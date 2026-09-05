@@ -108,6 +108,7 @@ export async function processClientDocument(
               id: true,
               projectId: true,
               reference: true,
+              currencyCode: true,
               totalHt: true,
             },
           })

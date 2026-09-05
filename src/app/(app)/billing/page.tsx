@@ -29,7 +29,7 @@ import {
   listClientBillingPage,
 } from "@/lib/billing/billing";
 
-export const metadata: Metadata = { title: "Client Billing" };
+export const metadata: Metadata = { title: "Billing" };
 export const maxDuration = 120;
 
 export default async function BillingPage({
@@ -69,11 +69,11 @@ export default async function BillingPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Client Billing"
+        title="Billing"
         description={
           <>
             Quotes, Invoices, planned payments, actual receipts, and
-            Project-level Supplier Order allocation.
+            Project-level Order allocation.
           </>
         }
         actions={

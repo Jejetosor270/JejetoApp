@@ -16,8 +16,7 @@ export function CreateOrderActions({ children }: { children: ReactNode }) {
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button>
-            New Supplier Order{" "}
-            <ChevronDown aria-hidden="true" className="size-4" />
+            New Order <ChevronDown aria-hidden="true" className="size-4" />
           </Button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
@@ -38,12 +37,7 @@ export function CreateOrderActions({ children }: { children: ReactNode }) {
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
-      <EditorDrawer
-        title="New Supplier Order"
-        wide
-        open={open}
-        onOpenChange={setOpen}
-      >
+      <EditorDrawer title="New Order" wide open={open} onOpenChange={setOpen}>
         {children}
       </EditorDrawer>
     </>

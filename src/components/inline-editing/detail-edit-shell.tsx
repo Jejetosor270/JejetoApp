@@ -1,11 +1,9 @@
 "use client";
-
-import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
+import type { ReactNode } from "react";
 import { Pencil } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
-
+import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { Button } from "@/components/ui/button";
-
+import { SheetClose } from "@/components/ui/sheet";
 export function DetailEditShell({
   canEdit,
   children,
@@ -17,54 +15,28 @@ export function DetailEditShell({
   editor: ReactNode;
   label: string;
 }) {
-  const [editing, setEditing] = useState(false);
-  const shellRef = useRef<HTMLDivElement>(null);
-  const editButtonRef = useRef<HTMLButtonElement>(null);
-  const wasEditing = useRef(false);
-  useEffect(() => {
-    if (editing) {
-      shellRef.current
-        ?.querySelector<HTMLElement>("input, select, textarea")
-        ?.focus();
-    } else if (wasEditing.current) {
-      editButtonRef.current?.focus();
-    }
-    wasEditing.current = editing;
-  }, [editing]);
-  if (editing) {
-    return (
-      <div ref={shellRef}>
-        {editor}
-        <Button
-          className="mt-3"
-          onClick={() => {
-            if (
-              !hasUnsavedDrafts() ||
-              window.confirm("Discard your unsaved changes?")
-            )
-              setEditing(false);
-          }}
-          type="button"
-          variant="outline"
-        >
-          Cancel editing
-        </Button>
-      </div>
-    );
-  }
   return (
     <div className="relative space-y-6">
       {canEdit ? (
-        <Button
-          className="float-right ml-4"
-          onClick={() => setEditing(true)}
-          ref={editButtonRef}
-          type="button"
-          variant="outline"
-        >
-          <Pencil data-icon="inline-start" />
-          {label}
-        </Button>
+        <div className="float-right ml-4">
+          <EditorDrawer
+            title={label}
+            wide
+            trigger={
+              <Button variant="outline" type="button">
+                <Pencil data-icon="inline-start" />
+                {label}
+              </Button>
+            }
+          >
+            {editor}
+            <SheetClose asChild>
+              <Button className="mt-3" type="button" variant="outline">
+                Cancel editing
+              </Button>
+            </SheetClose>
+          </EditorDrawer>
+        </div>
       ) : null}
       {children}
     </div>

@@ -102,7 +102,7 @@ function OrderRow({
   const selectionCell = canEdit ? (
     <SelectionCell
       checked={isSelected}
-      label={`Supplier Order ${saved.orderNumber}`}
+      label={`Order ${saved.orderNumber}`}
       onChange={onSelect}
     />
   ) : null;
@@ -115,6 +115,9 @@ function OrderRow({
         </td>
         <td className="px-4 py-3">{order.supplier.displayName}</td>
         <td className="px-4 py-3">{order.project.name}</td>
+        <td className="px-4 py-3">
+          {order.orderPackage?.name ?? "Unassigned"}
+        </td>
         <td className="financial-figure px-4 py-3 text-right">
           {formatMoney(cost.purchaseCost, order.orderCurrencyCode)}
         </td>
@@ -147,6 +150,9 @@ function OrderRow({
           <Link href={`/orders/${order.id}`}>{order.orderNumber}</Link>
         </td>
         <td className="px-4 py-3">{order.project.name}</td>
+        <td className="px-4 py-3">
+          {order.orderPackage?.name ?? "Unassigned"}
+        </td>
         <td className="financial-figure px-4 py-3 text-right">
           {formatMoney(
             order.supplierPayment.totalPayable,
@@ -191,6 +197,9 @@ function OrderRow({
         </td>
         <td className="px-4 py-3">{order.supplier.displayName}</td>
         <td className="px-4 py-3">{order.project.name}</td>
+        <td className="px-4 py-3">
+          {order.orderPackage?.name ?? "Unassigned"}
+        </td>
         <td className="max-w-64 px-4 py-3">
           {order.buildings.join(", ") || "—"}
         </td>
@@ -202,7 +211,7 @@ function OrderRow({
       {canEdit ? (
         <SelectionCell
           checked={isSelected}
-          label={`Supplier Order ${saved.orderNumber}`}
+          label={`Order ${saved.orderNumber}`}
           onChange={onSelect}
         />
       ) : null}
@@ -229,6 +238,7 @@ function OrderRow({
         </span>
       </td>
       <td className="px-4 py-3">{order.project.name}</td>
+      <td className="px-4 py-3">{order.orderPackage?.name ?? "Unassigned"}</td>
       <td className="px-4 py-3">{order.supplier.displayName}</td>
       <td className="px-4 py-3">
         {editing ? (
@@ -313,15 +323,15 @@ export function OrderTable({
         <BulkActionBar
           action={deleteSelectedOrdersAction}
           clearSelection={selection.clear}
-          entityName="Supplier Order"
-          scope="Deleting the selected Supplier Orders will also permanently delete all related Supplier Payment and Client Receipt schedules, settlements, quote-import history, VAT and cost records, Building links, and other Supplier Order-owned data. Suppliers, Projects, and Clients are preserved."
+          entityName="Order"
+          scope="Deleting the selected Orders will also permanently delete all related Supplier Payment and Client Receipt schedules, settlements, quote-import history, VAT and cost records, Building links, and other Order-owned data. Suppliers, Projects, and Clients are preserved."
           selectedIds={selection.selectedIds}
         />
       ) : null}
       <div
         className="max-h-[70svh] overflow-auto"
         role="region"
-        aria-label="Supplier Orders table"
+        aria-label="Orders table"
         tabIndex={0}
       >
         <table
@@ -347,6 +357,7 @@ export function OrderTable({
                     defaultDirection="desc"
                   />
                   <th className="px-4 py-3">Project</th>
+                  <th className="px-4 py-3">Package</th>
                   <th className="px-4 py-3">Supplier</th>
                   <SortHeader
                     className="px-4 py-3"
@@ -368,22 +379,22 @@ export function OrderTable({
                   />
                   <th className="px-4 py-3">Supplier</th>
                   <th className="px-4 py-3">Project</th>
+                  <th className="px-4 py-3">Package</th>
                   <th className="px-4 py-3 text-right">Purchase Cost HT</th>
 
                   <th className="px-4 py-3 text-right">
                     Economic Landed Cost HT
                   </th>
-                  <th className="px-4 py-3 text-right">
-                    Total Supplier Order Sell HT
-                  </th>
+                  <th className="px-4 py-3 text-right">Total Order Sell HT</th>
 
                   <th className="px-4 py-3 text-right">Planned Markup</th>
                 </>
               ) : view === "supplier-payment" ? (
                 <>
                   <th className="px-4 py-3">Supplier</th>
-                  <th className="px-4 py-3">Supplier Order reference</th>
+                  <th className="px-4 py-3">Order reference</th>
                   <th className="px-4 py-3">Project</th>
+                  <th className="px-4 py-3">Package</th>
                   <th className="px-4 py-3 text-right">Payable</th>
                   <th className="px-4 py-3 text-right">Scheduled</th>
                   <th className="px-4 py-3 text-right">Paid</th>
@@ -411,6 +422,7 @@ export function OrderTable({
                   <th className="px-4 py-3">Expected delivery</th>
                   <th className="px-4 py-3">Supplier</th>
                   <th className="px-4 py-3">Project</th>
+                  <th className="px-4 py-3">Package</th>
                   <th className="px-4 py-3">Buildings</th>
                 </>
               )}
@@ -434,7 +446,7 @@ export function OrderTable({
           </tbody>
         </table>
       </div>
-      {orders.length === 0 ? <ListEmptyState entity="Supplier Orders" /> : null}
+      {orders.length === 0 ? <ListEmptyState entity="Orders" /> : null}
     </section>
   );
 }

@@ -144,7 +144,7 @@ export async function processSupplierQuote(
       itemResult = itemOutcome.value;
     } else if (itemOutcome.reason instanceof ItemExtractionProviderError) {
       itemExtractionWarning =
-        "Item-line extraction was unavailable. Aggregate Supplier Order review remains available; Items can be added later.";
+        "Item-line extraction was unavailable. Aggregate Order review remains available; Items can be added later.";
     } else {
       throw itemOutcome.reason;
     }

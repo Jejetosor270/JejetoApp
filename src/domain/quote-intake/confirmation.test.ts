@@ -139,7 +139,7 @@ describe("quote confirmation validation", () => {
     expect(parseQuoteConfirmation(form).success).toBe(true);
   });
 
-  it("validates an optional existing Client Billing link during quote review", () => {
+  it("validates an optional existing Billing link during quote review", () => {
     const form = baseForm();
     form.set("applyCurrency", "on");
     form.set("billingDocumentId", "c12b6b9b-10e9-4e42-b93f-38796de4f65a");

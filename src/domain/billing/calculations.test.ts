@@ -14,7 +14,7 @@ import {
   scheduleReconciliation,
 } from "./calculations";
 
-describe("client billing calculations", () => {
+describe("billing calculations", () => {
   it("adds a Project remainder to an allocation Decimal-safely", () => {
     expect(addAllocationAmount("40.1234", "59.8766")).toBe("100.0000");
   });
@@ -212,4 +212,18 @@ describe("client billing calculations", () => {
       status: "CANCELLED",
     });
   });
+});
+
+it("preserves high-precision FX serialization while handling incomplete human input", () => {
+  const basis = (rate: string) =>
+    orderSellingBasisInBillingCurrency({
+      billingCurrencyCode: "USD",
+      reportingCurrencyCode: "EUR",
+      billingFxRateToReporting: rate,
+      orderSellingReporting: "10000",
+    });
+  expect(basis("1e-10")).toBe("100000000000000.0000");
+  expect(basis("0,5")).toBe("20000.0000");
+  expect(basis("not a rate")).toBeNull();
+  expect(basis("Infinity")).toBeNull();
 });

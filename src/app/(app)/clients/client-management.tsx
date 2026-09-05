@@ -213,11 +213,9 @@ export function CreateClientForm({
 function EditClientForm({
   client,
   currencies,
-  onClose,
 }: {
   client: ClientView;
   currencies: CurrencyOption[];
-  onClose?: () => void;
 }) {
   const { state, onSubmit, pending } = usePersistentActionState(
     updateClientAction,
@@ -225,14 +223,6 @@ function EditClientForm({
   );
   return (
     <section className="bg-card rounded-lg border p-4">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Edit client</h2>
-        {onClose ? (
-          <Button onClick={onClose} size="sm" type="button" variant="ghost">
-            Close
-          </Button>
-        ) : null}
-      </div>
       <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-2">
         <input name="id" type="hidden" value={client.id} />
         <ClientFields client={client} currencies={currencies} />
@@ -409,7 +399,7 @@ export function ClientManagement({
             clearSelection={selection.clear}
             entityName="Client"
             impactSummary={`${affectedProjectCount} Project${affectedProjectCount === 1 ? "" : "s"} and the complete downstream hierarchy will also be deleted.`}
-            scope="Deleting the selected Clients will also permanently delete their Projects, Buildings, Supplier Orders, payments, settlements, quote-import history, and financial records. Suppliers are preserved."
+            scope="Deleting the selected Clients will also permanently delete their Projects, Buildings, Orders, payments, settlements, quote-import history, and financial records. Suppliers are preserved."
             selectedIds={selection.selectedIds}
           />
         ) : null}

@@ -1,4 +1,5 @@
 "use client";
+import { DateInput } from "@/components/forms/date-input";
 
 import Decimal from "decimal.js";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
@@ -184,7 +185,7 @@ export function BillingInstallmentEditor({
               />
             </Field>
             <Field error={fieldErrors.dueDate} label="Due date" required>
-              <input
+              <DateInput
                 className={inputClassName}
                 name="dueDate"
                 onChange={(event) =>
@@ -194,7 +195,7 @@ export function BillingInstallmentEditor({
                   }))
                 }
                 required
-                type="date"
+
                 value={draft.dueDate}
               />
             </Field>

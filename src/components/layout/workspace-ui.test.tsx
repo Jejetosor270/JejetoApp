@@ -144,14 +144,12 @@ describe("workspace accessibility and navigation contracts", () => {
   it("distinguishes an empty list from a filtered result", () => {
     location.pathname = "/orders";
     location.search = "view=financial&sort=updated&pageSize=50";
-    expect(
-      renderToStaticMarkup(<ListEmptyState entity="Supplier Orders" />),
-    ).toContain("No Supplier Orders yet.");
-    location.search += "&projectId=demo";
-    const html = renderToStaticMarkup(
-      <ListEmptyState entity="Supplier Orders" />,
+    expect(renderToStaticMarkup(<ListEmptyState entity="Orders" />)).toContain(
+      "No Orders yet.",
     );
-    expect(html).toContain("No Supplier Orders match these filters.");
+    location.search += "&projectId=demo";
+    const html = renderToStaticMarkup(<ListEmptyState entity="Orders" />);
+    expect(html).toContain("No Orders match these filters.");
     expect(html).toContain('href="/orders"');
   });
 });

@@ -52,6 +52,7 @@ async function ordersCsv(params: Params): Promise<string> {
   const dateFrom = firstQueryValue(params, "dateFrom");
   const dateTo = firstQueryValue(params, "dateTo");
   const items = await listOrders({
+    packageId: optionalUuid(firstQueryValue(params, "packageId")),
     buildingId: optionalUuid(firstQueryValue(params, "buildingId")),
     currencyCode: firstQueryValue(params, "currencyCode"),
     dateFrom: dateFrom && isDateOnly(dateFrom) ? dateFrom : undefined,
@@ -72,6 +73,7 @@ async function ordersCsv(params: Params): Promise<string> {
     [
       "Order reference",
       "Package",
+      "Historical Order title",
       "Project",
       "Supplier",
       "Status",
@@ -85,6 +87,7 @@ async function ordersCsv(params: Params): Promise<string> {
     ],
     items.map((item) => [
       item.orderNumber,
+      item.orderPackage?.name ?? "",
       item.packageName,
       item.project.name,
       item.supplier.displayName,

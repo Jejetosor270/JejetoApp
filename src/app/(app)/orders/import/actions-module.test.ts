@@ -18,7 +18,7 @@ describe("supplier quote server action boundary", () => {
       "utf8",
     );
     expect(source.startsWith('"use server"')).toBe(true);
-    expect(source.match(/requireMasterDataEditor\(\)/g)).toHaveLength(3);
+    expect(source.match(/requireMasterDataEditor\(\)/g)).toHaveLength(4);
     const exports = source.match(/^export\s+.*$/gm) ?? [];
     expect(exports).toEqual([
       expect.stringMatching(
@@ -27,6 +27,9 @@ describe("supplier quote server action boundary", () => {
       expect.stringMatching(/^export async function createQuoteSupplierAction/),
       expect.stringMatching(
         /^export async function confirmSupplierQuoteAction/,
+      ),
+      expect.stringMatching(
+        /^export async function previewSupplierOrderBillingAction/,
       ),
     ]);
     expect(source).not.toContain("OPENAI_API_KEY");

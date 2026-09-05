@@ -10,7 +10,7 @@ import {
 } from "@/lib/billing/billing";
 import { listProjectOrders } from "@/lib/procurement/orders";
 
-export const metadata: Metadata = { title: "Client Billing Event" };
+export const metadata: Metadata = { title: "Billing Event" };
 
 export default async function BillingDetailPage({
   params,

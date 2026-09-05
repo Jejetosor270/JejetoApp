@@ -161,8 +161,19 @@ export function orderSellingBasisInBillingCurrency(input: {
   if (input.billingCurrencyCode === input.reportingCurrencyCode)
     return selling.toFixed(4);
   if (input.billingFxRateToReporting === null) return null;
-  const rate = new Decimal(input.billingFxRateToReporting);
-  if (!rate.isPositive()) return null;
+  const normalizedRate = normalizeDecimalInput(input.billingFxRateToReporting, {
+    allowNegative: false,
+    maximumDecimalPlaces: 10,
+  });
+  if (normalizedRate === "") return null;
+  let rate: Decimal;
+  try {
+    // Stored Decimal values may serialize as exponent notation (e.g. 1e-10).
+    rate = new Decimal(normalizedRate ?? input.billingFxRateToReporting);
+  } catch {
+    return null;
+  }
+  if (!rate.isFinite() || !rate.isPositive()) return null;
   return selling
     .dividedBy(rate)
     .toDecimalPlaces(4, Decimal.ROUND_HALF_UP)

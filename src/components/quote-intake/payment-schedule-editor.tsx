@@ -1,4 +1,5 @@
 "use client";
+import { DateInput } from "@/components/forms/date-input";
 
 import Decimal from "decimal.js";
 import { Plus, Trash2 } from "lucide-react";
@@ -248,7 +249,8 @@ export function PaymentScheduleEditor({
                 label="Due date"
                 required={approveSchedule}
               >
-                <input
+                <DateInput
+                  europeanValue
                   aria-invalid={Boolean(dueDateError) || undefined}
                   className={errorClass(dueDateError)}
                   inputMode="numeric"
@@ -261,7 +263,7 @@ export function PaymentScheduleEditor({
                   placeholder="DD/MM/YYYY"
                   required={approveSchedule}
                   title="Enter a date as DD/MM/YYYY"
-                  type="text"
+
                   value={payment.dueDate}
                 />
               </Field>

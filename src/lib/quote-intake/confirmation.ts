@@ -1,6 +1,7 @@
 import "server-only";
 
 import Decimal from "decimal.js";
+import { orderSellingBasisInBillingCurrency } from "@/domain/billing/calculations";
 
 import { vatAmount as calculateVatAmount } from "@/domain/finance/calculations";
 import {
@@ -27,6 +28,8 @@ import { getQuoteExtractionModel } from "@/lib/env/quote-extraction";
 import {
   createOrderInTransaction,
   getOrderInTransaction,
+  getOrder,
+  inputPricing,
   type OrderSummary,
   updateOrderInTransaction,
 } from "@/lib/procurement/orders";
@@ -596,4 +599,46 @@ export async function confirmSupplierQuote(
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
+}
+
+/** Read-only preview shares exactly the candidate and pricing helpers used at confirmation. */
+export async function previewReviewedBillingBasis(
+  input: QuoteConfirmationInput,
+  billingId: string,
+) {
+  const db = getDatabase();
+  const [project, existing, billing] = await Promise.all([
+    db.project.findUnique({ where: { id: input.projectId } }),
+    input.orderId ? getOrder(input.orderId) : Promise.resolve(null),
+    db.clientBillingDocument.findFirst({
+      where: { id: billingId, projectId: input.projectId, isCancelled: false },
+    }),
+  ]);
+  if (
+    !project ||
+    !billing ||
+    (input.action === "UPDATE" &&
+      (!existing || existing.project.id !== input.projectId))
+  )
+    throw new QuoteConfirmationError(
+      "Choose an Order and Billing in the locked Project.",
+    );
+  const values = reviewedOrderValues(
+    input,
+    project.reportingCurrencyCode,
+    existing,
+  );
+  const pricing = inputPricing(values, {
+    reportingCurrencyCode: project.reportingCurrencyCode,
+    defaultProductMarkupRate: project.defaultProductMarkupRate.toString(),
+    defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
+    defaultOtherCostMarkupRate: project.defaultOtherCostMarkupRate.toString(),
+    freightEstimateRate: project.freightEstimateRate?.toString() ?? null,
+  });
+  return orderSellingBasisInBillingCurrency({
+    billingCurrencyCode: billing.currencyCode,
+    billingFxRateToReporting: billing.fxRateToReporting?.toString() ?? null,
+    orderSellingReporting: pricing.totalSellReporting,
+    reportingCurrencyCode: project.reportingCurrencyCode,
+  });
 }

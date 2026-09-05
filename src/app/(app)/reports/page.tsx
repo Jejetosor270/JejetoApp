@@ -1,3 +1,4 @@
+import { DateInput } from "@/components/forms/date-input";
 import { PageHeader } from "@/components/layout/page-header";
 import { FilterBar } from "@/components/listing/filter-bar";
 import { queryStringFromParams } from "@/domain/listing/validation";
@@ -229,21 +230,19 @@ function ReportingFilters({
           <FilterField
             label={view === "payments" ? "Actual date from" : "Cash-flow start"}
           >
-            <input
+            <DateInput
               className={filterControlClassName}
               defaultValue={first(params, "dateFrom") ?? ""}
               name="dateFrom"
-              type="date"
             />
           </FilterField>
           <FilterField
             label={view === "payments" ? "Actual date to" : "Cash-flow end"}
           >
-            <input
+            <DateInput
               className={filterControlClassName}
               defaultValue={first(params, "dateTo") ?? ""}
               name="dateTo"
-              type="date"
             />
           </FilterField>
         </>

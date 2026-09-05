@@ -1,6 +1,8 @@
 "use client";
+import { DateInput } from "@/components/forms/date-input";
 
 import Decimal from "decimal.js";
+import { installmentOutstanding } from "@/domain/payments/calculations";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -228,12 +230,12 @@ export function BillingScheduleManager({
                 label="Due date"
                 required
               >
-                <input
+                <DateInput
                   className={inputClassName}
                   name="dueDate"
                   onChange={(event) => setDueDate(event.target.value)}
                   required
-                  type="date"
+
                   value={dueDate}
                 />
               </Field>
@@ -392,12 +394,12 @@ export function BillingScheduleManager({
                 label="Receipt date"
                 required
               >
-                <input
+                <DateInput
                   className={inputClassName}
                   name="receivedAt"
                   onChange={(event) => setReceivedAt(event.target.value)}
                   required
-                  type="date"
+
                   value={receivedAt}
                 />
               </Field>
@@ -420,7 +422,24 @@ export function BillingScheduleManager({
                 <select
                   className={inputClassName}
                   name="installmentId"
-                  onChange={(event) => setInstallmentId(event.target.value)}
+                  onChange={(event) => {
+                    const id = event.target.value;
+                    setInstallmentId(id);
+                    const selected = ownedInstallments.find(
+                      (item) => item.id === id,
+                    );
+                    setReceiptAmount(
+                      selected
+                        ? installmentOutstanding(
+                            selected.scheduledAmount,
+                            selected.receipts.reduce(
+                              (sum, receipt) => sum.plus(receipt.amount),
+                              new Decimal(0),
+                            ),
+                          ).toFixed(4)
+                        : "",
+                    );
+                  }}
                   value={installmentId}
                 >
                   <option value="">Billing level</option>

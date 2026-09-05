@@ -27,9 +27,7 @@ function OverdueTable({
             <thead className="text-muted-foreground border-b">
               <tr>
                 <th className="px-3 py-2">
-                  {supplier
-                    ? "Project / Supplier Order"
-                    : "Project / Client Billing"}
+                  {supplier ? "Project / Order" : "Project / Billing"}
                 </th>
                 <th className="px-3 py-2">Party</th>
                 <th className="px-3 py-2">Installment</th>
@@ -96,8 +94,8 @@ export function OverdueItems({
     <section className="bg-card rounded-lg border p-4" id="overdue">
       <h2 className="text-sm font-semibold">Overdue items</h2>
       <p className="text-muted-foreground mt-1 text-xs">
-        Derived from authoritative Supplier Payment and Client Billing
-        installment balances and due dates.
+        Derived from authoritative Supplier Payment and Billing installment
+        balances and due dates.
       </p>
       <div
         className={`mt-4 grid gap-4 ${showClientReceipts ? "xl:grid-cols-2" : ""}`}

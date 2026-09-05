@@ -1,4 +1,5 @@
 "use client";
+import { DateInput } from "@/components/forms/date-input";
 
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
@@ -129,7 +130,7 @@ export function BillingReceiptEditor({
             />
             <input name="id" type="hidden" value={receipt.id} />
             <Field error={fieldErrors.receivedAt} label="Receipt date" required>
-              <input
+              <DateInput
                 className={inputClassName}
                 name="receivedAt"
                 onChange={(event) =>
@@ -139,7 +140,7 @@ export function BillingReceiptEditor({
                   }))
                 }
                 required
-                type="date"
+
                 value={draft.receivedAt}
               />
             </Field>

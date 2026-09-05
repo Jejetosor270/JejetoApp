@@ -20,7 +20,26 @@ const route = readFileSync(
 );
 const search = readFileSync("src/lib/search/global-search.ts", "utf8");
 
-describe("Client Billing operational navigation", () => {
+describe("Billing operational navigation", () => {
+  it("opens the successful intake record instead of linking back to the current Billing list", () => {
+    const intake = readFileSync(
+      "src/components/billing/client-document-intake.tsx",
+      "utf8",
+    );
+    expect(intake).toContain("href={`/billing/${state.recordId}`}");
+    expect(intake).not.toContain('<Link href="/billing">');
+    const orderRoute = readFileSync(
+      "src/app/(app)/orders/import/page.tsx",
+      "utf8",
+    );
+    const panel = readFileSync(
+      "src/components/quote-intake/order-intake-panel.tsx",
+      "utf8",
+    );
+    expect(orderRoute).toContain("<OrderIntakePanel");
+    expect(panel).toContain("<EditorDrawer");
+    expect(panel).toContain("<QuoteIntake options={options}");
+  });
   it("opens table rows and sends Edit directly to detail edit mode", () => {
     expect(table).toContain("router.push(href)");
     expect(table).toContain(

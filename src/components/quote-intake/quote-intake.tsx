@@ -1,11 +1,22 @@
 "use client";
+import { AllocationInputs } from "@/components/billing/allocation-inputs";
+import { calculateOrderPricingDraft } from "@/domain/finance/order-pricing";
+import { orderSellingBasisInBillingCurrency } from "@/domain/billing/calculations";
+import { DateInput } from "@/components/forms/date-input";
 
 import Decimal from "decimal.js";
 import Link from "next/link";
 import { IntakeReviewLayout } from "@/components/intake/intake-review-layout";
-import { useActionState, useCallback, useState } from "react";
+import {
+  useActionState,
+  useCallback,
+  useState,
+  useTransition,
+  useRef,
+} from "react";
 
 import {
+  previewSupplierOrderBillingAction,
   confirmSupplierQuoteAction,
   processSupplierQuoteAction,
 } from "@/app/(app)/orders/import/actions";
@@ -171,12 +182,17 @@ export function QuoteReview({
     id: string;
   } | null>(null);
   const [orderNumber, setOrderNumber] = useState("");
+  const previewVersion = useRef(0);
+  const [revisionBasis, setRevisionBasis] = useState<string | null>(null);
+  const [previewMessage, setPreviewMessage] = useState("");
+  const [previewPending, startPreview] = useTransition();
   const [billingDocumentId, setBillingDocumentId] = useState("");
-  const [billingAllocationBasis, setBillingAllocationBasis] = useState<
-    "FIXED_AMOUNT" | "PERCENTAGE"
-  >("FIXED_AMOUNT");
   const [billingAllocatedAmount, setBillingAllocatedAmount] = useState("");
-  const [billingPercentage, setBillingPercentage] = useState("");
+  const [applyFreight, setApplyFreight] = useState(financial.freight !== null);
+  const [applyMiscellaneous, setApplyMiscellaneous] = useState(
+    financial.miscellaneous !== null,
+  );
+  const [purchaseFxRate, setPurchaseFxRate] = useState("");
   const [billingRemainderApproved, setBillingRemainderApproved] =
     useState(false);
   const selectedBillingDocument = options.billingDocuments.find(
@@ -249,13 +265,44 @@ export function QuoteReview({
       ? formatMoney(observation.value, extractedCurrency)
       : undefined;
 
+  let reviewedOrderBasis: string | null =
+    actionType === "UPDATE" ? revisionBasis : null;
+  if (actionType === "CREATE" && project && selectedBillingDocument) {
+    try {
+      const pricing = calculateOrderPricingDraft({
+        method: "PROJECT_MARKUP",
+        directPackageSell: "0",
+        freightResale: "0",
+        freightTreatment: "NOT_APPLICABLE",
+        productCost: applyPurchaseCost ? financialValues.purchaseCost : "0",
+        freightCost: applyFreight ? financialValues.freight : "0",
+        otherCost: applyMiscellaneous ? financialValues.miscellaneous : "0",
+        productMarkupRate: project.defaultProductMarkupRate,
+        freightMarkupRate: project.defaultFreightMarkupRate,
+        otherMarkupRate: project.defaultOtherCostMarkupRate,
+        purchaseCurrencyCode: orderCurrencyCode,
+        purchaseFxRate,
+        reportingCurrencyCode: project.reportingCurrencyCode,
+        sellingCurrencyCode: project.reportingCurrencyCode,
+      });
+      reviewedOrderBasis = orderSellingBasisInBillingCurrency({
+        billingCurrencyCode: selectedBillingDocument.currencyCode,
+        billingFxRateToReporting: selectedBillingDocument.fxRateToReporting,
+        orderSellingReporting: pricing.totalSellReporting,
+        reportingCurrencyCode: project.reportingCurrencyCode,
+      });
+    } catch {
+      /* Incomplete review values cannot supply a percentage basis. */
+    }
+  }
+
   if (state.status === "success" && state.orderId) {
     return (
       <section className="bg-card rounded-lg border p-5">
-        <h2 className="text-base font-semibold">Supplier Order import saved</h2>
+        <h2 className="text-base font-semibold">Order import saved</h2>
         <p className="text-muted-foreground mt-2 text-sm">{state.message}</p>
         <Button asChild className="mt-4">
-          <Link href={`/orders/${state.orderId}`}>Open Supplier Order</Link>
+          <Link href={`/orders/${state.orderId}`}>Open Order</Link>
         </Button>
       </section>
     );
@@ -436,7 +483,42 @@ export function QuoteReview({
       }
     >
       {
-        <form className="space-y-5" onSubmit={onSubmit}>
+        <form
+          className="space-y-5"
+          onSubmit={onSubmit}
+          onChange={(event) => {
+            const control = event.target;
+            if (
+              control instanceof HTMLInputElement ||
+              control instanceof HTMLSelectElement
+            ) {
+              const name =
+                control.name ||
+                (control.nextElementSibling instanceof HTMLInputElement
+                  ? control.nextElementSibling.name
+                  : "");
+              if (
+                [
+                  "orderId",
+                  "billingDocumentId",
+                  "purchaseCost",
+                  "freight",
+                  "miscellaneous",
+                  "purchaseFxRate",
+                  "orderCurrencyCode",
+                  "applyCurrency",
+                  "applyPurchaseCost",
+                  "applyFreight",
+                  "applyMiscellaneous",
+                ].includes(name)
+              ) {
+                previewVersion.current += 1;
+                setRevisionBasis(null);
+                setPreviewMessage("");
+              }
+            }
+          }}
+        >
           <input
             name="importRequestId"
             type="hidden"
@@ -481,7 +563,7 @@ export function QuoteReview({
                   type="radio"
                   value="CREATE"
                 />
-                Create Draft Supplier Order
+                Create Draft Order
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -495,14 +577,14 @@ export function QuoteReview({
                   type="radio"
                   value="UPDATE"
                 />
-                Update existing Supplier Order
+                Update existing Order
               </label>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-2">
               {actionType === "CREATE" ? (
                 <Field
                   error={fieldErrors.orderNumber}
-                  label="Internal Supplier Order reference"
+                  label="Internal Order reference"
                   required
                 >
                   <input
@@ -518,7 +600,7 @@ export function QuoteReview({
                 <div className="md:col-span-2">
                   <Field
                     error={fieldErrors.orderId}
-                    label="Existing Supplier Order in this Project"
+                    label="Existing Order in this Project"
                     required
                   >
                     <select
@@ -527,7 +609,7 @@ export function QuoteReview({
                       name="orderId"
                       required
                     >
-                      <option value="">Choose Supplier Order</option>
+                      <option value="">Choose Order</option>
                       {review.orders.map((order) => (
                         <option key={order.id} value={order.id}>
                           {order.orderNumber} · {order.packageName}
@@ -600,9 +682,7 @@ export function QuoteReview({
           </section>
 
           <section className="bg-card rounded-lg border p-4 sm:p-5">
-            <h2 className="text-sm font-semibold">
-              Reviewed Supplier Order values
-            </h2>
+            <h2 className="text-sm font-semibold">Reviewed Order values</h2>
             <p className="text-muted-foreground mt-1 text-xs">
               Unchecked fields are ignored. On update, ignored or missing fields
               preserve the existing authoritative value.
@@ -629,7 +709,8 @@ export function QuoteReview({
                 label="quote date"
                 name="applyQuoteDate"
               >
-                <input
+                <DateInput
+                  europeanValue
                   aria-invalid={Boolean(fieldErrors.quoteDate) || undefined}
                   className={inputWithError("quoteDate")}
                   defaultValue={dateOnlyToEuropeanInput(financial.quoteDate)}
@@ -639,7 +720,6 @@ export function QuoteReview({
                   pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
                   placeholder="DD/MM/YYYY"
                   title="Enter a date as DD/MM/YYYY"
-                  type="text"
                 />
               </ApplyField>
               <ApplyField
@@ -673,6 +753,8 @@ export function QuoteReview({
                   className={`${inputClassName} mt-2`}
                   inputMode="decimal"
                   name="purchaseFxRate"
+                  value={purchaseFxRate}
+                  onChange={(event) => setPurchaseFxRate(event.target.value)}
                   placeholder={`FX to ${project?.reportingCurrencyCode ?? "reporting currency"}`}
                 />
               </ApplyField>
@@ -696,7 +778,8 @@ export function QuoteReview({
                 />
               </ApplyField>
               <ApplyField
-                checked={financial.freight !== null}
+                checked={applyFreight}
+                onCheckedChange={setApplyFreight}
                 label="freight HT"
                 name="applyFreight"
               >
@@ -718,7 +801,8 @@ export function QuoteReview({
                 </p>
               </ApplyField>
               <ApplyField
-                checked={financial.miscellaneous !== null}
+                checked={applyMiscellaneous}
+                onCheckedChange={setApplyMiscellaneous}
                 label="other procurement costs HT"
                 name="applyMiscellaneous"
               >
@@ -750,7 +834,8 @@ export function QuoteReview({
                 label="expected delivery date"
                 name="applyExpectedDeliveryDate"
               >
-                <input
+                <DateInput
+                  europeanValue
                   className={inputClassName}
                   defaultValue={dateOnlyToEuropeanInput(
                     financial.expectedDeliveryDate,
@@ -761,7 +846,6 @@ export function QuoteReview({
                   pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
                   placeholder="DD/MM/YYYY"
                   title="Enter a date as DD/MM/YYYY"
-                  type="text"
                 />
               </ApplyField>
             </div>
@@ -920,14 +1004,14 @@ export function QuoteReview({
           {billingDocuments.length ? (
             <section className="bg-card rounded-lg border p-4 sm:p-5">
               <h2 className="text-sm font-semibold">
-                Optional Client Billing reconciliation
+                Optional Billing reconciliation
               </h2>
               <p className="text-muted-foreground mt-1 text-xs">
-                Link the reviewed Supplier Order to an existing Billing Event
-                from this Project, or skip and reconcile later.
+                Link the reviewed Order to an existing Billing Event from this
+                Project, or skip and reconcile later.
               </p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-                <Field label="Client Billing Event">
+                <Field label="Billing Event">
                   <select
                     className={inputClassName}
                     name="billingDocumentId"
@@ -937,7 +1021,6 @@ export function QuoteReview({
                       );
                       setBillingDocumentId(event.target.value);
                       setBillingAllocatedAmount("");
-                      setBillingPercentage("");
                       setBillingRemainderApproved(
                         selected?.isProjectRemainderApproved ?? false,
                       );
@@ -948,62 +1031,60 @@ export function QuoteReview({
                     {billingDocuments.map((document) => (
                       <option key={document.id} value={document.id}>
                         {document.reference} · {document.documentType} ·{" "}
-                        {document.totalHt} {document.currencyCode}
+                        {formatMoney(document.totalHt, document.currencyCode)}
                       </option>
                     ))}
                   </select>
                 </Field>
                 {selectedBillingDocument ? (
                   <>
-                    <Field label="Allocation basis">
-                      <select
-                        className={inputClassName}
-                        name="billingAllocationBasis"
-                        onChange={(event) =>
-                          setBillingAllocationBasis(
-                            event.target.value as "FIXED_AMOUNT" | "PERCENTAGE",
-                          )
-                        }
-                        value={billingAllocationBasis}
-                      >
-                        <option value="FIXED_AMOUNT">Amount</option>
-                        <option value="PERCENTAGE">Percentage</option>
-                      </select>
-                    </Field>
-                    <Field
-                      error={fieldErrors.billingPercentageRate}
-                      label="% of Supplier Order"
-                    >
-                      <PercentageInput
-                        className={inputClassName}
-                        disabled={billingAllocationBasis !== "PERCENTAGE"}
-                        name="billingPercentageRate"
-                        onValueChange={(next) => {
-                          setBillingPercentage(next);
-                          setBillingAllocatedAmount("");
-                        }}
-                        value={billingPercentage}
-                      />
-                    </Field>
-                    <Field
+                    <input
+                      type="hidden"
+                      name="billingAllocationBasis"
+                      value="FIXED_AMOUNT"
+                    />
+                    {actionType === "UPDATE" ? (
+                      <div className="sm:col-span-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={previewPending}
+                          onClick={(event) => {
+                            const form = event.currentTarget.closest("form");
+                            if (!form) return;
+                            const data = new FormData(form);
+                            const version = previewVersion.current;
+                            startPreview(async () => {
+                              const result =
+                                await previewSupplierOrderBillingAction(data);
+                              if (version !== previewVersion.current) return;
+                              setRevisionBasis(result.amount);
+                              setPreviewMessage(result.message);
+                            });
+                          }}
+                        >
+                          {previewPending
+                            ? "Calculating…"
+                            : "Calculate reviewed Order coverage"}
+                        </Button>
+                        <p
+                          role="status"
+                          className="text-muted-foreground mt-2 text-xs"
+                        >
+                          {previewMessage ||
+                            "Calculate the revised pricing to enable the Order percentage. This does not save or call AI."}
+                        </p>
+                      </div>
+                    ) : null}
+                    <AllocationInputs
+                      amount={billingAllocatedAmount}
+                      onAmountChange={setBillingAllocatedAmount}
+                      billingTotalHt={selectedBillingDocument.totalHt}
+                      orderSellHt={reviewedOrderBasis}
+                      currencyCode={selectedBillingDocument.currencyCode}
+                      name="billingAllocatedAmount"
                       error={fieldErrors.billingAllocatedAmount}
-                      label={`Allocation HT (${selectedBillingDocument.currencyCode})`}
-                    >
-                      <MoneyInput
-                        disabled={billingAllocationBasis === "PERCENTAGE"}
-                        invalid={Boolean(fieldErrors.billingAllocatedAmount)}
-                        name="billingAllocatedAmount"
-                        onValueChange={(next) => {
-                          setBillingAllocatedAmount(next);
-                        }}
-                        placeholder={
-                          billingAllocationBasis === "PERCENTAGE"
-                            ? "Calculated from Supplier Order Sell HT on approval"
-                            : "0.00"
-                        }
-                        value={billingAllocatedAmount}
-                      />
-                    </Field>
+                    />
                     <div className="bg-background grid gap-2 rounded-md border p-3 text-xs sm:col-span-2 sm:grid-cols-3 xl:col-span-4">
                       <p>
                         Billing HT:{" "}
@@ -1031,13 +1112,6 @@ export function QuoteReview({
                           selectedBillingDocument.currencyCode,
                         )}
                       </p>
-                      {billingAllocationBasis === "PERCENTAGE" ? (
-                        <p className="text-muted-foreground sm:col-span-3">
-                          The percentage is of the reviewed Supplier Order Sell
-                          HT. Its allocation amount is calculated again from
-                          authoritative Supplier Order pricing when you approve.
-                        </p>
-                      ) : null}
                     </div>
                     <label className="flex items-center gap-2 text-xs sm:col-span-2 xl:col-span-4">
                       <input
@@ -1082,9 +1156,7 @@ export function QuoteReview({
             </p>
           ) : null}
           <SubmitButton pending={pending}>
-            {pending
-              ? "Saving reviewed quote…"
-              : "Confirm and save Supplier Order"}
+            {pending ? "Saving reviewed quote…" : "Confirm and save Order"}
           </SubmitButton>
         </form>
       }

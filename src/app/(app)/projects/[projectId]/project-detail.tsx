@@ -1,4 +1,5 @@
 "use client";
+import { DateInput } from "@/components/forms/date-input";
 
 import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
 import { WorkspaceTabs } from "@/components/layout/workspace-tabs";
@@ -179,8 +180,8 @@ function ProjectFields({
           </select>
           {project.reportingCurrencyLocked ? (
             <span className="text-muted-foreground text-xs leading-5 font-normal">
-              Locked after the first Supplier Order because historical FX and
-              reporting values depend on this currency.
+              Locked after the first Order because historical FX and reporting
+              values depend on this currency.
             </span>
           ) : null}
         </Field>
@@ -214,22 +215,20 @@ function ProjectFields({
       </FormSection>
       <FormSection title="Schedule">
         <Field error={fieldErrors?.startDate} label="Start date">
-          <input
+          <DateInput
             className={inputClassName}
             defaultValue={inputDate(project.startDate)}
             name="startDate"
-            type="date"
           />
         </Field>
         <Field
           error={fieldErrors?.expectedCompletionDate}
           label="Expected completion"
         >
-          <input
+          <DateInput
             className={inputClassName}
             defaultValue={inputDate(project.expectedCompletionDate)}
             name="expectedCompletionDate"
-            type="date"
           />
         </Field>
       </FormSection>
@@ -739,10 +738,10 @@ export function ProjectDetail({
         label="Project workspace"
         tabs={[
           { id: "overview", label: "Overview", content: workspace.overview },
-          { id: "orders", label: "Supplier Orders", content: workspace.orders },
+          { id: "orders", label: "Orders", content: workspace.orders },
           {
             id: "billing",
-            label: "Client Billing",
+            label: "Billing",
             content: workspace.billing,
           },
           { id: "finance", label: "Finance", content: workspace.finance },

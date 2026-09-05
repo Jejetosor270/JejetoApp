@@ -1,3 +1,4 @@
+import { ProjectPackages } from "@/components/procurement/project-packages";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -176,11 +177,16 @@ export default async function ProjectPage({
         ),
         orders: (
           <>
+            <ProjectPackages
+              projectId={projectId}
+              currency={project.reportingCurrencyCode}
+              canEdit={canEditMasterData(user.role)}
+            />
             <Link
               className="text-primary text-sm underline"
               href={`/orders?projectId=${projectId}`}
             >
-              Open all Supplier Orders for this Project
+              Open all Orders for this Project
             </Link>{" "}
             <ProjectFinancialDashboard
               section="orders"
@@ -198,7 +204,7 @@ export default async function ProjectPage({
         ),
         billing: (
           <section className="space-y-4">
-            <h2 className="font-semibold">Client Billing</h2>
+            <h2 className="font-semibold">Billing</h2>
             <p className="text-muted-foreground text-sm">
               Quotes, Invoices, payment schedules and actual Client Receipts for
               this Project.
@@ -207,7 +213,7 @@ export default async function ProjectPage({
               className="text-primary text-sm underline"
               href={`/billing?projectId=${projectId}`}
             >
-              Open Project Client Billing
+              Open Project Billing
             </Link>
             <dl className="grid gap-4 sm:grid-cols-3">
               {[

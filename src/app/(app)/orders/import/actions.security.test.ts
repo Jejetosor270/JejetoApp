@@ -59,7 +59,7 @@ describe("supplier quote action authorization", () => {
     );
   });
 
-  it("logs completed confirmation after creating the Supplier Order", async () => {
+  it("logs completed confirmation after creating the Order", async () => {
     auth.requireMasterDataEditor.mockResolvedValueOnce({ id: "actor-1" });
     confirmation.confirmSupplierQuote.mockResolvedValueOnce("order-1");
     const formData = new FormData();

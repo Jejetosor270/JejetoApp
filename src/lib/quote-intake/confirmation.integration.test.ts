@@ -331,7 +331,7 @@ describe("reviewed quote confirmation persistence", () => {
     expect(database.$transaction).toHaveBeenCalledTimes(1);
   });
 
-  it("creates a Supplier Order from an Invoice without optional schedule, Items, or Billing allocation", async () => {
+  it("creates a Order from an Invoice without optional schedule, Items, or Billing allocation", async () => {
     const form = commonForm("CREATE");
     form.set("applyCurrency", "on");
     form.set("orderCurrencyCode", "EUR");

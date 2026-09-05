@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/layout/page-header";
 import type { Metadata } from "next";
 
-import { QuoteIntake } from "@/components/quote-intake/quote-intake";
+import { OrderIntakePanel } from "@/components/quote-intake/order-intake-panel";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import { listQuoteIntakeOptions } from "@/lib/quote-intake/options";
 
@@ -23,7 +23,7 @@ export default async function SupplierQuoteImportPage() {
           </>
         }
       />
-      <QuoteIntake options={options} />
+      <OrderIntakePanel options={options} />
     </div>
   );
 }

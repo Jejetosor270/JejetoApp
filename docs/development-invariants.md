@@ -6,12 +6,12 @@ Observed limitations below describe current code, not requirements to preserve d
 
 ## Product boundaries and terminology
 
-Use **Supplier Orders**, **Client Billing**, **Supplier Payments**, **Client Receipts**,
+Use **Orders**, **Billing**, **Payments**, **Client Receipts**,
 **Projects**, **Clients**, **Suppliers**, **Funding Coverage**, **Freight reconciliation**,
 and **Items (Beta)** in human-facing workflows. Reserve “Procurement Order” for
 internal names such as `ProcurementOrder` and procurement service paths.
 
-A Supplier Order is a Supplier-level Project package that may cover several Buildings.
+A Order is a Supplier-level Project package that may cover several Buildings.
 It owns one normalized cost structure. Items are Project-specific supporting detail,
 not a reusable catalog, inventory, or a replacement for Order financial authority.
 
@@ -47,14 +47,14 @@ Project target cost uses approved estimated purchase plus estimated freight cost
 Target sell uses Product/Freight markups in `MARKUP` mode or entered `expectedSellHt`
 in `EXPECTED_SELL` mode. Targets do not replace actuals. Actual Project profitability
 compares non-cancelled Client Invoice HT with non-cancelled Order economic costs plus
-Project freight expense economic costs once. Supplier Order planned sell, Quotes,
+Project freight expense economic costs once. Order planned sell, Quotes,
 Client budget, legacy Order Client schedules, and allocation amounts alone are not
 actual Project revenue. Invoice allocations support Order-level attribution without
 overwriting Order prices or duplicating Project revenue.
 
 ## Billing, collections, and cash
 
-Client Billing owns Quotes/Invoices, Billing installments, Client Receipts, and Client
+Billing owns Quotes/Invoices, Billing installments, Client Receipts, and Client
 outstanding. Recognized Client outstanding is non-cancelled Invoice TTC less associated
 receipts; preserve document-level and matched-installment attribution. Allocations
 cannot exceed document HT and must reference Orders in the same Project.
@@ -81,7 +81,7 @@ Invoice-only, or silently change eligibility while adding an unrelated feature.
 
 ## Funding Coverage
 
-**Funding Coverage HT = eligible Client Billing HT − non-cancelled Supplier Order Sell HT.**
+**Funding Coverage HT = eligible Billing HT − non-cancelled Order Sell HT.**
 This is commercial coverage, not cash or profit. Positive means excess coverage,
 zero fully covered, and negative a funding gap.
 
@@ -181,8 +181,8 @@ controlled state or `usePersistentActionState`.
 
 ## Intake and Items Beta
 
-Supplier Order intake accepts Supplier Quote and Supplier Invoice PDFs/images;
-Client Billing intake accepts PDFs; budget Item intake accepts XLSX. Uploads are
+Order intake accepts Supplier Quote and Supplier Invoice PDFs/images;
+Billing intake accepts PDFs; budget Item intake accepts XLSX. Uploads are
 temporary/request-scoped, limited to 4 MiB, and validated by extension/content
 signature (XLSX also undergoes workbook parsing). Do not persist source files, base64,
 page images, or raw model output. Persist reviewed structured records and lightweight
@@ -194,9 +194,9 @@ before persistence. Supplier intake's selected Project remains authoritative; Su
 matching never silently creates a Supplier. Inline creation is a separate explicit action.
 XLSX mapping is deterministic first, with at most one optional semantic mapping call.
 
-Aggregate Supplier Order review must work without Items Beta. A recognized optional
+Aggregate Order review must work without Items Beta. A recognized optional
 Item-provider failure becomes a warning; it must not discard successful aggregate
-extraction. Client Billing allocation and reviewed payment-term proposals are optional.
+extraction. Billing allocation and reviewed payment-term proposals are optional.
 Initialize Billing selection state before any dependent lookup in `QuoteReview`;
 preserve its rendering regressions and draft-preserving confirmation flow.
 
@@ -206,7 +206,7 @@ Do not introduce an Item dependency without explicit feature design.
 
 ## Lasting UX and compatibility rules
 
-Keep planned versus actual terminology explicit. Supplier Payments is supplier-side;
+Keep planned versus actual terminology explicit. Payments has Overview, Supplier, Client, and Transactions tabs; Supplier schedules remain supplier-side;
 Client cash belongs to Billing/Receipts. Use progressive financial disclosure rather
 than duplicate blocks or renamed copies of the same financial concept. Preserve shared
 filtering, sorting, pagination, tables, and visible-page selection mechanics. Reports
@@ -258,3 +258,24 @@ Run full quality gates once at completion: formatting, Prisma validation, typech
 lint, tests, and production build; include coverage for domain changes. Do not repeat
 full suites without a reason. Documentation-only changes need focused Markdown/Git
 checks. Report migration/deployment requirements explicitly.
+
+## V2 product refinement
+
+- Project Packages are explicit relational Order groupings, never cost or revenue authorities.
+  One Order has zero or one same-Project Package. Preserve historical `packageName` text;
+  the forward migration intentionally creates no inferred assignments. Archive retains
+  existing assignments. Package mutations/reassignments use server authorization and audit.
+- Allocation amount remains the authority. Fixed HT, percentage of Billing HT, and
+  percentage of Order Sell HT are interchangeable UI inputs. Convert the Order basis
+  into Billing currency with the existing manual-FX helper; incomplete FX disables that
+  percentage. Revised Supplier intake previews use the same candidate/pricing helpers
+  as confirmation and make no AI calls or writes.
+- The Payments actual ledger unions Client Receipts and Supplier-direction settlements
+  once each, preserving original currencies. It excludes legacy Order client settlements.
+  Schedules, including planned Quotes, are a separate expectation view.
+- Use `DateInput` for editable dates: European display/calendar, canonical ISO date-only
+  submission (the legacy reviewed Supplier form retains its accepted European input contract).
+  Monetary/percentage display uses shared formatters; storage, FX and quantity precision remain unchanged.
+- Explicit full-detail editing uses `EditorDrawer`; preserve quick row edits and structured intake.
+- Rollout requires `20260909000000_project_order_packages` before the new application.
+  Migration creation/generation does not authorize applying it to the configured database.

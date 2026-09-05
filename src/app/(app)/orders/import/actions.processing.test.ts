@@ -75,7 +75,7 @@ function upload(filename: string): FormData {
   return formData;
 }
 
-describe("Supplier Order processing action lifecycle", () => {
+describe("Order processing action lifecycle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     auth.requireMasterDataEditor.mockResolvedValue({ id: "actor-1" });

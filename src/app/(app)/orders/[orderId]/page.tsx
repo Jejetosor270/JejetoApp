@@ -25,7 +25,7 @@ import { getOrderBillingReconciliation } from "@/lib/billing/billing";
 import { orderBillingDifference } from "@/domain/billing/calculations";
 import { formatEnumLabel } from "@/domain/presentation/labels";
 
-export const metadata: Metadata = { title: "Supplier Order" };
+export const metadata: Metadata = { title: "Order" };
 export default async function OrderPage({
   params,
 }: {
@@ -54,7 +54,7 @@ export default async function OrderPage({
         <div>
           <DetailPageHeader
             backHref="/orders"
-            backLabel="Supplier Orders"
+            backLabel="Orders"
             eyebrow={order.orderNumber}
             meta={`${order.project.name} · ${order.supplier.displayName}`}
             status={order.status}
@@ -67,7 +67,7 @@ export default async function OrderPage({
           ) : null}
         </div>
         <WorkspaceTabs
-          label="Supplier Order workspace"
+          label="Order workspace"
           tabs={[
             {
               id: "overview",
@@ -223,7 +223,7 @@ export default async function OrderPage({
                               {order.componentPricing.productMarkupSource ===
                               "PROJECT_DEFAULT"
                                 ? "Project default"
-                                : "Supplier Order override"}
+                                : "Order override"}
                             </span>
                           </dd>
                           <dt>Product Sell HT (reporting)</dt>
@@ -242,7 +242,7 @@ export default async function OrderPage({
                               {order.componentPricing.freightMarkupSource ===
                               "PROJECT_DEFAULT"
                                 ? "Project default"
-                                : "Supplier Order override"}
+                                : "Order override"}
                             </span>
                           </dd>
                           <dt>Freight Sell HT (reporting)</dt>
@@ -288,7 +288,7 @@ export default async function OrderPage({
                           order.project.reportingCurrencyCode,
                         )}
                       </dd>
-                      <dt>Supplier Order Planned Gross Profit HT</dt>
+                      <dt>Order Planned Gross Profit HT</dt>
                       <dd className="financial-figure text-right">
                         {formatMoney(
                           cost.grossProfit,
@@ -310,14 +310,14 @@ export default async function OrderPage({
                   <article className="bg-card rounded-lg border p-4">
                     <h2 className="text-sm font-semibold">Selling & VAT</h2>
                     <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-                      <dt>Total Supplier Order Sell HT</dt>
+                      <dt>Total Order Sell HT</dt>
                       <dd className="financial-figure text-right">
                         {formatMoney(
                           order.totalSellingRevenue,
                           order.sellingCurrencyCode,
                         )}
                       </dd>
-                      <dt>Planned Supplier Order Output VAT</dt>
+                      <dt>Planned Order Output VAT</dt>
                       <dd className="financial-figure text-right">
                         {formatMoney(
                           cost.outputVat?.amount ?? null,
@@ -443,13 +443,13 @@ export default async function OrderPage({
                     </summary>
                     <p className="text-muted-foreground my-3 text-sm">
                       Historical planning only. Actual Client collections belong
-                      to Client Billing.
+                      to Billing.
                     </p>
                     <Link
                       className="text-primary text-sm underline"
                       href={`/billing?projectId=${order.project.id}`}
                     >
-                      Open Project Client Billing
+                      Open Project Billing
                     </Link>{" "}
                     <PaymentSchedule
                       canEdit={canEditMasterData(user.role)}
@@ -483,7 +483,7 @@ export default async function OrderPage({
                     </div>
                     <div>
                       <dt className="text-muted-foreground text-xs">
-                        Supplier Order date
+                        Order date
                       </dt>
                       <dd className="mt-1">
                         {formatDateOnly(order.orderDate)}

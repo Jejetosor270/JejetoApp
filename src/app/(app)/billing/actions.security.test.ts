@@ -37,7 +37,7 @@ import {
   updateOrderBillingLinkAction,
 } from "./actions";
 
-describe("Client billing authorization", () => {
+describe("Billing authorization", () => {
   it.each([
     [
       "Billing installment creation",

@@ -57,6 +57,7 @@ import {
 import { ProcurementNotFoundError, ProcurementRelationError } from "./errors";
 
 const orderInclude = {
+  orderPackage: { select: { id: true, name: true, isActive: true } },
   buildings: {
     include: {
       building: { select: { id: true, name: true, shortCode: true } },
@@ -106,7 +107,7 @@ type OrderRecord = Prisma.ProcurementOrderGetPayload<{
 }>;
 type OrderRelationClient = Pick<
   Prisma.TransactionClient,
-  "building" | "currency" | "project" | "supplier"
+  "building" | "currency" | "project" | "supplier" | "orderPackage"
 >;
 
 export interface VatSummary {
@@ -188,6 +189,8 @@ export interface OrderSummary {
   orderCurrencyCode: string;
   orderNumber: string;
   orderDate: string | null;
+  packageId?: string | null;
+  orderPackage?: { id: string; name: string; isActive: boolean } | null;
   packageName: string;
   packageSellingPrice: string | null;
   pricingMode: PricingMode;
@@ -877,6 +880,8 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
     orderCurrencyCode: order.orderCurrencyCode,
     orderNumber: order.orderNumber,
     orderDate: order.orderDate ? dateToDateOnly(order.orderDate) : null,
+    packageId: order.packageId,
+    orderPackage: order.orderPackage,
     packageName: order.packageName,
     packageSellingPrice: packagePrice?.toString() ?? null,
     pricingMode: order.pricingMode,
@@ -989,7 +994,10 @@ interface ProjectPricingContext {
   reportingCurrencyCode: string;
 }
 
-function inputPricing(input: CreateOrderInput, project: ProjectPricingContext) {
+export function inputPricing(
+  input: CreateOrderInput,
+  project: ProjectPricingContext,
+) {
   const projectMode = input.pricingMode === "PROJECT_MARKUP";
   return calculateOrderPricingDraft({
     directPackageSell: input.sellingPriceAmount ?? "0",
@@ -1021,7 +1029,27 @@ function inputPricing(input: CreateOrderInput, project: ProjectPricingContext) {
 async function assertRelations(
   input: CreateOrderInput,
   database: OrderRelationClient = getDatabase(),
+  currentOrderId?: string,
 ): Promise<ProjectPricingContext> {
+  if (
+    input.packageId &&
+    !(await database.orderPackage.findFirst({
+      where: {
+        id: input.packageId,
+        projectId: input.projectId,
+        OR: [
+          { isActive: true },
+          ...(currentOrderId
+            ? [{ orders: { some: { id: currentOrderId } } }]
+            : []),
+        ],
+      },
+    }))
+  ) {
+    throw new ProcurementRelationError(
+      "Choose an active Package belonging to this Project.",
+    );
+  }
   const [project, supplier, purchaseCurrency, sellingCurrency, buildings] =
     await Promise.all([
       database.project.findUnique({
@@ -1117,6 +1145,7 @@ function orderData(input: CreateOrderInput, project: ProjectPricingContext) {
     orderCurrencyCode: input.orderCurrencyCode,
     orderNumber: input.orderNumber,
     orderDate: input.orderDate ? dateOnlyToDate(input.orderDate) : null,
+    ...(input.packageId === undefined ? {} : { packageId: input.packageId }),
     packageName: input.packageName,
     outputVatTaxableBaseOverride: input.outputVatTaxableBaseOverride ?? null,
     pricingMode: input.pricingMode,
@@ -1282,6 +1311,10 @@ export async function listOrderOptions() {
       database.project.findMany({
         orderBy: [{ status: "asc" }, { name: "asc" }],
         select: {
+          orderPackages: {
+            orderBy: { name: "asc" },
+            select: { id: true, name: true, isActive: true },
+          },
           buildings: {
             orderBy: { name: "asc" },
             select: { id: true, isActive: true, name: true, shortCode: true },
@@ -1346,6 +1379,7 @@ export async function listOrderOptions() {
   };
 }
 export interface OrderFilters {
+  packageId?: string | undefined;
   buildingId?: string | undefined;
   currencyCode?: string | undefined;
   dateFrom?: string | undefined;
@@ -1366,6 +1400,7 @@ export interface OrderListFilters extends OrderFilters, PageInput {
 function orderWhere(filters: OrderFilters): Prisma.ProcurementOrderWhereInput {
   const query = filters.query.trim();
   return {
+    ...(filters.packageId ? { packageId: filters.packageId } : {}),
     ...(filters.buildingId
       ? { buildings: { some: { buildingId: filters.buildingId } } }
       : {}),
@@ -1503,7 +1538,9 @@ async function createOrderRecord(
     entityReference: input.orderNumber,
     entityType: "ORDER",
     metadata: {
+      ...(input.packageId === undefined ? {} : { packageId: input.packageId }),
       fields: [
+        "packageId",
         "supplierId",
         "pricingMode",
         "costLines",
@@ -1516,7 +1553,7 @@ async function createOrderRecord(
         "vatEntries",
       ],
     },
-    summary: "Created the Supplier Order.",
+    summary: "Created the Order.",
   });
   return order.id;
 }
@@ -1534,7 +1571,7 @@ export async function updateOrder(
   actorId: string,
   input: UpdateOrderInput,
 ): Promise<void> {
-  const project = await assertRelations(input);
+  const project = await assertRelations(input, getDatabase(), input.id);
   try {
     await getDatabase().$transaction((transaction) =>
       updateOrderRecord(transaction, actorId, input, project),
@@ -1589,8 +1626,7 @@ export async function updateOrderInline(
             "expectedDeliveryDate",
           ],
         },
-        summary:
-          "Updated routine Supplier Order fields from the Supplier Orders table.",
+        summary: "Updated routine Order fields from the Orders table.",
       });
       return {
         ...order,
@@ -1663,7 +1699,9 @@ async function updateOrderRecord(
     entityReference: input.orderNumber,
     entityType: "ORDER",
     metadata: {
+      ...(input.packageId === undefined ? {} : { packageId: input.packageId }),
       fields: [
+        "packageId",
         "supplierId",
         "pricingMode",
         "costLines",
@@ -1676,8 +1714,7 @@ async function updateOrderRecord(
         "vatEntries",
       ],
     },
-    summary:
-      "Updated the Supplier Order and authoritative financial structure.",
+    summary: "Updated the Order and authoritative financial structure.",
   });
 }
 
@@ -1686,7 +1723,7 @@ export async function updateOrderInTransaction(
   actorId: string,
   input: UpdateOrderInput,
 ): Promise<void> {
-  const project = await assertRelations(input, transaction);
+  const project = await assertRelations(input, transaction, input.id);
   try {
     await updateOrderRecord(transaction, actorId, input, project);
   } catch (error) {

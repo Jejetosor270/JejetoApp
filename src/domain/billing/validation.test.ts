@@ -35,7 +35,7 @@ function baseForm() {
   return form;
 }
 
-describe("Client billing confirmation", () => {
+describe("Billing confirmation", () => {
   it.each([
     ["0", "0.000000"],
     ["15,5", "0.155000"],

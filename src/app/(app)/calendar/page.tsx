@@ -97,10 +97,7 @@ export default async function CalendarPage({
       <PageHeader
         title="Procurement calendar"
         description={
-          <>
-            Derived automatically from payment due dates and Supplier Order
-            timing.
-          </>
+          <>Derived automatically from payment due dates and Order timing.</>
         }
         actions={
           <>

@@ -11,7 +11,7 @@ export default function BillingNotFound() {
         className="text-primary mt-4 inline-block text-sm underline"
         href="/billing"
       >
-        Return to Client Billing
+        Return to Billing
       </Link>
     </section>
   );

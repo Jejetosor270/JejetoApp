@@ -1,4 +1,10 @@
 "use client";
+import { AllocationInputs } from "@/components/billing/allocation-inputs";
+import {
+  PackageSelect,
+  type PackageOption,
+} from "@/components/procurement/package-select";
+import { DateInput } from "@/components/forms/date-input";
 
 import Decimal from "decimal.js";
 import { useRouter } from "next/navigation";
@@ -49,11 +55,7 @@ import {
   freightRecoveryTarget,
   resolveOrderFreightAllowance,
 } from "@/domain/freight/calculations";
-import {
-  amountFromPercentage,
-  orderSellingBasisInBillingCurrency,
-  percentageFromAmount,
-} from "@/domain/billing/calculations";
+import { orderSellingBasisInBillingCurrency } from "@/domain/billing/calculations";
 
 interface BuildingOption {
   id: string;
@@ -62,6 +64,7 @@ interface BuildingOption {
   shortCode: string;
 }
 interface ProjectOption {
+  orderPackages?: PackageOption[];
   buildings: BuildingOption[];
   client: { defaultCurrencyCode: string };
   id: string;
@@ -140,6 +143,7 @@ export interface EditableOrder {
   orderCurrencyCode: string;
   orderNumber: string;
   orderDate: string | null;
+  packageId?: string | null;
   packageName: string;
   packageSellingPrice: string | null;
   pricingMode: string;
@@ -164,7 +168,7 @@ const labels: Record<string, string> = {
   NOT_APPLICABLE: "Not applicable",
   RECHARGED_SEPARATELY: "Recharged separately",
   PROJECT_MARKUP: "Project Markup",
-  ORDER_MARKUP: "Specific Supplier Order Markup",
+  ORDER_MARKUP: "Specific Order Markup",
   DIRECT_SELLING_PRICE: "Direct Selling Price",
   RECOVERABLE: "Recoverable",
   NON_RECOVERABLE: "Non-recoverable",
@@ -479,11 +483,8 @@ export function OrderForm({
     supplierQuoteReference: order?.supplierQuoteReference ?? "",
   }));
   const [billingDocumentId, setBillingDocumentId] = useState("");
-  const [billingAllocationBasis, setBillingAllocationBasis] = useState<
-    "FIXED_AMOUNT" | "PERCENTAGE"
-  >("FIXED_AMOUNT");
+  const [packageId, setPackageId] = useState(order?.packageId ?? "");
   const [billingAllocatedAmount, setBillingAllocatedAmount] = useState("");
-  const [billingPercentage, setBillingPercentage] = useState("");
   const [billingRemainderApproved, setBillingRemainderApproved] =
     useState(false);
   function changeDraft<K extends keyof OrderDraft>(
@@ -752,18 +753,34 @@ export function OrderForm({
               value={draft.orderNumber}
             />
           </Field>
-          <Field error={fieldErrors.packageName} label="Package title">
-            <input
-              aria-invalid={Boolean(fieldErrors.packageName) || undefined}
-              className={errorClass("packageName")}
-              name="packageName"
-              onChange={(event) =>
-                changeDraft("packageName", event.target.value)
+          <Field error={fieldErrors.packageId} label="Package">
+            <PackageSelect
+              key={projectId}
+              projectId={projectId}
+              packages={
+                options.projects.find((project) => project.id === projectId)
+                  ?.orderPackages ?? []
               }
-              required
-              value={draft.packageName}
+              value={packageId}
+              onChange={setPackageId}
             />
           </Field>
+          {isEditing ? (
+            <Field error={fieldErrors.packageName} label="Order title">
+              <input
+                aria-invalid={Boolean(fieldErrors.packageName) || undefined}
+                className={errorClass("packageName")}
+                name="packageName"
+                onChange={(event) =>
+                  changeDraft("packageName", event.target.value)
+                }
+                required
+                value={draft.packageName}
+              />
+            </Field>
+          ) : (
+            <input type="hidden" name="packageName" value={draft.orderNumber} />
+          )}
           <Field error={fieldErrors.category} label="Category">
             <input
               aria-invalid={Boolean(fieldErrors.category) || undefined}
@@ -774,12 +791,12 @@ export function OrderForm({
             />
           </Field>
           <Field error={fieldErrors.quoteDate} label="Supplier quote date">
-            <input
+            <DateInput
               aria-invalid={Boolean(fieldErrors.quoteDate) || undefined}
               className={errorClass("quoteDate")}
               name="quoteDate"
               onChange={(event) => changeDraft("quoteDate", event.target.value)}
-              type="date"
+
               value={draft.quoteDate}
             />
           </Field>
@@ -808,9 +825,10 @@ export function OrderForm({
                   (item) => item.id === event.target.value,
                 );
                 changeDraft("projectId", event.target.value);
+                setPackageId("");
                 setBillingDocumentId("");
                 setBillingAllocatedAmount("");
-                setBillingPercentage("");
+
                 if (!isEditing && next)
                   changeDraft(
                     "sellingCurrencyCode",
@@ -997,11 +1015,11 @@ export function OrderForm({
           </summary>
           <p className="text-muted-foreground mt-1 text-xs">
             Business dates remain date-only. Expected ready is calculated from
-            Supplier Order date and lead time, and remains editable.
+            Order date and lead time, and remains editable.
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <Field error={fieldErrors.orderDate} label="Supplier Order date">
-              <input
+            <Field error={fieldErrors.orderDate} label="Order date">
+              <DateInput
                 aria-invalid={Boolean(fieldErrors.orderDate) || undefined}
                 className={errorClass("orderDate")}
                 name="orderDate"
@@ -1009,7 +1027,7 @@ export function OrderForm({
                   changeDraft("orderDate", event.target.value);
                   refreshExpectedReady(event.target.value, leadTimeWeeks);
                 }}
-                type="date"
+
                 value={orderDate}
               />
             </Field>
@@ -1030,7 +1048,7 @@ export function OrderForm({
               />
             </Field>
             <Field error={fieldErrors.expectedReadyDate} label="Expected ready">
-              <input
+              <DateInput
                 aria-invalid={
                   Boolean(fieldErrors.expectedReadyDate) || undefined
                 }
@@ -1039,7 +1057,7 @@ export function OrderForm({
                 onChange={(event) =>
                   changeDraft("expectedReadyDate", event.target.value)
                 }
-                type="date"
+
                 value={expectedReadyDate}
               />
             </Field>
@@ -1047,7 +1065,7 @@ export function OrderForm({
               error={fieldErrors.expectedDeliveryDate}
               label="Expected delivery"
             >
-              <input
+              <DateInput
                 aria-invalid={
                   Boolean(fieldErrors.expectedDeliveryDate) || undefined
                 }
@@ -1056,7 +1074,7 @@ export function OrderForm({
                 onChange={(event) =>
                   changeDraft("expectedDeliveryDate", event.target.value)
                 }
-                type="date"
+
                 value={draft.expectedDeliveryDate}
               />
             </Field>
@@ -1064,7 +1082,7 @@ export function OrderForm({
               error={fieldErrors.actualDeliveryDate}
               label="Actual delivery"
             >
-              <input
+              <DateInput
                 aria-invalid={
                   Boolean(fieldErrors.actualDeliveryDate) || undefined
                 }
@@ -1073,7 +1091,7 @@ export function OrderForm({
                 onChange={(event) =>
                   changeDraft("actualDeliveryDate", event.target.value)
                 }
-                type="date"
+
                 value={draft.actualDeliveryDate}
               />
             </Field>
@@ -1310,7 +1328,7 @@ export function OrderForm({
               />
               <section className="bg-background/60 rounded-md border p-3">
                 <h4 className="text-xs font-semibold">
-                  Planned Supplier Order Output VAT
+                  Planned Order Output VAT
                 </h4>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <Field
@@ -1516,7 +1534,7 @@ export function OrderForm({
             {pricingMode === "PROJECT_MARKUP"
               ? "Uses this Project's default Product, Freight and Other Cost markup rates."
               : pricingMode === "ORDER_MARKUP"
-                ? "Uses explicit markup rates for this Supplier Order only."
+                ? "Uses explicit markup rates for this Order only."
                 : "Selling HT is entered directly; effective markup is calculated."}
           </p>
           {pricingMode === "ORDER_MARKUP" && project ? (
@@ -1726,15 +1744,14 @@ export function OrderForm({
         {!isEditing && availableBillingDocuments.length ? (
           <details className="bg-muted/20 rounded-lg border p-4">
             <summary className="cursor-pointer text-sm font-semibold">
-              Optional Client Billing link
+              Optional Billing link
             </summary>
             <p className="text-muted-foreground mt-1 text-xs">
-              Link this new Supplier Order to an existing Billing Event from the
-              same Project. You can also reconcile it later from either detail
-              page.
+              Link this new Order to an existing Billing Event from the same
+              Project. You can also reconcile it later from either detail page.
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-              <Field label="Client Billing Event">
+              <Field label="Billing Event">
                 <select
                   className={inputClassName}
                   name="billingDocumentId"
@@ -1744,7 +1761,6 @@ export function OrderForm({
                     );
                     setBillingDocumentId(event.target.value);
                     setBillingAllocatedAmount("");
-                    setBillingPercentage("");
                     setBillingRemainderApproved(
                       selected?.isProjectRemainderApproved ?? false,
                     );
@@ -1755,82 +1771,30 @@ export function OrderForm({
                   {availableBillingDocuments.map((document) => (
                     <option key={document.id} value={document.id}>
                       {document.reference} · {document.documentType} ·{" "}
-                      {document.totalHt} {document.currencyCode}
+                      {formatMoney(document.totalHt, document.currencyCode)}
                     </option>
                   ))}
                 </select>
               </Field>
               {selectedBillingDocument ? (
                 <>
-                  <Field label="Allocation basis">
-                    <select
-                      className={inputClassName}
-                      name="billingAllocationBasis"
-                      onChange={(event) =>
-                        setBillingAllocationBasis(
-                          event.target.value as "FIXED_AMOUNT" | "PERCENTAGE",
-                        )
-                      }
-                      value={billingAllocationBasis}
-                    >
-                      <option value="FIXED_AMOUNT">Amount</option>
-                      <option value="PERCENTAGE">Percentage</option>
-                    </select>
-                  </Field>
-                  <Field
-                    error={fieldErrors.billingPercentageRate}
-                    label="% of Supplier Order"
-                  >
-                    <PercentageInput
-                      className={inputClassName}
-                      disabled={billingAllocationBasis !== "PERCENTAGE"}
-                      onValueChange={(next) => {
-                        setBillingPercentage(next);
-                        setBillingAllocatedAmount(
-                          amountFromPercentage(
-                            selectedBillingOrderBasis ?? "",
-                            next,
-                          ) ?? "",
-                        );
-                      }}
-                      value={billingPercentage}
-                    />
-                    <input
-                      name="billingPercentageRate"
-                      type="hidden"
-                      value={
-                        billingAllocationBasis === "PERCENTAGE"
-                          ? (humanPercentageToFraction(billingPercentage, {
-                              maximumPercent: "100",
-                            }) ?? billingPercentage)
-                          : ""
-                      }
-                    />
-                  </Field>
-                  <Field
+                  <input
+                    type="hidden"
+                    name="billingAllocationBasis"
+                    value="FIXED_AMOUNT"
+                  />
+                  <AllocationInputs
+                    amount={billingAllocatedAmount}
+                    onAmountChange={setBillingAllocatedAmount}
+                    billingTotalHt={selectedBillingDocument.totalHt}
+                    orderSellHt={selectedBillingOrderBasis}
+                    currencyCode={selectedBillingDocument.currencyCode}
+                    name="billingAllocatedAmount"
                     error={fieldErrors.billingAllocatedAmount}
-                    label={`Allocation HT (${selectedBillingDocument.currencyCode})`}
-                  >
-                    <input
-                      className={inputClassName}
-                      inputMode="decimal"
-                      name="billingAllocatedAmount"
-                      onChange={(event) => {
-                        const next = event.target.value;
-                        setBillingAllocatedAmount(next);
-                        setBillingPercentage(
-                          percentageFromAmount(
-                            selectedBillingOrderBasis ?? "",
-                            next,
-                          ) ?? "",
-                        );
-                      }}
-                      value={billingAllocatedAmount}
-                    />
-                  </Field>
+                  />
                   <div className="bg-background grid gap-2 rounded-md border p-3 text-xs sm:col-span-2 sm:grid-cols-4 xl:col-span-2">
                     <p>
-                      Supplier Order Sell HT:{" "}
+                      Order Sell HT:{" "}
                       {formatMoney(
                         selectedBillingOrderBasis,
                         selectedBillingDocument.currencyCode,
@@ -1876,7 +1840,7 @@ export function OrderForm({
         ) : null}
         <div className="flex items-center gap-3">
           <SubmitButton pending={pending}>
-            {isEditing ? "Save Supplier Order" : "Create Supplier Order"}
+            {isEditing ? "Save Order" : "Create Order"}
           </SubmitButton>
           <ActionFeedback state={state} />
         </div>

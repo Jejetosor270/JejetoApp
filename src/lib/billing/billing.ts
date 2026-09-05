@@ -44,7 +44,11 @@ import { paginationSkip, type PageInput } from "@/domain/listing/validation";
 import { writeAuditEvent } from "@/lib/audit/events";
 import { getDatabase } from "@/lib/db";
 import { COMPANY_REPORTING_CURRENCY_CODE } from "@/config/reporting";
-import { getOrder, getOrderInTransaction } from "@/lib/procurement/orders";
+import {
+  getOrder,
+  getOrderInTransaction,
+  listOrderFundingRows,
+} from "@/lib/procurement/orders";
 
 export class ClientBillingValidationError extends Error {}
 export class ClientBillingNotFoundError extends Error {}
@@ -320,6 +324,11 @@ export async function listClientBillingOptions() {
         },
       }),
     ]);
+  const funding = new Map(
+    (await listOrderFundingRows(projects.map((project) => project.id))).map(
+      (order) => [order.id, order.sellingHt],
+    ),
+  );
   return {
     clients,
     currencies,
@@ -328,7 +337,10 @@ export async function listClientBillingOptions() {
       dueDate: dateToDateOnly(installment.dueDate),
       scheduledAmount: installment.scheduledAmount.toString(),
     })),
-    orders,
+    orders: orders.map((order) => ({
+      ...order,
+      sellingReporting: funding.get(order.id) ?? null,
+    })),
     projects,
   };
 }
@@ -923,7 +935,7 @@ export async function updateClientBillingInline(
       metadata: {
         changedFields: ["reference", "dueDate", "notes", "isCancelled"],
       },
-      summary: "Updated safe Client billing fields.",
+      summary: "Updated safe Billing fields.",
     });
     return document;
   });
@@ -1028,7 +1040,7 @@ export async function updateClientBillingInstallment(
           "notes",
         ],
       },
-      summary: "Updated a Client Billing payment installment.",
+      summary: "Updated a Billing payment installment.",
     });
     return {
       basis: installment.basis,
@@ -1102,7 +1114,7 @@ export async function createClientBillingInstallment(
         entityReference: `${document.reference} · ${installment.label}`,
         entityType: "INSTALLMENT",
         metadata: { billingDocumentId: document.id },
-        summary: "Added a Client Billing payment installment.",
+        summary: "Added a Billing payment installment.",
       });
       return installment.id;
     },
@@ -1145,7 +1157,7 @@ export async function deleteClientBillingInstallment(
       entityReference: `${installment.billingDocument.reference} · ${installment.label}`,
       entityType: "INSTALLMENT",
       metadata: { billingDocumentId: input.billingDocumentId },
-      summary: "Removed a Client Billing payment installment.",
+      summary: "Removed a Billing payment installment.",
     });
   });
 }
@@ -1317,7 +1329,7 @@ async function reconcileBillingAllocationsInTransaction(
         projectRemainderApproved: input.isProjectRemainderApproved,
         projectRemainderApprovalChanged: remainderApprovalChanged,
       },
-      summary: "Reconciled Client Billing allocations with Supplier Orders.",
+      summary: "Reconciled Billing allocations with Orders.",
     });
 }
 
@@ -1621,7 +1633,7 @@ export async function updateClientBillingDocument(
             "isCancelled",
           ],
         },
-        summary: "Updated the Client Billing Event.",
+        summary: "Updated the Billing Event.",
       });
       await reconcileBillingAllocationsInTransaction(
         transaction,

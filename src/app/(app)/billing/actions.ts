@@ -78,7 +78,7 @@ export async function processClientDocumentAction(
     ) {
       return { message: error.message, status: "error" };
     }
-    console.error("Unable to process Client billing document.", error);
+    console.error("Unable to process Billing document.", error);
     return {
       message: "The Client PDF could not be processed. Please retry.",
       status: "error",
@@ -95,10 +95,8 @@ export async function confirmClientDocumentAction(
   if (!input.success) {
     return {
       fieldErrors: fieldErrorMap(input.error.issues),
-      formError:
-        input.error.issues[0]?.message ?? "Review the Client billing values.",
-      message:
-        input.error.issues[0]?.message ?? "Review the Client billing values.",
+      formError: input.error.issues[0]?.message ?? "Review the Billing values.",
+      message: input.error.issues[0]?.message ?? "Review the Billing values.",
       status: "error",
       values: Object.fromEntries(
         [...formData.entries()].filter(
@@ -134,10 +132,10 @@ export async function confirmClientDocumentAction(
         status: "error",
       };
     }
-    console.error("Unable to confirm Client billing document.", error);
+    console.error("Unable to confirm Billing document.", error);
     return {
-      formError: "The reviewed Client billing document could not be saved.",
-      message: "The reviewed Client billing document could not be saved.",
+      formError: "The reviewed Billing document could not be saved.",
+      message: "The reviewed Billing document could not be saved.",
       status: "error",
     };
   }
@@ -277,7 +275,7 @@ export async function createClientBillingInstallmentAction(
   } catch (error) {
     const expected = expectedBillingError(error);
     if (expected) return expected;
-    console.error("Unable to add Client Billing installment.", error);
+    console.error("Unable to add Billing installment.", error);
     return {
       formError: "The payment installment could not be added.",
       message: "The payment installment could not be added.",
@@ -309,7 +307,7 @@ export async function deleteClientBillingInstallmentAction(
   } catch (error) {
     const expected = expectedBillingError(error);
     if (expected) return expected;
-    console.error("Unable to remove Client Billing installment.", error);
+    console.error("Unable to remove Billing installment.", error);
     return {
       formError: "The payment installment could not be removed.",
       message: "The payment installment could not be removed.",
@@ -358,7 +356,7 @@ export async function updateClientBillingInstallmentAction(
       };
     const expected = expectedBillingError(error);
     if (expected) return expected;
-    console.error("Unable to update Client Billing installment.", error);
+    console.error("Unable to update Billing installment.", error);
     return {
       formError: "The payment installment could not be updated.",
       message: "The payment installment could not be updated.",
@@ -395,7 +393,7 @@ export async function updateClientBillingInlineAction(
         status: "error",
       };
     }
-    console.error("Unable to update Client billing row.", error);
+    console.error("Unable to update Billing row.", error);
     return {
       message: "The billing row could not be updated.",
       status: "error",
@@ -415,8 +413,8 @@ function expectedBillingError(error: unknown): BillingActionState | null {
     };
   if (error instanceof Error && "code" in error && error.code === "P2002")
     return {
-      formError: "A Client Billing Event already uses this type and reference.",
-      message: "A Client Billing Event already uses this type and reference.",
+      formError: "A Billing Event already uses this type and reference.",
+      message: "A Billing Event already uses this type and reference.",
       status: "error",
     };
   return null;
@@ -445,7 +443,7 @@ export async function updateClientBillingDocumentAction(
   } catch (error) {
     const expected = expectedBillingError(error);
     if (expected) return expected;
-    console.error("Unable to update Client Billing Event.", error);
+    console.error("Unable to update Billing Event.", error);
     return {
       formError: "The Billing Event could not be updated.",
       message: "The Billing Event could not be updated.",
@@ -474,16 +472,16 @@ export async function updateClientBillingAllocationsAction(
     revalidatePath("/orders", "layout");
     revalidateProjectFinancialViews();
     return {
-      message: "Supplier Order reconciliation updated.",
+      message: "Order reconciliation updated.",
       status: "success",
     };
   } catch (error) {
     const expected = expectedBillingError(error);
     if (expected) return expected;
-    console.error("Unable to update Client Billing allocations.", error);
+    console.error("Unable to update Billing allocations.", error);
     return {
-      formError: "The Supplier Order reconciliation could not be updated.",
-      message: "The Supplier Order reconciliation could not be updated.",
+      formError: "The Order reconciliation could not be updated.",
+      message: "The Order reconciliation could not be updated.",
       status: "error",
     };
   }

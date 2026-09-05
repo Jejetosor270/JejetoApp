@@ -1,5 +1,7 @@
 "use server";
 
+import { z } from "zod";
+import { previewReviewedBillingBasis } from "@/lib/quote-intake/confirmation";
 import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
@@ -291,8 +293,8 @@ export async function confirmSupplierQuoteAction(
     return {
       message:
         (input.data.action === "CREATE"
-          ? "Draft Supplier Order created from the reviewed quote."
-          : "Supplier Order updated from the reviewed quote.") +
+          ? "Draft Order created from the reviewed quote."
+          : "Order updated from the reviewed quote.") +
         (itemsSkipped
           ? " Items were not imported because Items Beta is disabled."
           : ""),
@@ -328,12 +330,12 @@ export async function confirmSupplierQuoteAction(
       return {
         status: "error",
         message:
-          "The VAT setup needs an administrator update before this Supplier Order can be saved. Your review is still available.",
+          "The VAT setup needs an administrator update before this Order can be saved. Your review is still available.",
       };
     }
     if (isDuplicateOrderReferenceError(error)) {
       return {
-        message: "A Supplier Order already uses this internal reference.",
+        message: "A Order already uses this internal reference.",
         status: "error",
       };
     }
@@ -348,8 +350,42 @@ export async function confirmSupplierQuoteAction(
     }
     return {
       message:
-        "The Supplier Order could not be saved. Your review is still available; please try again.",
+        "The Order could not be saved. Your review is still available; please try again.",
       status: "error",
+    };
+  }
+}
+
+export async function previewSupplierOrderBillingAction(
+  formData: FormData,
+): Promise<{ amount: string | null; message: string }> {
+  await requireMasterDataEditor();
+  const billing = z.uuid().safeParse(formData.get("billingDocumentId"));
+  formData.set("billingDocumentId", "");
+  formData.set("approveItems", "");
+  const parsed = parseQuoteConfirmation(formData);
+  if (!billing.success || !parsed.success)
+    return {
+      amount: null,
+      message:
+        "Complete the reviewed Order fields before calculating coverage.",
+    };
+  try {
+    const amount = await previewReviewedBillingBasis(parsed.data, billing.data);
+    return {
+      amount,
+      message:
+        amount === null
+          ? "Complete manual FX before calculating Order coverage."
+          : "Coverage uses the reviewed Order pricing. No record has been saved.",
+    };
+  } catch (error) {
+    return {
+      amount: null,
+      message:
+        error instanceof QuoteConfirmationError
+          ? error.message
+          : "Coverage preview is unavailable. Your review is preserved.",
     };
   }
 }

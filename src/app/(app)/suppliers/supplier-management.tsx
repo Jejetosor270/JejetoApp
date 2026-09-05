@@ -240,11 +240,9 @@ export function CreateSupplierForm({
 }
 function EditSupplierForm({
   currencies,
-  onClose,
   supplier,
 }: {
   currencies: CurrencyOption[];
-  onClose?: () => void;
   supplier: SupplierView;
 }) {
   const { state, onSubmit, pending } = usePersistentActionState(
@@ -253,14 +251,6 @@ function EditSupplierForm({
   );
   return (
     <section className="bg-card rounded-lg border p-4">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Edit supplier</h2>
-        {onClose ? (
-          <Button onClick={onClose} size="sm" type="button" variant="ghost">
-            Close
-          </Button>
-        ) : null}
-      </div>
       <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-2">
         <input name="id" type="hidden" value={supplier.id} />
         <SupplierFields currencies={currencies} supplier={supplier} />
@@ -442,8 +432,8 @@ export function SupplierManagement({
             action={deleteSelectedSuppliersAction}
             clearSelection={selection.clear}
             entityName="Supplier"
-            impactSummary={`${affectedOrderCount} Supplier Order${affectedOrderCount === 1 ? "" : "s"} and all downstream records will also be deleted.`}
-            scope="Deleting the selected Suppliers will also permanently delete their Supplier Orders, payments, settlements, quote-import history, financial records, and Building links. Projects and Clients are preserved."
+            impactSummary={`${affectedOrderCount} Order${affectedOrderCount === 1 ? "" : "s"} and all downstream records will also be deleted.`}
+            scope="Deleting the selected Suppliers will also permanently delete their Orders, payments, settlements, quote-import history, financial records, and Building links. Projects and Clients are preserved."
             selectedIds={selection.selectedIds}
           />
         ) : null}

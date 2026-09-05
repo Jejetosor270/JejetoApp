@@ -1,4 +1,5 @@
 "use client";
+import { DateInput } from "@/components/forms/date-input";
 
 import {
   useEffect,
@@ -9,7 +10,10 @@ import {
 } from "react";
 
 import { Button } from "@/components/ui/button";
-import { formatPercentageInput } from "@/domain/procurement/presentation";
+import {
+  formatMoneyInput,
+  formatPercentageInput,
+} from "@/domain/procurement/presentation";
 
 export const inlineControlClassName =
   "border-input bg-background h-8 min-w-20 rounded border px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60";
@@ -41,6 +45,7 @@ export function InlineTextInput({
 }
 
 export function InlineMoneyInput(props: InputProps) {
+  const [focused, setFocused] = useState(false);
   return (
     <input
       aria-label={props.ariaLabel}
@@ -48,7 +53,9 @@ export function InlineMoneyInput(props: InputProps) {
       disabled={props.disabled}
       inputMode="decimal"
       onChange={(event) => props.onChange(event.target.value)}
-      value={props.value}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      value={focused ? props.value : formatMoneyInput(props.value)}
     />
   );
 }
@@ -74,7 +81,8 @@ export function InlinePercentInput(props: InputProps) {
 
 export function InlineDateInput(props: InputProps) {
   return (
-    <input
+    <DateInput
+      europeanValue
       aria-label={props.ariaLabel}
       className={`${inlineControlClassName} w-28 tabular-nums ${props.className ?? ""}`}
       disabled={props.disabled}

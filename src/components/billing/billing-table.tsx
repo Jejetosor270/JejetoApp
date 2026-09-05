@@ -107,7 +107,7 @@ export function BillingTable({
       <div
         className="max-h-[70svh] overflow-auto"
         role="region"
-        aria-label="Client Billing table"
+        aria-label="Billing table"
         tabIndex={0}
       >
         <table className="w-full min-w-[48rem] text-left text-sm">
@@ -169,7 +169,7 @@ export function BillingTable({
         </table>
       </div>
       {documents.length === 0 ? (
-        <ListEmptyState entity="Client Billing documents" />
+        <ListEmptyState entity="Billing documents" />
       ) : null}
     </section>
   );

@@ -293,7 +293,7 @@ export function PaymentInstallmentTable({
                 directionKey="sortDirection"
               />
               <th className="px-3 py-2">Actual</th>
-              <th className="px-3 py-2">Project / Supplier Order</th>
+              <th className="px-3 py-2">Project / Order</th>
               <th className="px-3 py-2">Supplier</th>
               <th className="px-3 py-2">Installment / notes</th>
               <SortHeader

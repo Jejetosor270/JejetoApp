@@ -1,4 +1,5 @@
 "use client";
+import { DateInput } from "@/components/forms/date-input";
 
 import { useActionState, useState } from "react";
 
@@ -181,12 +182,12 @@ export function InstallmentForm({
         </select>
       </Field>
       <Field error={fieldErrors.dueDate} label="Due date" required>
-        <input
+        <DateInput
           className={inputClassName}
           name="dueDate"
           onChange={(event) => setDueDate(event.target.value)}
           required
-          type="date"
+
           value={dueDate}
         />
       </Field>
@@ -255,12 +256,7 @@ export function PresetForm({
         </select>
       </Field>
       <Field label="First due date">
-        <input
-          className={inputClassName}
-          name="firstDueDate"
-          required
-          type="date"
-        />
+        <DateInput className={inputClassName} name="firstDueDate" required />
       </Field>
       <SubmitButton pending={pending}>Add preset</SubmitButton>
       <Feedback state={state} />
@@ -306,12 +302,12 @@ export function SettlementForm({
         />
       </Field>
       <Field error={fieldErrors.settledAt} label="Actual payment date" required>
-        <input
+        <DateInput
           className={inputClassName}
           name="settledAt"
           onChange={(event) => setSettledAt(event.target.value)}
           required
-          type="date"
+
           value={settledAt}
         />
       </Field>

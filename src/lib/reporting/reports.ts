@@ -917,7 +917,7 @@ export async function getPortfolioReportingSnapshot(
       if (!snapshot) throw new Error("Project reporting snapshot is missing.");
       const clientBilling = clientBillingByProject.get(project.id);
       if (!clientBilling)
-        throw new Error("Project Client Billing summary is missing.");
+        throw new Error("Project Billing summary is missing.");
       const fundingCoverage = fundingCoverageByProject.get(project.id);
       if (!fundingCoverage)
         throw new Error("Project Funding Coverage is missing.");

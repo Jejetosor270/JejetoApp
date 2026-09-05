@@ -1,4 +1,5 @@
 "use client";
+import { DateInput } from "@/components/forms/date-input";
 
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { ConfirmSubmit } from "@/components/forms/confirm-submit";
@@ -190,7 +191,7 @@ export function ProjectFreightExpenses({
     <section className="bg-card rounded-lg border p-4">
       <h2 className="text-sm font-semibold">Project-level freight expenses</h2>
       <p className="text-muted-foreground mt-1 text-xs">
-        Use this only for freight not already recorded on a Supplier Order.
+        Use this only for freight not already recorded on a Order.
       </p>
       {canEdit ? (
         <EditorDrawer
@@ -229,11 +230,10 @@ export function ProjectFreightExpenses({
               label="Expense date"
               required
             >
-              <input
+              <DateInput
                 className={inputClassName}
                 name="expenseDate"
                 required
-                type="date"
               />
             </Field>
             <Field error={fieldErrors.currencyCode} label="Currency" required>

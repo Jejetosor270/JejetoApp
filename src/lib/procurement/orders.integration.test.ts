@@ -65,6 +65,8 @@ function sellingOrder(
     orderCurrencyCode: "EUR",
     orderDate: null,
     orderNumber: "PO-001",
+    packageId: null,
+    orderPackage: null,
     packageName: "Example",
     paymentInstallments: [],
     pricingMode: PricingMode.SELLING_PRICE,

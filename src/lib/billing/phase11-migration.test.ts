@@ -17,7 +17,7 @@ const migration = readFileSync(
 );
 
 describe("Phase 11 billing migration", () => {
-  it("adds Project targets and the reviewed Client billing hierarchy", () => {
+  it("adds Project targets and the reviewed Billing hierarchy", () => {
     expect(migration).toContain('ADD COLUMN "clientBudgetTargetHt"');
     expect(migration).toContain('CREATE TABLE "client_billing_documents"');
     expect(migration).toContain('CREATE TABLE "client_payment_installments"');

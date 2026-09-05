@@ -61,6 +61,7 @@ export function orderFormValues(formData: FormData) {
       "outputVatTaxableBaseOverride",
     ),
     outputVatTreatment: stringValue(formData, "outputVatTreatment"),
+    packageId: stringValue(formData, "packageId"),
     packageName: stringValue(formData, "packageName"),
     pricingMode: stringValue(formData, "pricingMode"),
     projectId: stringValue(formData, "projectId"),

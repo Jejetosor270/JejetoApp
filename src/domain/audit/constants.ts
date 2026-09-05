@@ -17,6 +17,7 @@ export const auditEntityTypes = [
   "PROJECT",
   "BUILDING",
   "ORDER",
+  "ORDER_PACKAGE",
   "INSTALLMENT",
   "SETTLEMENT",
   "QUOTE_IMPORT",

@@ -273,7 +273,7 @@ function providerFailureMessage(
   }
 }
 
-const instructions = `You extract supplier document facts for an internal procurement ERP. The document may be a Quote, Quotation, Estimate, Proforma Invoice, Invoice, Facture, or Devis. Its title must never prevent extraction into the common Supplier Order review schema.
+const instructions = `You extract supplier document facts for an internal procurement ERP. The document may be a Quote, Quotation, Estimate, Proforma Invoice, Invoice, Facture, or Devis. Its title must never prevent extraction into the common Order review schema.
 Return only the requested structured object. Never guess. For every observed field:
 - EXTRACTED means the value is explicitly supported by the document.
 - MISSING means it is not present.

@@ -41,7 +41,7 @@ export default async function DashboardPage() {
         <h2 className="text-base font-semibold">Needs attention</h2>
         <div className="divide-y rounded-lg border">
           <Link
-            href="/payments?status=OVERDUE"
+            href="/payments?tab=supplier&status=OVERDUE"
             className="hover:bg-muted flex items-center justify-between gap-4 p-4"
           >
             <span className="text-sm">Overdue Supplier Payments</span>
@@ -58,7 +58,7 @@ export default async function DashboardPage() {
             href="/billing?status=OVERDUE"
             className="hover:bg-muted flex items-center justify-between gap-4 p-4"
           >
-            <span className="text-sm">Overdue Client Billing</span>
+            <span className="text-sm">Overdue Billing</span>
             <span className="financial-figure text-destructive text-sm font-semibold">
               {formatMoney(
                 billing.complete ? billing.overdueTtc : null,

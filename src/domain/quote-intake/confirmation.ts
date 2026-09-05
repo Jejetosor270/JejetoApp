@@ -169,9 +169,7 @@ const confirmationSchema = z
     billingDocumentId: z.preprocess(
       (value) =>
         typeof value === "string" && value.trim() === "" ? undefined : value,
-      z
-        .uuid("Choose a valid Client Billing event or skip the allocation.")
-        .optional(),
+      z.uuid("Choose a valid Billing event or skip the allocation.").optional(),
     ),
     billingPercentageRate: optionalPercent,
     billingRemainderApproved: z.boolean(),
@@ -252,7 +250,7 @@ const confirmationSchema = z
       )
         context.addIssue({
           code: "custom",
-          message: "Enter the approved Client Billing allocation amount.",
+          message: "Enter the approved Billing allocation amount.",
           path: ["billingAllocatedAmount"],
         });
       if (
@@ -261,7 +259,7 @@ const confirmationSchema = z
       )
         context.addIssue({
           code: "custom",
-          message: "Enter the Client Billing allocation percentage.",
+          message: "Enter the Billing allocation percentage.",
           path: ["billingPercentageRate"],
         });
     }

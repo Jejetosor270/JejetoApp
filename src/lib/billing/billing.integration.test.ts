@@ -170,7 +170,7 @@ function summaryRecord(input: {
   };
 }
 
-describe("Client billing persistence", () => {
+describe("Billing persistence", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     database.project.findFirst.mockResolvedValue({
@@ -316,7 +316,7 @@ describe("Client billing persistence", () => {
     });
   });
 
-  it("excludes allocations attached to cancelled Supplier Orders", async () => {
+  it("excludes allocations attached to cancelled Orders", async () => {
     const record = summaryRecord({
       allocations: ["40", "20"],
       id: "invoice",
@@ -766,7 +766,7 @@ describe("Client billing persistence", () => {
     expect(transaction.clientReceipt.create).not.toHaveBeenCalled();
   });
 
-  it("updates an existing Client Billing installment in both directions without creating a duplicate", async () => {
+  it("updates an existing Billing installment in both directions without creating a duplicate", async () => {
     transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
       billingDocument: {
         id: "document-1",
@@ -954,7 +954,7 @@ describe("Client billing persistence", () => {
     expect(transaction.clientPaymentInstallment.delete).not.toHaveBeenCalled();
   });
 
-  it("rejects reducing a Client Billing installment below receipts without an audit write", async () => {
+  it("rejects reducing a Billing installment below receipts without an audit write", async () => {
     transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
       billingDocument: {
         id: "document-1",

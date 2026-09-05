@@ -32,7 +32,7 @@ export function CompanyFinancialSummary({
       "/projects?status=ACTIVE",
     ],
     [
-      "Supplier Order Planned Sell HT",
+      "Order Planned Sell HT",
       formatMoney(report.financial.totals.salesRevenue.value, currency),
       !report.financial.totals.salesRevenue.complete,
       "/orders",
@@ -44,7 +44,7 @@ export function CompanyFinancialSummary({
       "/orders",
     ],
     [
-      "Supplier Order Planned Gross Profit HT",
+      "Order Planned Gross Profit HT",
       formatMoney(report.financial.grossProfit, currency),
       !report.financial.complete,
       "/orders",
@@ -105,8 +105,8 @@ export function CompanyFinancialSummary({
         <div>
           <h2 className="text-sm font-semibold">Portfolio commercial plan</h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            Supplier Order planned selling and economic costs. Comparable totals
-            include {currency}-reporting Projects only.
+            Order planned selling and economic costs. Comparable totals include{" "}
+            {currency}-reporting Projects only.
           </p>
         </div>
         <Badge variant={report.financial.complete ? "outline" : "destructive"}>
@@ -209,7 +209,7 @@ export function ProjectPortfolioTable({
   const labels =
     view === "commercial"
       ? [
-          "Supplier Order Sell HT",
+          "Order Sell HT",
           "Economic Landed Cost HT",
           "Planned Gross Profit HT",
           "Planned Markup",
@@ -229,8 +229,8 @@ export function ProjectPortfolioTable({
           <h2 className="text-sm font-semibold">Project portfolio</h2>
           <p className="text-muted-foreground mt-1 text-xs">
             Each row remains in its Project reporting currency. Commercial
-            figures describe the Supplier Order plan; Funding Coverage is
-            commercial coverage, separate from cash.
+            figures describe the Order plan; Funding Coverage is commercial
+            coverage, separate from cash.
           </p>
         </div>
         <ViewShortcuts

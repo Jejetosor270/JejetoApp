@@ -38,19 +38,19 @@ export const navigationGroups: readonly NavigationGroup[] = [
         href: "/orders",
         icon: Package,
         isAvailable: true,
-        label: "Supplier Orders",
+        label: "Orders",
       },
       {
         href: "/billing",
         icon: WalletCards,
         isAvailable: true,
-        label: "Client Billing",
+        label: "Billing",
       },
       {
         href: "/payments",
         icon: CircleDollarSign,
         isAvailable: true,
-        label: "Supplier Payments",
+        label: "Payments",
       },
       {
         href: "/reports",

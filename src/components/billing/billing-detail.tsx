@@ -1,9 +1,14 @@
 "use client";
+import { MoneyInput } from "@/components/master-data/form-ui";
+
+import { AllocationInputs } from "@/components/billing/allocation-inputs";
+import { DateInput } from "@/components/forms/date-input";
 
 import Decimal from "decimal.js";
 import Link from "next/link";
 import { WorkspaceTabs } from "@/components/layout/workspace-tabs";
-import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
+import { SheetClose } from "@/components/ui/sheet";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { updateClientBillingDocumentAction } from "@/app/(app)/billing/actions";
@@ -22,6 +27,7 @@ import type { BillingActionState } from "@/domain/billing/action-state";
 import {
   addAllocationAmount,
   allocationReconciliation,
+  orderSellingBasisInBillingCurrency,
   amountFromPercentage,
   percentageFromAmount,
 } from "@/domain/billing/calculations";
@@ -43,6 +49,7 @@ interface BillingDetailOptions {
   orders: {
     id: string;
     orderNumber: string;
+    sellingReporting?: string | null;
     projectId: string;
     supplier: { displayName: string };
   }[];
@@ -257,7 +264,7 @@ export function BillingDetail({
         }
         backHref="/billing"
         backLabel="Back to Billing"
-        eyebrow="Client Billing Event"
+        eyebrow="Billing Event"
         meta={
           <>
             {savedClient?.displayName ?? document.client.displayName} ·{" "}
@@ -269,532 +276,506 @@ export function BillingDetail({
       />
 
       {editing ? (
-        <form
-          className="space-y-5"
-          onSubmit={(event) => {
-            submittedDraft.current = draft;
-            onSubmit(event);
+        <EditorDrawer
+          open={editing}
+          wide
+          title="Edit Billing"
+          onOpenChange={(open) => {
+            setEditing(open);
+            if (!open) setDraft(saved);
           }}
         >
-          <input name="id" type="hidden" value={document.id} />
-          <input
-            name="allocations"
-            type="hidden"
-            value={JSON.stringify(serializedAllocations)}
-          />
+          <form
+            className="space-y-5"
+            onSubmit={(event) => {
+              submittedDraft.current = draft;
+              onSubmit(event);
+            }}
+          >
+            <input name="id" type="hidden" value={document.id} />
+            <input
+              name="allocations"
+              type="hidden"
+              value={JSON.stringify(serializedAllocations)}
+            />
 
-          <>
-            <section className="bg-card rounded-lg border p-4">
-              <h2 className="text-sm font-semibold">General & financial</h2>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-                <Field error={fieldErrors.clientId} label="Client">
-                  <select
-                    className={inputClassName}
-                    name="clientId"
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        clientId: event.target.value,
-                        projectId: "",
-                      }))
-                    }
-                    value={draft.clientId}
-                  >
-                    {options.clients.map((client) => (
-                      <option key={client.id} value={client.id}>
-                        {client.displayName}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field error={fieldErrors.projectId} label="Project">
-                  <select
-                    className={inputClassName}
-                    name="projectId"
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        projectId: event.target.value,
-                      }))
-                    }
-                    value={draft.projectId}
-                  >
-                    <option value="">Choose</option>
-                    {availableProjects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.code} · {project.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field error={fieldErrors.documentType} label="Document type">
-                  <select
-                    className={inputClassName}
-                    name="documentType"
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        documentType: event.target.value as "QUOTE" | "INVOICE",
-                      }))
-                    }
-                    value={draft.documentType}
-                  >
-                    <option value="QUOTE">Quote / Devis</option>
-                    <option value="INVOICE">Invoice</option>
-                  </select>
-                </Field>
-                <Field error={fieldErrors.reference} label="Reference">
-                  <input
-                    className={inputClassName}
-                    name="reference"
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        reference: event.target.value,
-                      }))
-                    }
-                    required
-                    value={draft.reference}
-                  />
-                </Field>
-                <Field error={fieldErrors.documentDate} label="Document date">
-                  <input
-                    className={inputClassName}
-                    name="documentDate"
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        documentDate: event.target.value,
-                      }))
-                    }
-                    required
-                    type="date"
-                    value={draft.documentDate}
-                  />
-                </Field>
-                <Field error={fieldErrors.dueDate} label="Due date">
-                  <input
-                    className={inputClassName}
-                    name="dueDate"
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        dueDate: event.target.value,
-                      }))
-                    }
-                    type="date"
-                    value={draft.dueDate}
-                  />
-                </Field>
-                <Field error={fieldErrors.currencyCode} label="Currency">
-                  <select
-                    className={inputClassName}
-                    name="currencyCode"
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        currencyCode: event.target.value,
-                      }))
-                    }
-                    value={draft.currencyCode}
-                  >
-                    {options.currencies.map((currency) => (
-                      <option key={currency.code} value={currency.code}>
-                        {currency.code} · {currency.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field
-                  error={fieldErrors.fxRate}
-                  label="FX to Project reporting"
-                >
-                  <input
-                    className={inputClassName}
-                    inputMode="decimal"
-                    name="fxRate"
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        fxRate: event.target.value,
-                      }))
-                    }
-                    value={draft.fxRate}
-                  />
-                </Field>
-                <Field
-                  error={fieldErrors.totalHt}
-                  label={`HT (${draft.currencyCode})`}
-                >
-                  <input
-                    className={inputClassName}
-                    inputMode="decimal"
-                    name="totalHt"
-                    onChange={(event) =>
-                      updateFinancialTotals({ totalHt: event.target.value })
-                    }
-                    required
-                    value={draft.totalHt}
-                  />
-                </Field>
-                <Field error={fieldErrors.vatTreatment} label="VAT treatment">
-                  <select
-                    className={inputClassName}
-                    name="vatTreatment"
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        vatTreatment: event.target.value,
-                      }))
-                    }
-                    value={draft.vatTreatment}
-                  >
-                    <option value="">Not classified</option>
-                    <option value="DOMESTIC">Domestic</option>
-                    <option value="INTRA_EU_SUPPLY">Intra-EU supply</option>
-                    <option value="INTRA_EU_ACQUISITION">
-                      Intra-EU acquisition
-                    </option>
-                    <option value="IMPORT">Import</option>
-                    <option value="EXPORT">Export</option>
-                    <option value="REVERSE_CHARGE">Reverse charge</option>
-                    <option value="EXEMPT">Exempt</option>
-                    <option value="OUT_OF_SCOPE">Out of scope</option>
-                    <option value="CUSTOM">Custom</option>
-                  </select>
-                </Field>
-                <Field error={fieldErrors.vatRate} label="VAT rate (%)">
-                  <PercentageInput
-                    className={inputClassName}
-                    onValueChange={(vatRate) => {
-                      const vatAmount =
-                        amountFromPercentage(draft.totalHt, vatRate) ??
-                        draft.vatAmount;
-                      updateFinancialTotals({ vatAmount, vatRate });
-                    }}
-                    value={draft.vatRate}
-                  />
-                  <input
-                    name="vatRate"
-                    type="hidden"
-                    value={
-                      humanPercentageToFraction(draft.vatRate, {
-                        maximumPercent: "100",
-                      }) ?? draft.vatRate
-                    }
-                  />
-                </Field>
-                <Field
-                  error={fieldErrors.vatAmount}
-                  label={`VAT (${draft.currencyCode})`}
-                >
-                  <input
-                    className={inputClassName}
-                    inputMode="decimal"
-                    name="vatAmount"
-                    onChange={(event) =>
-                      updateFinancialTotals({ vatAmount: event.target.value })
-                    }
-                    required
-                    value={draft.vatAmount}
-                  />
-                </Field>
-                <Field
-                  error={fieldErrors.totalTtc}
-                  label={`TTC (${draft.currencyCode})`}
-                >
-                  <input
-                    className={`${inputClassName} bg-muted/40`}
-                    name="totalTtc"
-                    readOnly
-                    value={draft.totalTtc}
-                  />
-                </Field>
-              </div>
-              <Field error={fieldErrors.notes} label="Notes">
-                <textarea
-                  className={`${inputClassName} mt-3 min-h-24 py-2`}
-                  name="notes"
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      notes: event.target.value,
-                    }))
-                  }
-                  value={draft.notes}
-                />
-              </Field>
-              <label className="mt-3 flex items-center gap-2 text-sm">
-                <input
-                  checked={draft.isCancelled}
-                  name="isCancelled"
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      isCancelled: event.target.checked,
-                    }))
-                  }
-                  type="checkbox"
-                />
-                Cancelled
-              </label>
-            </section>
-
-            <section className="bg-card rounded-lg border p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-sm font-semibold">
-                    Supplier Order Reconciliation
-                  </h2>
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    Attribute this Billing HT without creating additional
-                    revenue.
-                  </p>
-                </div>
-                <Button
-                  onClick={() =>
-                    setDraft((current) => ({
-                      ...current,
-                      allocations: [
-                        ...current.allocations,
-                        {
-                          amount: "",
-                          basis: "FIXED_AMOUNT",
-                          orderId: "",
-                          percentage: "",
-                        },
-                      ],
-                    }))
-                  }
-                  type="button"
-                  variant="outline"
-                >
-                  Add Supplier Order
-                </Button>
-              </div>
-              <div className="mt-4 space-y-3">
-                {draft.allocations.map((allocation, index) => (
-                  <div
-                    className="grid gap-2 rounded-md border p-3 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]"
-                    key={`${index}-${allocation.orderId}`}
-                  >
-                    <Field
-                      error={fieldErrors[`allocations.${index}.orderId`]}
-                      label="Supplier Order"
-                    >
-                      <select
-                        className={inputClassName}
-                        onChange={(event) =>
-                          setDraft((current) => ({
-                            ...current,
-                            allocations: current.allocations.map(
-                              (item, itemIndex) =>
-                                itemIndex === index
-                                  ? { ...item, orderId: event.target.value }
-                                  : item,
-                            ),
-                          }))
-                        }
-                        value={allocation.orderId}
-                      >
-                        <option value="">Choose Supplier Order</option>
-                        {availableOrders.map((order) => (
-                          <option key={order.id} value={order.id}>
-                            {order.orderNumber} · {order.supplier.displayName}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Basis">
-                      <select
-                        className={inputClassName}
-                        onChange={(event) => {
-                          const basis = event.target
-                            .value as AllocationDraft["basis"];
-                          setDraft((current) => ({
-                            ...current,
-                            allocations: current.allocations.map(
-                              (item, itemIndex) =>
-                                itemIndex === index ? { ...item, basis } : item,
-                            ),
-                          }));
-                        }}
-                        value={allocation.basis}
-                      >
-                        <option value="FIXED_AMOUNT">Amount</option>
-                        <option value="PERCENTAGE">Percentage</option>
-                      </select>
-                    </Field>
-                    <Field
-                      error={fieldErrors[`allocations.${index}.percentageRate`]}
-                      label="% of Billing"
-                    >
-                      <PercentageInput
-                        className={inputClassName}
-                        disabled={allocation.basis !== "PERCENTAGE"}
-                        onValueChange={(percentage) => {
-                          const amount =
-                            amountFromPercentage(draft.totalHt, percentage) ??
-                            "";
-                          setDraft((current) => ({
-                            ...current,
-                            allocations: current.allocations.map(
-                              (item, itemIndex) =>
-                                itemIndex === index
-                                  ? { ...item, amount, percentage }
-                                  : item,
-                            ),
-                          }));
-                        }}
-                        value={allocation.percentage}
-                      />
-                    </Field>
-                    <Field
-                      error={
-                        fieldErrors[`allocations.${index}.allocatedAmount`]
-                      }
-                      label={`Allocation HT (${draft.currencyCode})`}
-                    >
-                      <input
-                        className={inputClassName}
-                        inputMode="decimal"
-                        onChange={(event) => {
-                          const amount = event.target.value;
-                          const percentage =
-                            percentageFromAmount(draft.totalHt, amount) ?? "";
-                          setDraft((current) => ({
-                            ...current,
-                            allocations: current.allocations.map(
-                              (item, itemIndex) =>
-                                itemIndex === index
-                                  ? { ...item, amount, percentage }
-                                  : item,
-                            ),
-                          }));
-                        }}
-                        value={allocation.amount}
-                      />
-                    </Field>
-                    <Button
-                      className="self-end"
-                      onClick={() =>
+            <>
+              <section className="bg-card rounded-lg border p-4">
+                <h2 className="text-sm font-semibold">General & financial</h2>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+                  <Field error={fieldErrors.clientId} label="Client">
+                    <select
+                      className={inputClassName}
+                      name="clientId"
+                      onChange={(event) =>
                         setDraft((current) => ({
                           ...current,
-                          allocations: current.allocations.filter(
-                            (_, itemIndex) => itemIndex !== index,
-                          ),
+                          clientId: event.target.value,
+                          projectId: "",
                         }))
                       }
-                      type="button"
-                      variant="outline"
+                      value={draft.clientId}
                     >
-                      Remove
-                    </Button>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-muted/30 mt-4 grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-4">
-                <p>
-                  Billing HT: {formatMoney(draft.totalHt, draft.currencyCode)}
-                </p>
-                <p>
-                  Allocated:{" "}
-                  {formatMoney(reconciliation.allocated, draft.currencyCode)}
-                </p>
-                <p>
-                  Project remainder:{" "}
-                  {formatMoney(reconciliation.remaining, draft.currencyCode)}
-                </p>
-                <p
-                  className={
-                    new Decimal(reconciliation.overallocated).greaterThan(0)
-                      ? "text-destructive"
-                      : ""
-                  }
-                >
-                  Over-allocation:{" "}
-                  {formatMoney(
-                    reconciliation.overallocated,
-                    draft.currencyCode,
-                  )}
-                </p>
-              </div>
-              {draft.allocations.length > 0 &&
-              new Decimal(reconciliation.remaining).greaterThan(0) ? (
-                <Button
-                  className="mt-3"
-                  onClick={() =>
-                    setDraft((current) => {
-                      const lastIndex = current.allocations.length - 1;
-                      return {
-                        ...current,
-                        allocations: current.allocations.map(
-                          (allocation, index) => {
-                            if (index !== lastIndex) return allocation;
-                            const amount = addAllocationAmount(
-                              allocation.amount,
-                              reconciliation.remaining,
-                            );
-                            return {
-                              ...allocation,
-                              amount,
-                              percentage:
-                                percentageFromAmount(current.totalHt, amount) ??
-                                allocation.percentage,
-                            };
-                          },
-                        ),
-                      };
-                    })
-                  }
-                  type="button"
-                  variant="outline"
-                >
-                  Allocate remaining to last Supplier Order
-                </Button>
-              ) : null}
-              {new Decimal(reconciliation.remaining).greaterThan(0) ? (
-                <label className="mt-3 flex items-center gap-2 text-sm">
-                  <input
-                    checked={draft.isProjectRemainderApproved}
-                    name="isProjectRemainderApproved"
+                      {options.clients.map((client) => (
+                        <option key={client.id} value={client.id}>
+                          {client.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field error={fieldErrors.projectId} label="Project">
+                    <select
+                      className={inputClassName}
+                      name="projectId"
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          projectId: event.target.value,
+                        }))
+                      }
+                      value={draft.projectId}
+                    >
+                      <option value="">Choose</option>
+                      {availableProjects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.code} · {project.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field error={fieldErrors.documentType} label="Document type">
+                    <select
+                      className={inputClassName}
+                      name="documentType"
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          documentType: event.target.value as
+                            "QUOTE" | "INVOICE",
+                        }))
+                      }
+                      value={draft.documentType}
+                    >
+                      <option value="QUOTE">Quote / Devis</option>
+                      <option value="INVOICE">Invoice</option>
+                    </select>
+                  </Field>
+                  <Field error={fieldErrors.reference} label="Reference">
+                    <input
+                      className={inputClassName}
+                      name="reference"
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          reference: event.target.value,
+                        }))
+                      }
+                      required
+                      value={draft.reference}
+                    />
+                  </Field>
+                  <Field error={fieldErrors.documentDate} label="Document date">
+                    <DateInput
+                      className={inputClassName}
+                      name="documentDate"
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          documentDate: event.target.value,
+                        }))
+                      }
+                      required
+
+                      value={draft.documentDate}
+                    />
+                  </Field>
+                  <Field error={fieldErrors.dueDate} label="Due date">
+                    <DateInput
+                      className={inputClassName}
+                      name="dueDate"
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          dueDate: event.target.value,
+                        }))
+                      }
+
+                      value={draft.dueDate}
+                    />
+                  </Field>
+                  <Field error={fieldErrors.currencyCode} label="Currency">
+                    <select
+                      className={inputClassName}
+                      name="currencyCode"
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          currencyCode: event.target.value,
+                        }))
+                      }
+                      value={draft.currencyCode}
+                    >
+                      {options.currencies.map((currency) => (
+                        <option key={currency.code} value={currency.code}>
+                          {currency.code} · {currency.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field
+                    error={fieldErrors.fxRate}
+                    label="FX to Project reporting"
+                  >
+                    <input
+                      className={inputClassName}
+                      inputMode="decimal"
+                      name="fxRate"
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          fxRate: event.target.value,
+                        }))
+                      }
+                      value={draft.fxRate}
+                    />
+                  </Field>
+                  <Field
+                    error={fieldErrors.totalHt}
+                    label={`HT (${draft.currencyCode})`}
+                  >
+                    <MoneyInput
+                      className={inputClassName}
+
+                      name="totalHt"
+                      onValueChange={(nextValue) =>
+                        updateFinancialTotals({ totalHt: nextValue })
+                      }
+                      required
+                      value={draft.totalHt}
+                    />
+                  </Field>
+                  <Field error={fieldErrors.vatTreatment} label="VAT treatment">
+                    <select
+                      className={inputClassName}
+                      name="vatTreatment"
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          vatTreatment: event.target.value,
+                        }))
+                      }
+                      value={draft.vatTreatment}
+                    >
+                      <option value="">Not classified</option>
+                      <option value="DOMESTIC">Domestic</option>
+                      <option value="INTRA_EU_SUPPLY">Intra-EU supply</option>
+                      <option value="INTRA_EU_ACQUISITION">
+                        Intra-EU acquisition
+                      </option>
+                      <option value="IMPORT">Import</option>
+                      <option value="EXPORT">Export</option>
+                      <option value="REVERSE_CHARGE">Reverse charge</option>
+                      <option value="EXEMPT">Exempt</option>
+                      <option value="OUT_OF_SCOPE">Out of scope</option>
+                      <option value="CUSTOM">Custom</option>
+                    </select>
+                  </Field>
+                  <Field error={fieldErrors.vatRate} label="VAT rate (%)">
+                    <PercentageInput
+                      className={inputClassName}
+                      onValueChange={(vatRate) => {
+                        const vatAmount =
+                          amountFromPercentage(draft.totalHt, vatRate) ??
+                          draft.vatAmount;
+                        updateFinancialTotals({ vatAmount, vatRate });
+                      }}
+                      value={draft.vatRate}
+                    />
+                    <input
+                      name="vatRate"
+                      type="hidden"
+                      value={
+                        humanPercentageToFraction(draft.vatRate, {
+                          maximumPercent: "100",
+                        }) ?? draft.vatRate
+                      }
+                    />
+                  </Field>
+                  <Field
+                    error={fieldErrors.vatAmount}
+                    label={`VAT (${draft.currencyCode})`}
+                  >
+                    <MoneyInput
+                      className={inputClassName}
+
+                      name="vatAmount"
+                      onValueChange={(nextValue) =>
+                        updateFinancialTotals({ vatAmount: nextValue })
+                      }
+                      required
+                      value={draft.vatAmount}
+                    />
+                  </Field>
+                  <Field
+                    error={fieldErrors.totalTtc}
+                    label={`TTC (${draft.currencyCode})`}
+                  >
+                    <input
+                      className={`${inputClassName} bg-muted/40`}
+                      name="totalTtc"
+                      readOnly
+                      value={draft.totalTtc}
+                    />
+                  </Field>
+                </div>
+                <Field error={fieldErrors.notes} label="Notes">
+                  <textarea
+                    className={`${inputClassName} mt-3 min-h-24 py-2`}
+                    name="notes"
                     onChange={(event) =>
                       setDraft((current) => ({
                         ...current,
-                        isProjectRemainderApproved: event.target.checked,
+                        notes: event.target.value,
+                      }))
+                    }
+                    value={draft.notes}
+                  />
+                </Field>
+                <label className="mt-3 flex items-center gap-2 text-sm">
+                  <input
+                    checked={draft.isCancelled}
+                    name="isCancelled"
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        isCancelled: event.target.checked,
                       }))
                     }
                     type="checkbox"
                   />
-                  Approve the remainder as Project-level Billing
+                  Cancelled
                 </label>
-              ) : null}
-            </section>
-            <div className="flex flex-wrap items-center gap-2">
-              <SubmitButton pending={pending}>Save Billing Event</SubmitButton>
-              <Button
-                disabled={pending}
-                onClick={() => {
-                  if (
-                    hasUnsavedDrafts() &&
-                    !window.confirm("Discard your unsaved Billing changes?")
-                  )
-                    return;
-                  setDraft(saved);
-                  setEditing(false);
-                }}
-                type="button"
-                variant="outline"
-              >
-                Cancel
-              </Button>
-              <ActionFeedback state={state} />
-            </div>
-          </>
-        </form>
+              </section>
+
+              <section className="bg-card rounded-lg border p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-sm font-semibold">
+                      Order Reconciliation
+                    </h2>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      Attribute this Billing HT without creating additional
+                      revenue.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() =>
+                      setDraft((current) => ({
+                        ...current,
+                        allocations: [
+                          ...current.allocations,
+                          {
+                            amount: "",
+                            basis: "FIXED_AMOUNT",
+                            orderId: "",
+                            percentage: "",
+                          },
+                        ],
+                      }))
+                    }
+                    type="button"
+                    variant="outline"
+                  >
+                    Add Order
+                  </Button>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {draft.allocations.map((allocation, index) => (
+                    <div
+                      className="grid gap-2 rounded-md border p-3 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]"
+                      key={`${index}-${allocation.orderId}`}
+                    >
+                      <Field
+                        error={fieldErrors[`allocations.${index}.orderId`]}
+                        label="Order"
+                      >
+                        <select
+                          className={inputClassName}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              allocations: current.allocations.map(
+                                (item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, orderId: event.target.value }
+                                    : item,
+                              ),
+                            }))
+                          }
+                          value={allocation.orderId}
+                        >
+                          <option value="">Choose Order</option>
+                          {availableOrders.map((order) => (
+                            <option key={order.id} value={order.id}>
+                              {order.orderNumber} · {order.supplier.displayName}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <AllocationInputs
+                        amount={allocation.amount}
+                        billingTotalHt={draft.totalHt}
+                        currencyCode={draft.currencyCode}
+                        name={`allocation.${index}.amount`}
+                        orderSellHt={orderSellingBasisInBillingCurrency({
+                          billingCurrencyCode: draft.currencyCode,
+                          billingFxRateToReporting:
+                            decimal(draft.fxRate) || null,
+                          orderSellingReporting:
+                            orderById.get(allocation.orderId)
+                              ?.sellingReporting ??
+                            financialByOrder.get(allocation.orderId)
+                              ?.plannedSell ??
+                            null,
+                          reportingCurrencyCode:
+                            options.projects.find(
+                              (project) => project.id === draft.projectId,
+                            )?.reportingCurrencyCode ?? "",
+                        })}
+                        error={
+                          fieldErrors[`allocations.${index}.allocatedAmount`]
+                        }
+                        onAmountChange={(amount) =>
+                          setDraft((current) => ({
+                            ...current,
+                            allocations: current.allocations.map(
+                              (item, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...item,
+                                      amount,
+                                      basis: "FIXED_AMOUNT",
+                                      percentage: "",
+                                    }
+                                  : item,
+                            ),
+                          }))
+                        }
+                      />
+                      <Button
+                        className="self-end"
+                        onClick={() =>
+                          setDraft((current) => ({
+                            ...current,
+                            allocations: current.allocations.filter(
+                              (_, itemIndex) => itemIndex !== index,
+                            ),
+                          }))
+                        }
+                        type="button"
+                        variant="outline"
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-muted/30 mt-4 grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-4">
+                  <p>
+                    Billing HT: {formatMoney(draft.totalHt, draft.currencyCode)}
+                  </p>
+                  <p>
+                    Allocated:{" "}
+                    {formatMoney(reconciliation.allocated, draft.currencyCode)}
+                  </p>
+                  <p>
+                    Project remainder:{" "}
+                    {formatMoney(reconciliation.remaining, draft.currencyCode)}
+                  </p>
+                  <p
+                    className={
+                      new Decimal(reconciliation.overallocated).greaterThan(0)
+                        ? "text-destructive"
+                        : ""
+                    }
+                  >
+                    Over-allocation:{" "}
+                    {formatMoney(
+                      reconciliation.overallocated,
+                      draft.currencyCode,
+                    )}
+                  </p>
+                </div>
+                {draft.allocations.length > 0 &&
+                new Decimal(reconciliation.remaining).greaterThan(0) ? (
+                  <Button
+                    className="mt-3"
+                    onClick={() =>
+                      setDraft((current) => {
+                        const lastIndex = current.allocations.length - 1;
+                        return {
+                          ...current,
+                          allocations: current.allocations.map(
+                            (allocation, index) => {
+                              if (index !== lastIndex) return allocation;
+                              const amount = addAllocationAmount(
+                                allocation.amount,
+                                reconciliation.remaining,
+                              );
+                              return {
+                                ...allocation,
+                                amount,
+                                percentage:
+                                  percentageFromAmount(
+                                    current.totalHt,
+                                    amount,
+                                  ) ?? allocation.percentage,
+                              };
+                            },
+                          ),
+                        };
+                      })
+                    }
+                    type="button"
+                    variant="outline"
+                  >
+                    Allocate remaining to last Order
+                  </Button>
+                ) : null}
+                {new Decimal(reconciliation.remaining).greaterThan(0) ? (
+                  <label className="mt-3 flex items-center gap-2 text-sm">
+                    <input
+                      checked={draft.isProjectRemainderApproved}
+                      name="isProjectRemainderApproved"
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          isProjectRemainderApproved: event.target.checked,
+                        }))
+                      }
+                      type="checkbox"
+                    />
+                    Approve the remainder as Project-level Billing
+                  </label>
+                ) : null}
+              </section>
+              <div className="flex flex-wrap items-center gap-2">
+                <SubmitButton pending={pending}>
+                  Save Billing Event
+                </SubmitButton>
+                <SheetClose asChild>
+                  <Button disabled={pending} type="button" variant="outline">
+                    Cancel
+                  </Button>
+                </SheetClose>
+                <ActionFeedback state={state} />
+              </div>
+            </>
+          </form>
+        </EditorDrawer>
       ) : (
         <WorkspaceTabs
-          label="Client Billing workspace"
+          label="Billing workspace"
           tabs={[
             {
               id: "overview",
@@ -978,13 +959,13 @@ export function BillingDetail({
               content: (
                 <section className="bg-card rounded-lg border p-4">
                   <h2 className="text-sm font-semibold">
-                    Supplier Order Reconciliation
+                    Order Reconciliation
                   </h2>
                   <div className="mt-3 overflow-x-auto">
                     <table className="w-full min-w-[760px] text-left text-sm">
                       <thead className="text-muted-foreground border-b text-xs">
                         <tr>
-                          <th className="py-2">Supplier Order</th>
+                          <th className="py-2">Order</th>
                           <th>Supplier</th>
                           <th className="text-right">Allocated HT</th>
                           <th className="text-right">% of Billing</th>

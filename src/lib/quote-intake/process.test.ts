@@ -257,7 +257,7 @@ describe("supplier quote processing lifecycle", () => {
 
     expect(result.itemReview).toBeNull();
     expect(result.proposal.warnings).toContain(
-      "Item-line extraction was unavailable. Aggregate Supplier Order review remains available; Items can be added later.",
+      "Item-line extraction was unavailable. Aggregate Order review remains available; Items can be added later.",
     );
   });
 

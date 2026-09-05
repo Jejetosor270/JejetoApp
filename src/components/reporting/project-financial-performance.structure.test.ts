@@ -20,7 +20,7 @@ describe("Project financial performance presentation", () => {
     expect(dashboard).toContain("formatSignedMoney");
     expect(dashboard).toContain("formatSignedRate");
     expect(dashboard).not.toContain("Budget / Target");
-    expect(dashboard).not.toContain("Client Billing & actual profitability");
+    expect(dashboard).not.toContain("Billing & actual profitability");
   });
 
   it("uses Invoice output VAT and deductible input VAT for Project VAT", () => {

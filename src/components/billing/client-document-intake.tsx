@@ -1,4 +1,9 @@
 "use client";
+import { MoneyInput } from "@/components/master-data/form-ui";
+
+import { AllocationInputs } from "@/components/billing/allocation-inputs";
+import { formatMoney } from "@/domain/procurement/presentation";
+import { DateInput } from "@/components/forms/date-input";
 
 import Decimal from "decimal.js";
 import Link from "next/link";
@@ -32,6 +37,7 @@ import {
 import type { ProcessedClientDocumentReview } from "@/lib/billing/process";
 import {
   allocationReconciliation,
+  orderSellingBasisInBillingCurrency,
   amountFromPercentage,
   percentageFromAmount,
   scheduleReconciliation,
@@ -55,7 +61,12 @@ interface BillingOptions {
     label: string;
     scheduledAmount: string;
   }[];
-  orders: { id: string; orderNumber: string; projectId: string }[];
+  orders: {
+    id: string;
+    orderNumber: string;
+    projectId: string;
+    sellingReporting?: string | null;
+  }[];
   projects: {
     clientId: string;
     code: string;
@@ -154,7 +165,7 @@ function scheduleFromReview(
   }));
 }
 
-function ClientDocumentReview({
+export function ClientDocumentReview({
   options,
   review,
 }: {
@@ -253,10 +264,10 @@ function ClientDocumentReview({
   if (state.status === "success" && state.recordId) {
     return (
       <section className="bg-card rounded-lg border p-5">
-        <h2 className="font-semibold">Client billing saved</h2>
+        <h2 className="font-semibold">Billing saved</h2>
         <p className="text-muted-foreground mt-2 text-sm">{state.message}</p>
         <Button asChild className="mt-4">
-          <Link href="/billing">Open Client Billing</Link>
+          <Link href={`/billing/${state.recordId}`}>Open Billing</Link>
         </Button>
       </section>
     );
@@ -373,9 +384,12 @@ function ClientDocumentReview({
               <option value="">Create a new billing document</option>
               {review.duplicateCandidates.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
-                  Update {candidate.reference} · HT {candidate.totalHt} →{" "}
-                  {totalHt || "review value"} ·{" "}
-                  {candidate.reasons.join(", ") || "possible match"}
+                  Update {candidate.reference} · HT{" "}
+                  {formatMoney(candidate.totalHt, candidate.currencyCode)} →{" "}
+                  {totalHt
+                    ? formatMoney(totalHt, currencyCode)
+                    : "review value"}{" "}
+                  · {candidate.reasons.join(", ") || "possible match"}
                 </option>
               ))}
             </select>
@@ -492,21 +506,21 @@ function ClientDocumentReview({
               label="Document date"
               required
             >
-              <input
+              <DateInput
                 className={inputClassName}
                 name="documentDate"
                 onChange={(event) => setDocumentDate(event.target.value)}
                 required
-                type="date"
+
                 value={documentDate}
               />
             </ReviewField>
             <ReviewField error={state.fieldErrors?.dueDate} label="Due date">
-              <input
+              <DateInput
                 className={inputClassName}
                 name="dueDate"
                 onChange={(event) => setDueDate(event.target.value)}
-                type="date"
+
                 value={dueDate}
               />
             </ReviewField>
@@ -552,12 +566,12 @@ function ClientDocumentReview({
               label="Total HT"
               required
             >
-              <input
+              <MoneyInput
                 className={inputClassName}
-                inputMode="decimal"
+
                 name="totalHt"
-                onChange={(event) => {
-                  const next = event.target.value;
+                onValueChange={(nextValue) => {
+                  const next = nextValue;
                   setTotalHt(next);
                   setAllocations((current) =>
                     current.map((row) =>
@@ -632,11 +646,11 @@ function ClientDocumentReview({
               label="VAT amount"
               required
             >
-              <input
+              <MoneyInput
                 className={inputClassName}
-                inputMode="decimal"
+
                 name="vatAmount"
-                onChange={(event) => setVatAmount(event.target.value)}
+                onValueChange={(nextValue) => setVatAmount(nextValue)}
                 required
                 value={vatAmount}
               />
@@ -646,12 +660,12 @@ function ClientDocumentReview({
               label="Total TTC"
               required
             >
-              <input
+              <MoneyInput
                 className={inputClassName}
-                inputMode="decimal"
+
                 name="totalTtc"
-                onChange={(event) => {
-                  const next = event.target.value;
+                onValueChange={(nextValue) => {
+                  const next = nextValue;
                   setTotalTtc(next);
                   setSchedule((current) =>
                     current.map((row) =>
@@ -711,8 +725,8 @@ function ClientDocumentReview({
                   {matchable.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.billingDocument.reference} · {item.label} ·{" "}
-                      {item.scheduledAmount} {item.currencyCode} · due{" "}
-                      {item.dueDate}
+                      {formatMoney(item.scheduledAmount, item.currencyCode)} ·
+                      due {item.dueDate}
                     </option>
                   ))}
                 </select>
@@ -825,11 +839,12 @@ function ClientDocumentReview({
                     label={`Installment amount (${currencyCode || "currency"})`}
                     required
                   >
-                    <input
+                    <MoneyInput
+                      name=""
                       className={inputClassName}
-                      inputMode="decimal"
-                      onChange={(event) => {
-                        const fixedAmount = event.target.value;
+
+                      onValueChange={(nextValue) => {
+                        const fixedAmount = nextValue;
                         setSchedule((current) =>
                           current.map((row, rowIndex) =>
                             rowIndex === index
@@ -855,7 +870,7 @@ function ClientDocumentReview({
                     label="Due date"
                     required
                   >
-                    <input
+                    <DateInput
                       className={inputClassName}
                       onChange={(event) =>
                         setSchedule((current) =>
@@ -866,7 +881,7 @@ function ClientDocumentReview({
                           ),
                         )
                       }
-                      type="date"
+
                       value={item.dueDate}
                     />
                   </ReviewField>
@@ -926,11 +941,11 @@ function ClientDocumentReview({
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold">
-                Optional Supplier Order allocation (HT)
+                Optional Order allocation (HT)
               </h2>
               <p className="text-muted-foreground mt-1 text-xs">
                 Project-level billing is valid. Allocations never overwrite
-                planned Supplier Order selling prices.
+                planned Order selling prices.
               </p>
             </div>
             <Button
@@ -961,7 +976,7 @@ function ClientDocumentReview({
               >
                 <ReviewField
                   error={state.fieldErrors?.[`allocations.${index}.orderId`]}
-                  label="Project Supplier Order"
+                  label="Project Order"
                   required
                 >
                   <select
@@ -977,7 +992,7 @@ function ClientDocumentReview({
                     }
                     value={item.orderId}
                   >
-                    <option value="">Choose Project Supplier Order</option>
+                    <option value="">Choose Project Order</option>
                     {orders.map((order) => (
                       <option key={order.id} value={order.id}>
                         {order.orderNumber}
@@ -985,68 +1000,37 @@ function ClientDocumentReview({
                     ))}
                   </select>
                 </ReviewField>
-                <ReviewField
-                  error={
-                    state.fieldErrors?.[`allocations.${index}.percentageRate`]
-                  }
-                  label="% of Billing"
-                  required
-                >
-                  <PercentageInput
-                    className={inputClassName}
-                    onValueChange={(percentage) => {
-                      setAllocations((current) =>
-                        current.map((row, rowIndex) =>
-                          rowIndex === index
-                            ? {
-                                ...row,
-                                amount:
-                                  amountFromPercentage(
-                                    totalHt || "0",
-                                    percentage,
-                                  ) ?? row.amount,
-                                basis: "PERCENTAGE",
-                                percentage,
-                              }
-                            : row,
-                        ),
-                      );
-                    }}
-                    value={item.percentage}
-                  />
-                </ReviewField>
-                <ReviewField
+                <AllocationInputs
+                  amount={item.amount}
+                  billingTotalHt={totalHt}
+                  currencyCode={currencyCode}
+                  name={`allocation.${index}.amount`}
+                  orderSellHt={orderSellingBasisInBillingCurrency({
+                    billingCurrencyCode: currencyCode,
+                    billingFxRateToReporting: fixedDecimal(fxRate) || null,
+                    orderSellingReporting:
+                      orders.find((order) => order.id === item.orderId)
+                        ?.sellingReporting ?? null,
+                    reportingCurrencyCode: project?.reportingCurrencyCode ?? "",
+                  })}
                   error={
                     state.fieldErrors?.[`allocations.${index}.allocatedAmount`]
                   }
-                  label={`Supplier Order allocation HT (${currencyCode || "currency"})`}
-                  required
-                >
-                  <input
-                    className={inputClassName}
-                    inputMode="decimal"
-                    onChange={(event) => {
-                      const amount = event.target.value;
-                      setAllocations((current) =>
-                        current.map((row, rowIndex) =>
-                          rowIndex === index
-                            ? {
-                                ...row,
-                                amount,
-                                basis: "FIXED_AMOUNT",
-                                percentage:
-                                  percentageFromAmount(
-                                    totalHt || "0",
-                                    amount,
-                                  ) ?? row.percentage,
-                              }
-                            : row,
-                        ),
-                      );
-                    }}
-                    value={item.amount}
-                  />
-                </ReviewField>
+                  onAmountChange={(amount) =>
+                    setAllocations((current) =>
+                      current.map((row, rowIndex) =>
+                        rowIndex === index
+                          ? {
+                              ...row,
+                              amount,
+                              basis: "FIXED_AMOUNT",
+                              percentage: "",
+                            }
+                          : row,
+                      ),
+                    )
+                  }
+                />
                 <Button
                   type="button"
                   variant="ghost"
@@ -1063,12 +1047,14 @@ function ClientDocumentReview({
           </div>
           {allocations.length ? (
             <div className="mt-3 rounded-md border p-3 text-xs">
-              <p>Document HT: {totalHt || "—"}</p>
-              <p>Allocated HT: {allocation.allocated}</p>
+              <p>Document HT: {formatMoney(totalHt || null, currencyCode)}</p>
+              <p>
+                Allocated HT: {formatMoney(allocation.allocated, currencyCode)}
+              </p>
               <p>
                 {allocationOverallocated
-                  ? `Over-allocated: ${allocation.overallocated}`
-                  : `Project-level remainder: ${allocation.remaining}`}
+                  ? `Over-allocated: ${formatMoney(allocation.overallocated, currencyCode)}`
+                  : `Project-level remainder: ${formatMoney(allocation.remaining, currencyCode)}`}
               </p>
               {new Decimal(allocation.remaining).greaterThan(0) ? (
                 <label className="mt-2 flex items-center gap-2 font-medium">
@@ -1096,7 +1082,7 @@ function ClientDocumentReview({
             disabled={scheduleOverallocated || allocationOverallocated}
             pending={pending}
           >
-            Confirm and save Client Billing
+            Confirm and save Billing
           </SubmitButton>
           {state.message ? (
             <p

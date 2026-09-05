@@ -332,6 +332,9 @@ export async function getPortfolioClientBillingSummary() {
 }
 
 export interface ClientCashInstallment {
+  clientId?: string;
+  receivedAmount?: string;
+  documentType?: string;
   billingDocumentId: string;
   billingReference: string;
   clientName: string;
@@ -348,7 +351,7 @@ export interface ClientCashInstallment {
   status: ReturnType<typeof derivePaymentStatus>;
 }
 
-/** Authoritative Client Billing schedules for forecasts and overdue reporting. */
+/** Authoritative Billing schedules for forecasts and overdue reporting. */
 export async function listClientCashInstallments(
   projectIds?: readonly string[],
 ): Promise<ClientCashInstallment[]> {
@@ -360,7 +363,7 @@ export async function listClientCashInstallments(
     },
     orderBy: { documentType: "desc" },
     select: {
-      client: { select: { displayName: true } },
+      client: { select: { id: true, displayName: true } },
       documentType: true,
       id: true,
       matchedInstallment: {
@@ -413,6 +416,9 @@ export async function listClientCashInstallments(
         : installmentOutstanding(installment.scheduledAmount, received);
       const dueDate = dateToDateOnly(installment.dueDate);
       unique.set(installment.id, {
+        clientId: document.client.id,
+        receivedAmount: received.toString(),
+        documentType: document.documentType,
         billingDocumentId: document.id,
         billingReference: document.reference,
         clientName: document.client.displayName,

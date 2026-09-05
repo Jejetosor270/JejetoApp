@@ -1,3 +1,4 @@
+import { DateInput } from "@/components/forms/date-input";
 import { PageHeader } from "@/components/layout/page-header";
 import { SettingsNavigation } from "@/components/layout/settings-navigation";
 import { FilterBar } from "@/components/listing/filter-bar";
@@ -105,19 +106,17 @@ export default async function ActivityPage({
           </select>
         </FilterField>
         <FilterField label="Activity from">
-          <input
+          <DateInput
             className={filterControlClassName}
             defaultValue={firstQueryValue(params, "dateFrom") ?? ""}
             name="dateFrom"
-            type="date"
           />
         </FilterField>
         <FilterField label="Activity to">
-          <input
+          <DateInput
             className={filterControlClassName}
             defaultValue={firstQueryValue(params, "dateTo") ?? ""}
             name="dateTo"
-            type="date"
           />
         </FilterField>
         <PageSizeField value={pageInput.pageSize} />

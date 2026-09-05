@@ -37,13 +37,13 @@ describe("Workspace navigation", () => {
 });
 
 describe("operational terminology", () => {
-  it("distinguishes Supplier Orders from Client Billing", () => {
+  it("distinguishes Orders from Billing", () => {
     const items = visibleItems(true);
     expect(items).toContainEqual(
-      expect.objectContaining({ href: "/orders", label: "Supplier Orders" }),
+      expect.objectContaining({ href: "/orders", label: "Orders" }),
     );
     expect(items).toContainEqual(
-      expect.objectContaining({ href: "/billing", label: "Client Billing" }),
+      expect.objectContaining({ href: "/billing", label: "Billing" }),
     );
   });
 });

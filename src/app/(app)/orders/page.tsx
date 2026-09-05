@@ -1,3 +1,4 @@
+import { DateInput } from "@/components/forms/date-input";
 import { CreateOrderActions } from "@/components/procurement/create-order-actions";
 import { ViewShortcuts } from "@/components/listing/view-shortcuts";
 import { PageHeader } from "@/components/layout/page-header";
@@ -33,7 +34,7 @@ import {
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listOrderOptions, listOrdersPage } from "@/lib/procurement/orders";
 
-export const metadata: Metadata = { title: "Supplier Orders" };
+export const metadata: Metadata = { title: "Orders" };
 
 function statusValue(
   value: string | undefined,
@@ -58,6 +59,7 @@ export default async function OrdersPage({
       ? requestedView
       : "general";
   const projectId = optionalUuid(firstQueryValue(params, "projectId"));
+  const packageId = optionalUuid(firstQueryValue(params, "packageId"));
   const supplierId = optionalUuid(firstQueryValue(params, "supplierId"));
   const buildingId = optionalUuid(firstQueryValue(params, "buildingId"));
   const status = statusValue(firstQueryValue(params, "status"));
@@ -77,6 +79,7 @@ export default async function OrdersPage({
   const optionsPromise = listOrderOptions();
   const [user, options] = await Promise.all([requireUser(), optionsPromise]);
   const result = await listOrdersPage({
+    packageId,
     buildingId,
     currencyCode: firstQueryValue(params, "currencyCode"),
     dateFrom: dateFrom && isDateOnly(dateFrom) ? dateFrom : undefined,
@@ -93,7 +96,7 @@ export default async function OrdersPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Supplier Orders"
+        title="Orders"
         description={
           <>Supplier-level packages, cost progression, and commercial markup.</>
         }
@@ -162,6 +165,25 @@ export default async function OrdersPage({
             )}
           </select>
         </FilterField>
+        <FilterField label="Package">
+          <select
+            className={filterControlClassName}
+            name="packageId"
+            defaultValue={packageId ?? ""}
+          >
+            <option value="">All Packages</option>
+            {options.projects
+              .filter((project) => !projectId || project.id === projectId)
+              .flatMap((project) =>
+                project.orderPackages.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {project.name} · {item.name}
+                    {item.isActive ? "" : " (archived)"}
+                  </option>
+                )),
+              )}
+          </select>
+        </FilterField>
         <FilterField label="Supplier">
           <select
             className={filterControlClassName}
@@ -205,19 +227,17 @@ export default async function OrdersPage({
           </select>
         </FilterField>
         <FilterField label="Order date from">
-          <input
+          <DateInput
             className={filterControlClassName}
             defaultValue={dateFrom ?? ""}
             name="dateFrom"
-            type="date"
           />
         </FilterField>
         <FilterField label="Order date to">
-          <input
+          <DateInput
             className={filterControlClassName}
             defaultValue={dateTo ?? ""}
             name="dateTo"
-            type="date"
           />
         </FilterField>
         <FilterField label="Sort by">
@@ -228,7 +248,7 @@ export default async function OrdersPage({
           >
             <option value="updated">Updated date</option>
             <option value="reference">Reference</option>
-            <option value="orderDate">Supplier Order date</option>
+            <option value="orderDate">Order date</option>
             <option value="status">Status</option>
           </select>
         </FilterField>

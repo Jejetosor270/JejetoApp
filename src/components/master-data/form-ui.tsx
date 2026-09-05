@@ -28,6 +28,10 @@ export const inputClassName =
 
 const FieldContext = createContext<{ errorId?: string; invalid?: boolean }>({});
 
+export function useFieldAccessibility() {
+  return useContext(FieldContext);
+}
+
 export function Field({
   children,
   error,
