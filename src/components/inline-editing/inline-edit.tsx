@@ -162,6 +162,21 @@ export function InlineEditActions({
         ?.focus();
     }
     wasEditing.current = editing;
+    const container = containerRef.current;
+    const row = container?.closest("tr") ?? container?.parentElement;
+    if (!editing) {
+      if (container) delete container.dataset.dirty;
+      return;
+    }
+    const markDirty = () => {
+      if (container) container.dataset.dirty = "true";
+    };
+    row?.addEventListener("input", markDirty);
+    row?.addEventListener("change", markDirty);
+    return () => {
+      row?.removeEventListener("input", markDirty);
+      row?.removeEventListener("change", markDirty);
+    };
   }, [editing]);
   return (
     <div className="flex min-w-28 flex-col items-end gap-1" ref={containerRef}>
@@ -173,7 +188,14 @@ export function InlineEditActions({
             </Button>
             <Button
               disabled={pending}
-              onClick={onCancel}
+              onClick={() => {
+                if (
+                  containerRef.current?.dataset.dirty === "true" &&
+                  !window.confirm("Discard your unsaved row changes?")
+                )
+                  return;
+                onCancel();
+              }}
               size="sm"
               type="button"
               variant="ghost"

@@ -1,5 +1,6 @@
 "use client";
 
+import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
 import { Pencil } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
@@ -36,7 +37,13 @@ export function DetailEditShell({
         {editor}
         <Button
           className="mt-3"
-          onClick={() => setEditing(false)}
+          onClick={() => {
+            if (
+              !hasUnsavedDrafts() ||
+              window.confirm("Discard your unsaved changes?")
+            )
+              setEditing(false);
+          }}
           type="button"
           variant="outline"
         >
@@ -49,7 +56,7 @@ export function DetailEditShell({
     <div className="relative space-y-6">
       {canEdit ? (
         <Button
-          className="absolute top-4 right-4 z-10"
+          className="float-right ml-4"
           onClick={() => setEditing(true)}
           ref={editButtonRef}
           type="button"

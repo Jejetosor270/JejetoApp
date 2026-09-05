@@ -108,7 +108,7 @@ export function InstallmentForm({
   const fieldErrors = state.fieldErrors ?? {};
   return (
     <form
-      className="grid gap-3 rounded-lg border p-3 md:grid-cols-2 xl:grid-cols-4"
+      className="grid gap-3 rounded-lg border p-3 md:grid-cols-2 xl:grid-cols-2"
       onSubmit={onSubmit}
     >
       <input name="direction" type="hidden" value={direction} />
@@ -217,7 +217,7 @@ export function InstallmentForm({
           value={notes}
         />
       </Field>
-      <div className="flex items-end gap-2 md:col-span-2 xl:col-span-4">
+      <div className="flex items-end gap-2 md:col-span-2 xl:col-span-2">
         <SubmitButton pending={pending}>
           {installment ? "Save installment" : "Add installment"}
         </SubmitButton>
@@ -289,7 +289,7 @@ export function SettlementForm({
   const fieldErrors = state.fieldErrors ?? {};
   return (
     <form
-      className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2 lg:grid-cols-4"
+      className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2 lg:grid-cols-2"
       onSubmit={onSubmit}
     >
       <input name="installmentId" type="hidden" value={installment.id} />
@@ -349,7 +349,7 @@ export function SettlementForm({
           value={notes}
         />
       </Field>
-      <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
+      <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-2">
         <SubmitButton pending={pending}>Record {wording}</SubmitButton>
         <Feedback state={state} />
       </div>

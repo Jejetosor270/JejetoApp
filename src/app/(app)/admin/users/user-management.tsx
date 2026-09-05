@@ -1,14 +1,11 @@
 "use client";
 
-import { KeyRound, LoaderCircle, Plus, UserCog, Users } from "lucide-react";
-import {
-  useActionState,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
+import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
+import { KeyRound, LoaderCircle, Plus, UserCog } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   createEmployeeAction,
@@ -26,12 +23,6 @@ import {
   SelectionHeader,
   useBulkSelection,
 } from "@/components/bulk-actions/bulk-selection";
-import {
-  InlineCheckbox,
-  InlineEditActions,
-  InlineSelect,
-  InlineTextInput,
-} from "@/components/inline-editing/inline-edit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { minimumPasswordLength } from "@/domain/users/password-policy";
@@ -81,10 +72,11 @@ function ActionFeedback({
 
 function CreateEmployeeForm() {
   const formRef = useRef<HTMLFormElement>(null);
-  const [state, formAction, isPending] = useActionState(
-    createEmployeeAction,
-    initialUserActionState,
-  );
+  const {
+    state,
+    onSubmit,
+    pending: isPending,
+  } = usePersistentActionState(createEmployeeAction, initialUserActionState);
 
   useEffect(() => {
     if (state.status === "success") {
@@ -112,8 +104,8 @@ function CreateEmployeeForm() {
         </div>
       </div>
       <form
-        action={formAction}
-        className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+        onSubmit={onSubmit}
+        className="grid gap-3 md:grid-cols-2 xl:grid-cols-2"
         ref={formRef}
       >
         <label className="grid gap-1.5 text-sm font-medium">
@@ -149,7 +141,7 @@ function CreateEmployeeForm() {
             <option value="ADMIN">Administrator</option>
           </select>
         </label>
-        <div className="flex items-end gap-3 xl:col-span-4">
+        <div className="flex items-end gap-3 xl:col-span-2">
           <Button disabled={isPending} type="submit">
             {isPending ? (
               <LoaderCircle
@@ -179,10 +171,11 @@ function EditEmployeeForm({
   onUpdated: (employee: UpdatedEmployeeActionData) => void;
 }) {
   const router = useRouter();
-  const [state, formAction, isPending] = useActionState(
-    updateEmployeeAction,
-    initialUserActionState,
-  );
+  const {
+    state,
+    onSubmit,
+    pending: isPending,
+  } = usePersistentActionState(updateEmployeeAction, initialUserActionState);
 
   useEffect(() => {
     if (state.status === "success" && state.employee) {
@@ -210,13 +203,24 @@ function EditEmployeeForm({
             </p>
           </div>
         </div>
-        <Button onClick={onClose} size="sm" type="button" variant="ghost">
+        <Button
+          onClick={() => {
+            if (
+              !hasUnsavedDrafts() ||
+              window.confirm("Discard your unsaved employee changes?")
+            )
+              onClose();
+          }}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
           Close
         </Button>
       </div>
       <form
-        action={formAction}
-        className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+        onSubmit={onSubmit}
+        className="grid gap-3 md:grid-cols-2 xl:grid-cols-2"
       >
         <input name="id" type="hidden" value={employee.id} />
         <label className="grid gap-1.5 text-sm font-medium">
@@ -259,7 +263,7 @@ function EditEmployeeForm({
           />
           Account active
         </label>
-        <div className="flex items-center gap-3 md:col-span-2 xl:col-span-4">
+        <div className="flex items-center gap-3 md:col-span-2 xl:col-span-2">
           <Button disabled={isPending} type="submit">
             {isPending ? (
               <LoaderCircle
@@ -280,7 +284,11 @@ function EditEmployeeForm({
 
 function PasswordResetForm({ employeeId }: { employeeId: string }) {
   const formRef = useRef<HTMLFormElement>(null);
-  const [state, formAction, isPending] = useActionState(
+  const {
+    state,
+    onSubmit,
+    pending: isPending,
+  } = usePersistentActionState(
     resetEmployeePasswordAction,
     initialUserActionState,
   );
@@ -311,8 +319,8 @@ function PasswordResetForm({ employeeId }: { employeeId: string }) {
         </div>
       </div>
       <form
-        action={formAction}
-        className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+        onSubmit={onSubmit}
+        className="grid gap-3 md:grid-cols-2 xl:grid-cols-2"
         ref={formRef}
       >
         <input name="id" type="hidden" value={employeeId} />
@@ -364,7 +372,6 @@ function EmployeeInlineRow({
   isSelected,
   onFullEdit,
   onSelect,
-  onUpdated,
 }: {
   currentAdministratorId: string;
   employee: EmployeeView;
@@ -373,144 +380,30 @@ function EmployeeInlineRow({
   onSelect: () => void;
   onUpdated: (employee: UpdatedEmployeeActionData) => void;
 }) {
-  const initial = () => ({
-    email: employee.email,
-    isActive: employee.isActive,
-    name: employee.name,
-    role: employee.role,
-  });
-  const [saved, setSaved] = useState(initial);
-  const [draft, setDraft] = useState(initial);
-  const [editing, setEditing] = useState(false);
-  const [feedback, setFeedback] = useState("");
-  const [pending, startTransition] = useTransition();
-  const save = () => {
-    const data = new FormData();
-    data.set("email", draft.email);
-    data.set("id", employee.id);
-    data.set("name", draft.name);
-    data.set("role", draft.role);
-    if (draft.isActive) data.set("isActive", "on");
-    startTransition(async () => {
-      const result = await updateEmployeeAction(initialUserActionState, data);
-      setFeedback(result.message ?? "");
-      if (result.status === "success" && result.employee) {
-        const next = {
-          email: result.employee.email,
-          isActive: result.employee.isActive,
-          name: result.employee.name,
-          role: result.employee.role,
-        };
-        setSaved(next);
-        setDraft(next);
-        setEditing(false);
-        onUpdated(result.employee);
-      }
-    });
-  };
   return (
-    <tr className="hover:bg-muted/25 align-top">
+    <tr className="hover:bg-muted/40">
       <SelectionCell
         checked={isSelected}
         disabled={employee.id === currentAdministratorId}
-        label={`employee ${saved.name}${employee.id === currentAdministratorId ? " (current account)" : ""}`}
+        label={employee.name}
         onChange={onSelect}
       />
-      <td className="px-4 py-3 font-medium sm:px-5">
-        {editing ? (
-          <InlineTextInput
-            ariaLabel="Employee name"
-            onChange={(value) =>
-              setDraft((current) => ({ ...current, name: value }))
-            }
-            value={draft.name}
-          />
-        ) : (
-          saved.name
+      <td className="px-4 py-3 font-medium">
+        {employee.name}
+        {employee.id === currentAdministratorId && (
+          <span className="text-muted-foreground ml-2 text-xs">You</span>
         )}
       </td>
-      <td className="text-muted-foreground px-4 py-3">
-        {editing ? (
-          <InlineTextInput
-            ariaLabel="Employee email"
-            onChange={(value) =>
-              setDraft((current) => ({ ...current, email: value }))
-            }
-            value={draft.email}
-          />
-        ) : (
-          saved.email
-        )}
-      </td>
-      <td className="px-4 py-3">
-        {editing ? (
-          <InlineSelect
-            ariaLabel="Employee role"
-            onChange={(value) =>
-              setDraft((current) => ({
-                ...current,
-                role: value as EmployeeRole,
-              }))
-            }
-            value={draft.role}
-          >
-            <option value="USER">User</option>
-            <option value="MANAGER">Manager</option>
-            <option value="ADMIN">Administrator</option>
-          </InlineSelect>
-        ) : (
-          formatRoleLabel(saved.role)
-        )}
-      </td>
-      <td className="px-4 py-3">
-        {editing ? (
-          <InlineCheckbox
-            ariaLabel="Employee active"
-            checked={draft.isActive}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                isActive: event.target.checked,
-              }))
-            }
-          />
-        ) : (
-          <Badge variant={saved.isActive ? "secondary" : "outline"}>
-            {saved.isActive ? "Active" : "Inactive"}
-          </Badge>
-        )}
-      </td>
-      <td className="text-muted-foreground px-4 py-3 text-xs">
+      <td className="px-4 py-3">{employee.email}</td>
+      <td className="px-4 py-3">{formatRoleLabel(employee.role)}</td>
+      <td className="px-4 py-3">{employee.isActive ? "Active" : "Inactive"}</td>
+      <td className="px-4 py-3 text-xs">
         {formatTimestampDate(employee.createdAt)}
       </td>
       <td className="px-4 py-3 text-right">
-        <InlineEditActions
-          editing={editing}
-          feedback={feedback}
-          onCancel={() => {
-            setDraft(saved);
-            setFeedback("");
-            setEditing(false);
-          }}
-          onEdit={() => {
-            setDraft(saved);
-            setFeedback("");
-            setEditing(true);
-          }}
-          onSave={save}
-          pending={pending}
-        />
-        {!editing ? (
-          <Button
-            className="mt-1"
-            onClick={onFullEdit}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            <KeyRound data-icon="inline-start" /> Password
-          </Button>
-        ) : null}
+        <Button type="button" variant="outline" size="sm" onClick={onFullEdit}>
+          Manage account
+        </Button>
       </td>
     </tr>
   );
@@ -566,34 +459,43 @@ export function UserManagement({
 
   return (
     <div className="space-y-6">
-      <section className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="text-primary mb-2 flex items-center gap-2 text-xs font-medium tracking-[0.08em] uppercase">
-            <Users aria-hidden="true" className="size-3.5" />
-            Administration
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Employee accounts
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm leading-6">
-            Create and maintain the internal accounts permitted to access MB
-            Procurement.
-          </p>
-        </div>
-        <Badge className="w-fit" variant="outline">
-          {displayedEmployees.filter((employee) => employee.isActive).length}{" "}
-          active
-        </Badge>
-      </section>
-
-      <CreateEmployeeForm />
+      <PageHeader
+        title="Employee accounts"
+        description="Manage internal accounts and access permissions."
+        actions={
+          <>
+            <Badge className="w-fit" variant="outline">
+              {
+                displayedEmployees.filter((employee) => employee.isActive)
+                  .length
+              }{" "}
+              active
+            </Badge>
+            <EditorDrawer
+              title="Create employee"
+              trigger={<Button>Create employee</Button>}
+            >
+              <CreateEmployeeForm />
+            </EditorDrawer>
+          </>
+        }
+      />
 
       {editingEmployee ? (
-        <EditEmployeeForm
-          employee={editingEmployee}
-          onClose={() => setEditingEmployee(null)}
-          onUpdated={handleEmployeeUpdated}
-        />
+        <EditorDrawer
+          open
+          title="Manage employee"
+          onOpenChange={(open) => {
+            if (!open) setEditingEmployee(null);
+          }}
+        >
+          {" "}
+          <EditEmployeeForm
+            employee={editingEmployee}
+            onClose={() => setEditingEmployee(null)}
+            onUpdated={handleEmployeeUpdated}
+          />
+        </EditorDrawer>
       ) : null}
 
       <section
@@ -623,6 +525,7 @@ export function UserManagement({
               <tr>
                 <SelectionHeader
                   checked={selection.allSelected}
+                  indeterminate={selection.someSelected}
                   disabled={displayedEmployees.length === 0}
                   onChange={selection.toggleAll}
                 />

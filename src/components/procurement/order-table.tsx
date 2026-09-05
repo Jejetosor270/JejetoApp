@@ -1,7 +1,8 @@
 "use client";
+import { ListEmptyState } from "@/components/listing/empty-state";
 
-import Decimal from "decimal.js";
 import Link from "next/link";
+import { SortHeader } from "@/components/listing/sort-header";
 import { useState, useTransition } from "react";
 
 import {
@@ -24,7 +25,6 @@ import {
   dateOnlyToEuropeanInput,
   europeanInputToDateOnly,
   formatDateOnly,
-  formatTimestampDate,
 } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import { formatEnumLabel } from "@/domain/presentation/labels";
@@ -107,9 +107,6 @@ function OrderRow({
     />
   ) : null;
   if (view === "financial") {
-    const other = [cost.customsDuties, cost.miscellaneous]
-      .filter((value): value is string => value !== null)
-      .reduce((sum, value) => sum.plus(value), new Decimal(0));
     return (
       <tr className={tableRowClassName}>
         {selectionCell}
@@ -121,12 +118,7 @@ function OrderRow({
         <td className="financial-figure px-4 py-3 text-right">
           {formatMoney(cost.purchaseCost, order.orderCurrencyCode)}
         </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatMoney(cost.freight, order.orderCurrencyCode)}
-        </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatMoney(other.toString(), order.orderCurrencyCode)}
-        </td>
+
         <td className="financial-figure px-4 py-3 text-right">
           {formatMoney(
             cost.reportingEconomicLandedCost,
@@ -139,39 +131,10 @@ function OrderRow({
             order.project.reportingCurrencyCode,
           )}
         </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatMoney(
-            order.billing.quotedAllocated,
-            order.project.reportingCurrencyCode,
-          )}
-        </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatMoney(
-            order.billing.invoicedAllocated,
-            order.project.reportingCurrencyCode,
-          )}
-          {!order.billing.conversionComplete ? (
-            <span className="text-destructive block text-[0.6875rem]">
-              Missing billing FX
-            </span>
-          ) : null}
-        </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatMoney(cost.grossProfit, order.project.reportingCurrencyCode)}
-        </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatMoney(
-            order.billing.actualGrossProfit,
-            order.project.reportingCurrencyCode,
-          )}
-        </td>
+
         <td className="financial-figure px-4 py-3 text-right">
           {formatRate(cost.markupRate)}
         </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatRate(cost.grossMarginRate)}
-        </td>
-        {canEdit ? <td /> : null}
       </tr>
     );
   }
@@ -211,7 +174,6 @@ function OrderRow({
         <td className="px-4 py-3">
           {formatEnumLabel(order.supplierPayment.status)}
         </td>
-        {canEdit ? <td /> : null}
       </tr>
     );
   }
@@ -229,7 +191,9 @@ function OrderRow({
         </td>
         <td className="px-4 py-3">{order.supplier.displayName}</td>
         <td className="px-4 py-3">{order.project.name}</td>
-        {canEdit ? <td /> : null}
+        <td className="max-w-64 px-4 py-3">
+          {order.buildings.join(", ") || "—"}
+        </td>
       </tr>
     );
   }
@@ -257,9 +221,9 @@ function OrderRow({
             {saved.orderNumber}
           </Link>
         )}
-      </td>
-      <td className="px-4 py-3 font-medium">
-        {order.packageName}
+        <span className="mt-1 block font-sans text-sm font-normal">
+          {order.packageName}
+        </span>
         <span className="text-muted-foreground mt-0.5 block text-xs font-normal">
           Buy {order.orderCurrencyCode} · sell {order.sellingCurrencyCode}
         </span>
@@ -285,31 +249,27 @@ function OrderRow({
       </td>
       <td className="px-4 py-3">
         {editing ? (
-          <InlineDateInput
-            ariaLabel={`Expected ready date for ${saved.orderNumber}`}
-            onChange={(value) => set("expectedReadyDate", value)}
-            value={draft.expectedReadyDate}
-          />
-        ) : (
-          formatDateOnly(europeanInputToDateOnly(saved.expectedReadyDate))
-        )}
-      </td>
-      <td className="px-4 py-3">
-        {editing ? (
-          <InlineDateInput
-            ariaLabel={`Expected delivery date for ${saved.orderNumber}`}
-            onChange={(value) => set("expectedDeliveryDate", value)}
-            value={draft.expectedDeliveryDate}
-          />
+          <div className="grid gap-2">
+            <label className="grid gap-1 text-xs">
+              Ready date
+              <InlineDateInput
+                ariaLabel={`Expected ready date for ${saved.orderNumber}`}
+                onChange={(value) => set("expectedReadyDate", value)}
+                value={draft.expectedReadyDate}
+              />
+            </label>
+            <label className="grid gap-1 text-xs">
+              Delivery date
+              <InlineDateInput
+                ariaLabel={`Expected delivery date for ${saved.orderNumber}`}
+                onChange={(value) => set("expectedDeliveryDate", value)}
+                value={draft.expectedDeliveryDate}
+              />
+            </label>
+          </div>
         ) : (
           formatDateOnly(europeanInputToDateOnly(saved.expectedDeliveryDate))
         )}
-      </td>
-      <td className="text-muted-foreground max-w-48 truncate px-4 py-3">
-        {order.buildings.join(", ") || "—"}
-      </td>
-      <td className="text-muted-foreground px-4 py-3 text-xs">
-        {formatTimestampDate(order.updatedAt)}
       </td>
       {canEdit ? (
         <td className="px-4 py-3">
@@ -358,59 +318,66 @@ export function OrderTable({
           selectedIds={selection.selectedIds}
         />
       ) : null}
-      <div className="overflow-x-auto">
+      <div
+        className="max-h-[70svh] overflow-auto"
+        role="region"
+        aria-label="Supplier Orders table"
+        tabIndex={0}
+      >
         <table
-          className={`w-full text-left text-sm ${view === "general" ? "min-w-[62rem]" : "min-w-[74rem]"}`}
+          className={`w-full text-left text-sm ${view === "general" ? "min-w-[48rem]" : "min-w-[60rem]"}`}
         >
           <thead className={tableHeaderClassName}>
             <tr>
               {canEdit ? (
                 <SelectionHeader
                   checked={selection.allSelected}
+                  indeterminate={selection.someSelected}
                   disabled={orders.length === 0}
                   onChange={selection.toggleAll}
                 />
               ) : null}
               {view === "general" ? (
                 <>
-                  <th className="px-4 py-3">Reference</th>
-                  <th className="px-4 py-3">Package</th>
+                  <SortHeader
+                    className="px-4 py-3"
+                    label="Reference"
+                    field="reference"
+                    defaultSort="updated"
+                    defaultDirection="desc"
+                  />
                   <th className="px-4 py-3">Project</th>
                   <th className="px-4 py-3">Supplier</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Expected ready</th>
+                  <SortHeader
+                    className="px-4 py-3"
+                    label="Status"
+                    field="status"
+                    defaultSort="updated"
+                    defaultDirection="desc"
+                  />
                   <th className="px-4 py-3">Expected delivery</th>
-                  <th className="px-4 py-3">Buildings</th>
-                  <th className="px-4 py-3">Updated</th>
                 </>
               ) : view === "financial" ? (
                 <>
-                  <th className="px-4 py-3">Reference</th>
+                  <SortHeader
+                    className="px-4 py-3"
+                    label="Reference"
+                    field="reference"
+                    defaultSort="updated"
+                    defaultDirection="desc"
+                  />
                   <th className="px-4 py-3">Supplier</th>
                   <th className="px-4 py-3">Project</th>
                   <th className="px-4 py-3 text-right">Purchase Cost HT</th>
-                  <th className="px-4 py-3 text-right">Freight HT</th>
-                  <th className="px-4 py-3 text-right">Other Costs HT</th>
+
                   <th className="px-4 py-3 text-right">
                     Economic Landed Cost HT
                   </th>
                   <th className="px-4 py-3 text-right">
                     Total Supplier Order Sell HT
                   </th>
-                  <th className="px-4 py-3 text-right">
-                    Client Quote Allocated HT
-                  </th>
-                  <th className="px-4 py-3 text-right">
-                    Client Invoice Allocated HT
-                  </th>
-                  <th className="px-4 py-3 text-right">
-                    Supplier Order Planned Gross Profit HT
-                  </th>
-                  <th className="px-4 py-3 text-right">
-                    Actual Allocated Gross Profit HT
-                  </th>
+
                   <th className="px-4 py-3 text-right">Planned Markup</th>
-                  <th className="px-4 py-3 text-right">Planned Margin</th>
                 </>
               ) : view === "supplier-payment" ? (
                 <>
@@ -426,15 +393,30 @@ export function OrderTable({
                 </>
               ) : (
                 <>
-                  <th className="px-4 py-3">Reference</th>
-                  <th className="px-4 py-3">Status</th>
+                  <SortHeader
+                    className="px-4 py-3"
+                    label="Reference"
+                    field="reference"
+                    defaultSort="updated"
+                    defaultDirection="desc"
+                  />
+                  <SortHeader
+                    className="px-4 py-3"
+                    label="Status"
+                    field="status"
+                    defaultSort="updated"
+                    defaultDirection="desc"
+                  />
                   <th className="px-4 py-3">Expected ready</th>
                   <th className="px-4 py-3">Expected delivery</th>
                   <th className="px-4 py-3">Supplier</th>
                   <th className="px-4 py-3">Project</th>
+                  <th className="px-4 py-3">Buildings</th>
                 </>
               )}
-              {canEdit ? <th className="px-4 py-3 text-right">Edit</th> : null}
+              {canEdit && view === "general" ? (
+                <th className="px-4 py-3 text-right">Edit</th>
+              ) : null}
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -452,11 +434,7 @@ export function OrderTable({
           </tbody>
         </table>
       </div>
-      {orders.length === 0 ? (
-        <p className="text-muted-foreground px-4 py-10 text-sm">
-          No procurement orders yet.
-        </p>
-      ) : null}
+      {orders.length === 0 ? <ListEmptyState entity="Supplier Orders" /> : null}
     </section>
   );
 }

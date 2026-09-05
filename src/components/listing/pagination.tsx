@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { PAGE_SIZE_OPTIONS } from "@/domain/listing/validation";
+import { PageSizeControl } from "@/components/listing/page-size-control";
 
 function pageHref(pathname: string, queryString: string, page: number): string {
   const query = new URLSearchParams(queryString);
@@ -34,6 +34,11 @@ export function Pagination({
         {selectionIsPageScoped ? " Selection applies to this page only." : ""}
       </p>
       <div className="flex items-center gap-2">
+        <PageSizeControl
+          pageSize={pageSize}
+          pathname={pathname}
+          queryString={queryString}
+        />
         <span className="text-muted-foreground">
           Page {safePage} of {pageCount}
         </span>
@@ -66,21 +71,7 @@ export function Pagination({
   );
 }
 
+/** Preserve the filter form's existing page-size query; the visible control lives in the footer. */
 export function PageSizeField({ value }: { value: number }) {
-  return (
-    <label className="text-muted-foreground grid min-w-0 gap-1 text-xs font-medium">
-      <span>Rows per page</span>
-      <select
-        className="border-input bg-background h-9 w-full min-w-0 rounded-lg border px-3 text-sm"
-        defaultValue={String(value)}
-        name="pageSize"
-      >
-        {PAGE_SIZE_OPTIONS.map((size) => (
-          <option key={size} value={size}>
-            {size} rows
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+  return <input name="pageSize" type="hidden" value={value} />;
 }

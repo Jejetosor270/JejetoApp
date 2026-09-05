@@ -35,7 +35,11 @@ describe("financial percentage presentation boundaries", () => {
       "formatRate(report.financial.markupRate)",
     ],
   ])("keeps %s on the shared rate formatter", (_label, path, marker) => {
-    expect(source(path)).toContain(marker);
+    expect(
+      source(path)
+        .replace(/,\s*\)/g, ")")
+        .replace(/\s+/g, ""),
+    ).toContain(marker.replace(/\s+/g, ""));
   });
 
   it("keeps Freight reconciliation rates on the shared rate formatter", () => {

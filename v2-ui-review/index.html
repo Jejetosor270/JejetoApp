@@ -1,0 +1,2391 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>MB Procurement — V2 design review</title>
+    <style>
+      :root {
+        --ink: #20242c;
+        --muted: #5b6472;
+        --line: #e5e7eb;
+        --surface: #f7f8fa;
+        --hover: #f3f4f6;
+        --accent: #315b85;
+        --accent-soft: #eaf0f7;
+        --warning: #805500;
+        --warning-soft: #fff4d9;
+        --success: #24634a;
+        --success-soft: #eaf4ef;
+        --danger: #a63232;
+        --input: #838d9c;
+        --rail: 224px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: white;
+        font:
+          14px/1.5 "Segoe UI",
+          Arial,
+          sans-serif;
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+      button,
+      a,
+      input,
+      select,
+      summary {
+        -webkit-tap-highlight-color: transparent;
+      }
+      button,
+      a {
+        touch-action: manipulation;
+      }
+      button {
+        cursor: pointer;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      svg {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+        vertical-align: middle;
+      }
+      .skip {
+        position: fixed;
+        left: 12px;
+        top: -60px;
+        z-index: 100;
+        padding: 8px 12px;
+        background: white;
+        border: 2px solid var(--accent);
+      }
+      .skip:focus {
+        top: 12px;
+      }
+      .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: var(--rail);
+        background: var(--surface);
+        border-right: 1px solid var(--line);
+        padding: 22px 14px 14px;
+        display: flex;
+        flex-direction: column;
+        z-index: 20;
+        transition: width 0.12s;
+      }
+      .brand-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 0 8px 24px;
+      }
+      .brand {
+        font-size: 14px;
+        font-weight: 650;
+        letter-spacing: -0.25px;
+        white-space: nowrap;
+      }
+      .monogram {
+        background: var(--ink);
+        color: white;
+        font-size: 11px;
+        letter-spacing: -0.5px;
+        border-radius: 6px;
+        width: 27px;
+        height: 27px;
+        display: grid;
+        place-items: center;
+        flex-shrink: 0;
+        font-weight: 700;
+      }
+      .icon-btn {
+        display: inline-grid;
+        place-items: center;
+        height: 32px;
+        width: 32px;
+        padding: 0;
+        border: 0;
+        border-radius: 6px;
+        color: var(--muted);
+        background: transparent;
+      }
+      .icon-btn:hover {
+        background: var(--hover);
+        color: var(--ink);
+      }
+      .collapse {
+        margin-left: auto;
+      }
+      .search-entry {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        width: 100%;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        text-align: left;
+        padding: 8px 10px;
+        margin-bottom: 22px;
+        font-size: 13px;
+      }
+      .search-entry:hover {
+        background: var(--hover);
+      }
+      nav.primary {
+        display: grid;
+        gap: 3px;
+      }
+      .nav-item {
+        display: flex;
+        gap: 11px;
+        align-items: center;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        min-height: 36px;
+        padding: 8px 10px;
+        font-size: 13px;
+        text-align: left;
+        width: 100%;
+        white-space: nowrap;
+      }
+      .nav-item:hover {
+        background: var(--hover);
+        color: var(--ink);
+      }
+      .nav-item[aria-current="page"] {
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .more {
+        margin-top: 20px;
+      }
+      .more summary {
+        list-style: none;
+        cursor: pointer;
+      }
+      .more summary::-webkit-details-marker {
+        display: none;
+      }
+      .more[open] .chevron {
+        transform: rotate(90deg);
+      }
+      .more .chevron {
+        margin-left: auto;
+        width: 14px;
+      }
+      .subnav {
+        padding-left: 0;
+        margin-top: 5px;
+      }
+      .beta {
+        font-size: 10px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0 4px;
+        color: var(--muted);
+        margin-left: auto;
+      }
+      .utilities {
+        margin-top: auto;
+        padding-top: 18px;
+      }
+      .account {
+        border-top: 1px solid var(--line);
+        padding: 14px 4px 0;
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .avatar {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #e3e7ed;
+        color: #454e5b;
+        font-size: 11px;
+        font-weight: 650;
+        flex-shrink: 0;
+      }
+      .account-copy {
+        line-height: 1.4;
+        flex: 1;
+      }
+      .account-copy strong {
+        font-size: 12px;
+        font-weight: 600;
+        display: block;
+      }
+      .account-copy span {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .main {
+        margin-left: var(--rail);
+        padding: 26px 40px 48px;
+        min-height: 100vh;
+      }
+      .content {
+        max-width: 1280px;
+        margin: auto;
+      }
+      .review-strip {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        color: var(--muted);
+        font-size: 11px;
+        margin-bottom: 32px;
+      }
+      .review-strip span:first-child {
+        font-weight: 600;
+        color: var(--accent);
+      }
+      .review-strip a {
+        margin-left: auto;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .page-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin: 0 0 28px;
+      }
+      h1 {
+        font-size: 28px;
+        line-height: 1.25;
+        font-weight: 620;
+        letter-spacing: -0.8px;
+        margin: 0;
+      }
+      h2 {
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: -0.2px;
+        margin: 0;
+      }
+      h3 {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0;
+      }
+      p {
+        margin: 0;
+      }
+      .subtitle {
+        color: var(--muted);
+        margin-top: 8px;
+        font-size: 13px;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 36px;
+        padding: 7px 12px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: white;
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn:hover {
+        background: var(--hover);
+        text-decoration: none;
+      }
+      .btn.primary {
+        color: white;
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .btn.primary:hover {
+        background: #244b73;
+      }
+      .btn.quiet {
+        border-color: transparent;
+        background: transparent;
+        color: var(--muted);
+      }
+      .btn:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      .tabs {
+        display: flex;
+        gap: 25px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 24px;
+        overflow-x: auto;
+      }
+      .tabs button {
+        padding: 0 0 12px;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: none;
+        color: var(--muted);
+        font-size: 13px;
+        white-space: nowrap;
+        min-height: 36px;
+      }
+      .tabs button[aria-current="page"] {
+        color: var(--ink);
+        border-bottom-color: var(--ink);
+        font-weight: 600;
+      }
+      .filterbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 18px;
+        flex-wrap: wrap;
+      }
+      .search-box {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--input);
+        border-radius: 6px;
+        padding: 0 10px;
+        height: 36px;
+        color: var(--muted);
+        min-width: 245px;
+      }
+      .search-box:focus-within {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .search-box input {
+        border: 0;
+        background: transparent;
+        outline: none;
+        width: 100%;
+        font-size: 12px;
+        color: var(--ink);
+        min-width: 0;
+      }
+      .filterbar select {
+        border: 1px solid var(--input);
+        border-radius: 6px;
+        height: 36px;
+        background: white;
+        color: var(--ink);
+        padding: 0 30px 0 10px;
+        font-size: 12px;
+      }
+      .filterbar .right {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .filter-extra {
+        background: var(--surface);
+        padding: 16px;
+        border-radius: 6px;
+        margin-bottom: 18px;
+        display: flex;
+        gap: 16px;
+        align-items: end;
+        flex-wrap: wrap;
+      }
+      label.field {
+        display: grid;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      label.field input,
+      label.field select {
+        padding: 8px 10px;
+        border: 1px solid var(--input);
+        border-radius: 6px;
+        background: white;
+        min-width: 190px;
+        height: 36px;
+      }
+      .table-wrap {
+        overflow: auto;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+        min-width: 760px;
+      }
+      th {
+        text-align: left;
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 550;
+        height: 40px;
+        background: var(--surface);
+        white-space: nowrap;
+      }
+      th,
+      td {
+        padding: 10px 14px;
+      }
+      tbody tr {
+        border-top: 1px solid var(--line);
+      }
+      tbody tr:hover {
+        background: #fafbfd;
+      }
+      td {
+        height: 64px;
+        vertical-align: middle;
+      }
+      td:first-child,
+      th:first-child {
+        padding-left: 10px;
+      }
+      .check {
+        width: 36px;
+      }
+      input[type="checkbox"] {
+        accent-color: var(--accent);
+        width: 15px;
+        height: 15px;
+        vertical-align: middle;
+      }
+      .identity {
+        display: block;
+        font-weight: 600;
+      }
+      .secondary {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        margin-top: 3px;
+      }
+      .number {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .status:before {
+        content: "";
+        height: 5px;
+        width: 5px;
+        background: #838d9c;
+        border-radius: 50%;
+      }
+      .status.info:before {
+        background: var(--accent);
+      }
+      .status.success:before {
+        background: var(--success);
+      }
+      .status.warning:before {
+        background: var(--warning);
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        color: var(--muted);
+        background: var(--surface);
+        border: 1px solid var(--line);
+        padding: 2px 7px;
+        border-radius: 4px;
+        font-size: 11px;
+      }
+      .pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 11px;
+        margin-top: 16px;
+      }
+      .pagination select {
+        border: 0;
+        color: var(--muted);
+        background: white;
+        font-size: 11px;
+      }
+      .bulk {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        padding: 8px 10px;
+        color: var(--accent);
+        background: var(--accent-soft);
+        margin-bottom: 8px;
+        border-radius: 6px;
+        font-size: 12px;
+      }
+      .empty {
+        text-align: center;
+        padding: 48px 16px;
+        color: var(--muted);
+      }
+      .back {
+        color: var(--muted);
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        font-size: 12px;
+        margin-bottom: 16px;
+      }
+      .back svg {
+        width: 14px;
+        height: 14px;
+      }
+      .meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .meta .sep {
+        height: 12px;
+        width: 1px;
+        background: var(--line);
+      }
+      .section-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      .section-heading small {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 24px;
+        margin-bottom: 26px;
+        gap: 24px;
+      }
+      .metric-label {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 7px;
+      }
+      .metric-value {
+        font-size: 27px;
+        line-height: 1.3;
+        font-weight: 600;
+        letter-spacing: -0.6px;
+        font-variant-numeric: tabular-nums;
+      }
+      .metric-value span {
+        font-size: 12px;
+        font-weight: 400;
+        letter-spacing: 0;
+        color: var(--muted);
+        margin-left: 5px;
+      }
+      .metric-caption {
+        margin-top: 8px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .split {
+        display: grid;
+        grid-template-columns: minmax(0, 1.55fr) minmax(270px, 1fr);
+        gap: 36px;
+      }
+      .split > section:last-child {
+        border-left: 1px solid var(--line);
+        padding-left: 30px;
+      }
+      .slim-table {
+        min-width: 0;
+      }
+      .slim-table th {
+        background: white;
+      }
+      .slim-table td {
+        height: 43px;
+        padding: 11px 10px;
+      }
+      .slim-table td:first-child {
+        padding-left: 0;
+      }
+      .slim-table .total {
+        font-weight: 600;
+      }
+      .notice {
+        padding: 14px 16px;
+        border-radius: 6px;
+        background: var(--warning-soft);
+        color: var(--warning);
+        font-size: 12px;
+        line-height: 1.65;
+      }
+      .notice strong {
+        display: block;
+        font-size: 13px;
+      }
+      .notice p {
+        margin-top: 3px;
+      }
+      .quiet-link {
+        background: none;
+        border: 0;
+        padding: 0;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .notice .quiet-link {
+        color: inherit;
+        margin-top: 10px;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .definition {
+        margin: 18px 0 24px;
+      }
+      .definition div {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 8px 0;
+        font-size: 12px;
+      }
+      .definition dt {
+        color: var(--muted);
+      }
+      .definition dd {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .section-space {
+        margin-top: 34px;
+      }
+      .list-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .list-row .copy {
+        flex: 1;
+      }
+      .list-row .copy strong {
+        font-size: 13px;
+        font-weight: 550;
+      }
+      .list-row .copy p {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 3px;
+      }
+      .issue-icon {
+        display: grid;
+        place-items: center;
+        background: var(--warning-soft);
+        color: var(--warning);
+        width: 30px;
+        height: 30px;
+        border-radius: 6px;
+      }
+      .issue-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+      .home-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+        gap: 44px;
+        margin-top: 35px;
+      }
+      .home-layout > section:last-child {
+        border-left: 1px solid var(--line);
+        padding-left: 32px;
+      }
+      .demo-note {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 32px;
+        padding-top: 16px;
+        border-top: 1px solid var(--line);
+      }
+      dialog {
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        width: min(570px, calc(100vw - 32px));
+        color: var(--ink);
+        box-shadow: 0 18px 60px #17203322;
+      }
+      dialog::backdrop {
+        background: #17203344;
+      }
+      .dialog-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--line);
+      }
+      .dialog-body {
+        padding: 24px;
+      }
+      .dialog-body p {
+        margin-bottom: 16px;
+        color: var(--muted);
+      }
+      .dialog-body h3 {
+        margin: 18px 0 10px;
+      }
+      .dialog-foot {
+        border-top: 1px solid var(--line);
+        padding: 16px 24px;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .mobile-top {
+        display: none;
+      }
+      body.collapsed {
+        --rail: 60px;
+      }
+      body.collapsed .sidebar {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+      body.collapsed .sidebar .nav-label,
+      body.collapsed .brand,
+      body.collapsed .monogram,
+      body.collapsed .account-copy,
+      body.collapsed .account .icon-btn,
+      body.collapsed .beta {
+        display: none;
+      }
+      body.collapsed .brand-row {
+        padding: 0 0 24px;
+      }
+      body.collapsed .collapse {
+        margin: auto;
+      }
+      body.collapsed .nav-item,
+      body.collapsed .search-entry {
+        justify-content: center;
+        padding: 9px;
+      }
+      body.collapsed .account {
+        padding-left: 5px;
+      }
+      body.collapsed .more .chevron {
+        display: none;
+      }
+      @media (min-width: 1600px) {
+        .main {
+          padding-top: 32px;
+        }
+        .review-strip {
+          margin-bottom: 40px;
+        }
+      }
+      @media (max-width: 1279px) {
+        .main {
+          padding: 24px;
+        }
+        .tabs {
+          gap: 20px;
+        }
+        .split {
+          gap: 24px;
+          grid-template-columns: minmax(0, 1.4fr) minmax(245px, 1fr);
+        }
+        .split > section:last-child {
+          padding-left: 22px;
+        }
+      }
+      @media (max-width: 1023px) {
+        body,
+        body.collapsed {
+          --rail: 0px;
+        }
+        .sidebar {
+          transform: translateX(-100%);
+          visibility: hidden;
+          width: 224px;
+          transition: transform 0.12s;
+        }
+        body.mobile-open .sidebar {
+          transform: none;
+          visibility: visible;
+          box-shadow: 4px 0 30px #17203322;
+        }
+        .mobile-top {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 18px;
+        }
+        .review-strip {
+          margin-bottom: 24px;
+        }
+        .home-layout {
+          gap: 24px;
+        }
+        .home-layout > section:last-child {
+          padding-left: 20px;
+        }
+      }
+      @media (max-width: 767px) {
+        .main {
+          padding: 16px;
+        }
+        h1 {
+          font-size: 24px;
+        }
+        .page-header {
+          flex-direction: column;
+          gap: 16px;
+        }
+        .review-strip {
+          font-size: 10px;
+          flex-wrap: wrap;
+        }
+        .metrics {
+          grid-template-columns: 1fr;
+          gap: 20px;
+        }
+        .metric-value {
+          font-size: 26px;
+        }
+        .split,
+        .home-layout {
+          grid-template-columns: 1fr;
+          gap: 30px;
+        }
+        .split > section:last-child,
+        .home-layout > section:last-child {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+          padding: 24px 0 0;
+        }
+        .search-box {
+          width: 100%;
+        }
+        .filterbar .right {
+          display: none;
+        }
+        .tabs {
+          gap: 22px;
+        }
+        .pagination {
+          align-items: flex-start;
+        }
+        .pagination .actions {
+          gap: 4px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <aside class="sidebar" aria-label="Application sidebar">
+      <div class="brand-row">
+        <span class="monogram">MB</span><span class="brand">Procurement</span
+        ><button
+          class="icon-btn collapse"
+          id="collapse"
+          title="Collapse navigation"
+          aria-label="Collapse navigation"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-panel-left-close"
+            aria-hidden="true"
+          >
+            <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+            <path d="M9 3v18"></path>
+            <path d="m16 15-3-3 3-3"></path>
+          </svg>
+        </button>
+      </div>
+      <button class="search-entry" data-preview="search" title="Search records">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="lucide lucide-search"
+          aria-hidden="true"
+        >
+          <path d="m21 21-4.34-4.34"></path>
+          <circle cx="11" cy="11" r="8"></circle></svg
+        ><span class="nav-label">Search records…</span>
+      </button>
+      <nav class="primary" aria-label="Primary navigation">
+        <button class="nav-item" data-page="home" title="Home">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-house"
+            aria-hidden="true"
+          >
+            <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path>
+            <path
+              d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+            ></path></svg
+          ><span class="nav-label">Home</span>
+        </button>
+        <button class="nav-item" data-page="project" title="Projects">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-folder-closed"
+            aria-hidden="true"
+          >
+            <path
+              d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+            ></path>
+            <path d="M2 10h20"></path></svg
+          ><span class="nav-label">Projects</span>
+        </button>
+        <button
+          class="nav-item"
+          data-page="orders"
+          title="Supplier Orders"
+          aria-current="page"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-package"
+            aria-hidden="true"
+          >
+            <path
+              d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"
+            ></path>
+            <path d="M12 22V12"></path>
+            <polyline points="3.29 7 12 12 20.71 7"></polyline>
+            <path d="m7.5 4.27 9 5.15"></path></svg
+          ><span class="nav-label">Supplier Orders</span>
+        </button>
+        <button class="nav-item" data-preview="billing" title="Client Billing">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-files"
+            aria-hidden="true"
+          >
+            <path
+              d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"
+            ></path>
+            <path
+              d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z"
+            ></path>
+            <path
+              d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1"
+            ></path></svg
+          ><span class="nav-label">Client Billing</span>
+        </button>
+        <button
+          class="nav-item"
+          data-preview="payments"
+          title="Supplier Payments"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-arrow-up-right"
+            aria-hidden="true"
+          >
+            <path d="M7 7h10v10"></path>
+            <path d="M7 17 17 7"></path></svg
+          ><span class="nav-label">Supplier Payments</span>
+        </button>
+        <button class="nav-item" data-preview="reports" title="Reports">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-chart-no-axes-combined"
+            aria-hidden="true"
+          >
+            <path d="M12 16v5"></path>
+            <path d="M16 14.639V21"></path>
+            <path d="M20 10.656V21"></path>
+            <path
+              d="m22 3-8.646 8.646a.5.5 0 0 1-.708 0L9.354 8.354a.5.5 0 0 0-.707 0L2 15"
+            ></path>
+            <path d="M4 18.463V21"></path>
+            <path d="M8 14.656V21"></path></svg
+          ><span class="nav-label">Reports</span>
+        </button>
+      </nav>
+      <details class="more">
+        <summary class="nav-item" title="More destinations">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-ellipsis"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="1"></circle>
+            <circle cx="19" cy="12" r="1"></circle>
+            <circle cx="5" cy="12" r="1"></circle></svg
+          ><span class="nav-label">More</span
+          ><svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-chevron-right chevron"
+            aria-hidden="true"
+          >
+            <path d="m9 18 6-6-6-6"></path>
+          </svg>
+        </summary>
+        <nav class="subnav" aria-label="Secondary navigation">
+          <button class="nav-item" data-preview="clients" title="Clients">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-users"
+              aria-hidden="true"
+            >
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+              <path d="M16 3.128a4 4 0 0 1 0 7.744"></path>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+              <circle cx="9" cy="7" r="4"></circle></svg
+            ><span class="nav-label">Clients</span>
+          </button>
+          <button class="nav-item" data-preview="suppliers" title="Suppliers">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-truck"
+              aria-hidden="true"
+            >
+              <path
+                d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"
+              ></path>
+              <path d="M15 18H9"></path>
+              <path
+                d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"
+              ></path>
+              <circle cx="17" cy="18" r="2"></circle>
+              <circle cx="7" cy="18" r="2"></circle></svg
+            ><span class="nav-label">Suppliers</span>
+          </button>
+          <button class="nav-item" data-preview="calendar" title="Calendar">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-calendar-days"
+              aria-hidden="true"
+            >
+              <path d="M8 2v3"></path>
+              <path d="M16 2v3"></path>
+              <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+              <path d="M3 9h18"></path>
+              <path d="M8 13h.01"></path>
+              <path d="M12 13h.01"></path>
+              <path d="M16 13h.01"></path>
+              <path d="M8 17h.01"></path>
+              <path d="M12 17h.01"></path>
+              <path d="M16 17h.01"></path></svg
+            ><span class="nav-label">Calendar</span>
+          </button>
+          <button class="nav-item" data-preview="items" title="Items Beta">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-list-tree"
+              aria-hidden="true"
+            >
+              <path d="M8 5h13"></path>
+              <path d="M13 12h8"></path>
+              <path d="M13 19h8"></path>
+              <path d="M3 10a2 2 0 0 0 2 2h3"></path>
+              <path d="M3 5v12a2 2 0 0 0 2 2h3"></path></svg
+            ><span class="nav-label">Items</span><span class="beta">Beta</span>
+          </button>
+        </nav>
+      </details>
+      <div class="utilities">
+        <button class="nav-item" data-preview="settings" title="Settings">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-settings2 lucide-settings-2"
+            aria-hidden="true"
+          >
+            <path d="M14 17H5"></path>
+            <path d="M19 7h-9"></path>
+            <circle cx="17" cy="17" r="3"></circle>
+            <circle cx="7" cy="7" r="3"></circle></svg
+          ><span class="nav-label">Settings</span>
+        </button>
+        <div class="account">
+          <span class="avatar" title="Alex Martin · Admin · fictional employee"
+            >AM</span
+          >
+          <div class="account-copy">
+            <strong>Alex Martin</strong><span>Admin</span>
+          </div>
+          <button
+            class="icon-btn"
+            data-preview="signout"
+            title="Sign out preview"
+            aria-label="Sign out preview"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-log-out"
+              aria-hidden="true"
+            >
+              <path d="m16 17 5-5-5-5"></path>
+              <path d="M21 12H9"></path>
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+    <main class="main" id="main" tabindex="-1">
+      <div class="content">
+        <div class="mobile-top">
+          <button
+            class="icon-btn"
+            id="mobileMenu"
+            aria-label="Open navigation"
+            aria-expanded="false"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-menu"
+              aria-hidden="true"
+            >
+              <path d="M4 5h16"></path>
+              <path d="M4 12h16"></path>
+              <path d="M4 19h16"></path>
+            </svg></button
+          ><strong>MB Procurement</strong>
+        </div>
+        <div class="review-strip">
+          <span>V2 / DESIGN REVIEW</span
+          ><span>Fictional data · local specimen</span
+          ><a href="README.md">Read the complete proposal ↗</a>
+        </div>
+        <section id="page-orders" aria-labelledby="orders-title">
+          <header class="page-header">
+            <div>
+              <h1 id="orders-title" tabindex="-1">Supplier Orders</h1>
+              <p class="subtitle">Procurement packages across your Projects.</p>
+            </div>
+            <div class="actions">
+              <button class="btn primary" data-preview="neworder">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-plus"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14"></path>
+                  <path d="M12 5v14"></path></svg
+                >New Supplier Order<svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-chevron-down"
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6"></path>
+                </svg>
+              </button>
+            </div>
+          </header>
+          <nav class="tabs" aria-label="Supplier Order view">
+            <button aria-current="page" data-order-view="overview">
+              Overview</button
+            ><button data-order-view="commercial">Commercial</button
+            ><button data-preview="payments">Payments</button
+            ><button data-preview="delivery">Delivery</button>
+          </nav>
+          <div class="filterbar">
+            <label class="search-box"
+              ><svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-search"
+                aria-hidden="true"
+              >
+                <path d="m21 21-4.34-4.34"></path>
+                <circle cx="11" cy="11" r="8"></circle></svg
+              ><input
+                id="orderSearch"
+                aria-label="Search sample Orders"
+                placeholder="Search reference, package, Supplier…" /></label
+            ><select id="projectFilter" aria-label="Filter sample Project">
+              <option value="">All Projects</option>
+              <option>Villa Lumière</option>
+              <option>Courtyard House</option>
+              <option>Atelier Nord</option></select
+            ><button
+              class="btn"
+              id="filterToggle"
+              aria-expanded="false"
+              aria-controls="advancedFilters"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-sliders-horizontal"
+                aria-hidden="true"
+              >
+                <path d="M10 5H3"></path>
+                <path d="M12 19H3"></path>
+                <path d="M14 3v4"></path>
+                <path d="M16 17v4"></path>
+                <path d="M21 12h-9"></path>
+                <path d="M21 19h-5"></path>
+                <path d="M21 5h-7"></path>
+                <path d="M8 10v4"></path>
+                <path d="M8 12H3"></path></svg
+              >Filters</button
+            ><span class="right" id="resultCount">6 Orders</span>
+          </div>
+          <div class="filter-extra" id="advancedFilters" hidden>
+            <label class="field"
+              >Operational status<select id="statusFilter">
+                <option value="">All statuses</option>
+                <option>In production</option>
+                <option>Ordered</option>
+                <option>Ready</option>
+                <option>Draft</option>
+                <option>Delivered</option>
+              </select></label
+            ><button class="btn quiet" id="clearFilters">Clear filters</button>
+          </div>
+          <div class="bulk" id="bulkBar" hidden>
+            <strong id="selectedCount"></strong
+            ><span>Selection applies to this page only.</span
+            ><button class="btn quiet" id="clearSelection">
+              Clear selection
+            </button>
+          </div>
+          <div
+            class="table-wrap"
+            role="region"
+            aria-label="Sample Supplier Orders"
+            tabindex="0"
+          >
+            <table>
+              <thead>
+                <tr id="orderHeaders"></tr>
+              </thead>
+              <tbody id="orderRows"></tbody>
+            </table>
+            <div class="empty" id="noResults" hidden>
+              <h3>No Orders match these filters</h3>
+              <p class="subtitle">Try another search or clear the filters.</p>
+            </div>
+          </div>
+          <footer class="pagination">
+            <span id="range">1–6 of 6</span>
+            <div class="actions">
+              <span>25 rows per page</span
+              ><button class="icon-btn" disabled aria-label="Previous page">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-chevron-left"
+                  aria-hidden="true"
+                >
+                  <path d="m15 18-6-6 6-6"></path>
+                </svg></button
+              ><span>Page 1 of 1</span
+              ><button class="icon-btn" disabled aria-label="Next page">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-chevron-right"
+                  aria-hidden="true"
+                >
+                  <path d="m9 18 6-6-6-6"></path>
+                </svg>
+              </button>
+            </div>
+          </footer>
+        </section>
+        <section id="page-project" aria-labelledby="project-title" hidden>
+          <button class="quiet-link back" data-preview="projectlist">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-arrow-left"
+              aria-hidden="true"
+            >
+              <path d="m12 19-7-7 7-7"></path>
+              <path d="M19 12H5"></path></svg
+            >Projects
+          </button>
+          <header class="page-header">
+            <div>
+              <h1 id="project-title" tabindex="-1">Villa Lumière</h1>
+              <div class="meta">
+                <span>Lumière Residences</span><span class="sep"></span
+                ><span>VL-026</span><span class="sep"></span><span>EUR</span
+                ><span class="status info">Active</span>
+              </div>
+            </div>
+            <div class="actions">
+              <button class="btn" data-preview="editproject">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-pencil"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+                  ></path>
+                  <path d="m15 5 4 4"></path></svg
+                >Edit Project
+              </button>
+            </div>
+          </header>
+          <nav class="tabs" aria-label="Project workspace">
+            <button aria-current="page" data-project-view="overview">
+              Overview</button
+            ><button data-project-view="orders">Supplier Orders</button
+            ><button data-project-view="billing">Client Billing</button
+            ><button data-project-view="finance">Finance</button
+            ><button data-project-view="cash">Cash</button
+            ><button data-project-view="buildings">Buildings & Rooms</button
+            ><button data-project-view="items">Items · Beta</button>
+          </nav>
+          <div id="projectOverview">
+            <div class="section-heading">
+              <h2>Financial performance</h2>
+              <small>Actual to date · reporting currency EUR</small>
+            </div>
+            <div class="metrics">
+              <div>
+                <p class="metric-label">Client invoiced HT</p>
+                <p class="metric-value">120 000.00<span>EUR</span></p>
+                <p class="metric-caption">Active Client Invoices</p>
+              </div>
+              <div>
+                <p class="metric-label">Economic cost</p>
+                <p class="metric-value">86 000.00<span>EUR</span></p>
+                <p class="metric-caption">
+                  Supplier Orders + Project freight, once
+                </p>
+              </div>
+              <div>
+                <p class="metric-label">Actual gross profit</p>
+                <p class="metric-value">34 000.00<span>EUR</span></p>
+                <p class="metric-caption">Markup 39.53% · Margin 28.33%</p>
+              </div>
+            </div>
+            <div class="split">
+              <section>
+                <div class="section-heading">
+                  <h2>Planning targets</h2>
+                  <button class="quiet-link" data-project-view="finance">
+                    View Finance
+                  </button>
+                </div>
+                <table class="slim-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">HT / economic values</th>
+                      <th scope="col" class="number">Target · EUR</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Expected sell HT</td>
+                      <td class="number">140 000.00</td>
+                    </tr>
+                    <tr>
+                      <td>Cost</td>
+                      <td class="number">100 000.00</td>
+                    </tr>
+                    <tr class="total">
+                      <td>Gross profit</td>
+                      <td class="number">40 000.00</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p class="subtitle">
+                  Full-Project targets. Actuals to date are shown above.
+                </p>
+                <div class="section-space">
+                  <div class="section-heading">
+                    <h2>Project activity</h2>
+                    <button class="quiet-link" data-page="orders">
+                      Supplier Orders
+                    </button>
+                  </div>
+                  <div class="list-row">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-package"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"
+                      ></path>
+                      <path d="M12 22V12"></path>
+                      <polyline points="3.29 7 12 12 20.71 7"></polyline>
+                      <path d="m7.5 4.27 9 5.15"></path>
+                    </svg>
+                    <div class="copy">
+                      <strong>Kitchen joinery</strong>
+                      <p>Supplier Order SO-026-041 · expected 21/10/2026</p>
+                    </div>
+                    <span class="status info">In production</span>
+                  </div>
+                  <div class="list-row">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-files"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"
+                      ></path>
+                      <path
+                        d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z"
+                      ></path>
+                      <path
+                        d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1"
+                      ></path>
+                    </svg>
+                    <div class="copy">
+                      <strong>Client Billing</strong>
+                      <p>View Invoices, schedules and actual receipts</p>
+                    </div>
+                    <button
+                      class="icon-btn"
+                      data-project-view="billing"
+                      aria-label="View Project Client Billing"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-arrow-up-right"
+                        aria-hidden="true"
+                      >
+                        <path d="M7 7h10v10"></path>
+                        <path d="M7 17 17 7"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </section>
+              <section>
+                <h2>Funding Coverage</h2>
+                <dl class="definition">
+                  <div>
+                    <dt>Available Client Billing HT</dt>
+                    <dd>108 000.00 EUR</dd>
+                  </div>
+                  <div>
+                    <dt>Supplier Order Sell HT</dt>
+                    <dd>115 000.00 EUR</dd>
+                  </div>
+                </dl>
+                <div class="notice">
+                  <strong>Funding Gap · 7 000.00 EUR</strong>
+                  <p>
+                    Commercial coverage is below the active Supplier Order sell
+                    total. This is not a cash balance.
+                  </p>
+                  <button class="quiet-link" data-project-view="finance">
+                    Review coverage breakdown
+                  </button>
+                </div>
+                <div class="section-space">
+                  <h2>Cash position</h2>
+                  <dl class="definition">
+                    <div>
+                      <dt>Actual net cash</dt>
+                      <dd><strong>25 000.00 EUR</strong></dd>
+                    </div>
+                  </dl>
+                  <button class="quiet-link" data-project-view="cash">
+                    View Cash
+                  </button>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div id="projectOther" hidden></div>
+        </section>
+        <section id="page-home" aria-labelledby="home-title" hidden>
+          <header class="page-header">
+            <div>
+              <h1 id="home-title" tabindex="-1">Your workspace</h1>
+              <p class="subtitle">A clear view of what needs attention.</p>
+            </div>
+            <button class="btn quiet" data-preview="reports">
+              Open Reports<svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-arrow-up-right"
+                aria-hidden="true"
+              >
+                <path d="M7 7h10v10"></path>
+                <path d="M7 17 17 7"></path>
+              </svg>
+            </button>
+          </header>
+          <div class="home-layout">
+            <section>
+              <div class="section-heading">
+                <h2>Needs attention</h2>
+                <small>3 sample signals</small>
+              </div>
+              <div class="list-row">
+                <span class="issue-icon"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-alert"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" x2="12" y1="8" y2="12"></line>
+                    <line x1="12" x2="12.01" y1="16" y2="16"></line></svg
+                ></span>
+                <div class="copy">
+                  <strong>Villa Lumière has a Funding Gap</strong>
+                  <p>7 000.00 EUR · commercial coverage HT</p>
+                </div>
+                <button
+                  class="icon-btn"
+                  data-page="project"
+                  aria-label="Review Villa Lumière"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-arrow-up-right"
+                    aria-hidden="true"
+                  >
+                    <path d="M7 7h10v10"></path>
+                    <path d="M7 17 17 7"></path>
+                  </svg>
+                </button>
+              </div>
+              <div class="list-row">
+                <span class="issue-icon"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-calendar-clock"
+                    aria-hidden="true"
+                  >
+                    <path d="M16 14v2.2l1.6 1"></path>
+                    <path d="M16 2v3"></path>
+                    <path
+                      d="M21 7.338V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h2.338"
+                    ></path>
+                    <path d="M3 9h5.859"></path>
+                    <path d="M8 2v3"></path>
+                    <circle cx="16" cy="16" r="6"></circle></svg
+                ></span>
+                <div class="copy">
+                  <strong>A Supplier installment needs review</strong>
+                  <p>Review its due date and recorded settlements</p>
+                </div>
+                <button
+                  class="icon-btn"
+                  data-preview="payments"
+                  aria-label="Review Supplier Payments"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-arrow-up-right"
+                    aria-hidden="true"
+                  >
+                    <path d="M7 7h10v10"></path>
+                    <path d="M7 17 17 7"></path>
+                  </svg>
+                </button>
+              </div>
+              <div class="list-row">
+                <span class="issue-icon"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-question-mark"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                    <path d="M12 17h.01"></path></svg
+                ></span>
+                <div class="copy">
+                  <strong>Atelier Nord reporting is incomplete</strong>
+                  <p>Missing manual purchase FX on a Supplier Order</p>
+                </div>
+                <button
+                  class="icon-btn"
+                  data-preview="fx"
+                  aria-label="Review missing FX"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-arrow-up-right"
+                    aria-hidden="true"
+                  >
+                    <path d="M7 7h10v10"></path>
+                    <path d="M7 17 17 7"></path>
+                  </svg>
+                </button>
+              </div>
+              <div class="section-space">
+                <div class="section-heading">
+                  <h2>Projects</h2>
+                  <button class="quiet-link" data-preview="projectlist">
+                    All Projects
+                  </button>
+                </div>
+                <div class="list-row">
+                  <div class="copy">
+                    <strong>Villa Lumière</strong>
+                    <p>Lumière Residences · EUR</p>
+                  </div>
+                  <span class="status info">Active</span
+                  ><button
+                    class="icon-btn"
+                    data-page="project"
+                    aria-label="Open Villa Lumière"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-arrow-up-right"
+                      aria-hidden="true"
+                    >
+                      <path d="M7 7h10v10"></path>
+                      <path d="M7 17 17 7"></path>
+                    </svg>
+                  </button>
+                </div>
+                <div class="list-row">
+                  <div class="copy">
+                    <strong>Courtyard House</strong>
+                    <p>Courtyard Studio · EUR</p>
+                  </div>
+                  <span class="status">Planning</span>
+                </div>
+              </div>
+            </section>
+            <section>
+              <div class="section-heading">
+                <h2>Next 30 days</h2>
+                <small>Scheduled · TTC</small>
+              </div>
+              <div class="notice">
+                <strong>Forecast incomplete</strong>
+                <p>
+                  A required manual FX rate is missing. Comparable subtotals are
+                  not a complete company cash forecast.
+                </p>
+              </div>
+              <div class="section-space">
+                <div class="metric-label">Expected cash in / out / net</div>
+                <p class="metric-value">Incomplete</p>
+                <p class="subtitle">
+                  Review the affected record before using these totals.
+                </p>
+              </div>
+              <div class="section-space">
+                <button class="quiet-link" data-preview="reports">
+                  Open Cash forecast →
+                </button>
+              </div>
+            </section>
+          </div>
+        </section>
+        <p class="demo-note">
+          Local design specimen. Only Home, Supplier Orders and the Project
+          workspace are illustrated. Other controls explain the proposed
+          behavior. All records and values are fictional; no changes are saved.
+        </p>
+      </div>
+    </main>
+    <dialog id="previewDialog" aria-labelledby="dialogTitle">
+      <div class="dialog-head">
+        <h2 id="dialogTitle">Design preview</h2>
+        <button class="icon-btn" id="closeDialog" aria-label="Close preview">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-x"
+            aria-hidden="true"
+          >
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="dialog-body" id="dialogBody"></div>
+      <div class="dialog-foot">
+        <button class="btn" id="doneDialog">Close preview</button>
+      </div>
+    </dialog>
+    <script>
+      const rows = [
+        {
+          id: "SO-026-041",
+          name: "Kitchen joinery",
+          supplier: "Forma Atelier",
+          project: "Villa Lumière",
+          status: "In production",
+          date: "21/10/2026",
+          cost: "48 000.00",
+          sell: "67 200.00",
+        },
+        {
+          id: "SO-026-038",
+          name: "Decorative lighting",
+          supplier: "Lumen Studio",
+          project: "Villa Lumière",
+          status: "Ordered",
+          date: "12/10/2026",
+          cost: "15 800.00",
+          sell: "22 280.00",
+        },
+        {
+          id: "SO-026-036",
+          name: "Stone & surfaces",
+          supplier: "Pietra Collective",
+          project: "Courtyard House",
+          status: "Ready",
+          date: "30/09/2026",
+          cost: "15 500.00",
+          sell: "21 700.00",
+        },
+        {
+          id: "SO-026-033",
+          name: "Outdoor furniture",
+          supplier: "Terrace Works",
+          project: "Courtyard House",
+          status: "Draft",
+          date: "—",
+          cost: "12 000.00",
+          sell: "16 800.00",
+        },
+        {
+          id: "SO-026-029",
+          name: "Bathroom fittings",
+          supplier: "Linea Objects",
+          project: "Atelier Nord",
+          status: "In production",
+          date: "06/11/2026",
+          cost: "Incomplete",
+          sell: "18 600.00",
+        },
+        {
+          id: "SO-026-024",
+          name: "Interior doors",
+          supplier: "Forma Atelier",
+          project: "Villa Lumière",
+          status: "Delivered",
+          date: "02/09/2026",
+          cost: "18 200.00",
+          sell: "25 520.00",
+        },
+      ];
+      const $ = (id) => document.getElementById(id);
+      const selected = new Set();
+      let orderView = "overview";
+      const search = $("orderSearch"),
+        projectFilter = $("projectFilter"),
+        statusFilter = $("statusFilter");
+      function renderRows() {
+        const visible = rows.filter(
+          (r) =>
+            (!projectFilter.value || r.project === projectFilter.value) &&
+            (!statusFilter.value || r.status === statusFilter.value) &&
+            `${r.id} ${r.name} ${r.supplier}`
+              .toLowerCase()
+              .includes(search.value.toLowerCase()),
+        );
+        const commercial = orderView === "commercial";
+        $("orderHeaders").innerHTML =
+          '<th class="check"><input type="checkbox" id="selectAll" aria-label="Select all visible sample rows"></th><th scope="col">Supplier Order</th><th scope="col">Supplier</th><th scope="col">Project</th>' +
+          (commercial
+            ? '<th scope="col" class="number">Economic cost · EUR</th><th scope="col" class="number">Planned sell HT · EUR</th>'
+            : '<th scope="col">Operational status</th><th scope="col" class="number">Expected delivery</th>');
+        $("orderRows").innerHTML = visible
+          .map(
+            (r) =>
+              `<tr><td class="check"><input type="checkbox" data-select="${r.id}" aria-label="Select ${r.id}" ${selected.has(r.id) ? "checked" : ""}></td><td><a href="#${r.id}" data-record="${r.id}" class="identity">${r.name}</a><span class="secondary">${r.id}</span></td><td>${r.supplier}</td><td><button class="quiet-link" ${r.project === "Villa Lumière" ? 'data-page="project"' : 'data-preview="projectlist"'}>${r.project}</button></td>${commercial ? `<td class="number">${r.cost}</td><td class="number">${r.sell}</td>` : `<td><span class="status ${r.status === "Delivered" ? "success" : r.status === "Draft" ? "" : "info"}">${r.status}</span></td><td class="number">${r.date}</td>`}</tr>`,
+          )
+          .join("");
+        $("resultCount").textContent = `${visible.length} Orders`;
+        $("range").textContent = visible.length
+          ? `1–${visible.length} of ${visible.length}`
+          : "0 of 0";
+        $("noResults").hidden = visible.length !== 0;
+        $("selectAll").checked =
+          visible.length > 0 && visible.every((r) => selected.has(r.id));
+        $("selectAll").indeterminate =
+          visible.some((r) => selected.has(r.id)) && !$("selectAll").checked;
+        $("selectAll").disabled = visible.length === 0;
+        $("selectAll").onchange = (e) => {
+          visible.forEach((r) =>
+            e.target.checked ? selected.add(r.id) : selected.delete(r.id),
+          );
+          renderRows();
+        };
+        $("bulkBar").hidden = selected.size === 0;
+        $("selectedCount").textContent = `${selected.size} selected`;
+      }
+      function showPage(name) {
+        ["orders", "project", "home"].forEach(
+          (p) => ($(`page-${p}`).hidden = p !== name),
+        );
+        document.querySelectorAll(".primary [data-page]").forEach((b) => {
+          b.removeAttribute("aria-current");
+          if (b.dataset.page === name) b.setAttribute("aria-current", "page");
+        });
+        document.body.classList.remove("mobile-open");
+        $("mobileMenu").setAttribute("aria-expanded", "false");
+        $(`${name}-title`).focus({ preventScroll: true });
+        window.scrollTo(0, 0);
+      }
+      const descriptions = {
+        delivery: [
+          "Delivery view",
+          "Show expected ready and delivery dates, operational status, Supplier, Project and Building scope together. This specimen illustrates the Overview and Commercial table views; the complete Delivery layout belongs to implementation.",
+        ],
+        billing: [
+          "Client Billing",
+          "The proposed list uses All / Invoices / Quotes filters and focused Commercial or Collection views. Receipt management remains in the Billing detail, together with its schedule.",
+        ],
+        payments: [
+          "Supplier Payments",
+          "Due, overdue, upcoming and paid views remain Supplier-only. Open an installment to inspect its scheduled amount, settlements and outstanding TTC. Client receipts remain in Billing.",
+        ],
+        reports: [
+          "Reports",
+          "Portfolio · Cash (Forecast / Transactions) · VAT · Freight. The Forecast retains its monthly expected-versus-actual comparison. Keep existing URL filters, date meanings, financial authorities and visible incomplete-reporting warnings.",
+        ],
+        settings: [
+          "Settings",
+          "Company · Optional modules · Logistics Locations · Extraction diagnostics. Employees is ADMIN-only; Activity remains ADMIN/MANAGER. The Items Beta switch stays here, with an explicit save.",
+        ],
+        clients: [
+          "Clients",
+          "A compact directory of Client identity and contacts. Its detail links to Projects and Billing-based collection information.",
+        ],
+        suppliers: [
+          "Suppliers",
+          "A compact directory of Supplier identity, contacts and defaults. Its detail links to Supplier Orders and their payment schedules.",
+        ],
+        calendar: [
+          "Calendar",
+          "Keep the month view and authoritative source dates. Add a visible “+N events” link for busy days, opening a complete day agenda.",
+        ],
+        items: [
+          "Items · Beta",
+          "Project-specific supporting detail only. Commercial and logistics statuses stay separate; Item sums never replace Order financial truth.",
+        ],
+        search: [
+          "Search records",
+          "Keep the existing submitted search for Projects, Buildings, Clients, Suppliers and Supplier Orders. This specimen does not connect to real records.",
+        ],
+        signout: [
+          "Account utilities",
+          "The employee identity, role and sign-out control live at the bottom of the sidebar. This preview does not sign you out of any application.",
+        ],
+        neworder: [
+          "New Supplier Order",
+          "Choose manual entry or import a Supplier document. Both Supplier Quotes and Supplier Invoices enter the same reviewed Order flow. No Order is created in this specimen.",
+        ],
+        projectlist: [
+          "Projects",
+          "Search and status lead the compact Project list. The working detail specimen is Villa Lumière; all data is fictional.",
+        ],
+        editproject: [
+          "Edit Project",
+          "General details belong in a controlled editor. Targets, three markup defaults, reporting currency and freight estimate remain explicit financial inputs. No form here modifies the ERP.",
+        ],
+        fx: [
+          "Incomplete reporting",
+          "Name the missing manual FX input and link to its source record. Never substitute zero, mix incomparable currencies or hide the warning inside an inactive tab.",
+        ],
+      };
+      function preview(key, record) {
+        const detail = record ? rows.find((r) => r.id === record) : null;
+        const [title, body] = detail
+          ? [
+              detail.name,
+              `${detail.id} · ${detail.supplier} · ${detail.project}. Proposed detail sections: Overview, Commercial, Payments and Delivery. Editing the commercial structure remains a full, explicitly saved form.`,
+            ]
+          : descriptions[key];
+        $("dialogTitle").textContent = title;
+        $("dialogBody").replaceChildren();
+        const p = document.createElement("p");
+        p.textContent = body;
+        $("dialogBody").append(p);
+        const note = document.createElement("small");
+        note.textContent = "Design explanation only · no changes are saved.";
+        $("dialogBody").append(note);
+        $("previewDialog").showModal();
+      }
+      function projectView(view) {
+        document.querySelectorAll("[data-project-view]").forEach((b) => {
+          if (b.closest(".tabs")) {
+            b.removeAttribute("aria-current");
+            if (b.dataset.projectView === view)
+              b.setAttribute("aria-current", "page");
+          }
+        });
+        $("projectOverview").hidden = view !== "overview";
+        $("projectOther").hidden = view === "overview";
+        const content = {
+          finance:
+            '<h2>Finance</h2><p class="subtitle">Performance · Funding Coverage · Freight · VAT</p><div class="section-space notice"><strong>Funding Gap · 7 000.00 EUR</strong><p>108 000.00 EUR available Client Billing HT − 115 000.00 EUR active Supplier Order Sell HT. Eligible allocations and explicitly approved Project remainder determine available Billing. Receipts and Supplier settlements do not change this commercial coverage.</p></div><div class="section-space"><h3>Progressive financial detail</h3><p class="subtitle">Each section exposes its source, currency and completeness. Freight planning, actual economic cost and recovery stay distinct; VAT shows output, input, deductible input and payable/credit.</p></div>',
+          cash: '<h2>Cash</h2><p class="subtitle">Actual transactions · EUR</p><dl class="definition"><div><dt>Client receipts</dt><dd>90 000.00 EUR</dd></div><div><dt>Supplier settlements</dt><dd>65 000.00 EUR</dd></div><div><dt>Actual net cash</dt><dd>25 000.00 EUR</dd></div></dl><h3>Expected cash</h3><p class="subtitle">A separate view uses outstanding installments by due date. Cash timing remains separate from profitability and Funding Coverage.</p>',
+          orders:
+            '<h2>Supplier Orders</h2><p class="subtitle">The existing Order views, scoped to this Project.</p><div class="section-space"><button class="btn" id="openScopedOrders">View sample Orders for Villa Lumière</button></div>',
+          billing:
+            '<h2>Client Billing</h2><p class="subtitle">Invoice totals, schedule and actual receipts remain distinct.</p><dl class="definition"><div><dt>Client invoiced HT</dt><dd>120 000.00 EUR</dd></div><div><dt>Available Billing for commercial coverage HT</dt><dd>108 000.00 EUR</dd></div></dl><p class="subtitle">Open the Billing document for authoritative receipt and installment management. Project summaries do not add a second receipt editor.</p>',
+          buildings:
+            '<h2>Buildings & Rooms</h2><div class="list-row"><div class="copy"><strong>Main residence</strong><p>Ground floor · Living room · Kitchen</p></div></div><p class="subtitle">Expand a Building to manage its Rooms. These remain Project-specific operational relationships.</p>',
+          items:
+            '<h2>Items · Beta</h2><p class="subtitle">This tab is available only when the module is enabled. Item detail never becomes an inventory catalog or replaces Supplier Order totals.</p>',
+        };
+        if (view !== "overview") $("projectOther").innerHTML = content[view];
+      }
+      document.addEventListener("click", (e) => {
+        const b = e.target.closest("button,a");
+        if (!b) return;
+        if (b.dataset.page) {
+          e.preventDefault();
+          showPage(b.dataset.page);
+        }
+        if (b.dataset.preview) {
+          e.preventDefault();
+          preview(b.dataset.preview);
+        }
+        if (b.dataset.record) {
+          e.preventDefault();
+          preview(null, b.dataset.record);
+        }
+        if (b.dataset.projectView) {
+          projectView(b.dataset.projectView);
+        }
+        if (b.dataset.orderView) {
+          orderView = b.dataset.orderView;
+          document.querySelectorAll("[data-order-view]").forEach((t) => {
+            t.removeAttribute("aria-current");
+            if (t === b) t.setAttribute("aria-current", "page");
+          });
+          selected.clear();
+          renderRows();
+        }
+        if (b.id === "openScopedOrders") {
+          projectFilter.value = "Villa Lumière";
+          statusFilter.value = "";
+          search.value = "";
+          selected.clear();
+          renderRows();
+          showPage("orders");
+        }
+      });
+      document.addEventListener("change", (e) => {
+        if (e.target.dataset.select) {
+          e.target.checked
+            ? selected.add(e.target.dataset.select)
+            : selected.delete(e.target.dataset.select);
+          renderRows();
+        }
+      });
+      [search, projectFilter, statusFilter].forEach((el) =>
+        el.addEventListener("input", () => {
+          selected.clear();
+          renderRows();
+        }),
+      );
+      $("filterToggle").onclick = () => {
+        const open = $("advancedFilters").hidden;
+        $("advancedFilters").hidden = !open;
+        $("filterToggle").setAttribute("aria-expanded", String(open));
+        if (open) statusFilter.focus();
+      };
+      $("clearFilters").onclick = () => {
+        search.value = "";
+        projectFilter.value = "";
+        statusFilter.value = "";
+        selected.clear();
+        renderRows();
+      };
+      $("clearSelection").onclick = () => {
+        selected.clear();
+        renderRows();
+      };
+      $("collapse").onclick = () => {
+        if (window.innerWidth < 1024) {
+          document.body.classList.remove("mobile-open");
+          $("mobileMenu").setAttribute("aria-expanded", "false");
+          $("mobileMenu").focus();
+          return;
+        }
+        document.body.classList.toggle("collapsed");
+        const label = document.body.classList.contains("collapsed")
+          ? "Expand navigation"
+          : "Collapse navigation";
+        $("collapse").setAttribute("aria-label", label);
+        $("collapse").title = label;
+      };
+      $("mobileMenu").onclick = () => {
+        document.body.classList.remove("collapsed");
+        const open = document.body.classList.toggle("mobile-open");
+        $("mobileMenu").setAttribute("aria-expanded", String(open));
+        if (open) $("collapse").focus();
+      };
+      document.addEventListener("keydown", (e) => {
+        if (
+          e.key === "Escape" &&
+          document.body.classList.contains("mobile-open")
+        ) {
+          document.body.classList.remove("mobile-open");
+          $("mobileMenu").setAttribute("aria-expanded", "false");
+          $("mobileMenu").focus();
+        }
+      });
+      $("closeDialog").onclick = $("doneDialog").onclick = () =>
+        $("previewDialog").close();
+      renderRows();
+    </script>
+  </body>
+</html>

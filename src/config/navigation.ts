@@ -5,15 +5,13 @@ import {
   CalendarDays,
   CircleDollarSign,
   FolderKanban,
-  History,
-  LayoutDashboard,
+  House,
   ListTree,
   Package,
   Settings,
   Truck,
   WalletCards,
 } from "lucide-react";
-
 export interface NavigationItem {
   href: string;
   icon: LucideIcon;
@@ -21,33 +19,26 @@ export interface NavigationItem {
   label: string;
   roles?: readonly ("ADMIN" | "MANAGER" | "USER")[];
 }
-
 export interface NavigationGroup {
   items: readonly NavigationItem[];
   label: string;
 }
-
 export const navigationGroups: readonly NavigationGroup[] = [
   {
     label: "Workspace",
     items: [
+      { href: "/", icon: House, isAvailable: true, label: "Home" },
       {
-        href: "/",
-        icon: LayoutDashboard,
+        href: "/projects",
+        icon: FolderKanban,
         isAvailable: true,
-        label: "Dashboard",
+        label: "Projects",
       },
       {
         href: "/orders",
         icon: Package,
         isAvailable: true,
         label: "Supplier Orders",
-      },
-      {
-        href: "/items",
-        icon: ListTree,
-        isAvailable: true,
-        label: "Items (Beta)",
       },
       {
         href: "/billing",
@@ -62,42 +53,16 @@ export const navigationGroups: readonly NavigationGroup[] = [
         label: "Supplier Payments",
       },
       {
-        href: "/calendar",
-        icon: CalendarDays,
-        isAvailable: true,
-        label: "Calendar",
-      },
-      {
         href: "/reports",
         icon: BarChart3,
         isAvailable: true,
         label: "Reports",
       },
-      {
-        href: "/admin/activity",
-        icon: History,
-        isAvailable: true,
-        label: "Activity",
-        roles: ["ADMIN", "MANAGER"],
-      },
-      {
-        href: "/settings",
-        icon: Settings,
-        isAvailable: true,
-        label: "Settings",
-        roles: ["ADMIN", "MANAGER"],
-      },
     ],
   },
   {
-    label: "Directory",
+    label: "More",
     items: [
-      {
-        href: "/projects",
-        icon: FolderKanban,
-        isAvailable: true,
-        label: "Projects",
-      },
       {
         href: "/clients",
         icon: Building2,
@@ -110,10 +75,38 @@ export const navigationGroups: readonly NavigationGroup[] = [
         isAvailable: true,
         label: "Suppliers",
       },
+      {
+        href: "/calendar",
+        icon: CalendarDays,
+        isAvailable: true,
+        label: "Calendar",
+      },
+      {
+        href: "/items",
+        icon: ListTree,
+        isAvailable: true,
+        label: "Items (Beta)",
+      },
+    ],
+  },
+  {
+    label: "Administration",
+    items: [
+      {
+        href: "/settings",
+        icon: Settings,
+        isAvailable: true,
+        label: "Settings",
+        roles: ["ADMIN", "MANAGER"],
+      },
     ],
   },
 ];
-
+/** Match segments so Home and similarly named routes never light up together. */
+export function isNavigationActive(pathname: string, href: string): boolean {
+  if (href === "/settings" && pathname.startsWith("/admin/")) return true;
+  return pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
+}
 export function navigationForRole(
   role: "ADMIN" | "MANAGER" | "USER",
   itemManagementEnabled = false,

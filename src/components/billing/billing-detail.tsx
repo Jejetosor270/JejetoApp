@@ -2,6 +2,8 @@
 
 import Decimal from "decimal.js";
 import Link from "next/link";
+import { WorkspaceTabs } from "@/components/layout/workspace-tabs";
+import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { updateClientBillingDocumentAction } from "@/app/(app)/billing/actions";
@@ -144,7 +146,7 @@ function DetailValue({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className="mt-1 text-sm">{value}</dd>
+      <dd className="mt-1 text-sm tabular-nums">{value}</dd>
     </div>
   );
 }
@@ -266,24 +268,25 @@ export function BillingDetail({
         title={saved.reference}
       />
 
-      <form
-        className="space-y-5"
-        onSubmit={(event) => {
-          submittedDraft.current = draft;
-          onSubmit(event);
-        }}
-      >
-        <input name="id" type="hidden" value={document.id} />
-        <input
-          name="allocations"
-          type="hidden"
-          value={JSON.stringify(serializedAllocations)}
-        />
-        {editing ? (
+      {editing ? (
+        <form
+          className="space-y-5"
+          onSubmit={(event) => {
+            submittedDraft.current = draft;
+            onSubmit(event);
+          }}
+        >
+          <input name="id" type="hidden" value={document.id} />
+          <input
+            name="allocations"
+            type="hidden"
+            value={JSON.stringify(serializedAllocations)}
+          />
+
           <>
             <section className="bg-card rounded-lg border p-4">
               <h2 className="text-sm font-semibold">General & financial</h2>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
                 <Field error={fieldErrors.clientId} label="Client">
                   <select
                     className={inputClassName}
@@ -772,6 +775,11 @@ export function BillingDetail({
               <Button
                 disabled={pending}
                 onClick={() => {
+                  if (
+                    hasUnsavedDrafts() &&
+                    !window.confirm("Discard your unsaved Billing changes?")
+                  )
+                    return;
                   setDraft(saved);
                   setEditing(false);
                 }}
@@ -783,229 +791,286 @@ export function BillingDetail({
               <ActionFeedback state={state} />
             </div>
           </>
-        ) : (
-          <>
-            <section className="grid gap-4 lg:grid-cols-2">
-              <article className="bg-card rounded-lg border p-4">
-                <h2 className="text-sm font-semibold">General</h2>
-                <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <DetailValue
-                    label="Client"
-                    value={
-                      savedClient?.displayName ?? document.client.displayName
-                    }
-                  />
-                  <DetailValue
-                    label="Project"
-                    value={savedProject?.name ?? document.project.name}
-                  />
-                  <DetailValue
-                    label="Document type"
-                    value={
-                      saved.documentType === "QUOTE"
-                        ? "Quote / Devis"
-                        : "Invoice"
-                    }
-                  />
-                  <DetailValue label="Reference" value={saved.reference} />
-                  <DetailValue
-                    label="Document date"
-                    value={formatDateOnly(saved.documentDate)}
-                  />
-                  <DetailValue
-                    label="Due date"
-                    value={formatDateOnly(saved.dueDate)}
-                  />
-                  <DetailValue label="Currency" value={saved.currencyCode} />
-                  <DetailValue
-                    label="FX to reporting"
-                    value={
-                      (saved.fxRate ? formatFxRate(saved.fxRate) : "") ||
-                      (saved.currencyCode ===
-                      savedProject?.reportingCurrencyCode
-                        ? "1 · same currency"
-                        : "Missing")
-                    }
-                  />
-                </dl>
-              </article>
-              <article className="bg-card rounded-lg border p-4">
-                <h2 className="text-sm font-semibold">Financial</h2>
-                <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <DetailValue
-                    label="HT"
-                    value={formatMoney(saved.totalHt, saved.currencyCode)}
-                  />
-                  <DetailValue
-                    label="VAT"
-                    value={formatMoney(saved.vatAmount, saved.currencyCode)}
-                  />
-                  <DetailValue
-                    label="VAT rate"
-                    value={
-                      saved.vatRate
-                        ? formatRate(
-                            humanPercentageToFraction(saved.vatRate, {
-                              maximumPercent: "100",
-                            }),
-                          )
-                        : "—"
-                    }
-                  />
-                  <DetailValue
-                    label="TTC"
-                    value={formatMoney(saved.totalTtc, saved.currencyCode)}
-                  />
-                  <DetailValue
-                    label="Paid"
-                    value={formatMoney(document.paid, saved.currencyCode)}
-                  />
-                  <DetailValue
-                    label="Outstanding"
-                    value={formatMoney(
-                      document.outstanding,
-                      saved.currencyCode,
-                    )}
-                  />
-                  <DetailValue
-                    label="Status"
-                    value={formatEnumLabel(document.status)}
-                  />
-                  <DetailValue
-                    label="VAT treatment"
-                    value={
-                      saved.vatTreatment
-                        ? formatEnumLabel(saved.vatTreatment)
-                        : "—"
-                    }
-                  />
-                </dl>
-              </article>
-            </section>
-            <section className="bg-card rounded-lg border p-4">
-              <h2 className="text-sm font-semibold">
-                Supplier Order Reconciliation
-              </h2>
-              <div className="mt-3 overflow-x-auto">
-                <table className="w-full min-w-[760px] text-left text-sm">
-                  <thead className="text-muted-foreground border-b text-xs">
-                    <tr>
-                      <th className="py-2">Supplier Order</th>
-                      <th>Supplier</th>
-                      <th className="text-right">Allocated HT</th>
-                      <th className="text-right">% of Billing</th>
-                      <th className="text-right">Planned Sell HT</th>
-                      <th className="text-right">Effective markup</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {saved.allocations.map((allocation) => {
-                      const order = orderById.get(allocation.orderId);
-                      const financial = financialByOrder.get(
-                        allocation.orderId,
-                      );
-                      return (
-                        <tr key={allocation.orderId}>
-                          <td className="py-2">
+        </form>
+      ) : (
+        <WorkspaceTabs
+          label="Client Billing workspace"
+          tabs={[
+            {
+              id: "overview",
+              label: "Overview",
+              content: (
+                <>
+                  <section className="grid gap-4 lg:grid-cols-2">
+                    <article className="bg-card rounded-lg border p-4">
+                      <h2 className="text-sm font-semibold">General</h2>
+                      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <DetailValue
+                          label="Client"
+                          value={
+                            savedClient?.displayName ??
+                            document.client.displayName
+                          }
+                        />
+                        <DetailValue
+                          label="Project"
+                          value={savedProject?.name ?? document.project.name}
+                        />
+                        <DetailValue
+                          label="Document type"
+                          value={
+                            saved.documentType === "QUOTE"
+                              ? "Quote / Devis"
+                              : "Invoice"
+                          }
+                        />
+                        <DetailValue
+                          label="Reference"
+                          value={saved.reference}
+                        />
+                        <DetailValue
+                          label="Document date"
+                          value={formatDateOnly(saved.documentDate)}
+                        />
+                        <DetailValue
+                          label="Due date"
+                          value={formatDateOnly(saved.dueDate)}
+                        />
+                        <DetailValue
+                          label="Currency"
+                          value={saved.currencyCode}
+                        />
+                        <DetailValue
+                          label="FX to reporting"
+                          value={
+                            (saved.fxRate ? formatFxRate(saved.fxRate) : "") ||
+                            (saved.currencyCode ===
+                            savedProject?.reportingCurrencyCode
+                              ? "1 · same currency"
+                              : "Missing")
+                          }
+                        />
+                      </dl>
+                    </article>
+                    <article className="bg-card rounded-lg border p-4">
+                      <h2 className="text-sm font-semibold">Financial</h2>
+                      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <DetailValue
+                          label="HT"
+                          value={formatMoney(saved.totalHt, saved.currencyCode)}
+                        />
+                        <DetailValue
+                          label="VAT"
+                          value={formatMoney(
+                            saved.vatAmount,
+                            saved.currencyCode,
+                          )}
+                        />
+                        <DetailValue
+                          label="VAT rate"
+                          value={
+                            saved.vatRate
+                              ? formatRate(
+                                  humanPercentageToFraction(saved.vatRate, {
+                                    maximumPercent: "100",
+                                  }),
+                                )
+                              : "—"
+                          }
+                        />
+                        <DetailValue
+                          label="TTC"
+                          value={formatMoney(
+                            saved.totalTtc,
+                            saved.currencyCode,
+                          )}
+                        />
+                        <DetailValue
+                          label="Received"
+                          value={formatMoney(document.paid, saved.currencyCode)}
+                        />
+                        <DetailValue
+                          label="Outstanding"
+                          value={formatMoney(
+                            document.outstanding,
+                            saved.currencyCode,
+                          )}
+                        />
+                        <DetailValue
+                          label="Status"
+                          value={formatEnumLabel(document.status)}
+                        />
+                        <DetailValue
+                          label="VAT treatment"
+                          value={
+                            saved.vatTreatment
+                              ? formatEnumLabel(saved.vatTreatment)
+                              : "—"
+                          }
+                        />
+                      </dl>
+                    </article>
+                  </section>
+                  <details className="rounded-lg border p-4">
+                    <summary className="text-sm font-medium">
+                      Notes & document history
+                    </summary>
+
+                    <section className="grid gap-4 lg:grid-cols-2">
+                      <article className="bg-card rounded-lg border p-4">
+                        <h2 className="text-sm font-semibold">Notes</h2>
+                        <p className="text-muted-foreground mt-3 text-sm whitespace-pre-wrap">
+                          {saved.notes || "No notes."}
+                        </p>
+                        {document.paymentTermsRaw ? (
+                          <p className="mt-3 border-t pt-3 text-xs">
+                            <span className="font-medium">Payment terms:</span>{" "}
+                            {document.paymentTermsRaw}
+                          </p>
+                        ) : null}
+                      </article>
+                      <article className="bg-card rounded-lg border p-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <h2 className="text-sm font-semibold">
+                            Import metadata
+                          </h2>
+                          {canEdit ? (
                             <Link
-                              className="font-mono text-xs underline"
-                              href={`/orders/${allocation.orderId}`}
+                              className="text-primary text-xs underline"
+                              href="/admin/activity?entityType=BILLING_DOCUMENT"
                             >
-                              {order?.orderNumber ?? allocation.orderId}
+                              Activity history
                             </Link>
-                          </td>
-                          <td>{order?.supplier.displayName ?? "—"}</td>
-                          <td className="financial-figure text-right">
-                            {formatMoney(allocation.amount, saved.currencyCode)}
-                          </td>
-                          <td className="financial-figure text-right">
-                            {formatRate(
-                              humanPercentageToFraction(
-                                percentageFromAmount(
-                                  saved.totalHt,
-                                  allocation.amount,
-                                ) ?? "",
-                                { maximumPercent: "100" },
-                              ),
-                            )}
-                          </td>
-                          <td className="financial-figure text-right">
-                            {formatMoney(
-                              financial?.plannedSell ?? null,
-                              financial?.reportingCurrencyCode ??
-                                savedProject?.reportingCurrencyCode ??
-                                document.project.reportingCurrencyCode,
-                            )}
-                          </td>
-                          <td className="financial-figure text-right">
-                            {formatRate(financial?.actualMarkupRate ?? null)}
-                          </td>
+                          ) : null}
+                        </div>
+                        <div className="mt-3 space-y-2 text-xs">
+                          {document.imports.map((item) => (
+                            <p key={item.id}>
+                              {formatTimestamp(item.processedAt)} ·{" "}
+                              {item.action.toLowerCase()} ·{" "}
+                              {item.originalFilename} ·{" "}
+                              {item.extractionProvider}/{item.extractionModel} ·{" "}
+                              {item.processedByName ?? "Historical user"}
+                            </p>
+                          ))}
+                          {document.imports.length === 0 ? (
+                            <p className="text-muted-foreground">
+                              No import metadata.
+                            </p>
+                          ) : null}
+                        </div>
+                      </article>
+                    </section>
+                  </details>
+                </>
+              ),
+            },
+            {
+              id: "schedule",
+              label: "Schedule & receipts",
+              content: (
+                <BillingScheduleManager canEdit={canEdit} document={document} />
+              ),
+            },
+            {
+              id: "allocations",
+              label: "Allocations",
+              content: (
+                <section className="bg-card rounded-lg border p-4">
+                  <h2 className="text-sm font-semibold">
+                    Supplier Order Reconciliation
+                  </h2>
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full min-w-[760px] text-left text-sm">
+                      <thead className="text-muted-foreground border-b text-xs">
+                        <tr>
+                          <th className="py-2">Supplier Order</th>
+                          <th>Supplier</th>
+                          <th className="text-right">Allocated HT</th>
+                          <th className="text-right">% of Billing</th>
+                          <th className="text-right">Planned Sell HT</th>
+                          <th className="text-right">Effective markup</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div className="bg-muted/30 mt-3 grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-3">
-                <p>
-                  Billing HT: {formatMoney(saved.totalHt, saved.currencyCode)}
-                </p>
-                <p>
-                  Allocated HT:{" "}
-                  {formatMoney(reconciliation.allocated, saved.currencyCode)}
-                </p>
-                <p>
-                  Project-level remainder:{" "}
-                  {formatMoney(reconciliation.remaining, saved.currencyCode)}
-                </p>
-              </div>
-            </section>
-          </>
-        )}
-      </form>
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        <article className="bg-card rounded-lg border p-4">
-          <h2 className="text-sm font-semibold">Notes</h2>
-          <p className="text-muted-foreground mt-3 text-sm whitespace-pre-wrap">
-            {saved.notes || "No notes."}
-          </p>
-          {document.paymentTermsRaw ? (
-            <p className="mt-3 border-t pt-3 text-xs">
-              <span className="font-medium">Payment terms:</span>{" "}
-              {document.paymentTermsRaw}
-            </p>
-          ) : null}
-        </article>
-        <article className="bg-card rounded-lg border p-4">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold">Import metadata</h2>
-            {canEdit ? (
-              <Link
-                className="text-primary text-xs underline"
-                href="/admin/activity?entityType=BILLING_DOCUMENT"
-              >
-                Activity history
-              </Link>
-            ) : null}
-          </div>
-          <div className="mt-3 space-y-2 text-xs">
-            {document.imports.map((item) => (
-              <p key={item.id}>
-                {formatTimestamp(item.processedAt)} ·{" "}
-                {item.action.toLowerCase()} · {item.originalFilename} ·{" "}
-                {item.extractionProvider}/{item.extractionModel} ·{" "}
-                {item.processedByName ?? "Historical user"}
-              </p>
-            ))}
-            {document.imports.length === 0 ? (
-              <p className="text-muted-foreground">No import metadata.</p>
-            ) : null}
-          </div>
-        </article>
-      </section>
-
-      <BillingScheduleManager canEdit={canEdit} document={document} />
+                      </thead>
+                      <tbody className="divide-y">
+                        {saved.allocations.map((allocation) => {
+                          const order = orderById.get(allocation.orderId);
+                          const financial = financialByOrder.get(
+                            allocation.orderId,
+                          );
+                          return (
+                            <tr key={allocation.orderId}>
+                              <td className="py-2">
+                                <Link
+                                  className="font-mono text-xs underline"
+                                  href={`/orders/${allocation.orderId}`}
+                                >
+                                  {order?.orderNumber ?? allocation.orderId}
+                                </Link>
+                              </td>
+                              <td>{order?.supplier.displayName ?? "—"}</td>
+                              <td className="financial-figure text-right">
+                                {formatMoney(
+                                  allocation.amount,
+                                  saved.currencyCode,
+                                )}
+                              </td>
+                              <td className="financial-figure text-right">
+                                {formatRate(
+                                  humanPercentageToFraction(
+                                    percentageFromAmount(
+                                      saved.totalHt,
+                                      allocation.amount,
+                                    ) ?? "",
+                                    { maximumPercent: "100" },
+                                  ),
+                                )}
+                              </td>
+                              <td className="financial-figure text-right">
+                                {formatMoney(
+                                  financial?.plannedSell ?? null,
+                                  financial?.reportingCurrencyCode ??
+                                    savedProject?.reportingCurrencyCode ??
+                                    document.project.reportingCurrencyCode,
+                                )}
+                              </td>
+                              <td className="financial-figure text-right">
+                                {formatRate(
+                                  financial?.actualMarkupRate ?? null,
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="bg-muted/30 mt-3 grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-3">
+                    <p>
+                      Billing HT:{" "}
+                      {formatMoney(saved.totalHt, saved.currencyCode)}
+                    </p>
+                    <p>
+                      Allocated HT:{" "}
+                      {formatMoney(
+                        reconciliation.allocated,
+                        saved.currencyCode,
+                      )}
+                    </p>
+                    <p>
+                      Project-level remainder:{" "}
+                      {formatMoney(
+                        reconciliation.remaining,
+                        saved.currencyCode,
+                      )}
+                    </p>
+                  </div>
+                </section>
+              ),
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }

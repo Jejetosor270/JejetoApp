@@ -1,11 +1,10 @@
 "use client";
 
-import { LogOut, ShieldCheck, Users } from "lucide-react";
+import { LogOut, ShieldCheck } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useTransition } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatRoleLabel } from "@/domain/presentation/labels";
 
@@ -26,32 +25,30 @@ function getInitials(name: string): string {
   return initials.toUpperCase() || "MB";
 }
 
-export function AccountControl({ user }: { user: AccountControlUser }) {
+export function AccountControl({
+  user,
+  collapsed = false,
+}: {
+  user: AccountControlUser;
+  collapsed?: boolean;
+}) {
   const [isPending, startTransition] = useTransition();
 
   return (
-    <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+    <div
+      className={`flex min-w-0 items-center gap-2 ${collapsed ? "flex-col" : "px-1"}`}
+    >
       <Avatar className="size-8 border">
         <AvatarFallback className="bg-card text-xs font-semibold">
           {getInitials(user.name)}
         </AvatarFallback>
       </Avatar>
-      <div className="hidden min-w-0 lg:block">
+      <div className={collapsed ? "sr-only" : "min-w-0 flex-1"}>
         <p className="truncate text-xs font-medium">{user.name}</p>
         <p className="text-muted-foreground truncate text-[0.6875rem]">
-          {user.email}
+          {formatRoleLabel(user.role)}
         </p>
       </div>
-      <Badge className="hidden sm:inline-flex" variant="outline">
-        {formatRoleLabel(user.role)}
-      </Badge>
-      {user.role === "ADMIN" ? (
-        <Button asChild size="icon-sm" variant="ghost">
-          <a aria-label="Manage employee accounts" href="/admin/users">
-            <Users aria-hidden="true" />
-          </a>
-        </Button>
-      ) : null}
       <Button
         aria-label="Log out"
         disabled={isPending}

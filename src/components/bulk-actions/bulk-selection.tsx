@@ -1,7 +1,8 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,11 +21,19 @@ import type { BulkActionState } from "@/domain/deletion/action-state";
 export type BulkServerAction = (formData: FormData) => Promise<BulkActionState>;
 
 export function useBulkSelection(rowIds: string[]) {
+  const search = useSearchParams();
+  const scope = `${search.toString()}:${rowIds.join(",")}`;
+  const [previousScope, setPreviousScope] = useState(scope);
   const [selection, setSelection] = useState<Set<string>>(() => new Set());
+  if (scope !== previousScope) {
+    setPreviousScope(scope);
+    setSelection(new Set());
+  }
   const selectedIds = rowIds.filter((id) => selection.has(id));
   const allSelected = rowIds.length > 0 && selectedIds.length === rowIds.length;
   return {
     allSelected,
+    someSelected: selectedIds.length > 0 && !allSelected,
     clear: () => setSelection(new Set()),
     isSelected: (id: string) => selection.has(id),
     selectedIds,
@@ -152,15 +161,23 @@ export function SelectionHeader({
   checked,
   disabled,
   onChange,
+  indeterminate = false,
 }: {
   checked: boolean;
   disabled: boolean;
   onChange: () => void;
+  indeterminate?: boolean;
 }) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
   return (
     <th className="w-10 px-3 py-3">
       <input
         aria-label="Select all visible rows"
+        ref={ref}
+        aria-checked={indeterminate ? "mixed" : checked}
         checked={checked}
         className="accent-primary size-4"
         disabled={disabled}

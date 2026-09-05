@@ -1,5 +1,9 @@
 "use client";
 
+import { SortHeader } from "@/components/listing/sort-header";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/master-data/form-ui";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
@@ -15,7 +19,6 @@ import {
 } from "@/components/bulk-actions/bulk-selection";
 import {
   InlineDateInput,
-  InlineEditActions,
   InlineMoneyInput,
   InlineTextInput,
 } from "@/components/inline-editing/inline-edit";
@@ -105,106 +108,139 @@ function InstallmentRow({
     });
   };
   return (
-    <tr className="align-top">
-      {canEdit ? (
+    <tr className="hover:bg-muted/40 align-top">
+      {canEdit && (
         <SelectionCell
           checked={isSelected}
-          label={`Supplier payment ${saved.label}`}
+          label={saved.label}
           onChange={onSelect}
         />
-      ) : null}
-      <td className="px-3 py-2">
-        {editing ? (
-          <InlineDateInput
-            ariaLabel={`Due date for ${saved.label}`}
-            onChange={(value) => set("dueDate", value)}
-            value={draft.dueDate}
-          />
-        ) : (
-          formatDateOnly(europeanInputToDateOnly(saved.dueDate))
-        )}
+      )}
+      <td className="px-3 py-3">
+        {formatDateOnly(europeanInputToDateOnly(saved.dueDate))}
       </td>
-      <td className="px-3 py-2">{formatDateOnly(installment.actualDate)}</td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-3">{formatDateOnly(installment.actualDate)}</td>
+      <td className="px-3 py-3">
         <Link
           className="font-medium hover:underline"
-          href={`/orders/${installment.orderId}#payments`}
+          href={`/orders/${installment.orderId}?tab=payments`}
         >
           {installment.projectName}
         </Link>
-        <p className="text-muted-foreground font-mono text-xs">
+        <p className="text-muted-foreground text-xs">
           {installment.orderNumber}
         </p>
       </td>
-      <td className="px-3 py-2">{installment.supplierName}</td>
-      <td className="px-3 py-2">
-        {editing ? (
-          <div className="grid gap-1">
-            <InlineTextInput
-              ariaLabel={`Installment label for ${installment.orderNumber}`}
-              onChange={(value) => set("label", value)}
-              value={draft.label}
-            />
-            <InlineTextInput
-              ariaLabel={`Notes for ${saved.label}`}
-              className="w-48"
-              onChange={(value) => set("notes", value)}
-              value={draft.notes}
-            />
-          </div>
-        ) : (
-          <>
-            {saved.label}
-            {saved.notes ? (
-              <p className="text-muted-foreground mt-0.5 max-w-48 truncate text-xs">
-                {saved.notes}
-              </p>
-            ) : null}
-          </>
-        )}
+      <td className="px-3 py-3">{installment.supplierName}</td>
+      <td className="px-3 py-3">
+        {saved.label}
+        <p className="text-muted-foreground max-w-48 truncate text-xs">
+          {saved.notes}
+        </p>
       </td>
-      <td className="financial-figure px-3 py-2 text-right">
-        {editing ? (
-          <InlineMoneyInput
-            ariaLabel={`Scheduled amount for ${saved.label}`}
-            onChange={(value) => set("scheduledAmount", value)}
-            value={draft.scheduledAmount}
-          />
-        ) : (
-          formatMoney(saved.scheduledAmount, installment.currencyCode)
-        )}
-      </td>
-      <td className="financial-figure px-3 py-2 text-right">
-        {formatMoney(installment.paidAmount, installment.currencyCode)}
-      </td>
-      <td className="financial-figure px-3 py-2 text-right">
-        {formatMoney(saved.outstandingAmount, installment.currencyCode)}
-      </td>
-      <td className="px-3 py-2">
+      {[
+        saved.scheduledAmount,
+        installment.paidAmount,
+        saved.outstandingAmount,
+      ].map((value, index) => (
+        <td key={index} className="financial-figure px-3 py-3 text-right">
+          {formatMoney(value, installment.currencyCode)}
+        </td>
+      ))}
+      <td className="px-3 py-3">
         <Badge variant={saved.status === "OVERDUE" ? "destructive" : "outline"}>
           {formatEnumLabel(saved.status)}
         </Badge>
       </td>
-      {canEdit ? (
-        <td className="px-3 py-2">
-          <InlineEditActions
-            editing={editing}
-            feedback={feedback}
-            onCancel={() => {
-              setDraft(saved);
-              setFeedback("");
-              setEditing(false);
-            }}
-            onEdit={() => {
+      {canEdit && (
+        <td className="px-3 py-3">
+          <Button
+            size="sm"
+            variant="outline"
+            type="button"
+            onClick={() => {
               setDraft(saved);
               setFeedback("");
               setEditing(true);
             }}
-            onSave={save}
-            pending={pending}
-          />
+          >
+            Edit
+          </Button>
+          {editing && (
+            <EditorDrawer
+              open
+              title="Edit Supplier installment"
+              onOpenChange={(open) => {
+                if (!open) {
+                  setDraft(saved);
+                  setFeedback("");
+                  setEditing(false);
+                }
+              }}
+            >
+              <form
+                className="space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  save();
+                }}
+              >
+                <p className="text-sm">
+                  {installment.orderNumber} · {installment.supplierName}
+                </p>
+                <p className="bg-muted rounded-md p-3 text-sm">
+                  Already paid:{" "}
+                  {formatMoney(
+                    installment.paidAmount,
+                    installment.currencyCode,
+                  )}
+                  . Recorded settlements keep their own dates and FX.
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Due date">
+                    <InlineDateInput
+                      ariaLabel="Due date"
+                      onChange={(value) => set("dueDate", value)}
+                      value={draft.dueDate}
+                    />
+                  </Field>
+                  <Field
+                    label={`Scheduled amount (${installment.currencyCode})`}
+                  >
+                    <InlineMoneyInput
+                      ariaLabel="Scheduled amount"
+                      onChange={(value) => set("scheduledAmount", value)}
+                      value={draft.scheduledAmount}
+                    />
+                  </Field>
+                  <Field label="Label">
+                    <InlineTextInput
+                      ariaLabel="Installment label"
+                      onChange={(value) => set("label", value)}
+                      value={draft.label}
+                    />
+                  </Field>
+                  <Field label="Notes">
+                    <InlineTextInput
+                      ariaLabel="Notes"
+                      onChange={(value) => set("notes", value)}
+                      value={draft.notes}
+                    />
+                  </Field>
+                </div>
+                <Button type="submit" disabled={pending}>
+                  {pending ? "Saving…" : "Save installment"}
+                </Button>
+                {feedback && (
+                  <p role="alert" className="text-destructive text-sm">
+                    {feedback}
+                  </p>
+                )}
+              </form>
+            </EditorDrawer>
+          )}
         </td>
-      ) : null}
+      )}
     </tr>
   );
 }
@@ -232,23 +268,41 @@ export function PaymentInstallmentTable({
           selectedIds={selection.selectedIds}
         />
       ) : null}
-      <div className="overflow-x-auto">
+      <div
+        className="max-h-[70svh] overflow-auto"
+        role="region"
+        aria-label="Supplier Payments table"
+        tabIndex={0}
+      >
         <table className="w-full min-w-[76rem] text-left text-sm">
           <thead className={tableHeaderClassName}>
             <tr>
               {canEdit ? (
                 <SelectionHeader
                   checked={selection.allSelected}
+                  indeterminate={selection.someSelected}
                   disabled={installments.length === 0}
                   onChange={selection.toggleAll}
                 />
               ) : null}
-              <th className="px-3 py-2">Due</th>
+              <SortHeader
+                className="px-3 py-2"
+                label="Due"
+                field="dueDate"
+                defaultSort="dueDate"
+                directionKey="sortDirection"
+              />
               <th className="px-3 py-2">Actual</th>
               <th className="px-3 py-2">Project / Supplier Order</th>
               <th className="px-3 py-2">Supplier</th>
               <th className="px-3 py-2">Installment / notes</th>
-              <th className="px-3 py-2 text-right">Scheduled</th>
+              <SortHeader
+                className="px-3 py-2 text-right"
+                label="Scheduled"
+                field="amount"
+                defaultSort="dueDate"
+                directionKey="sortDirection"
+              />
               <th className="px-3 py-2 text-right">Paid</th>
               <th className="px-3 py-2 text-right">Outstanding</th>
               <th className="px-3 py-2">Status</th>

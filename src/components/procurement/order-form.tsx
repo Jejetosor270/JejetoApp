@@ -739,7 +739,7 @@ export function OrderForm({
       </div>
       <form action={action} className="space-y-5" ref={formRef}>
         {order ? <input name="id" type="hidden" value={order.id} /> : null}
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-2">
           <Field error={fieldErrors.orderNumber} label="Internal reference">
             <input
               aria-invalid={Boolean(fieldErrors.orderNumber) || undefined}
@@ -1093,7 +1093,7 @@ export function OrderForm({
                 editing; read-only values are formatted.
               </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
               <Field
                 error={fieldErrors.purchaseCost}
                 label="Product / supplier cost HT"
@@ -1471,7 +1471,7 @@ export function OrderForm({
           <summary className="cursor-pointer text-sm font-semibold">
             Commercial pricing
           </summary>
-          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-2">
             <Field error={fieldErrors.pricingMode} label="Pricing method">
               <select
                 aria-invalid={Boolean(fieldErrors.pricingMode) || undefined}
@@ -1733,7 +1733,7 @@ export function OrderForm({
               same Project. You can also reconcile it later from either detail
               page.
             </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
               <Field label="Client Billing Event">
                 <select
                   className={inputClassName}
@@ -1828,7 +1828,7 @@ export function OrderForm({
                       value={billingAllocatedAmount}
                     />
                   </Field>
-                  <div className="bg-background grid gap-2 rounded-md border p-3 text-xs sm:col-span-2 sm:grid-cols-4 xl:col-span-4">
+                  <div className="bg-background grid gap-2 rounded-md border p-3 text-xs sm:col-span-2 sm:grid-cols-4 xl:col-span-2">
                     <p>
                       Supplier Order Sell HT:{" "}
                       {formatMoney(
@@ -1858,7 +1858,7 @@ export function OrderForm({
                       )}
                     </p>
                   </div>
-                  <label className="flex items-center gap-2 text-xs sm:col-span-2 xl:col-span-4">
+                  <label className="flex items-center gap-2 text-xs sm:col-span-2 xl:col-span-2">
                     <input
                       checked={billingRemainderApproved}
                       name="billingRemainderApproved"

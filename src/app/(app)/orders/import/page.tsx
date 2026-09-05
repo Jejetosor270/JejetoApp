@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/layout/page-header";
 import type { Metadata } from "next";
 
 import { QuoteIntake } from "@/components/quote-intake/quote-intake";
@@ -13,18 +14,15 @@ export default async function SupplierQuoteImportPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-          Procurement · AI-assisted intake
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          Import Supplier document
-        </h1>
-        <p className="text-muted-foreground mt-2 max-w-3xl text-sm">
-          Select the Project first, upload one Supplier quote or invoice, then
-          review every extracted value before anything is written to the ERP.
-        </p>
-      </header>
+      <PageHeader
+        title="Import Supplier document"
+        description={
+          <>
+            Select the Project first, upload one Supplier quote or invoice, then
+            review every extracted value before anything is written to the ERP.
+          </>
+        }
+      />
       <QuoteIntake options={options} />
     </div>
   );

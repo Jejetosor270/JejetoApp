@@ -36,6 +36,9 @@ describe("Funding Coverage presentation", () => {
     expect(portfolio).toContain("Projects with Funding Gap");
     expect(portfolio).toContain("Excess Billing Coverage");
     expect(portfolio).toContain("Funding Gap");
-    expect(portfolio).toContain(">Funding Coverage<");
+    expect(portfolio).toContain('"Funding Coverage HT"');
+    expect(portfolio).toContain('view === "funding"');
+    expect(portfolio).toContain("project.fundingCoverage.fundingCoverageHt");
+    expect(portfolio).toContain("formatSignedMoney");
   });
 });

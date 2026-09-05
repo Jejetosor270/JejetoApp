@@ -77,7 +77,7 @@ export function ItemForm({
   return (
     <ItemActionForm action={action} className="space-y-5 rounded-lg border p-4">
       {item ? <input name="id" type="hidden" value={item.id} /> : null}
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-2">
         <Field label="Project *">
           <select
             className={input}
@@ -442,7 +442,7 @@ export function ItemForm({
         <summary className="cursor-pointer text-sm font-medium">
           Physical, logistics and claim details
         </summary>
-        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-2">
           {(
             ["weightEach", "totalWeight", "volumeEach", "totalVolume"] as const
           ).map((key) => (

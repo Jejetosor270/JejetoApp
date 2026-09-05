@@ -1,9 +1,12 @@
 "use client";
+import { ListEmptyState } from "@/components/listing/empty-state";
 
-import { Pencil, Plus } from "lucide-react";
+import { SortHeader } from "@/components/listing/sort-header";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
 import {
   createClientAction,
@@ -16,12 +19,7 @@ import {
   SelectionHeader,
   useBulkSelection,
 } from "@/components/bulk-actions/bulk-selection";
-import {
-  InlineCheckbox,
-  InlineEditActions,
-  InlineSelect,
-  InlineTextInput,
-} from "@/components/inline-editing/inline-edit";
+
 import { initialMasterDataActionState } from "@/components/master-data/action-state";
 import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import {
@@ -179,29 +177,36 @@ function ClientFields({
   );
 }
 
-function CreateClientForm({ currencies }: { currencies: CurrencyOption[] }) {
+export function CreateClientForm({
+  currencies,
+}: {
+  currencies: CurrencyOption[];
+}) {
   const { state, onSubmit, pending } = usePersistentActionState(
     createClientAction,
     initialMasterDataActionState,
   );
   return (
-    <details className="bg-card rounded-lg border">
-      <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold">
-        <span className="inline-flex items-center gap-2">
-          <Plus className="size-4" /> Add client
-        </span>
-      </summary>
+    <EditorDrawer
+      title="Add client"
+      trigger={
+        <Button type="button">
+          <Plus data-icon="inline-start" />
+          Add client
+        </Button>
+      }
+    >
       <form
         onSubmit={onSubmit}
-        className="grid gap-3 border-t p-4 md:grid-cols-2 xl:grid-cols-4"
+        className="grid gap-3 border-t p-4 md:grid-cols-2"
       >
         <ClientFields currencies={currencies} />
-        <div className="flex items-end gap-3 md:col-span-2 xl:col-span-4">
+        <div className="flex items-end gap-3 md:col-span-2">
           <SubmitButton pending={pending}>Create client</SubmitButton>
           <ActionFeedback state={state} />
         </div>
       </form>
-    </details>
+    </EditorDrawer>
   );
 }
 
@@ -228,10 +233,7 @@ function EditClientForm({
           </Button>
         ) : null}
       </div>
-      <form
-        onSubmit={onSubmit}
-        className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
-      >
+      <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-2">
         <input name="id" type="hidden" value={client.id} />
         <ClientFields client={client} currencies={currencies} />
         <label className="flex h-9 items-center gap-2 self-end text-sm font-medium">
@@ -243,7 +245,7 @@ function EditClientForm({
           />
           Client active
         </label>
-        <div className="flex items-end gap-3 md:col-span-2 xl:col-span-4">
+        <div className="flex items-end gap-3 md:col-span-2">
           <SubmitButton pending={pending}>Save changes</SubmitButton>
           <ActionFeedback state={state} />
         </div>
@@ -266,171 +268,52 @@ function ClientInlineRow({
   onSelect: () => void;
 }) {
   const router = useRouter();
-  const initial = () => ({
-    countryCode: client.countryCode ?? "",
-    displayName: client.displayName,
-    isActive: client.isActive,
-    legalName: client.legalName,
-  });
-  const [saved, setSaved] = useState(initial);
-  const [draft, setDraft] = useState(initial);
-  const [editing, setEditing] = useState(false);
-  const [feedback, setFeedback] = useState("");
-  const [pending, startTransition] = useTransition();
-  const save = () => {
-    const data = new FormData();
-    Object.entries({
-      billingAddressLine1: client.billingAddressLine1 ?? "",
-      billingAddressLine2: client.billingAddressLine2 ?? "",
-      billingCity: client.billingCity ?? "",
-      billingPostalCode: client.billingPostalCode ?? "",
-      contactName: client.contactName ?? "",
-      countryCode: draft.countryCode,
-      defaultCurrencyCode: client.defaultCurrencyCode,
-      displayName: draft.displayName,
-      email: client.email ?? "",
-      id: client.id,
-      legalName: draft.legalName,
-      notes: client.notes ?? "",
-      phone: client.phone ?? "",
-      vatNumber: client.vatNumber ?? "",
-    }).forEach(([key, value]) => data.set(key, value));
-    if (draft.isActive) data.set("isActive", "on");
-    startTransition(async () => {
-      const result = await updateClientAction(
-        initialMasterDataActionState,
-        data,
-      );
-      setFeedback(result.message ?? "");
-      if (result.status === "success") {
-        setSaved(draft);
-        setEditing(false);
-      }
-    });
-  };
   return (
     <tr
       className="hover:bg-muted/25 cursor-pointer align-top"
       onClick={(event) => {
-        if ((event.target as HTMLElement).closest("a,button,input,select"))
+        if (
+          (event.target as HTMLElement).closest(
+            "a,button,input,select,textarea",
+          )
+        )
           return;
         router.push(`/clients/${client.id}`);
       }}
-      onKeyDown={(event) => {
-        if (
-          event.key === "Enter" &&
-          !(event.target as HTMLElement).closest("a,button,input,select")
-        )
-          router.push(`/clients/${client.id}`);
-      }}
-      tabIndex={0}
     >
       {canEdit ? (
         <SelectionCell
           checked={isSelected}
-          label={`Client ${saved.displayName}`}
+          label={client.displayName}
           onChange={onSelect}
         />
       ) : null}
-      <td className="px-4 py-3 font-medium">
-        {editing ? (
-          <InlineTextInput
-            ariaLabel="Client display name"
-            onChange={(value) =>
-              setDraft((current) => ({ ...current, displayName: value }))
-            }
-            value={draft.displayName}
-          />
-        ) : (
-          <Link
-            className="hover:text-primary hover:underline"
-            href={`/clients/${client.id}`}
-          >
-            {saved.displayName}
-          </Link>
-        )}
+      <td className="px-4 py-3">
+        <Link
+          className="font-medium hover:underline"
+          href={`/clients/${client.id}`}
+        >
+          {client.displayName}
+        </Link>
+        <span className="text-muted-foreground mt-1 block text-xs">
+          {client.legalName}
+        </span>
       </td>
-      <td className="text-muted-foreground px-4 py-3">
-        {editing ? (
-          <InlineTextInput
-            ariaLabel="Client legal name"
-            onChange={(value) =>
-              setDraft((current) => ({ ...current, legalName: value }))
-            }
-            value={draft.legalName}
-          />
-        ) : (
-          saved.legalName
-        )}
+      <td className="px-4 py-3">{countryLabel(client.countryCode)}</td>
+      <td className="px-4 py-3">
+        {client.contactName ?? "—"}
+        <span className="text-muted-foreground mt-1 block text-xs">
+          {client.email ?? client.phone ?? ""}
+        </span>
       </td>
       <td className="px-4 py-3">
-        {editing ? (
-          <InlineSelect
-            ariaLabel="Client country"
-            onChange={(value) =>
-              setDraft((current) => ({ ...current, countryCode: value }))
-            }
-            value={draft.countryCode}
-          >
-            <option value="">Not specified</option>
-            {countries.map((country) => (
-              <option key={country.code} value={country.code}>
-                {country.label}
-              </option>
-            ))}
-          </InlineSelect>
-        ) : (
-          countryLabel(saved.countryCode)
-        )}
-      </td>
-      <td className="px-4 py-3">{client.vatNumber ?? "—"}</td>
-      <td className="px-4 py-3 font-mono">{client.defaultCurrencyCode}</td>
-      <td className="px-4 py-3">{client.contactName ?? "—"}</td>
-      <td className="px-4 py-3">
-        {editing ? (
-          <InlineCheckbox
-            ariaLabel="Client active"
-            checked={draft.isActive}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                isActive: event.target.checked,
-              }))
-            }
-          />
-        ) : (
-          <StatusBadge active={saved.isActive} />
-        )}
+        <StatusBadge active={client.isActive} />
       </td>
       {canEdit ? (
         <td className="px-4 py-3 text-right">
-          <InlineEditActions
-            editing={editing}
-            feedback={feedback}
-            onCancel={() => {
-              setDraft(saved);
-              setFeedback("");
-              setEditing(false);
-            }}
-            onEdit={() => {
-              setDraft(saved);
-              setFeedback("");
-              setEditing(true);
-            }}
-            onSave={save}
-            pending={pending}
-          />
-          {!editing ? (
-            <Button
-              className="mt-1"
-              onClick={onFullEdit}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              <Pencil data-icon="inline-start" /> Full details
-            </Button>
-          ) : null}
+          <Button onClick={onFullEdit} size="sm" variant="outline">
+            Edit
+          </Button>
         </td>
       ) : null}
     </tr>
@@ -446,9 +329,50 @@ export function ClientDetailEditor({
   client: ClientView;
   currencies: CurrencyOption[];
 }) {
-  return canEdit ? (
-    <EditClientForm client={client} currencies={currencies} />
-  ) : null;
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold">Contact & company details</h2>
+        {canEdit ? (
+          <EditorDrawer title="Edit client">
+            <EditClientForm client={client} currencies={currencies} />
+          </EditorDrawer>
+        ) : null}
+      </div>
+      <dl className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        {[
+          ["Legal name", client.legalName],
+          ["Country", countryLabel(client.countryCode)],
+          ["VAT number", client.vatNumber],
+          ["Default currency", client.defaultCurrencyCode],
+          ["Contact", client.contactName],
+          ["Email", client.email],
+          ["Phone", client.phone],
+          [
+            "Billing address",
+            [
+              client.billingAddressLine1,
+              client.billingAddressLine2,
+              client.billingPostalCode,
+              client.billingCity,
+            ]
+              .filter(Boolean)
+              .join(", "),
+          ],
+        ].map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-muted-foreground text-xs">{label}</dt>
+            <dd className="mt-1">{value || "—"}</dd>
+          </div>
+        ))}
+      </dl>
+      {client.notes && (
+        <p className="text-muted-foreground border-t pt-4 text-sm whitespace-pre-wrap">
+          {client.notes}
+        </p>
+      )}
+    </section>
+  );
 }
 
 export function ClientManagement({
@@ -467,69 +391,77 @@ export function ClientManagement({
     .reduce((total, client) => total + client._count.projects, 0);
   return (
     <div className="space-y-5">
-      {canEdit ? <CreateClientForm currencies={currencies} /> : null}
       {editing ? (
-        <EditClientForm
-          client={editing}
-          currencies={currencies}
-          onClose={() => setEditing(null)}
-        />
-      ) : (
-        <section className="bg-card overflow-hidden rounded-lg border">
-          {canEdit ? (
-            <BulkActionBar
-              action={deleteSelectedClientsAction}
-              clearSelection={selection.clear}
-              entityName="Client"
-              impactSummary={`${affectedProjectCount} Project${affectedProjectCount === 1 ? "" : "s"} and the complete downstream hierarchy will also be deleted.`}
-              scope="Deleting the selected Clients will also permanently delete their Projects, Buildings, Supplier Orders, payments, settlements, quote-import history, and financial records. Suppliers are preserved."
-              selectedIds={selection.selectedIds}
-            />
-          ) : null}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[48rem] text-left text-sm">
-              <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
-                <tr>
-                  {canEdit ? (
-                    <SelectionHeader
-                      checked={selection.allSelected}
-                      disabled={clients.length === 0}
-                      onChange={selection.toggleAll}
-                    />
-                  ) : null}
-                  <th className="px-4 py-3">Display name</th>
-                  <th className="px-4 py-3">Legal name</th>
-                  <th className="px-4 py-3">Country</th>
-                  <th className="px-4 py-3">VAT</th>
-                  <th className="px-4 py-3">Currency</th>
-                  <th className="px-4 py-3">Contact</th>
-                  <th className="px-4 py-3">Status</th>
-                  {canEdit ? (
-                    <th className="px-4 py-3 text-right">Edit</th>
-                  ) : null}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {clients.map((client) => (
-                  <ClientInlineRow
-                    canEdit={canEdit}
-                    client={client}
-                    isSelected={selection.isSelected(client.id)}
-                    key={client.id}
-                    onFullEdit={() => setEditing(client)}
-                    onSelect={() => selection.toggle(client.id)}
+        <EditorDrawer
+          open
+          title="Edit client"
+          onOpenChange={(open) => {
+            if (!open) setEditing(null);
+          }}
+        >
+          <EditClientForm client={editing} currencies={currencies} />
+        </EditorDrawer>
+      ) : null}
+      <section className="bg-card overflow-hidden rounded-lg border">
+        {canEdit ? (
+          <BulkActionBar
+            action={deleteSelectedClientsAction}
+            clearSelection={selection.clear}
+            entityName="Client"
+            impactSummary={`${affectedProjectCount} Project${affectedProjectCount === 1 ? "" : "s"} and the complete downstream hierarchy will also be deleted.`}
+            scope="Deleting the selected Clients will also permanently delete their Projects, Buildings, Supplier Orders, payments, settlements, quote-import history, and financial records. Suppliers are preserved."
+            selectedIds={selection.selectedIds}
+          />
+        ) : null}
+        <div
+          className="max-h-[70svh] overflow-auto"
+          role="region"
+          aria-label="Clients table"
+          tabIndex={0}
+        >
+          <table className="w-full min-w-[40rem] text-left text-sm">
+            <thead className="bg-muted text-muted-foreground sticky top-0 z-10 border-b text-xs">
+              <tr>
+                {canEdit ? (
+                  <SelectionHeader
+                    checked={selection.allSelected}
+                    indeterminate={selection.someSelected}
+                    disabled={clients.length === 0}
+                    onChange={selection.toggleAll}
                   />
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {clients.length === 0 ? (
-            <p className="text-muted-foreground px-4 py-8 text-sm">
-              No clients yet.
-            </p>
-          ) : null}
-        </section>
-      )}
+                ) : null}
+                <SortHeader
+                  className="px-4 py-3"
+                  label="Display name"
+                  field="name"
+                  defaultSort="name"
+                />
+
+                <th className="px-4 py-3">Country</th>
+
+                <th className="px-4 py-3">Contact</th>
+                <th className="px-4 py-3">Status</th>
+                {canEdit ? (
+                  <th className="px-4 py-3 text-right">Edit</th>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {clients.map((client) => (
+                <ClientInlineRow
+                  canEdit={canEdit}
+                  client={client}
+                  isSelected={selection.isSelected(client.id)}
+                  key={client.id}
+                  onFullEdit={() => setEditing(client)}
+                  onSelect={() => selection.toggle(client.id)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {clients.length === 0 ? <ListEmptyState entity="Clients" /> : null}
+      </section>
     </div>
   );
 }

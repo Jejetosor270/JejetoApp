@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/layout/page-header";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Search } from "lucide-react";
@@ -20,14 +21,7 @@ export default async function SearchPage({
   const results = parsed.success ? await globalSearch(parsed.data) : [];
   return (
     <div className="space-y-6">
-      <header>
-        <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-          Workspace
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          Global search
-        </h1>
-      </header>
+      <PageHeader title="Global search" />
       <form className="flex max-w-2xl gap-2">
         <input
           aria-label="Search the ERP"

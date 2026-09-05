@@ -1,9 +1,12 @@
 "use client";
+import { ListEmptyState } from "@/components/listing/empty-state";
 
-import { Pencil, Plus } from "lucide-react";
+import { SortHeader } from "@/components/listing/sort-header";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
 import {
   createSupplierAction,
@@ -16,12 +19,7 @@ import {
   SelectionHeader,
   useBulkSelection,
 } from "@/components/bulk-actions/bulk-selection";
-import {
-  InlineCheckbox,
-  InlineEditActions,
-  InlineSelect,
-  InlineTextInput,
-} from "@/components/inline-editing/inline-edit";
+
 import { initialMasterDataActionState } from "@/components/master-data/action-state";
 import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import {
@@ -208,29 +206,36 @@ function SupplierFields({
   );
 }
 
-function CreateSupplierForm({ currencies }: { currencies: CurrencyOption[] }) {
+export function CreateSupplierForm({
+  currencies,
+}: {
+  currencies: CurrencyOption[];
+}) {
   const { state, onSubmit, pending } = usePersistentActionState(
     createSupplierAction,
     initialMasterDataActionState,
   );
   return (
-    <details className="bg-card rounded-lg border">
-      <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold">
-        <span className="inline-flex items-center gap-2">
-          <Plus className="size-4" /> Add supplier
-        </span>
-      </summary>
+    <EditorDrawer
+      title="Add supplier"
+      trigger={
+        <Button type="button">
+          <Plus data-icon="inline-start" />
+          Add supplier
+        </Button>
+      }
+    >
       <form
         onSubmit={onSubmit}
-        className="grid gap-3 border-t p-4 md:grid-cols-2 xl:grid-cols-4"
+        className="grid gap-3 border-t p-4 md:grid-cols-2"
       >
         <SupplierFields currencies={currencies} />
-        <div className="flex items-end gap-3 md:col-span-2 xl:col-span-4">
+        <div className="flex items-end gap-3 md:col-span-2">
           <SubmitButton pending={pending}>Create supplier</SubmitButton>
           <ActionFeedback state={state} />
         </div>
       </form>
-    </details>
+    </EditorDrawer>
   );
 }
 function EditSupplierForm({
@@ -256,10 +261,7 @@ function EditSupplierForm({
           </Button>
         ) : null}
       </div>
-      <form
-        onSubmit={onSubmit}
-        className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
-      >
+      <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-2">
         <input name="id" type="hidden" value={supplier.id} />
         <SupplierFields currencies={currencies} supplier={supplier} />
         <label className="flex h-9 items-center gap-2 self-end text-sm font-medium">
@@ -271,7 +273,7 @@ function EditSupplierForm({
           />
           Supplier active
         </label>
-        <div className="flex items-end gap-3 md:col-span-2 xl:col-span-4">
+        <div className="flex items-end gap-3 md:col-span-2">
           <SubmitButton pending={pending}>Save changes</SubmitButton>
           <ActionFeedback state={state} />
         </div>
@@ -282,213 +284,64 @@ function EditSupplierForm({
 
 function SupplierInlineRow({
   canEdit,
-  currencies,
   isSelected,
   onFullEdit,
   onSelect,
   supplier,
 }: {
   canEdit: boolean;
-  currencies: CurrencyOption[];
   isSelected: boolean;
   onFullEdit: () => void;
   onSelect: () => void;
   supplier: SupplierView;
 }) {
   const router = useRouter();
-  const initial = () => ({
-    countryCode: supplier.countryCode ?? "",
-    defaultCurrencyCode: supplier.defaultCurrencyCode,
-    displayName: supplier.displayName,
-    isActive: supplier.isActive,
-    legalName: supplier.legalName,
-    vatNumber: supplier.vatNumber ?? "",
-  });
-  const [saved, setSaved] = useState(initial);
-  const [draft, setDraft] = useState(initial);
-  const [editing, setEditing] = useState(false);
-  const [feedback, setFeedback] = useState("");
-  const [pending, startTransition] = useTransition();
-  const set = (field: keyof typeof draft, value: string | boolean) =>
-    setDraft((current) => ({ ...current, [field]: value }));
-  const save = () => {
-    const data = new FormData();
-    Object.entries({
-      addressLine1: supplier.addressLine1 ?? "",
-      addressLine2: supplier.addressLine2 ?? "",
-      city: supplier.city ?? "",
-      contactName: supplier.contactName ?? "",
-      countryCode: draft.countryCode,
-      defaultCurrencyCode: draft.defaultCurrencyCode,
-      defaultLeadTimeWeeks: supplier.defaultLeadTimeWeeks?.toString() ?? "",
-      defaultPaymentTermsDays:
-        supplier.defaultPaymentTermsDays?.toString() ?? "",
-      defaultPaymentTermsNotes: supplier.defaultPaymentTermsNotes ?? "",
-      displayName: draft.displayName,
-      email: supplier.email ?? "",
-      id: supplier.id,
-      legalName: draft.legalName,
-      notes: supplier.notes ?? "",
-      phone: supplier.phone ?? "",
-      postalCode: supplier.postalCode ?? "",
-      vatNumber: draft.vatNumber,
-    }).forEach(([key, value]) => data.set(key, value));
-    if (draft.isActive) data.set("isActive", "on");
-    startTransition(async () => {
-      const result = await updateSupplierAction(
-        initialMasterDataActionState,
-        data,
-      );
-      setFeedback(result.message ?? "");
-      if (result.status === "success") {
-        setSaved(draft);
-        setEditing(false);
-      }
-    });
-  };
   return (
     <tr
       className="hover:bg-muted/25 cursor-pointer align-top"
       onClick={(event) => {
-        if ((event.target as HTMLElement).closest("a,button,input,select"))
+        if (
+          (event.target as HTMLElement).closest(
+            "a,button,input,select,textarea",
+          )
+        )
           return;
         router.push(`/suppliers/${supplier.id}`);
       }}
-      onKeyDown={(event) => {
-        if (
-          event.key === "Enter" &&
-          !(event.target as HTMLElement).closest("a,button,input,select")
-        )
-          router.push(`/suppliers/${supplier.id}`);
-      }}
-      tabIndex={0}
     >
       {canEdit ? (
         <SelectionCell
           checked={isSelected}
-          label={`Supplier ${saved.displayName}`}
+          label={supplier.displayName}
           onChange={onSelect}
         />
       ) : null}
-      <td className="px-4 py-3 font-medium">
-        {editing ? (
-          <InlineTextInput
-            ariaLabel="Supplier display name"
-            onChange={(value) => set("displayName", value)}
-            value={draft.displayName}
-          />
-        ) : (
-          <Link
-            className="hover:text-primary hover:underline"
-            href={`/suppliers/${supplier.id}`}
-          >
-            {saved.displayName}
-          </Link>
-        )}
+      <td className="px-4 py-3">
+        <Link
+          className="font-medium hover:underline"
+          href={`/suppliers/${supplier.id}`}
+        >
+          {supplier.displayName}
+        </Link>
+        <span className="text-muted-foreground mt-1 block text-xs">
+          {supplier.legalName}
+        </span>
       </td>
-      <td className="text-muted-foreground px-4 py-3">
-        {editing ? (
-          <InlineTextInput
-            ariaLabel="Supplier legal name"
-            onChange={(value) => set("legalName", value)}
-            value={draft.legalName}
-          />
-        ) : (
-          saved.legalName
-        )}
+      <td className="px-4 py-3">{countryLabel(supplier.countryCode)}</td>
+      <td className="px-4 py-3">
+        {supplier.contactName ?? "—"}
+        <span className="text-muted-foreground mt-1 block text-xs">
+          {supplier.email ?? supplier.phone ?? ""}
+        </span>
       </td>
       <td className="px-4 py-3">
-        {editing ? (
-          <InlineSelect
-            ariaLabel="Supplier country"
-            onChange={(value) => set("countryCode", value)}
-            value={draft.countryCode}
-          >
-            <option value="">Not specified</option>
-            {countries.map((country) => (
-              <option key={country.code} value={country.code}>
-                {country.label}
-              </option>
-            ))}
-          </InlineSelect>
-        ) : (
-          countryLabel(saved.countryCode)
-        )}
-      </td>
-      <td className="px-4 py-3">
-        {editing ? (
-          <InlineTextInput
-            ariaLabel="Supplier VAT number"
-            onChange={(value) => set("vatNumber", value)}
-            value={draft.vatNumber}
-          />
-        ) : (
-          saved.vatNumber || "—"
-        )}
-      </td>
-      <td className="px-4 py-3 font-mono">
-        {editing ? (
-          <InlineSelect
-            ariaLabel="Supplier default currency"
-            onChange={(value) => set("defaultCurrencyCode", value)}
-            value={draft.defaultCurrencyCode}
-          >
-            {currencies.map((currency) => (
-              <option key={currency.code} value={currency.code}>
-                {currency.code}
-              </option>
-            ))}
-          </InlineSelect>
-        ) : (
-          saved.defaultCurrencyCode
-        )}
-      </td>
-      <td className="px-4 py-3">
-        {supplier.defaultLeadTimeWeeks === null
-          ? "—"
-          : `${supplier.defaultLeadTimeWeeks} weeks`}
-      </td>
-      <td className="px-4 py-3">{supplier.contactName ?? "—"}</td>
-      <td className="px-4 py-3">
-        {editing ? (
-          <InlineCheckbox
-            ariaLabel="Supplier active"
-            checked={draft.isActive}
-            onChange={(event) => set("isActive", event.target.checked)}
-          />
-        ) : (
-          <StatusBadge active={saved.isActive} />
-        )}
+        <StatusBadge active={supplier.isActive} />
       </td>
       {canEdit ? (
         <td className="px-4 py-3 text-right">
-          <InlineEditActions
-            editing={editing}
-            feedback={feedback}
-            onCancel={() => {
-              setDraft(saved);
-              setFeedback("");
-              setEditing(false);
-            }}
-            onEdit={() => {
-              setDraft(saved);
-              setFeedback("");
-              setEditing(true);
-            }}
-            onSave={save}
-            pending={pending}
-          />
-          {!editing ? (
-            <Button
-              className="mt-1"
-              onClick={onFullEdit}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              <Pencil data-icon="inline-start" /> Full details
-            </Button>
-          ) : null}
+          <Button onClick={onFullEdit} size="sm" variant="outline">
+            Edit
+          </Button>
         </td>
       ) : null}
     </tr>
@@ -504,9 +357,56 @@ export function SupplierDetailEditor({
   currencies: CurrencyOption[];
   supplier: SupplierView;
 }) {
-  return canEdit ? (
-    <EditSupplierForm currencies={currencies} supplier={supplier} />
-  ) : null;
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold">Contact & company details</h2>
+        {canEdit ? (
+          <EditorDrawer title="Edit supplier">
+            <EditSupplierForm currencies={currencies} supplier={supplier} />
+          </EditorDrawer>
+        ) : null}
+      </div>
+      <dl className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        {[
+          ["Legal name", supplier.legalName],
+          ["Country", countryLabel(supplier.countryCode)],
+          ["VAT number", supplier.vatNumber],
+          ["Default currency", supplier.defaultCurrencyCode],
+          ["Contact", supplier.contactName],
+          ["Email", supplier.email],
+          ["Phone", supplier.phone],
+          [
+            "Address",
+            [
+              supplier.addressLine1,
+              supplier.addressLine2,
+              supplier.postalCode,
+              supplier.city,
+            ]
+              .filter(Boolean)
+              .join(", "),
+          ],
+          [
+            "Default lead time",
+            supplier.defaultLeadTimeWeeks === null
+              ? null
+              : `${supplier.defaultLeadTimeWeeks} weeks`,
+          ],
+        ].map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-muted-foreground text-xs">{label}</dt>
+            <dd className="mt-1">{value || "—"}</dd>
+          </div>
+        ))}
+      </dl>
+      {supplier.notes && (
+        <p className="text-muted-foreground border-t pt-4 text-sm whitespace-pre-wrap">
+          {supplier.notes}
+        </p>
+      )}
+    </section>
+  );
 }
 
 export function SupplierManagement({
@@ -525,71 +425,77 @@ export function SupplierManagement({
     .reduce((total, supplier) => total + supplier._count.orders, 0);
   return (
     <div className="space-y-5">
-      {canEdit ? <CreateSupplierForm currencies={currencies} /> : null}
       {editing ? (
-        <EditSupplierForm
-          currencies={currencies}
-          onClose={() => setEditing(null)}
-          supplier={editing}
-        />
-      ) : (
-        <section className="bg-card overflow-hidden rounded-lg border">
-          {canEdit ? (
-            <BulkActionBar
-              action={deleteSelectedSuppliersAction}
-              clearSelection={selection.clear}
-              entityName="Supplier"
-              impactSummary={`${affectedOrderCount} Supplier Order${affectedOrderCount === 1 ? "" : "s"} and all downstream records will also be deleted.`}
-              scope="Deleting the selected Suppliers will also permanently delete their Supplier Orders, payments, settlements, quote-import history, financial records, and Building links. Projects and Clients are preserved."
-              selectedIds={selection.selectedIds}
-            />
-          ) : null}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[55rem] text-left text-sm">
-              <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
-                <tr>
-                  {canEdit ? (
-                    <SelectionHeader
-                      checked={selection.allSelected}
-                      disabled={suppliers.length === 0}
-                      onChange={selection.toggleAll}
-                    />
-                  ) : null}
-                  <th className="px-4 py-3">Display name</th>
-                  <th className="px-4 py-3">Legal name</th>
-                  <th className="px-4 py-3">Country</th>
-                  <th className="px-4 py-3">VAT</th>
-                  <th className="px-4 py-3">Currency</th>
-                  <th className="px-4 py-3">Lead time</th>
-                  <th className="px-4 py-3">Contact</th>
-                  <th className="px-4 py-3">Status</th>
-                  {canEdit ? (
-                    <th className="px-4 py-3 text-right">Edit</th>
-                  ) : null}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {suppliers.map((supplier) => (
-                  <SupplierInlineRow
-                    canEdit={canEdit}
-                    currencies={currencies}
-                    isSelected={selection.isSelected(supplier.id)}
-                    key={supplier.id}
-                    onFullEdit={() => setEditing(supplier)}
-                    onSelect={() => selection.toggle(supplier.id)}
-                    supplier={supplier}
+        <EditorDrawer
+          open
+          title="Edit supplier"
+          onOpenChange={(open) => {
+            if (!open) setEditing(null);
+          }}
+        >
+          <EditSupplierForm currencies={currencies} supplier={editing} />
+        </EditorDrawer>
+      ) : null}
+      <section className="bg-card overflow-hidden rounded-lg border">
+        {canEdit ? (
+          <BulkActionBar
+            action={deleteSelectedSuppliersAction}
+            clearSelection={selection.clear}
+            entityName="Supplier"
+            impactSummary={`${affectedOrderCount} Supplier Order${affectedOrderCount === 1 ? "" : "s"} and all downstream records will also be deleted.`}
+            scope="Deleting the selected Suppliers will also permanently delete their Supplier Orders, payments, settlements, quote-import history, financial records, and Building links. Projects and Clients are preserved."
+            selectedIds={selection.selectedIds}
+          />
+        ) : null}
+        <div
+          className="max-h-[70svh] overflow-auto"
+          role="region"
+          aria-label="Suppliers table"
+          tabIndex={0}
+        >
+          <table className="w-full min-w-[40rem] text-left text-sm">
+            <thead className="bg-muted text-muted-foreground sticky top-0 z-10 border-b text-xs">
+              <tr>
+                {canEdit ? (
+                  <SelectionHeader
+                    checked={selection.allSelected}
+                    indeterminate={selection.someSelected}
+                    disabled={suppliers.length === 0}
+                    onChange={selection.toggleAll}
                   />
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {suppliers.length === 0 ? (
-            <p className="text-muted-foreground px-4 py-8 text-sm">
-              No suppliers yet.
-            </p>
-          ) : null}
-        </section>
-      )}
+                ) : null}
+                <SortHeader
+                  className="px-4 py-3"
+                  label="Display name"
+                  field="name"
+                  defaultSort="name"
+                />
+
+                <th className="px-4 py-3">Country</th>
+
+                <th className="px-4 py-3">Contact</th>
+                <th className="px-4 py-3">Status</th>
+                {canEdit ? (
+                  <th className="px-4 py-3 text-right">Edit</th>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {suppliers.map((supplier) => (
+                <SupplierInlineRow
+                  canEdit={canEdit}
+                  isSelected={selection.isSelected(supplier.id)}
+                  key={supplier.id}
+                  onFullEdit={() => setEditing(supplier)}
+                  onSelect={() => selection.toggle(supplier.id)}
+                  supplier={supplier}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {suppliers.length === 0 ? <ListEmptyState entity="Suppliers" /> : null}
+      </section>
     </div>
   );
 }

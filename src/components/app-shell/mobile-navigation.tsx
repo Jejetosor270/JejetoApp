@@ -1,13 +1,15 @@
 "use client";
-
-import Link from "next/link";
+import { useState } from "react";
 import { Menu } from "lucide-react";
-
 import { AppBrand } from "@/components/app-shell/app-brand";
+import {
+  AccountControl,
+  type AccountControlUser,
+} from "@/components/app-shell/account-control";
+import { NavigationLinks } from "@/components/app-shell/sidebar-navigation";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
-  SheetClose,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -15,79 +17,52 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { navigationForRole } from "@/config/navigation";
-
 export function MobileNavigation({
   companyName,
   itemManagementEnabled,
-  role,
+  user,
 }: {
   companyName: string;
   itemManagementEnabled: boolean;
-  role: "ADMIN" | "MANAGER" | "USER";
+  user: AccountControlUser;
 }) {
+  const [open, setOpen] = useState(false);
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="lg:hidden"
-          aria-label="Open navigation"
-        >
+        <Button variant="ghost" size="icon" aria-label="Open navigation">
           <Menu aria-hidden="true" />
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="bg-sidebar w-[18rem] p-0">
-        <SheetHeader className="border-sidebar-border border-b px-4 py-4 text-left">
+        <SheetHeader className="border-b p-4">
           <SheetTitle className="sr-only">Application navigation</SheetTitle>
           <SheetDescription className="sr-only">
-            Navigate the MB Procurement workspace.
+            Navigate the workspace.
           </SheetDescription>
           <AppBrand companyName={companyName} />
         </SheetHeader>
-
-        <nav aria-label="Mobile navigation" className="space-y-5 px-3 py-4">
-          {navigationForRole(role, itemManagementEnabled).map((group) => (
+        <nav
+          aria-label="Mobile navigation"
+          className="flex-1 space-y-5 overflow-y-auto px-3"
+        >
+          {navigationForRole(user.role, itemManagementEnabled).map((group) => (
             <div key={group.label}>
-              <p className="text-muted-foreground mb-1.5 px-2 text-[0.6875rem] font-medium tracking-[0.08em] uppercase">
-                {group.label}
-              </p>
-              <ul className="space-y-0.5">
-                {group.items.map((item) => {
-                  const Icon = item.icon;
-
-                  return (
-                    <li key={item.label}>
-                      {item.isAvailable ? (
-                        <SheetClose asChild>
-                          <Link
-                            href={item.href}
-                            aria-current="page"
-                            className="bg-sidebar-accent text-sidebar-accent-foreground flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium"
-                          >
-                            <Icon aria-hidden="true" className="size-4" />
-                            {item.label}
-                          </Link>
-                        </SheetClose>
-                      ) : (
-                        <span
-                          aria-disabled="true"
-                          className="text-muted-foreground flex h-9 items-center gap-2.5 px-2.5 text-sm"
-                        >
-                          <Icon aria-hidden="true" className="size-4" />
-                          {item.label}
-                          <span className="ms-auto text-[0.625rem] tracking-wide uppercase">
-                            Later
-                          </span>
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+              {group.label !== "Workspace" && (
+                <p className="text-muted-foreground px-2 pb-2 text-xs">
+                  {group.label}
+                </p>
+              )}
+              <NavigationLinks
+                group={group}
+                onNavigate={() => setOpen(false)}
+              />
             </div>
           ))}
         </nav>
+        <div className="border-t p-3">
+          <AccountControl user={user} />
+        </div>
       </SheetContent>
     </Sheet>
   );

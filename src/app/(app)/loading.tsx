@@ -3,7 +3,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function Loading() {
   return (
     <div aria-busy="true" aria-label="Loading workspace" className="space-y-8">
-      <div className="space-y-3">
+      <div
+        aria-busy="true"
+        aria-label="Loading view"
+        role="status"
+        className="space-y-3"
+      >
         <Skeleton className="h-3 w-36" />
         <Skeleton className="h-8 w-80 max-w-full" />
         <Skeleton className="h-4 w-[36rem] max-w-full" />

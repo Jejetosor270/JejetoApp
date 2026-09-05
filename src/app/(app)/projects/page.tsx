@@ -1,6 +1,11 @@
+import { PageHeader } from "@/components/layout/page-header";
+import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
 
-import { ProjectManagement } from "@/app/(app)/projects/project-management";
+import {
+  ProjectManagement,
+  CreateProjectForm,
+} from "@/app/(app)/projects/project-management";
 import { ExportLink } from "@/components/export/export-link";
 import { PageSizeField, Pagination } from "@/components/listing/pagination";
 import {
@@ -64,24 +69,31 @@ export default async function ProjectsPage({
   const fundingCoverage = await getProjectsFundingCoverage(result.items);
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-            Workspace
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            Projects
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Client projects and their buildings.
-          </p>
-        </div>
-        <ExportLink
-          entity="projects"
-          queryString={queryStringFromParams(params)}
-        />
-      </header>
-      <form className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-6">
+      <PageHeader
+        title="Projects"
+        description={<>Client projects and their buildings.</>}
+        actions={
+          <>
+            {canEditMasterData(user.role) && (
+              <CreateProjectForm
+                clients={options.clients}
+                currencies={options.currencies}
+                managers={options.managers}
+                statuses={options.statuses}
+              />
+            )}
+            {
+              <>
+                <ExportLink
+                  entity="projects"
+                  queryString={queryStringFromParams(params)}
+                />
+              </>
+            }
+          </>
+        }
+      />
+      <FilterBar>
         <FilterField label="Search">
           <input
             className={filterControlClassName}
@@ -190,7 +202,7 @@ export default async function ProjectsPage({
         >
           Filter
         </button>
-      </form>
+      </FilterBar>
       <ProjectManagement
         canEdit={canEditMasterData(user.role)}
         clients={options.clients}

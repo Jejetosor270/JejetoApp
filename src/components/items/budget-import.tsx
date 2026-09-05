@@ -1,5 +1,6 @@
 "use client";
 
+import { Field } from "@/components/master-data/form-ui";
 import { useActionState, useState, useTransition } from "react";
 
 import {
@@ -562,82 +563,98 @@ export function BudgetImport({ options }: { options: Options }) {
     <div className="space-y-5">
       <IntakeStageHeader
         description="XLSX only, up to 500 Item rows and 4 MB. The source is processed for this request and discarded."
+        processing={pending}
         stage={1}
         title="Upload and parse"
       />
       <form
         action={action}
-        className="grid gap-3 rounded-lg border p-4 md:grid-cols-2 xl:grid-cols-5"
+        className="grid gap-3 rounded-lg border p-4 md:grid-cols-2 xl:grid-cols-2"
       >
-        <select
-          className={control}
-          name="projectId"
-          onChange={(e) => {
-            setProjectId(e.target.value);
-            const project = options.projects.find(
-              (p) => p.id === e.target.value,
-            );
-            setCurrency(project?.reportingCurrencyCode ?? "");
-            setBuildingId("");
-          }}
-          required
-          value={projectId}
-        >
-          <option value="">Project *</option>
-          {options.projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className={control}
-          name="defaultBuildingId"
-          onChange={(e) => setBuildingId(e.target.value)}
-          value={buildingId}
-        >
-          <option value="">Default Building (optional)</option>
-          {options.projects
-            .find((p) => p.id === projectId)
-            ?.buildings.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
+        <Field label="Project" required>
+          <select
+            className={control}
+            aria-label="Project"
+            name="projectId"
+            onChange={(e) => {
+              setProjectId(e.target.value);
+              const project = options.projects.find(
+                (p) => p.id === e.target.value,
+              );
+              setCurrency(project?.reportingCurrencyCode ?? "");
+              setBuildingId("");
+            }}
+            required
+            value={projectId}
+          >
+            <option value="">Project *</option>
+            {options.projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
               </option>
             ))}
-        </select>
-        <select
-          className={control}
-          name="defaultSupplierId"
-          onChange={(e) => setSupplierId(e.target.value)}
-          value={supplierId}
-        >
-          <option value="">Default Supplier (optional)</option>
-          {options.suppliers.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.displayName}
-            </option>
-          ))}
-        </select>
-        <select
-          className={control}
-          name="purchaseCurrencyCode"
-          onChange={(e) => setCurrency(e.target.value)}
-          value={currency}
-        >
-          <option value="">Purchase currency (required for prices)</option>
-          {options.currencies.map((c) => (
-            <option key={c.code} value={c.code}>
-              {c.code}
-            </option>
-          ))}
-        </select>
-        <input
-          accept={ACCEPTED_BUDGET_FILE_TYPES}
-          className={control}
-          name="budgetFile"
-          required
-          type="file"
-        />
+          </select>
+        </Field>
+        <Field label="Default Building">
+          <select
+            className={control}
+            aria-label="Default Building"
+            name="defaultBuildingId"
+            onChange={(e) => setBuildingId(e.target.value)}
+            value={buildingId}
+          >
+            <option value="">Default Building (optional)</option>
+            {options.projects
+              .find((p) => p.id === projectId)
+              ?.buildings.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <Field label="Default Supplier">
+          <select
+            className={control}
+            aria-label="Default Supplier"
+            name="defaultSupplierId"
+            onChange={(e) => setSupplierId(e.target.value)}
+            value={supplierId}
+          >
+            <option value="">Default Supplier (optional)</option>
+            {options.suppliers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.displayName}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Purchase currency">
+          <select
+            className={control}
+            aria-label="Purchase currency"
+            name="purchaseCurrencyCode"
+            onChange={(e) => setCurrency(e.target.value)}
+            value={currency}
+          >
+            <option value="">Purchase currency (required for prices)</option>
+            {options.currencies.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.code}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Budget workbook" required>
+          <input
+            accept={ACCEPTED_BUDGET_FILE_TYPES}
+            className={control}
+            aria-label="Budget workbook"
+            name="budgetFile"
+            required
+            type="file"
+          />
+        </Field>
         <button
           className="bg-primary text-primary-foreground h-9 rounded-lg px-4 text-sm font-medium disabled:opacity-50"
           disabled={pending}
@@ -645,7 +662,7 @@ export function BudgetImport({ options }: { options: Options }) {
         >
           {pending ? "Parsing…" : "Parse workbook"}
         </button>
-        <p className="text-muted-foreground text-xs md:col-span-4">
+        <p className="text-muted-foreground text-xs md:col-span-2">
           XLSX only, up to 500 Item rows and 4 MB. The file is processed in this
           request and discarded.
         </p>

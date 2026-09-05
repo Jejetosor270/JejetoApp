@@ -1,3 +1,6 @@
+import { PageHeader } from "@/components/layout/page-header";
+import { SettingsNavigation } from "@/components/layout/settings-navigation";
+import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
 
 import { Pagination, PageSizeField } from "@/components/listing/pagination";
@@ -28,7 +31,7 @@ export default async function ActivityPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireMasterDataEditor();
+  const user = await requireMasterDataEditor();
   const params = await searchParams;
   const pageInput = parsePageInput(params);
   const action = selectedValue(auditActions, firstQueryValue(params, "action"));
@@ -53,18 +56,12 @@ export default async function ActivityPage({
   }
   return (
     <div className="space-y-6">
-      <header>
-        <p className="text-primary text-xs font-medium tracking-[0.08em] uppercase">
-          Administration
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          Activity history
-        </h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Important authoritative changes, newest first.
-        </p>
-      </header>
-      <form className="bg-card grid items-end gap-2 rounded-lg border p-3 sm:grid-cols-2 xl:grid-cols-6">
+      <SettingsNavigation role={user.role} />
+      <PageHeader
+        title="Activity history"
+        description={<>Important authoritative changes, newest first.</>}
+      />
+      <FilterBar>
         <FilterField label="Employee">
           <select
             className={filterControlClassName}
@@ -130,7 +127,7 @@ export default async function ActivityPage({
         >
           Filter
         </button>
-      </form>
+      </FilterBar>
       <section className="bg-card overflow-hidden rounded-lg border">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[64rem] text-left text-sm">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
@@ -119,39 +120,10 @@ export default async function ProjectPage({
       canEdit={canEditMasterData(user.role)}
       clients={options.clients}
       currencies={options.currencies}
-      financialDashboard={
-        <>
-          {itemSummary ? (
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <div className="rounded-lg border p-3">
-                <p className="text-muted-foreground text-xs">Items</p>
-                <p className="mt-1 text-xl font-semibold">
-                  {itemSummary.count}
-                </p>
-              </div>
-              <div className="rounded-lg border p-3">
-                <p className="text-muted-foreground text-xs">
-                  Item purchase HT
-                </p>
-                <p className="financial-figure mt-1 font-semibold">
-                  {formatMoney(
-                    itemSummary.purchase,
-                    project.reportingCurrencyCode,
-                  )}
-                </p>
-              </div>
-              <div className="rounded-lg border p-3">
-                <p className="text-muted-foreground text-xs">Item selling HT</p>
-                <p className="financial-figure mt-1 font-semibold">
-                  {formatMoney(
-                    itemSummary.selling,
-                    project.reportingCurrencyCode,
-                  )}
-                </p>
-              </div>
-            </section>
-          ) : null}
+      workspace={{
+        overview: (
           <ProjectFinancialDashboard
+            section="overview"
             billing={billing}
             financialPerformance={financialPerformance}
             freight={freight}
@@ -162,16 +134,146 @@ export default async function ProjectPage({
             report={reporting}
             vatPosition={vatPosition}
           />
-          <ProjectFreightExpenses
-            canEdit={canEditMasterData(user.role)}
-            currencies={options.currencies}
-            expenses={freightExpenses}
+        ),
+        finance: (
+          <>
+            {" "}
+            <ProjectFinancialDashboard
+              section="finance"
+              billing={billing}
+              financialPerformance={financialPerformance}
+              freight={freight}
+              fundingCoverage={fundingCoverage}
+              horizon={horizon}
+              phase11CashPosition={phase11CashPosition}
+              projectId={projectId}
+              report={reporting}
+              vatPosition={vatPosition}
+            />{" "}
+            <ProjectFreightExpenses
+              canEdit={canEditMasterData(user.role)}
+              currencies={options.currencies}
+              expenses={freightExpenses}
+              projectId={projectId}
+              reportingCurrencyCode={project.reportingCurrencyCode}
+              suppliers={options.suppliers}
+            />
+          </>
+        ),
+        cash: (
+          <ProjectFinancialDashboard
+            section="cash"
+            billing={billing}
+            financialPerformance={financialPerformance}
+            freight={freight}
+            fundingCoverage={fundingCoverage}
+            horizon={horizon}
+            phase11CashPosition={phase11CashPosition}
             projectId={projectId}
-            reportingCurrencyCode={project.reportingCurrencyCode}
-            suppliers={options.suppliers}
+            report={reporting}
+            vatPosition={vatPosition}
           />
-        </>
-      }
+        ),
+        orders: (
+          <>
+            <Link
+              className="text-primary text-sm underline"
+              href={`/orders?projectId=${projectId}`}
+            >
+              Open all Supplier Orders for this Project
+            </Link>{" "}
+            <ProjectFinancialDashboard
+              section="orders"
+              billing={billing}
+              financialPerformance={financialPerformance}
+              freight={freight}
+              fundingCoverage={fundingCoverage}
+              horizon={horizon}
+              phase11CashPosition={phase11CashPosition}
+              projectId={projectId}
+              report={reporting}
+              vatPosition={vatPosition}
+            />
+          </>
+        ),
+        billing: (
+          <section className="space-y-4">
+            <h2 className="font-semibold">Client Billing</h2>
+            <p className="text-muted-foreground text-sm">
+              Quotes, Invoices, payment schedules and actual Client Receipts for
+              this Project.
+            </p>
+            <Link
+              className="text-primary text-sm underline"
+              href={`/billing?projectId=${projectId}`}
+            >
+              Open Project Client Billing
+            </Link>
+            <dl className="grid gap-4 sm:grid-cols-3">
+              {[
+                [
+                  "Invoiced HT",
+                  billing?.invoicedComplete ? billing.invoicedHt : null,
+                ],
+                [
+                  "Client receipts TTC",
+                  billing?.complete ? billing.paidTtc : null,
+                ],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-muted-foreground text-xs">{label}</dt>
+                  <dd className="financial-figure mt-2 text-lg font-semibold">
+                    {formatMoney(value ?? null, project.reportingCurrencyCode)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        ),
+        items: itemSummary ? (
+          <>
+            {" "}
+            {itemSummary ? (
+              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-lg border p-3">
+                  <p className="text-muted-foreground text-xs">Items</p>
+                  <p className="mt-1 text-xl font-semibold">
+                    {itemSummary.count}
+                  </p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-muted-foreground text-xs">
+                    Item purchase HT
+                  </p>
+                  <p className="financial-figure mt-1 font-semibold">
+                    {formatMoney(
+                      itemSummary.purchase,
+                      project.reportingCurrencyCode,
+                    )}
+                  </p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-muted-foreground text-xs">
+                    Item selling HT
+                  </p>
+                  <p className="financial-figure mt-1 font-semibold">
+                    {formatMoney(
+                      itemSummary.selling,
+                      project.reportingCurrencyCode,
+                    )}
+                  </p>
+                </div>
+              </section>
+            ) : null}
+            <Link
+              className="text-primary text-sm underline"
+              href={`/items?projectId=${projectId}`}
+            >
+              Open Project Items (Beta)
+            </Link>
+          </>
+        ) : null,
+      }}
       managers={options.managers}
       project={{
         ...project,

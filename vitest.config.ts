@@ -17,6 +17,6 @@ export default defineConfig({
       reporter: ["text", "lcov"],
       include: ["src/domain/**/*.ts"],
     },
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 });

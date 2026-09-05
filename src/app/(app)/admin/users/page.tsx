@@ -1,3 +1,4 @@
+import { SettingsNavigation } from "@/components/layout/settings-navigation";
 import type { Metadata } from "next";
 
 import { UserManagement } from "@/app/(app)/admin/users/user-management";
@@ -16,15 +17,18 @@ export default async function UserManagementPage() {
     .join("|");
 
   return (
-    <UserManagement
-      currentAdministratorId={administrator.id}
-      key={employeeListVersion}
-      employees={employees.map((employee) => ({
-        ...employee,
-        createdAt: employee.createdAt.toISOString(),
-        role: employee.role,
-        updatedAt: employee.updatedAt.toISOString(),
-      }))}
-    />
+    <>
+      <SettingsNavigation role={administrator.role} />
+      <UserManagement
+        currentAdministratorId={administrator.id}
+        key={employeeListVersion}
+        employees={employees.map((employee) => ({
+          ...employee,
+          createdAt: employee.createdAt.toISOString(),
+          role: employee.role,
+          updatedAt: employee.updatedAt.toISOString(),
+        }))}
+      />
+    </>
   );
 }

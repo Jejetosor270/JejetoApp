@@ -1,3 +1,4 @@
+import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { Badge } from "@/components/ui/badge";
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
@@ -42,16 +43,14 @@ export function PaymentSchedule({
   today: string;
 }) {
   const supplierSide = direction === "SUPPLIER_PAYMENT";
-  const noun = supplierSide ? "Supplier Payments" : "Client Receipts";
-  const settledLabel = supplierSide ? "Paid" : "Received";
+  const noun = supplierSide ? "Supplier Payments" : "Legacy Client schedule";
+  const settledLabel = supplierSide ? "Paid" : "Legacy settlements";
   return (
-    <section
-      className={`bg-card rounded-lg border border-l-4 p-4 ${supplierSide ? "border-l-destructive" : "border-l-positive"}`}
-    >
+    <section className={`bg-card rounded-lg border p-4`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            {supplierSide ? "Cash out" : "Cash in"}
+            {supplierSide ? "Supplier cash out" : "Historical planning"}
           </p>
           <h2 className="mt-1 text-base font-semibold">{noun}</h2>
         </div>
@@ -149,11 +148,8 @@ export function PaymentSchedule({
                 </td>
                 {canEdit ? (
                   <td className="px-3 py-2">
-                    <details>
-                      <summary className="text-primary cursor-pointer text-xs font-medium">
-                        Manage
-                      </summary>
-                      <div className="mt-3 w-[min(78vw,58rem)] space-y-3">
+                    <EditorDrawer title="Manage">
+                      <div className="mt-3 space-y-3">
                         <InstallmentActions installment={installment} />
                         <InstallmentForm
                           baseAmount={summary.baseAmount}
@@ -197,7 +193,7 @@ export function PaymentSchedule({
                           </div>
                         ) : null}
                       </div>
-                    </details>
+                    </EditorDrawer>
                   </td>
                 ) : null}
               </tr>
@@ -218,10 +214,7 @@ export function PaymentSchedule({
       </div>
       {canEdit ? (
         <div className="mt-4 grid gap-3 xl:grid-cols-2">
-          <details>
-            <summary className="border-input inline-flex h-8 cursor-pointer list-none items-center rounded-lg border px-2.5 text-sm font-medium">
-              Add installment
-            </summary>
+          <EditorDrawer title="Add installment">
             <div className="mt-3">
               <InstallmentForm
                 baseAmount={summary.baseAmount}
@@ -232,15 +225,12 @@ export function PaymentSchedule({
                 reportingCurrencyCode={reportingCurrencyCode}
               />
             </div>
-          </details>
-          <details>
-            <summary className="border-input inline-flex h-8 cursor-pointer list-none items-center rounded-lg border px-2.5 text-sm font-medium">
-              Use schedule preset
-            </summary>
+          </EditorDrawer>
+          <EditorDrawer title="Use schedule preset">
             <div className="mt-3">
               <PresetForm direction={direction} orderId={orderId} />
             </div>
-          </details>
+          </EditorDrawer>
         </div>
       ) : null}
     </section>

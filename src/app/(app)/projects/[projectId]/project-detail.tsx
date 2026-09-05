@@ -1,5 +1,8 @@
 "use client";
 
+import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
+import { WorkspaceTabs } from "@/components/layout/workspace-tabs";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
 import Decimal from "decimal.js";
 import { Pencil, Plus } from "lucide-react";
 import { type ReactNode, useEffect, useState, useTransition } from "react";
@@ -326,13 +329,24 @@ function EditProject({
     <section className="bg-card rounded-lg border p-4">
       <div className="mb-4 flex justify-between">
         <h2 className="text-sm font-semibold">Edit project</h2>
-        <Button onClick={onClose} size="sm" type="button" variant="ghost">
+        <Button
+          onClick={() => {
+            if (
+              !hasUnsavedDrafts() ||
+              window.confirm("Discard your unsaved changes?")
+            )
+              onClose?.();
+          }}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
           Close
         </Button>
       </div>
       <form
         onSubmit={onSubmit}
-        className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+        className="grid gap-3 md:grid-cols-2 xl:grid-cols-2"
       >
         <input name="id" type="hidden" value={project.id} />
         <ProjectFields
@@ -342,7 +356,7 @@ function EditProject({
           project={project}
           statuses={statuses}
         />
-        <div className="flex items-end gap-3 md:col-span-2 xl:col-span-4">
+        <div className="flex items-end gap-3 md:col-span-2 xl:col-span-2">
           <SubmitButton pending={pending}>Save changes</SubmitButton>
           <ActionFeedback state={state} />
         </div>
@@ -378,14 +392,25 @@ function BuildingForm({
           {isEdit ? "Edit building" : "Add building"}
         </h2>
         {onClose ? (
-          <Button onClick={onClose} size="sm" type="button" variant="ghost">
+          <Button
+            onClick={() => {
+              if (
+                !hasUnsavedDrafts() ||
+                window.confirm("Discard your unsaved changes?")
+              )
+                onClose?.();
+            }}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
             Close
           </Button>
         ) : null}
       </div>
       <form
         onSubmit={onSubmit}
-        className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+        className="grid gap-3 md:grid-cols-2 xl:grid-cols-2"
       >
         <input name="projectId" type="hidden" value={projectId} />
         {building ? (
@@ -426,7 +451,7 @@ function BuildingForm({
             Building active
           </label>
         ) : null}
-        <div className="flex items-end gap-3 md:col-span-2 xl:col-span-4">
+        <div className="flex items-end gap-3 md:col-span-2 xl:col-span-2">
           <SubmitButton pending={pending}>
             {isEdit ? "Save building" : "Add building"}
           </SubmitButton>
@@ -455,7 +480,18 @@ function RoomForm({
     <section className="bg-card rounded-lg border p-4">
       <div className="mb-3 flex justify-between">
         <h2 className="text-sm font-semibold">Add Room</h2>
-        <Button onClick={onClose} size="sm" type="button" variant="ghost">
+        <Button
+          onClick={() => {
+            if (
+              !hasUnsavedDrafts() ||
+              window.confirm("Discard your unsaved changes?")
+            )
+              onClose?.();
+          }}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
           Close
         </Button>
       </div>
@@ -581,7 +617,7 @@ export function ProjectDetail({
   canEdit,
   clients,
   currencies,
-  financialDashboard,
+  workspace,
   managers,
   project,
   statuses,
@@ -590,7 +626,14 @@ export function ProjectDetail({
   canEdit: boolean;
   clients: { id: string; displayName: string }[];
   currencies: CurrencyOption[];
-  financialDashboard: ReactNode;
+  workspace: {
+    overview: ReactNode;
+    finance: ReactNode;
+    cash: ReactNode;
+    orders: ReactNode;
+    billing: ReactNode;
+    items: ReactNode;
+  };
   managers: Option[];
   project: ProjectView;
   statuses: string[];
@@ -603,157 +646,239 @@ export function ProjectDetail({
   const [addingRoomTo, setAddingRoomTo] = useState<string | null>(null);
   return (
     <div className="space-y-5">
-      {canEdit && editingProject ? (
-        <EditProject
-          clients={clients}
-          currencies={currencies}
-          managers={managers}
-          onClose={() => setEditingProject(false)}
-          project={project}
-          statuses={statuses}
-        />
-      ) : (
-        <DetailPageHeader
-          actions={
-            canEdit ? (
-              <Button
-                onClick={() => setEditingProject(true)}
-                type="button"
-                variant="outline"
-              >
-                <Pencil data-icon="inline-start" />
-                Edit project
-              </Button>
-            ) : undefined
+      {
+        <>
+          {
+            <DetailPageHeader
+              actions={
+                canEdit ? (
+                  <Button
+                    onClick={() => setEditingProject(true)}
+                    type="button"
+                    variant="outline"
+                  >
+                    <Pencil data-icon="inline-start" />
+                    Edit project
+                  </Button>
+                ) : undefined
+              }
+              backHref="/projects"
+              backLabel="Back to Projects"
+              eyebrow={project.code}
+              meta={
+                <>
+                  <span>
+                    {project.client.displayName} ·{" "}
+                    {project.reportingCurrencyCode}
+                  </span>
+                  {project.notes ? (
+                    <p className="mt-4 border-t pt-4 leading-6">
+                      {project.notes}
+                    </p>
+                  ) : null}
+                </>
+              }
+              status={project.status}
+              title={project.name}
+            />
           }
-          backHref="/projects"
-          backLabel="Back to Projects"
-          eyebrow={project.code}
-          meta={
-            <>
-              <span>
-                {project.client.displayName} · {project.reportingCurrencyCode}
-              </span>
-              {project.notes ? (
-                <p className="mt-4 border-t pt-4 leading-6">{project.notes}</p>
-              ) : null}
-            </>
-          }
-          status={project.status}
-          title={project.name}
-        />
-      )}
-      {financialDashboard}
-      {canEdit && addingBuilding ? (
-        <BuildingForm
-          onClose={() => setAddingBuilding(false)}
-          projectId={project.id}
-        />
-      ) : null}
-      {editingBuilding ? (
-        <BuildingForm
-          building={editingBuilding}
-          onClose={() => setEditingBuilding(null)}
-          projectId={project.id}
-        />
-      ) : null}
-      {canEdit && addingRoomTo ? (
-        <RoomForm
-          buildingId={addingRoomTo}
-          onClose={() => setAddingRoomTo(null)}
-        />
-      ) : null}
-      <section className="bg-card overflow-hidden rounded-lg border">
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <div>
-            <h2 className="text-sm font-semibold">Buildings / Units</h2>
-            <p className="text-muted-foreground mt-0.5 text-xs">
-              Buildings are managed within this project.
-            </p>
-          </div>
-          {canEdit ? (
-            <Button
-              onClick={() => setAddingBuilding(true)}
-              size="sm"
-              type="button"
+          {canEdit && editingProject ? (
+            <EditorDrawer
+              open
+              title="Edit project"
+              onOpenChange={(open) => {
+                if (!open) (() => setEditingProject(false))();
+              }}
             >
-              <Plus data-icon="inline-start" />
-              Add building
-            </Button>
+              <EditProject
+                clients={clients}
+                currencies={currencies}
+                managers={managers}
+                onClose={() => setEditingProject(false)}
+                project={project}
+                statuses={statuses}
+              />
+            </EditorDrawer>
           ) : null}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[35rem] text-left text-sm">
-            <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
-              <tr>
-                <th className="px-4 py-3">Building</th>
-                <th className="px-4 py-3">Short code</th>
-                <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3">Rooms</th>
-                <th className="px-4 py-3">Status</th>
-                {canEdit ? (
-                  <th className="px-4 py-3 text-right">Action</th>
+        </>
+      }
+      <WorkspaceTabs
+        label="Project workspace"
+        tabs={[
+          { id: "overview", label: "Overview", content: workspace.overview },
+          { id: "orders", label: "Supplier Orders", content: workspace.orders },
+          {
+            id: "billing",
+            label: "Client Billing",
+            content: workspace.billing,
+          },
+          { id: "finance", label: "Finance", content: workspace.finance },
+          { id: "cash", label: "Cash", content: workspace.cash },
+          {
+            id: "buildings",
+            label: "Buildings & Rooms",
+            content: (
+              <>
+                {canEdit && addingBuilding ? (
+                  <EditorDrawer
+                    open
+                    title="Building"
+                    onOpenChange={(open) => {
+                      if (!open)
+                        (() => {
+                          setAddingBuilding(false);
+                          setEditingBuilding(null);
+                        })();
+                    }}
+                  >
+                    <BuildingForm
+                      onClose={() => {
+                        setAddingBuilding(false);
+                        setEditingBuilding(null);
+                      }}
+                      projectId={project.id}
+                    />
+                  </EditorDrawer>
                 ) : null}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {buildings.map((building) => (
-                <tr className="hover:bg-muted/25" key={building.id}>
-                  <td className="px-4 py-3 font-medium">{building.name}</td>
-                  <td className="px-4 py-3 font-mono text-xs">
-                    {building.shortCode}
-                  </td>
-                  <td className="text-muted-foreground px-4 py-3">
-                    {building.description ?? "—"}
-                  </td>
-                  <td className="text-muted-foreground px-4 py-3">
-                    {building.rooms.length
-                      ? building.rooms.map((room) => (
-                          <RoomInlineEditor
-                            canEdit={canEdit}
-                            key={room.id}
-                            room={room}
-                          />
-                        ))
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge active={building.isActive} />
-                  </td>
-                  {canEdit ? (
-                    <td className="px-4 py-3 text-right">
+                {editingBuilding ? (
+                  <EditorDrawer
+                    open
+                    title="Building"
+                    onOpenChange={(open) => {
+                      if (!open)
+                        (() => {
+                          setAddingBuilding(false);
+                          setEditingBuilding(null);
+                        })();
+                    }}
+                  >
+                    <BuildingForm
+                      building={editingBuilding}
+                      onClose={() => {
+                        setAddingBuilding(false);
+                        setEditingBuilding(null);
+                      }}
+                      projectId={project.id}
+                    />
+                  </EditorDrawer>
+                ) : null}
+                {canEdit && addingRoomTo ? (
+                  <EditorDrawer
+                    open
+                    title="Add room"
+                    onOpenChange={(open) => {
+                      if (!open) (() => setAddingRoomTo(null))();
+                    }}
+                  >
+                    <RoomForm
+                      buildingId={addingRoomTo}
+                      onClose={() => setAddingRoomTo(null)}
+                    />
+                  </EditorDrawer>
+                ) : null}
+                <section className="bg-card overflow-hidden rounded-lg border">
+                  <div className="flex items-center justify-between border-b px-4 py-3">
+                    <div>
+                      <h2 className="text-sm font-semibold">
+                        Buildings / Units
+                      </h2>
+                      <p className="text-muted-foreground mt-0.5 text-xs">
+                        Buildings are managed within this project.
+                      </p>
+                    </div>
+                    {canEdit ? (
                       <Button
-                        onClick={() => setEditingBuilding(building)}
+                        onClick={() => setAddingBuilding(true)}
                         size="sm"
                         type="button"
-                        variant="outline"
-                      >
-                        <Pencil data-icon="inline-start" />
-                        Edit
-                      </Button>
-                      <Button
-                        className="ml-2"
-                        onClick={() => setAddingRoomTo(building.id)}
-                        size="sm"
-                        type="button"
-                        variant="outline"
                       >
                         <Plus data-icon="inline-start" />
-                        Room
+                        Add building
                       </Button>
-                    </td>
+                    ) : null}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[35rem] text-left text-sm">
+                      <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
+                        <tr>
+                          <th className="px-4 py-3">Building</th>
+                          <th className="px-4 py-3">Short code</th>
+                          <th className="px-4 py-3">Description</th>
+                          <th className="px-4 py-3">Rooms</th>
+                          <th className="px-4 py-3">Status</th>
+                          {canEdit ? (
+                            <th className="px-4 py-3 text-right">Action</th>
+                          ) : null}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {buildings.map((building) => (
+                          <tr className="hover:bg-muted/25" key={building.id}>
+                            <td className="px-4 py-3 font-medium">
+                              {building.name}
+                            </td>
+                            <td className="px-4 py-3 font-mono text-xs">
+                              {building.shortCode}
+                            </td>
+                            <td className="text-muted-foreground px-4 py-3">
+                              {building.description ?? "—"}
+                            </td>
+                            <td className="text-muted-foreground px-4 py-3">
+                              {building.rooms.length
+                                ? building.rooms.map((room) => (
+                                    <RoomInlineEditor
+                                      canEdit={canEdit}
+                                      key={room.id}
+                                      room={room}
+                                    />
+                                  ))
+                                : "—"}
+                            </td>
+                            <td className="px-4 py-3">
+                              <StatusBadge active={building.isActive} />
+                            </td>
+                            {canEdit ? (
+                              <td className="px-4 py-3 text-right">
+                                <Button
+                                  onClick={() => setEditingBuilding(building)}
+                                  size="sm"
+                                  type="button"
+                                  variant="outline"
+                                >
+                                  <Pencil data-icon="inline-start" />
+                                  Edit
+                                </Button>
+                                <Button
+                                  className="ml-2"
+                                  onClick={() => setAddingRoomTo(building.id)}
+                                  size="sm"
+                                  type="button"
+                                  variant="outline"
+                                >
+                                  <Plus data-icon="inline-start" />
+                                  Room
+                                </Button>
+                              </td>
+                            ) : null}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {buildings.length === 0 ? (
+                    <p className="text-muted-foreground px-4 py-8 text-sm">
+                      No buildings have been added to this project.
+                    </p>
                   ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {buildings.length === 0 ? (
-          <p className="text-muted-foreground px-4 py-8 text-sm">
-            No buildings have been added to this project.
-          </p>
-        ) : null}
-      </section>
+                </section>
+              </>
+            ),
+          },
+          ...(workspace.items
+            ? [{ id: "items", label: "Items (Beta)", content: workspace.items }]
+            : []),
+        ]}
+      />
     </div>
   );
 }

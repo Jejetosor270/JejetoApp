@@ -1,5 +1,7 @@
 "use client";
 
+import { EditorDrawer } from "@/components/forms/editor-drawer";
+import { ConfirmSubmit } from "@/components/forms/confirm-submit";
 import { useActionState, useState } from "react";
 
 import {
@@ -17,7 +19,6 @@ import {
   PercentageInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
-import { Button } from "@/components/ui/button";
 import {
   formatMoney,
   formatRate,
@@ -120,9 +121,11 @@ function DeleteExpense({ id }: { id: string }) {
   return (
     <form action={action} className="flex items-center gap-2">
       <input name="id" type="hidden" value={id} />
-      <Button disabled={pending} size="xs" type="submit" variant="ghost">
-        Delete
-      </Button>
+      <ConfirmSubmit
+        disabled={pending}
+        title="Delete this freight expense?"
+        description="This permanently removes the Project freight expense and its VAT. Project freight reconciliation and financial reports will be recalculated from the remaining records."
+      />
       <ActionFeedback state={state} />
     </form>
   );
@@ -142,12 +145,8 @@ function EditExpenseVat({
   const [treatment, setTreatment] = useState(expense.vatTreatment ?? "");
   const fieldErrors = state.fieldErrors ?? {};
   return (
-    <details>
-      <summary className="cursor-pointer text-xs font-medium">Edit VAT</summary>
-      <form
-        className="mt-3 grid min-w-[36rem] gap-3 sm:grid-cols-2"
-        onSubmit={onSubmit}
-      >
+    <EditorDrawer title="Edit freight VAT">
+      <form className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={onSubmit}>
         <input name="id" type="hidden" value={expense.id} />
         <input name="projectId" type="hidden" value={projectId} />
         <VatFields
@@ -161,7 +160,7 @@ function EditExpenseVat({
           <ActionFeedback state={state} />
         </div>
       </form>
-    </details>
+    </EditorDrawer>
   );
 }
 
@@ -194,91 +193,106 @@ export function ProjectFreightExpenses({
         Use this only for freight not already recorded on a Supplier Order.
       </p>
       {canEdit ? (
-        <form
-          className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
-          onSubmit={onSubmit}
+        <EditorDrawer
+          title="Add freight expense"
+          onOpenChange={(open) => {
+            if (!open) {
+              setCurrencyCode(reportingCurrencyCode);
+              setVatTreatment("");
+            }
+          }}
         >
-          <input name="projectId" type="hidden" value={projectId} />
-          <Field error={fieldErrors.description} label="Description" required>
-            <input className={inputClassName} name="description" required />
-          </Field>
-          <Field error={fieldErrors.reference} label="Reference">
-            <input className={inputClassName} name="reference" />
-          </Field>
-          <Field error={fieldErrors.supplierId} label="Supplier">
-            <select className={inputClassName} name="supplierId">
-              <option value="">No supplier selected</option>
-              {suppliers.map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.displayName}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field error={fieldErrors.expenseDate} label="Expense date" required>
-            <input
-              className={inputClassName}
-              name="expenseDate"
+          {" "}
+          <form
+            className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-2"
+            onSubmit={onSubmit}
+          >
+            <input name="projectId" type="hidden" value={projectId} />
+            <Field error={fieldErrors.description} label="Description" required>
+              <input className={inputClassName} name="description" required />
+            </Field>
+            <Field error={fieldErrors.reference} label="Reference">
+              <input className={inputClassName} name="reference" />
+            </Field>
+            <Field error={fieldErrors.supplierId} label="Supplier">
+              <select className={inputClassName} name="supplierId">
+                <option value="">No supplier selected</option>
+                {suppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.displayName}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field
+              error={fieldErrors.expenseDate}
+              label="Expense date"
               required
-              type="date"
-            />
-          </Field>
-          <Field error={fieldErrors.currencyCode} label="Currency" required>
-            <select
-              className={inputClassName}
-              name="currencyCode"
-              onChange={(event) => setCurrencyCode(event.target.value)}
-              value={currencyCode}
             >
-              {currencies.map((currency) => (
-                <option key={currency.code} value={currency.code}>
-                  {currency.code} — {currency.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field
-            error={fieldErrors.costAmountHt}
-            label="Freight cost HT"
-            required
-          >
-            <MoneyInput name="costAmountHt" required />
-          </Field>
-          <Field
-            error={fieldErrors.fxRate}
-            label={`FX to ${reportingCurrencyCode}`}
-            required={currencyCode !== reportingCurrencyCode}
-          >
-            <input
-              className={inputClassName}
-              disabled={currencyCode === reportingCurrencyCode}
-              inputMode="decimal"
-              name="fxRate"
+              <input
+                className={inputClassName}
+                name="expenseDate"
+                required
+                type="date"
+              />
+            </Field>
+            <Field error={fieldErrors.currencyCode} label="Currency" required>
+              <select
+                className={inputClassName}
+                name="currencyCode"
+                onChange={(event) => setCurrencyCode(event.target.value)}
+                value={currencyCode}
+              >
+                {currencies.map((currency) => (
+                  <option key={currency.code} value={currency.code}>
+                    {currency.code} — {currency.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field
+              error={fieldErrors.costAmountHt}
+              label="Freight cost HT"
+              required
+            >
+              <MoneyInput name="costAmountHt" required />
+            </Field>
+            <Field
+              error={fieldErrors.fxRate}
+              label={`FX to ${reportingCurrencyCode}`}
+              required={currencyCode !== reportingCurrencyCode}
+            >
+              <input
+                className={inputClassName}
+                disabled={currencyCode === reportingCurrencyCode}
+                inputMode="decimal"
+                name="fxRate"
+              />
+            </Field>
+            <Field
+              error={fieldErrors.freightMarkupOverrideRate}
+              label="Freight markup override %"
+            >
+              <PercentageInput
+                className={inputClassName}
+                name="freightMarkupOverrideRate"
+                placeholder="Blank uses Project default"
+              />
+            </Field>
+            <VatFields
+              errors={fieldErrors}
+              onTreatmentChange={setVatTreatment}
+              treatment={vatTreatment}
             />
-          </Field>
-          <Field
-            error={fieldErrors.freightMarkupOverrideRate}
-            label="Freight markup override %"
-          >
-            <PercentageInput
-              className={inputClassName}
-              name="freightMarkupOverrideRate"
-              placeholder="Blank uses Project default"
-            />
-          </Field>
-          <VatFields
-            errors={fieldErrors}
-            onTreatmentChange={setVatTreatment}
-            treatment={vatTreatment}
-          />
-          <Field error={fieldErrors.notes} label="Notes">
-            <input className={inputClassName} name="notes" />
-          </Field>
-          <div className="flex items-end gap-3 md:col-span-2 xl:col-span-4">
-            <SubmitButton pending={pending}>Add freight expense</SubmitButton>
-            <ActionFeedback state={state} />
-          </div>
-        </form>
+            <Field error={fieldErrors.notes} label="Notes">
+              <input className={inputClassName} name="notes" />
+            </Field>
+            <div className="flex items-end gap-3 md:col-span-2 xl:col-span-2">
+              <SubmitButton pending={pending}>Add freight expense</SubmitButton>
+              <ActionFeedback state={state} />
+            </div>
+          </form>
+        </EditorDrawer>
       ) : null}
       <div className="mt-4 overflow-x-auto rounded-md border">
         <table className="w-full min-w-[48rem] text-left text-sm">
