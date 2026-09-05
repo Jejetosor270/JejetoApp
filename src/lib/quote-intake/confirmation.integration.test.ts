@@ -331,6 +331,48 @@ describe("reviewed quote confirmation persistence", () => {
     expect(database.$transaction).toHaveBeenCalledTimes(1);
   });
 
+  it("creates a Supplier Order from an Invoice without optional schedule, Items, or Billing allocation", async () => {
+    const form = commonForm("CREATE");
+    form.set("applyCurrency", "on");
+    form.set("orderCurrencyCode", "EUR");
+    form.set("applyPurchaseCost", "on");
+    form.set("purchaseCost", "50000");
+    form.set("applyInputVat", "on");
+    form.set("inputVatAmount", "10000");
+    form.set("inputVatRate", "20");
+    form.set("inputVatRecoverablePercent", "100");
+    form.set("inputVatTaxableBase", "50000");
+    form.set("inputVatTreatment", "DOMESTIC");
+    form.set("orderNumber", "PO-INVOICE-NEW");
+    form.set("originalFilename", "supplier-invoice.pdf");
+    orderMocks.createOrderInTransaction.mockResolvedValue(orderId);
+
+    const createdId = await confirmSupplierQuote("actor-1", parsed(form));
+
+    expect(createdId).toBe(orderId);
+    expect(orderMocks.createOrderInTransaction).toHaveBeenCalledWith(
+      transaction,
+      "actor-1",
+      expect.objectContaining({
+        inputVatAmount: "10000.0000",
+        orderCurrencyCode: "EUR",
+        orderNumber: "PO-INVOICE-NEW",
+        purchaseCost: "50000.0000",
+      }),
+    );
+    expect(transaction.paymentInstallment.createMany).not.toHaveBeenCalled();
+    expect(transaction.itemImport.create).not.toHaveBeenCalled();
+    expect(
+      billingMocks.updateOrderBillingLinkInTransaction,
+    ).not.toHaveBeenCalled();
+    expect(transaction.supplierQuoteImport.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        orderId,
+        originalFilename: "supplier-invoice.pdf",
+      }),
+    });
+  });
+
   it("persists an explicitly approved fixed-amount installment without recalculation", async () => {
     const form = commonForm("CREATE");
     form.set("applyCurrency", "on");

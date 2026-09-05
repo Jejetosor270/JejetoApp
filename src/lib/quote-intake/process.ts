@@ -12,7 +12,10 @@ import {
   type SupplierMatchResult,
 } from "@/domain/quote-intake/supplier-matching";
 import { getDatabase } from "@/lib/db";
-import type { ItemExtractionProvider } from "@/lib/items/extraction-provider";
+import {
+  ItemExtractionProviderError,
+  type ItemExtractionProvider,
+} from "@/lib/items/extraction-provider";
 
 import { validateTemporaryQuoteFile } from "./files";
 import type { QuoteExtractionProvider } from "./provider";
@@ -127,13 +130,24 @@ export async function processSupplierQuote(
   let itemResult: Awaited<
     ReturnType<ItemExtractionProvider["extractQuoteItems"]>
   > | null = null;
+  let itemExtractionWarning: string | null = null;
   try {
-    [result, itemResult] = await Promise.all([
+    const [quoteOutcome, itemOutcome] = await Promise.allSettled([
       provider.extract(file),
       itemProvider
         ? itemProvider.extractQuoteItems(file)
         : Promise.resolve(null),
     ]);
+    if (quoteOutcome.status === "rejected") throw quoteOutcome.reason;
+    result = quoteOutcome.value;
+    if (itemOutcome.status === "fulfilled") {
+      itemResult = itemOutcome.value;
+    } else if (itemOutcome.reason instanceof ItemExtractionProviderError) {
+      itemExtractionWarning =
+        "Item-line extraction was unavailable. Aggregate Supplier Order review remains available; Items can be added later.";
+    } else {
+      throw itemOutcome.reason;
+    }
   } finally {
     file.bytes.fill(0);
   }
@@ -146,6 +160,7 @@ export async function processSupplierQuote(
     suppliers,
   );
   const proposal = buildQuoteReviewProposal(result.extraction);
+  if (itemExtractionWarning) proposal.warnings.push(itemExtractionWarning);
   if (supplierMatch.status === "NOT_FOUND") {
     proposal.warnings.push(
       "No active Supplier matched the extracted VAT number or normalized names. Choose one manually; no Supplier will be created automatically.",

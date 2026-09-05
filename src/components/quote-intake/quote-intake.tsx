@@ -43,6 +43,7 @@ import {
   IntakeStageHeader,
   IntakeWarning,
 } from "@/components/intake/intake-stage";
+import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 
 function statusLabel(status: ExtractionStatus): string {
   return status.toLowerCase().replace(/^./, (value) => value.toUpperCase());
@@ -142,25 +143,22 @@ function percentValue(value: string | null): string {
   return value === null ? "" : new Decimal(value).times(100).toString();
 }
 
-function QuoteReview({
+export function QuoteReview({
   options,
   review,
 }: {
   options: QuoteIntakeOptions;
-  review: ProcessedQuoteReview;
+  review: ProcessedQuoteReview & { requestId: string };
 }) {
   const [actionType, setActionType] = useState<"CREATE" | "UPDATE">("CREATE");
   const [applyBuildings, setApplyBuildings] = useState(true);
-  const [state, action, pending] = useActionState(
+  const { onSubmit, pending, state } = usePersistentActionState(
     confirmSupplierQuoteAction,
     initialQuoteConfirmationState,
   );
   const project = options.projects.find((item) => item.id === review.projectId);
   const billingDocuments = options.billingDocuments.filter(
     (document) => document.projectId === review.projectId,
-  );
-  const selectedBillingDocument = options.billingDocuments.find(
-    (document) => document.id === billingDocumentId,
   );
   const suggestedSupplier = review.supplierMatch.suggestedSupplierId ?? "";
   const financial = review.proposal.financial;
@@ -180,6 +178,9 @@ function QuoteReview({
   const [billingPercentage, setBillingPercentage] = useState("");
   const [billingRemainderApproved, setBillingRemainderApproved] =
     useState(false);
+  const selectedBillingDocument = options.billingDocuments.find(
+    (document) => document.id === billingDocumentId,
+  );
   const [orderCurrencyCode, setOrderCurrencyCode] = useState(
     financial.currencyCode ?? "",
   );
@@ -298,12 +299,12 @@ function QuoteReview({
             observation={extraction.supplier.phone}
           />
           <ExtractedFact
-            label="Quote reference"
+            label="Supplier document reference"
             observation={extraction.quote.reference}
           />
           <ExtractedFact
             displayValue={formatDateOnly(extraction.quote.quoteDate.value)}
-            label="Quote date"
+            label="Supplier document date"
             observation={extraction.quote.quoteDate}
           />
           <ExtractedFact
@@ -422,7 +423,8 @@ function QuoteReview({
         onSupplierSelected={selectSupplier}
       />
 
-      <form action={action} className="space-y-5">
+      <form className="space-y-5" onSubmit={onSubmit}>
+        <input name="importRequestId" type="hidden" value={review.requestId} />
         <input name="projectId" type="hidden" value={review.projectId} />
         <input
           name="originalFilename"
@@ -1094,7 +1096,7 @@ export function QuoteIntake({ options }: { options: QuoteIntakeOptions }) {
               ))}
             </select>
           </Field>
-          <Field label="Supplier quote file" required>
+          <Field label="Supplier document file" required>
             <input
               accept={ACCEPTED_QUOTE_FILE_TYPES}
               className="border-input bg-background file:bg-muted file:text-foreground h-9 w-full rounded-lg border px-2 py-1 text-sm file:mr-3 file:rounded-md file:border-0 file:px-2 file:py-1"
@@ -1104,7 +1106,7 @@ export function QuoteIntake({ options }: { options: QuoteIntakeOptions }) {
             />
           </Field>
           <SubmitButton pending={pending}>
-            {pending ? "Processing quote…" : "Process quote"}
+            {pending ? "Processing document…" : "Process document"}
           </SubmitButton>
         </form>
         {pending ? (

@@ -96,11 +96,14 @@ describe("OpenAI quote extraction provider", () => {
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
     const body = JSON.parse(String(request?.body)) as {
       input: Array<{ content: Array<Record<string, unknown>> }>;
+      instructions: string;
       model: string;
       store: boolean;
       text: { format: { strict: boolean; type: string } };
     };
     expect(body.model).toBe("gpt-5.6-luna");
+    expect(body.instructions).toContain("Proforma Invoice");
+    expect(body.instructions).toContain("Facture");
     expect(body.store).toBe(false);
     expect(body.text.format).toMatchObject({
       strict: true,

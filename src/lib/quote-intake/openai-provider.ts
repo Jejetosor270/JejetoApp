@@ -273,7 +273,7 @@ function providerFailureMessage(
   }
 }
 
-const instructions = `You extract supplier quote facts for an internal procurement ERP.
+const instructions = `You extract supplier document facts for an internal procurement ERP. The document may be a Quote, Quotation, Estimate, Proforma Invoice, Invoice, Facture, or Devis. Its title must never prevent extraction into the common Supplier Order review schema.
 Return only the requested structured object. Never guess. For every observed field:
 - EXTRACTED means the value is explicitly supported by the document.
 - MISSING means it is not present.
@@ -309,7 +309,7 @@ export class OpenAIQuoteExtractionProvider implements QuoteExtractionProvider {
                 fileContent(file),
                 {
                   type: "input_text",
-                  text: "Extract the supplier quote into the exact response schema.",
+                  text: "Extract this supplier quote or invoice into the exact response schema.",
                 },
               ],
             },

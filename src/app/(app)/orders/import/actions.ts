@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 
 import type {
@@ -42,29 +44,111 @@ import {
   QuoteExtractionBusyError,
   withQuoteExtractionGuard,
 } from "@/lib/quote-intake/operational-guard";
+import { isItemManagementEnabled } from "@/lib/settings/application-settings";
+import { QUOTE_EXTRACTION_PROVIDER } from "@/config/quote-extraction";
+import { getQuoteExtractionModel } from "@/lib/env/quote-extraction";
+import { logSupplierOrderImportLifecycle } from "@/lib/quote-intake/lifecycle";
+
+function importRequestId(formData: FormData): string {
+  const candidate = formData.get("importRequestId");
+  return typeof candidate === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      candidate,
+    )
+    ? candidate
+    : randomUUID();
+}
+
+function extractionModelForLogging(): string {
+  try {
+    return getQuoteExtractionModel();
+  } catch {
+    return "invalid-configuration";
+  }
+}
+
+function processingFailureClassification(error: unknown): string {
+  if (error instanceof QuoteExtractionProviderError) return error.category;
+  if (error instanceof QuoteFileValidationError) return "file_validation";
+  if (error instanceof QuoteProcessingError) return "review_processing";
+  if (error instanceof ItemExtractionProviderError) return "item_extraction";
+  if (error instanceof QuoteExtractionBusyError) return "rate_limit";
+  return "unexpected";
+}
+
+function missingReviewFields(review: {
+  proposal: {
+    financial: { currencyCode: string | null; purchaseCost: string | null };
+  };
+  supplierMatch: { suggestedSupplierId: string | null };
+}): string[] {
+  return [
+    "internalOrderReference",
+    ...(review.supplierMatch.suggestedSupplierId ? [] : ["supplierId"]),
+    ...(review.proposal.financial.currencyCode ? [] : ["orderCurrencyCode"]),
+    ...(review.proposal.financial.purchaseCost ? [] : ["purchaseCost"]),
+  ];
+}
 
 export async function processSupplierQuoteAction(
   _: QuoteProcessingActionState,
   formData: FormData,
 ): Promise<QuoteProcessingActionState> {
   const actor = await requireMasterDataEditor();
+  const requestId = randomUUID();
   const projectId = formData.get("projectId");
+  const model = extractionModelForLogging();
+  logSupplierOrderImportLifecycle("supplier_order_import.started", {
+    model,
+    provider: QUOTE_EXTRACTION_PROVIDER,
+    requestId,
+    stage: "extraction",
+  });
   try {
+    const itemsEnabled = await isItemManagementEnabled();
     const review = await withQuoteExtractionGuard(actor.id, () =>
       processSupplierQuote(
         typeof projectId === "string" ? projectId : "",
         formData.get("quoteFile"),
         getQuoteExtractionProvider(),
-        getItemExtractionProvider(),
+        itemsEnabled ? getItemExtractionProvider() : undefined,
       ),
     );
+    const lifecycle = {
+      extractedItemCount: review.itemReview?.rows.length ?? 0,
+      extractionStatus: "completed",
+      model: review.model,
+      provider: review.provider,
+      requestId,
+      supplierMatched: Boolean(review.supplierMatch.suggestedSupplierId),
+      warningCount:
+        review.proposal.warnings.length +
+        (review.itemReview?.warnings.length ?? 0),
+    };
+    logSupplierOrderImportLifecycle(
+      "supplier_order_import.extraction_completed",
+      { ...lifecycle, stage: "extraction" },
+    );
+    logSupplierOrderImportLifecycle("supplier_order_import.review_built", {
+      ...lifecycle,
+      missingRequiredFields: missingReviewFields(review),
+      stage: "review",
+    });
     return {
       message:
-        "Extraction complete. Review every proposed value before saving.",
-      review,
+        "Supplier document extraction complete. Review every proposed value before saving.",
+      review: { ...review, requestId },
       status: "ready",
     };
   } catch (error) {
+    logSupplierOrderImportLifecycle("supplier_order_import.failed", {
+      errorClassification: processingFailureClassification(error),
+      extractionStatus: "failed",
+      model,
+      provider: QUOTE_EXTRACTION_PROVIDER,
+      requestId,
+      stage: "extraction",
+    });
     if (
       error instanceof QuoteFileValidationError ||
       error instanceof QuoteProcessingError ||
@@ -77,7 +161,7 @@ export async function processSupplierQuoteAction(
     console.error("Unable to process supplier quote.", error);
     return {
       message:
-        "The quote could not be processed. Check the file and try again.",
+        "The Supplier document could not be processed. Check the file and try again.",
       status: "error",
     };
   }
@@ -138,6 +222,11 @@ export async function confirmSupplierQuoteAction(
   formData: FormData,
 ): Promise<QuoteConfirmationActionState> {
   const actor = await requireMasterDataEditor();
+  const requestId = importRequestId(formData);
+  logSupplierOrderImportLifecycle(
+    "supplier_order_import.confirmation_started",
+    { requestId, stage: "confirmation" },
+  );
   const input = parseQuoteConfirmation(formData);
   if (!input.success) {
     const fieldErrors = Object.fromEntries(
@@ -146,6 +235,13 @@ export async function confirmSupplierQuoteAction(
         issue.message,
       ]),
     );
+    const missingRequiredFields = [...new Set(Object.keys(fieldErrors))];
+    logSupplierOrderImportLifecycle("supplier_order_import.validation_failed", {
+      errorClassification: "confirmation_validation",
+      missingRequiredFields,
+      requestId,
+      stage: "confirmation",
+    });
     return {
       fieldErrors,
       message:
@@ -161,6 +257,10 @@ export async function confirmSupplierQuoteAction(
     revalidateProjectFinancialViews(input.data.projectId);
     revalidatePath("/payments");
     revalidatePath("/calendar");
+    logSupplierOrderImportLifecycle(
+      "supplier_order_import.confirmation_completed",
+      { requestId, stage: "confirmation" },
+    );
     return {
       message:
         input.data.action === "CREATE"
@@ -170,6 +270,19 @@ export async function confirmSupplierQuoteAction(
       status: "success",
     };
   } catch (error) {
+    const errorClassification = isDuplicateOrderReferenceError(error)
+      ? "duplicate_order_reference"
+      : error instanceof QuoteConfirmationError
+        ? "confirmation_business_rule"
+        : error instanceof ClientBillingValidationError ||
+            error instanceof ClientBillingNotFoundError
+          ? "optional_billing_link"
+          : "unexpected";
+    logSupplierOrderImportLifecycle("supplier_order_import.failed", {
+      errorClassification,
+      requestId,
+      stage: "confirmation",
+    });
     if (isDuplicateOrderReferenceError(error)) {
       return {
         message: "A Supplier Order already uses this internal reference.",
@@ -185,7 +298,8 @@ export async function confirmSupplierQuoteAction(
     }
     console.error("Unable to confirm supplier quote.", error);
     return {
-      message: "The reviewed quote could not be saved. Please try again.",
+      message:
+        "The Supplier Order could not be saved. Your review is still available; please try again.",
       status: "error",
     };
   }

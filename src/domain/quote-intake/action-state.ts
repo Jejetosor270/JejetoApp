@@ -2,7 +2,7 @@ import type { ProcessedQuoteReview } from "@/lib/quote-intake/process";
 
 export interface QuoteProcessingActionState {
   message?: string;
-  review?: ProcessedQuoteReview;
+  review?: ProcessedQuoteReview & { requestId: string };
   status?: "error" | "ready";
 }
 
