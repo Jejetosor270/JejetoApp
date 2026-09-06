@@ -2,7 +2,8 @@ import Link from "next/link";
 import Decimal from "decimal.js";
 import type { Metadata } from "next";
 import SupplierPaymentsPage from "./supplier-page";
-import { requireUser } from "@/lib/auth/current-user";
+import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
+import { ReceiptEntry } from "@/components/payments/receipt-entry";
 import { getDatabase } from "@/lib/db";
 import { listClientCashInstallments } from "@/lib/billing/reporting";
 import { listPaymentInstallments } from "@/lib/payments/payments";
@@ -36,37 +37,83 @@ export default async function PaymentsPage({
 }: {
   searchParams: Promise<Params>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const params = await searchParams;
   const text = (key: string) => firstQueryValue(params, key);
-  const tab = ["supplier", "client", "transactions"].includes(text("tab") ?? "")
+  const tab = ["supplier", "client", "receipts", "transactions"].includes(
+    text("tab") ?? "",
+  )
     ? text("tab")
     : "overview";
   const projectId = optionalUuid(text("projectId"));
   const tabs = (
-    <nav aria-label="Payments sections" className="flex gap-4 border-b pb-3">
-      {["overview", "supplier", "client", "transactions"].map((item) => {
-        const query = new URLSearchParams(queryStringFromParams(params));
-        query.set("tab", item);
-        query.delete("page");
-        return (
-          <Link
-            key={item}
-            aria-current={tab === item ? "page" : undefined}
-            className={
-              tab === item
-                ? "text-primary font-semibold"
-                : "text-muted-foreground"
-            }
-            href={`/payments?${query}`}
-          >
-            {item[0]?.toUpperCase()}
-            {item.slice(1)}
-          </Link>
-        );
-      })}
+    <nav
+      aria-label="Payments sections"
+      className="flex flex-wrap gap-x-4 gap-y-2 border-b pb-3"
+    >
+      {["overview", "supplier", "client", "receipts", "transactions"].map(
+        (item) => {
+          const query = new URLSearchParams(queryStringFromParams(params));
+          query.set("tab", item);
+          query.delete("page");
+          return (
+            <Link
+              key={item}
+              aria-current={tab === item ? "page" : undefined}
+              className={
+                tab === item
+                  ? "text-primary font-semibold"
+                  : "text-muted-foreground"
+              }
+              href={`/payments?${query}`}
+            >
+              {item[0]?.toUpperCase()}
+              {item.slice(1)}
+            </Link>
+          );
+        },
+      )}
     </nav>
   );
+  if (tab === "receipts") {
+    const canEdit = canEditMasterData(user.role);
+    const [projects, currencies] = canEdit
+      ? await Promise.all([
+          getDatabase().project.findMany({
+            select: { id: true, name: true },
+            orderBy: { name: "asc" },
+          }),
+          getDatabase().currency.findMany({
+            select: { code: true },
+            orderBy: { code: "asc" },
+          }),
+        ])
+      : [[], []];
+    return (
+      <div className="space-y-5">
+        <h1 className="text-2xl font-semibold">Payments</h1>
+        {tabs}
+        <section className="space-y-4 rounded-lg border p-4">
+          <h2 className="font-semibold">Receipts</h2>
+          <p className="text-muted-foreground text-sm">
+            Record a Supplier payment made or a Client payment received. Review
+            actual cash history in Transactions.
+          </p>
+          {canEdit ? (
+            <ReceiptEntry
+              projects={projects}
+              currencies={currencies}
+              today={businessToday()}
+            />
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              An ADMIN or MANAGER can record receipts.
+            </p>
+          )}
+        </section>
+      </div>
+    );
+  }
   if (tab === "supplier")
     return (
       <div className="space-y-5">

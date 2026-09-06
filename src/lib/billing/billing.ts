@@ -623,6 +623,7 @@ export async function confirmClientBillingDocument(
 export async function recordClientReceipt(
   actorId: string,
   input: ClientReceiptInput,
+  context?: { projectId: string },
 ): Promise<void> {
   await getDatabase().$transaction(
     async (transaction) => {
@@ -637,6 +638,11 @@ export async function recordClientReceipt(
         },
       });
       if (!document) throw new ClientBillingNotFoundError();
+      if (context && document.projectId !== context.projectId) {
+        throw new ClientBillingValidationError(
+          "Choose Billing belonging to the selected Project.",
+        );
+      }
       const installment = input.installmentId
         ? await transaction.clientPaymentInstallment.findUnique({
             where: { id: input.installmentId },

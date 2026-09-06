@@ -522,6 +522,7 @@ export async function updateInstallmentInline(
 export async function recordSettlement(
   actorId: string,
   input: SettlementInput,
+  context?: { projectId: string; orderId: string },
 ): Promise<void> {
   await getDatabase().$transaction(
     async (transaction) => {
@@ -529,12 +530,25 @@ export async function recordSettlement(
         where: { id: input.installmentId },
         include: {
           order: {
-            select: { project: { select: { reportingCurrencyCode: true } } },
+            select: {
+              projectId: true,
+              project: { select: { reportingCurrencyCode: true } },
+            },
           },
           settlements: { select: { amount: true } },
         },
       });
       if (!installment) throw new PaymentNotFoundError();
+      if (
+        context &&
+        (installment.direction !== "SUPPLIER_PAYMENT" ||
+          installment.orderId !== context.orderId ||
+          installment.order.projectId !== context.projectId)
+      ) {
+        throw new PaymentValidationError(
+          "Choose a Supplier installment belonging to the selected Order and Project.",
+        );
+      }
       if (installment.isCancelled) {
         throw new PaymentValidationError(
           "A cancelled installment cannot be settled.",

@@ -34,7 +34,7 @@ import {
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listOrderOptions, listOrdersPage } from "@/lib/procurement/orders";
 
-export const metadata: Metadata = { title: "Orders" };
+export const metadata: Metadata = { title: "Purchasing" };
 
 function statusValue(
   value: string | undefined,
@@ -96,7 +96,7 @@ export default async function OrdersPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Orders"
+        title="Purchasing"
         description={
           <>Supplier-level packages, cost progression, and commercial markup.</>
         }

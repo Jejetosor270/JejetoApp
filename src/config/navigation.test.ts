@@ -37,10 +37,10 @@ describe("Workspace navigation", () => {
 });
 
 describe("operational terminology", () => {
-  it("distinguishes Orders from Billing", () => {
+  it("names the purchasing workspace without renaming Order routes", () => {
     const items = visibleItems(true);
     expect(items).toContainEqual(
-      expect.objectContaining({ href: "/orders", label: "Orders" }),
+      expect.objectContaining({ href: "/orders", label: "Purchasing" }),
     );
     expect(items).toContainEqual(
       expect.objectContaining({ href: "/billing", label: "Billing" }),

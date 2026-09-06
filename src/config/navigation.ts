@@ -38,7 +38,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
         href: "/orders",
         icon: Package,
         isAvailable: true,
-        label: "Orders",
+        label: "Purchasing",
       },
       {
         href: "/billing",

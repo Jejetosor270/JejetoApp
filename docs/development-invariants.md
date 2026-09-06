@@ -11,6 +11,9 @@ Use **Orders**, **Billing**, **Payments**, **Client Receipts**,
 and **Items (Beta)** in human-facing workflows. Reserve “Procurement Order” for
 internal names such as `ProcurementOrder` and procurement service paths.
 
+**Purchasing** names the top-level `/orders` workspace and navigation; individual
+records and their creation/edit actions remain **Orders**.
+
 A Order is a Supplier-level Project package that may cover several Buildings.
 It owns one normalized cost structure. Items are Project-specific supporting detail,
 not a reusable catalog, inventory, or a replacement for Order financial authority.
@@ -206,7 +209,7 @@ Do not introduce an Item dependency without explicit feature design.
 
 ## Lasting UX and compatibility rules
 
-Keep planned versus actual terminology explicit. Payments has Overview, Supplier, Client, and Transactions tabs; Supplier schedules remain supplier-side;
+Keep planned versus actual terminology explicit. Payments has Overview, Supplier, Client, Receipts, and Transactions tabs; Supplier schedules remain supplier-side;
 Client cash belongs to Billing/Receipts. Use progressive financial disclosure rather
 than duplicate blocks or renamed copies of the same financial concept. Preserve shared
 filtering, sorting, pagination, tables, and visible-page selection mechanics. Reports
@@ -277,5 +280,13 @@ checks. Report migration/deployment requirements explicitly.
   submission (the legacy reviewed Supplier form retains its accepted European input contract).
   Monetary/percentage display uses shared formatters; storage, FX and quantity precision remain unchanged.
 - Explicit full-detail editing uses `EditorDrawer`; preserve quick row edits and structured intake.
+- Payments → Receipts is the central entry drawer for Supplier payments and Client
+  receipts. Reuse `recordSettlement` and `recordClientReceipt`, including their
+  transactional audit and overpayment checks. Central entry validates the selected
+  Project/document within the write transaction. Supplier payments require an
+  installment; the existing installment creator is available within the drawer.
+  Client receipts may be Billing-level. Selecting an installment proposes its current
+  outstanding amount; manual overrides survive unrelated edits. Contextual Order and
+  Billing entry remains available. Transactions is the actual-cash history view.
 - Rollout requires `20260909000000_project_order_packages` before the new application.
   Migration creation/generation does not authorize applying it to the configured database.

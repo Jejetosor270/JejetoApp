@@ -54,7 +54,7 @@ export default async function OrderPage({
         <div>
           <DetailPageHeader
             backHref="/orders"
-            backLabel="Orders"
+            backLabel="Purchasing"
             eyebrow={order.orderNumber}
             meta={`${order.project.name} · ${order.supplier.displayName}`}
             status={order.status}
