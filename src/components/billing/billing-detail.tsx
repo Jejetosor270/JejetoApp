@@ -2,6 +2,10 @@
 import { MoneyInput } from "@/components/master-data/form-ui";
 
 import { AllocationInputs } from "@/components/billing/allocation-inputs";
+import {
+  BillingAllocationEditor,
+  type SavedBillingAllocation,
+} from "@/components/billing/billing-allocation-editor";
 import { DateInput } from "@/components/forms/date-input";
 
 import Decimal from "decimal.js";
@@ -207,6 +211,68 @@ export function BillingDetail({
   );
   const savedProject = options.projects.find(
     (item) => item.id === saved.projectId,
+  );
+  const savedReconciliation = allocationReconciliation(
+    calculationDecimal(saved.totalHt),
+    saved.allocations.map((allocation) =>
+      calculationDecimal(allocation.amount),
+    ),
+  );
+  const saveAllocation = (allocation: SavedBillingAllocation) => {
+    const update = (current: BillingDraft): BillingDraft => ({
+      ...current,
+      isProjectRemainderApproved: allocation.isProjectRemainderApproved,
+      allocations: [
+        ...current.allocations.filter(
+          (item) => item.orderId !== allocation.orderId,
+        ),
+        {
+          amount: decimal(allocation.amount),
+          basis: "FIXED_AMOUNT",
+          orderId: allocation.orderId,
+          percentage: "",
+        },
+      ],
+    });
+    setSaved(update);
+    setDraft(update);
+  };
+  const allocationEditor = (allocation?: AllocationDraft) => (
+    <BillingAllocationEditor
+      {...(allocation ? { allocation } : {})}
+      billing={{ ...saved, id: document.id }}
+      availableHt={
+        allocationReconciliation(
+          calculationDecimal(saved.totalHt),
+          saved.allocations
+            .filter((item) => item.orderId !== allocation?.orderId)
+            .map((item) => calculationDecimal(item.amount)),
+        ).remaining
+      }
+      orders={options.orders
+        .filter((order) => order.projectId === saved.projectId)
+        .filter((order) =>
+          allocation
+            ? order.id === allocation.orderId
+            : !saved.allocations.some((item) => item.orderId === order.id),
+        )
+        .map((order) => ({
+          id: order.id,
+          label: `${order.orderNumber} · ${order.supplier.displayName}`,
+          sellingBasisHt: orderSellingBasisInBillingCurrency({
+            billingCurrencyCode: saved.currencyCode,
+            billingFxRateToReporting: saved.fxRate || null,
+            orderSellingReporting:
+              order.sellingReporting ??
+              financialByOrder.get(order.id)?.plannedSell ??
+              null,
+            reportingCurrencyCode:
+              savedProject?.reportingCurrencyCode ??
+              document.project.reportingCurrencyCode,
+          }),
+        }))}
+      onSaved={saveAllocation}
+    />
   );
   const fieldErrors = state.fieldErrors ?? {};
   const updateFinancialTotals = (next: Partial<BillingDraft>) => {
@@ -958,9 +1024,12 @@ export function BillingDetail({
               label: "Allocations",
               content: (
                 <section className="bg-card rounded-lg border p-4">
-                  <h2 className="text-sm font-semibold">
-                    Order Reconciliation
-                  </h2>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="text-sm font-semibold">
+                      Order Reconciliation
+                    </h2>
+                    {canEdit ? allocationEditor() : null}
+                  </div>
                   <div className="mt-3 overflow-x-auto">
                     <table className="w-full min-w-[760px] text-left text-sm">
                       <thead className="text-muted-foreground border-b text-xs">
@@ -971,6 +1040,9 @@ export function BillingDetail({
                           <th className="text-right">% of Billing</th>
                           <th className="text-right">Planned Sell HT</th>
                           <th className="text-right">Effective markup</th>
+                          {canEdit ? (
+                            <th className="text-right">Edit</th>
+                          ) : null}
                         </tr>
                       </thead>
                       <tbody className="divide-y">
@@ -1020,9 +1092,25 @@ export function BillingDetail({
                                   financial?.actualMarkupRate ?? null,
                                 )}
                               </td>
+                              {canEdit ? (
+                                <td className="py-2 pl-3 text-right">
+                                  {allocationEditor(allocation)}
+                                </td>
+                              ) : null}
                             </tr>
                           );
                         })}
+                        {saved.allocations.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={canEdit ? 7 : 6}
+                              className="text-muted-foreground py-6 text-center"
+                            >
+                              No Order allocations yet. Billing remains at
+                              Project level.
+                            </td>
+                          </tr>
+                        ) : null}
                       </tbody>
                     </table>
                   </div>
@@ -1034,14 +1122,14 @@ export function BillingDetail({
                     <p>
                       Allocated HT:{" "}
                       {formatMoney(
-                        reconciliation.allocated,
+                        savedReconciliation.allocated,
                         saved.currencyCode,
                       )}
                     </p>
                     <p>
                       Project-level remainder:{" "}
                       {formatMoney(
-                        reconciliation.remaining,
+                        savedReconciliation.remaining,
                         saved.currencyCode,
                       )}
                     </p>
