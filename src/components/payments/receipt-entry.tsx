@@ -32,8 +32,8 @@ interface Props {
 export function ReceiptEntry(props: Props) {
   return (
     <EditorDrawer
-      title="Record receipt"
-      trigger={<Button>Record receipt</Button>}
+      title="Record Payment"
+      trigger={<Button>Record Payment</Button>}
     >
       <ReceiptEntryForm {...props} />
     </EditorDrawer>
@@ -107,10 +107,10 @@ export function ReceiptEntryForm({ projects, currencies, today }: Props) {
         <p role="status">{state.message}</p>
         <Button asChild>
           <Link
-            href="/payments?tab=transactions"
+            href={`/payments?tab=${supplier ? "supplier" : "client"}&projectId=${projectId}&${supplier ? "orderId" : "billingId"}=${documentId}`}
             onClick={() => router.refresh()}
           >
-            View Transactions
+            {supplier ? "View Supplier payments" : "View Client collections"}
           </Link>
         </Button>
         <p>

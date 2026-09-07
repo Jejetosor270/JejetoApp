@@ -209,7 +209,7 @@ Do not introduce an Item dependency without explicit feature design.
 
 ## Lasting UX and compatibility rules
 
-Keep planned versus actual terminology explicit. Payments has Overview, Supplier, Client, Receipts, and Transactions tabs; Supplier schedules remain supplier-side;
+Keep planned versus actual terminology explicit. Payments has Supplier (default), Client, and Record Payment tabs; Supplier schedules remain supplier-side;
 Client cash belongs to Billing/Receipts. Use progressive financial disclosure rather
 than duplicate blocks or renamed copies of the same financial concept. Preserve shared
 filtering, sorting, pagination, tables, and visible-page selection mechanics. Reports
@@ -273,20 +273,22 @@ checks. Report migration/deployment requirements explicitly.
   into Billing currency with the existing manual-FX helper; incomplete FX disables that
   percentage. Revised Supplier intake previews use the same candidate/pricing helpers
   as confirmation and make no AI calls or writes.
-- The Payments actual ledger unions Client Receipts and Supplier-direction settlements
-  once each, preserving original currencies. It excludes legacy Order client settlements.
-  Schedules, including planned Quotes, are a separate expectation view.
+- Payments shows Supplier installment settlements and Client Billing collections in
+  their respective views, with Order/Billing detail links for individual actual records.
+  Client cash authority remains Client Receipts, not legacy Order client settlements.
+  Schedules, including planned Quotes, remain expectations rather than actual cash.
 - Use `DateInput` for editable dates: European display/calendar, canonical ISO date-only
   submission (the legacy reviewed Supplier form retains its accepted European input contract).
   Monetary/percentage display uses shared formatters; storage, FX and quantity precision remain unchanged.
 - Explicit full-detail editing uses `EditorDrawer`; preserve quick row edits and structured intake.
-- Payments → Receipts is the central entry drawer for Supplier payments and Client
+- Payments → Record Payment is the central entry drawer for Supplier payments and Client
   receipts. Reuse `recordSettlement` and `recordClientReceipt`, including their
   transactional audit and overpayment checks. Central entry validates the selected
   Project/document within the write transaction. Supplier payments require an
   installment; the existing installment creator is available within the drawer.
   Client receipts may be Billing-level. Selecting an installment proposes its current
   outstanding amount; manual overrides survive unrelated edits. Contextual Order and
-  Billing entry remains available. Transactions is the actual-cash history view.
+  Billing entry remains available. Overview and Transactions tabs are removed; legacy
+  links redirect to Supplier or Client, and old Receipts links redirect to Record Payment.
 - Rollout requires `20260909000000_project_order_packages` before the new application.
   Migration creation/generation does not authorize applying it to the configured database.
