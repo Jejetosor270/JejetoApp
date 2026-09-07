@@ -1,5 +1,4 @@
 import { DateInput } from "@/components/forms/date-input";
-import { PageHeader } from "@/components/layout/page-header";
 import { ViewShortcuts } from "@/components/listing/view-shortcuts";
 import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
@@ -84,23 +83,12 @@ export default async function PaymentsPage({
   exportQuery.set("direction", PaymentDirection.SUPPLIER_PAYMENT);
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Supplier Payments"
-        description={
-          <>
-            Supplier cash-out installments, settlements, and outstanding
-            balances.
-          </>
-        }
-        actions={
-          <>
-            <ExportLink
-              entity="payments"
-              queryString={exportQuery.toString()}
-            />
-          </>
-        }
-      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-muted-foreground text-sm">
+          Supplier cash-out installments, settlements, and outstanding balances.
+        </p>
+        <ExportLink entity="payments" queryString={exportQuery.toString()} />
+      </div>
       <ViewShortcuts
         pathname="/payments"
         queryString={queryStringFromParams(params)}

@@ -24,7 +24,7 @@ import {
 } from "@/domain/procurement/presentation";
 
 export const inputClassName =
-  "border-input bg-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2";
+  "border-input bg-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full min-w-0 rounded-md border px-3 text-sm outline-none focus-visible:ring-2";
 
 const FieldContext = createContext<{ errorId?: string; invalid?: boolean }>({});
 
@@ -46,7 +46,7 @@ export function Field({
   const errorId = useId();
   return (
     <FieldContext.Provider value={error ? { errorId, invalid: true } : {}}>
-      <label className="grid gap-1.5 text-sm font-medium">
+      <label className="grid min-w-0 gap-1.5 text-sm font-medium">
         <span>
           {label}
           {required ? (

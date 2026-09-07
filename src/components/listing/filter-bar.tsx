@@ -31,7 +31,13 @@ export function FilterBar({ children }: { children: ReactNode }) {
         ["sort", "direction", "sortDirection"].includes(control.props.name)
       )
         continue;
-      const option = flatten(control.props.children).find(
+      const options = flatten(control.props.children).flatMap((child) =>
+        isValidElement<{ children?: ReactNode }>(child) &&
+        child.type === "optgroup"
+          ? flatten(child.props.children)
+          : [child],
+      );
+      const option = options.find(
         (child) =>
           isValidElement<{ value?: string }>(child) &&
           child.props.value === control.props.defaultValue,
@@ -83,10 +89,10 @@ export function FilterBar({ children }: { children: ReactNode }) {
     <form method="get" data-draft-guard="off" className="space-y-3">
       {hidden}
       <div className="flex flex-wrap items-end gap-3">
-        <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-3">
+        <div className="grid w-full min-w-0 flex-auto gap-3 sm:flex-1 sm:grid-cols-3">
           {primary}
         </div>
-        <div className="flex items-center gap-2">{actions}</div>
+        <div className="flex flex-wrap items-center gap-2">{actions}</div>
       </div>
       <AppliedFilters labels={labels} />
       {advanced.length > 0 && (

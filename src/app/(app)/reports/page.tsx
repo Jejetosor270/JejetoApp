@@ -4,6 +4,7 @@ import { FilterBar } from "@/components/listing/filter-bar";
 import { queryStringFromParams } from "@/domain/listing/validation";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { NavigationTabs } from "@/components/layout/navigation-tabs";
 
 import { CashFlowPanel } from "@/components/reporting/cash-flow-panel";
 import {
@@ -427,46 +428,37 @@ export default async function ReportsPage({
         }
       />
 
-      <nav aria-label="Report view" className="flex flex-wrap gap-2">
-        {views
+      <NavigationTabs
+        label="Report view"
+        tabs={views
           .filter((item) => item.value !== "payments")
-          .map((item) => (
-            <Link
-              className={`rounded-md border px-3 py-2 text-sm font-medium ${
-                item.value === view ||
-                (item.value === "cash-flow" && view === "payments")
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "border-input"
-              }`}
-              href={viewHref(item.value, params)}
-              key={item.value}
-            >
-              {item.label}
-            </Link>
-          ))}
-      </nav>
+          .map((item) => ({
+            id: item.value,
+            label: item.label,
+            href: viewHref(item.value, params),
+            active:
+              item.value === view ||
+              (item.value === "cash-flow" && view === "payments"),
+          }))}
+      />
 
       {(view === "cash-flow" || view === "payments") && (
-        <nav aria-label="Cash report" className="flex gap-4 text-sm">
-          {[
-            { value: "cash-flow", label: "Forecast" },
-            { value: "payments", label: "Transactions" },
-          ].map((item) => (
-            <Link
-              key={item.value}
-              aria-current={view === item.value ? "page" : undefined}
-              className={
-                view === item.value
-                  ? "text-primary font-semibold underline underline-offset-8"
-                  : "text-muted-foreground"
-              }
-              href={viewHref(item.value as ReportView, params)}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <NavigationTabs
+          label="Cash report"
+          tabs={(
+            [
+              { value: "cash-flow", label: "Forecast" },
+              { value: "payments", label: "Transactions" },
+            ] as const
+          ).map((item) => ({
+            id: item.value,
+            label: item.label,
+            active: view === item.value,
+            href: viewHref(item.value, params),
+          }))}
+        />
       )}
+
       <ReportingFilters options={options} params={params} view={view} />
       <ActiveReportFilters options={options} params={params} view={view} />
 

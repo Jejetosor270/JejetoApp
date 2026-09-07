@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { clearFiltersHref } from "./filter-navigation";
 export function AppliedFilters({ labels }: { labels: Record<string, string> }) {
   const pathname = usePathname();
   const search = useSearchParams();
@@ -13,7 +14,7 @@ export function AppliedFilters({ labels }: { labels: Record<string, string> }) {
       aria-label="Applied filters"
       className="flex flex-wrap items-center gap-2 text-xs"
     >
-      {active.map(([key]) => {
+      {[...new Set(active.map(([key]) => key))].map((key) => {
         const query = new URLSearchParams(search);
         query.delete(key);
         query.delete("page");
@@ -31,6 +32,12 @@ export function AppliedFilters({ labels }: { labels: Record<string, string> }) {
           </Link>
         );
       })}
+      <Link
+        href={clearFiltersHref(pathname, new URLSearchParams(search))}
+        className="text-muted-foreground hover:text-foreground underline underline-offset-4"
+      >
+        Clear filters
+      </Link>
     </div>
   );
 }

@@ -54,6 +54,10 @@ it.each(["supplier", "client", "entry"])(
     for (const label of ["Supplier", "Client", "Record Payment"])
       expect(nav).toContain(label);
     expect(html).not.toMatch(/Overview|Transactions|tab=receipts/);
+    expect(html.match(/<h1 /g)).toHaveLength(1);
+    expect(html.indexOf("<h1 ")).toBeLessThan(
+      html.indexOf('<nav aria-label="Payments sections"'),
+    );
     expect(html).toContain(
       tab === "supplier"
         ? "Supplier installments"

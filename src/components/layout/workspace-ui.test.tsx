@@ -10,6 +10,11 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { WorkspaceTabs } from "./workspace-tabs";
+import { NavigationTabs } from "./navigation-tabs";
+import { PageHeader } from "./page-header";
+import { DetailPageHeader } from "./detail-page-header";
+import { Pagination } from "@/components/listing/pagination";
+import { clearFiltersHref } from "@/components/listing/filter-navigation";
 import { NavigationLinks } from "@/components/app-shell/sidebar-navigation";
 import { navigationForRole } from "@/config/navigation";
 import { Field, MoneyInput } from "@/components/master-data/form-ui";
@@ -150,6 +155,99 @@ describe("workspace accessibility and navigation contracts", () => {
     location.search += "&projectId=demo";
     const html = renderToStaticMarkup(<ListEmptyState entity="Orders" />);
     expect(html).toContain("No Orders match these filters.");
-    expect(html).toContain('href="/orders"');
+    expect(html).toContain(
+      'href="/orders?view=financial&amp;sort=updated&amp;pageSize=50"',
+    );
+  });
+  it("uses the same tab treatment for route links and mounted detail panels", () => {
+    const html = renderToStaticMarkup(
+      <NavigationTabs
+        label="Payments sections"
+        tabs={[
+          {
+            id: "supplier",
+            label: "Supplier",
+            href: "/payments?tab=supplier",
+            active: true,
+          },
+          {
+            id: "client",
+            label: "Client",
+            href: "/payments?tab=client",
+            active: false,
+          },
+          {
+            id: "entry",
+            label: "Record Payment",
+            href: "/payments?tab=entry",
+            active: false,
+          },
+        ]}
+      />,
+    );
+    expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(html.match(/<a /g)).toHaveLength(3);
+    expect(html).toContain("overflow-x-auto");
+    expect(html).toContain("focus-visible:outline-2");
+    expect(html).not.toContain('role="tab"');
+  });
+  it("retains the selected view and page size when clearing filters", () => {
+    expect(
+      clearFiltersHref(
+        "/payments",
+        new URLSearchParams(
+          "tab=client&projectId=demo&status=PAID&page=4&pageSize=50",
+        ),
+      ),
+    ).toBe("/payments?tab=client&pageSize=50");
+  });
+  it("shows human-readable grouped filter chips and a view-preserving clear action", () => {
+    location.pathname = "/payments";
+    location.search = "tab=client&counterpartyId=client-id&page=4";
+    const html = renderToStaticMarkup(
+      <FilterBar>
+        <FilterField label="Client">
+          <select name="counterpartyId" defaultValue="client-id">
+            <optgroup label="Clients">
+              <option value="client-id">Fictional Client</option>
+            </optgroup>
+          </select>
+        </FilterField>
+      </FilterBar>,
+    );
+    expect(html).toContain("Client: Fictional Client");
+    expect(html).toContain('href="/payments?tab=client"');
+    expect(html).toContain("Clear filters");
+  });
+  it("keeps header titles and actions flexible at narrow widths", () => {
+    for (const html of [
+      renderToStaticMarkup(
+        <PageHeader title="Purchasing" actions={<button>New Order</button>} />,
+      ),
+      renderToStaticMarkup(
+        <DetailPageHeader
+          title="Long Order reference"
+          backHref="/orders"
+          backLabel="Purchasing"
+          eyebrow="Order"
+          actions={<button>Edit</button>}
+        />,
+      ),
+    ]) {
+      expect(html.match(/<h1 /g)).toHaveLength(1);
+      expect(html).toContain("break-words");
+      expect(html).toContain("flex-wrap");
+    }
+    const pagination = renderToStaticMarkup(
+      <Pagination
+        page={2}
+        pageSize={25}
+        total={100}
+        pathname="/payments"
+        queryString="tab=client"
+      />,
+    );
+    expect(pagination).toContain("flex flex-wrap items-center gap-2");
+    expect(pagination).toContain("tab=client");
   });
 });

@@ -75,9 +75,9 @@ export function EditorDrawer({
             wide && "data-[side=right]:sm:max-w-[calc(100vw-3rem)]",
           )}
         >
-          <SheetHeader className="shrink-0 border-b p-6">
+          <SheetHeader className="shrink-0 border-b p-4 sm:p-6">
             <div className="flex items-center justify-between gap-3">
-              <SheetTitle>{title}</SheetTitle>
+              <SheetTitle className="min-w-0 break-words">{title}</SheetTitle>
               <Button
                 variant="ghost"
                 type="button"
@@ -88,7 +88,7 @@ export function EditorDrawer({
             </div>
             <SheetDescription>{description}</SheetDescription>
           </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
             <DraftGuard>{children}</DraftGuard>
           </div>
         </SheetContent>

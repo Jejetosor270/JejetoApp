@@ -2,33 +2,21 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-
-const presentationKeys = new Set([
-  "view",
-  "tab",
-  "sort",
-  "direction",
-  "sortDirection",
-  "page",
-  "pageSize",
-  "portfolioView",
-]);
+import { clearFiltersHref, hasListFilters } from "./filter-navigation";
 
 export function ListEmptyState({ entity }: { entity: string }) {
   const pathname = usePathname();
   const params = useSearchParams();
-  const filtered = Array.from(params.entries()).some(
-    ([name, value]) => value && !presentationKeys.has(name),
-  );
+  const filtered = hasListFilters(new URLSearchParams(params));
   return (
-    <div className="space-y-2 px-4 py-10 text-center text-sm">
+    <div className="space-y-2 px-4 py-6 text-center text-sm">
       <p className="font-medium">
         {filtered ? `No ${entity} match these filters.` : `No ${entity} yet.`}
       </p>
       {filtered ? (
         <Link
           className="text-primary underline underline-offset-4"
-          href={pathname}
+          href={clearFiltersHref(pathname, new URLSearchParams(params))}
         >
           Clear filters
         </Link>

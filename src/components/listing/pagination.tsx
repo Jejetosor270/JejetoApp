@@ -33,7 +33,7 @@ export function Pagination({
         {first}–{last} of {total}.
         {selectionIsPageScoped ? " Selection applies to this page only." : ""}
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <PageSizeControl
           pageSize={pageSize}
           pathname={pathname}

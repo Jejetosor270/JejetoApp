@@ -281,6 +281,11 @@ checks. Report migration/deployment requirements explicitly.
   submission (the legacy reviewed Supplier form retains its accepted European input contract).
   Monetary/percentage display uses shared formatters; storage, FX and quantity precision remain unchanged.
 - Explicit full-detail editing uses `EditorDrawer`; preserve quick row edits and structured intake.
+- Use shared `PageHeader` / `DetailPageHeader` and the shared tab treatment.
+  URL-driven `NavigationTabs` and mounted `WorkspaceTabs` retain their distinct
+  navigation/draft behavior. Clearing list filters must preserve the selected view/tab
+  and page size while resetting pagination. Headers, filter actions and pagination
+  wrap at narrow widths; financial table cells remain right-aligned and formatted.
 - Payments → Record Payment is the central entry drawer for Supplier payments and Client
   receipts. Reuse `recordSettlement` and `recordClientReceipt`, including their
   transactional audit and overpayment checks. Central entry validates the selected

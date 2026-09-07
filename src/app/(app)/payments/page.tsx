@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { PageHeader } from "@/components/layout/page-header";
+import { NavigationTabs } from "@/components/layout/navigation-tabs";
+import { Button } from "@/components/ui/button";
 import { redirect } from "next/navigation";
 import Decimal from "decimal.js";
 import type { Metadata } from "next";
@@ -53,11 +56,9 @@ export default async function PaymentsPage({
     : "supplier";
   const projectId = optionalUuid(text("projectId"));
   const tabs = (
-    <nav
-      aria-label="Payments sections"
-      className="flex flex-wrap gap-x-4 gap-y-2 border-b pb-3"
-    >
-      {(
+    <NavigationTabs
+      label="Payments sections"
+      tabs={(
         [
           ["supplier", "Supplier"],
           ["client", "Client"],
@@ -67,22 +68,14 @@ export default async function PaymentsPage({
         const query = new URLSearchParams(queryStringFromParams(params));
         query.set("tab", item);
         query.delete("page");
-        return (
-          <Link
-            key={item}
-            aria-current={tab === item ? "page" : undefined}
-            className={
-              tab === item
-                ? "text-primary font-semibold"
-                : "text-muted-foreground"
-            }
-            href={`/payments?${query}`}
-          >
-            {label}
-          </Link>
-        );
+        return {
+          id: item,
+          label,
+          active: tab === item,
+          href: `/payments?${query}`,
+        };
       })}
-    </nav>
+    />
   );
   if (tab === "entry") {
     const canEdit = canEditMasterData(user.role);
@@ -100,10 +93,9 @@ export default async function PaymentsPage({
       : [[], []];
     return (
       <div className="space-y-5">
-        <h1 className="text-2xl font-semibold">Payments</h1>
+        <PageHeader title="Payments" />
         {tabs}
-        <section className="space-y-4 rounded-lg border p-4">
-          <h2 className="font-semibold">Record Payment</h2>
+        <section className="space-y-4">
           <p className="text-muted-foreground text-sm">
             Record a Supplier payment made or a Client payment received.
           </p>
@@ -125,6 +117,7 @@ export default async function PaymentsPage({
   if (tab === "supplier")
     return (
       <div className="space-y-5">
+        <PageHeader title="Payments" />
         {tabs}
         <SupplierPaymentsPage
           searchParams={Promise.resolve({
@@ -234,9 +227,9 @@ export default async function PaymentsPage({
           <option value="asc">Oldest first</option>
         </select>
       </FilterField>
-      <button className="rounded border px-3 py-2" type="submit">
+      <Button variant="outline" type="submit">
         Apply filters
-      </button>
+      </Button>
     </FilterBar>
   );
   const today = businessToday();
@@ -274,7 +267,7 @@ export default async function PaymentsPage({
   const { page, pageSize } = parsePageInput(params);
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-semibold">Payments</h1>
+      <PageHeader title="Payments" />
       {tabs}
       {filters}
       <p className="text-muted-foreground text-sm">

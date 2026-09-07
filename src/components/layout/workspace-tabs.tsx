@@ -2,7 +2,7 @@
 
 import { useId, useSyncExternalStore, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { tabClassName, tabListClassName } from "./tab-styles";
 
 function subscribeHash(callback: () => void) {
   window.addEventListener("hashchange", callback);
@@ -49,7 +49,7 @@ export function WorkspaceTabs({
       <div
         role="tablist"
         aria-label={label}
-        className="flex gap-5 overflow-x-auto border-b"
+        className={tabListClassName}
         onKeyDown={(event) => {
           if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
             return;
@@ -82,12 +82,7 @@ export function WorkspaceTabs({
             aria-controls={`${id}-${tab.id}-panel`}
             tabIndex={selected === tab.id ? 0 : -1}
             onClick={() => select(tab.id)}
-            className={cn(
-              "min-h-11 shrink-0 border-b-2 px-1 text-sm font-medium",
-              selected === tab.id
-                ? "border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground border-transparent",
-            )}
+            className={tabClassName(selected === tab.id)}
           >
             {tab.label}
           </button>
