@@ -24,7 +24,6 @@ import { createOrderInputSchema } from "@/domain/procurement/validation";
 import { QUOTE_EXTRACTION_PROVIDER } from "@/config/quote-extraction";
 import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
-import { getQuoteExtractionModel } from "@/lib/env/quote-extraction";
 import {
   createOrderInTransaction,
   getOrderInTransaction,
@@ -567,7 +566,7 @@ export async function confirmSupplierQuote(
             input.action === "CREATE"
               ? SupplierQuoteImportAction.CREATED_ORDER
               : SupplierQuoteImportAction.UPDATED_ORDER,
-          extractionModel: getQuoteExtractionModel(),
+          extractionModel: input.extractionModel ?? "unknown",
           extractionProvider: QUOTE_EXTRACTION_PROVIDER,
           leadTimeRaw: input.leadTimeRaw ?? null,
           orderId,

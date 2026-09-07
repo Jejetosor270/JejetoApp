@@ -3,6 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { quoteExtractionFixture } from "@/test/quote-extraction-fixture";
 
 vi.mock("server-only", () => ({}));
+const modelSettings = vi.hoisted(() => ({
+  findUnique: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/lib/db", () => ({
+  getDatabase: () => ({ applicationSetting: modelSettings }),
+}));
 
 import {
   OpenAIQuoteExtractionProvider,
@@ -314,3 +320,22 @@ describe("OpenAI quote extraction provider", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+it.each(["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol"])(
+  "sends the saved supplier model %s to OpenAI",
+  async (model) => {
+    modelSettings.findUnique.mockResolvedValueOnce({
+      quoteExtractionModel: model,
+    });
+    const request = mockResponse(
+      completedResponse(JSON.stringify(quoteExtractionFixture())),
+    );
+    const result = await new OpenAIQuoteExtractionProvider().extract(
+      temporaryFile,
+    );
+    expect(JSON.parse(String(request.mock.calls[0]?.[1]?.body)).model).toBe(
+      model,
+    );
+    expect(result.model).toBe(model);
+  },
+);

@@ -16,7 +16,7 @@ const optionalModel = z.preprocess(
     .optional(),
 );
 
-export function getClientDocumentExtractionEnvironment() {
+export function getClientDocumentExtractionEnvironment(modelOverride?: string) {
   const parsed = z
     .object({
       CLIENT_DOCUMENT_EXTRACTION_MODEL: optionalModel,
@@ -24,7 +24,7 @@ export function getClientDocumentExtractionEnvironment() {
     })
     .parse({
       CLIENT_DOCUMENT_EXTRACTION_MODEL:
-        process.env.CLIENT_DOCUMENT_EXTRACTION_MODEL,
+        modelOverride ?? process.env.CLIENT_DOCUMENT_EXTRACTION_MODEL,
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     });
   return {

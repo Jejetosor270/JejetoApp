@@ -192,6 +192,7 @@ describe("reviewed quote confirmation persistence", () => {
     const form = commonForm("UPDATE");
     form.set("orderId", orderId);
     form.set("supplierQuoteReference", "MISSING-AI-SHOULD-NOT-APPLY");
+    form.set("extractionModel", "gpt-5.6-terra");
     orderMocks.getOrderInTransaction.mockResolvedValue(existingOrder());
 
     await confirmSupplierQuote("actor-1", parsed(form));
@@ -212,6 +213,7 @@ describe("reviewed quote confirmation persistence", () => {
         action: "UPDATED_ORDER",
         orderId,
         originalFilename: "supplier-quote.pdf",
+        extractionModel: "gpt-5.6-terra",
       }),
     });
     expect(transaction.paymentInstallment.createMany).not.toHaveBeenCalled();

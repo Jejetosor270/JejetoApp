@@ -525,6 +525,7 @@ export function QuoteReview({
             value={review.requestId}
           />
           <input name="projectId" type="hidden" value={review.projectId} />
+          <input name="extractionModel" type="hidden" value={review.model} />
           <input
             name="originalFilename"
             type="hidden"

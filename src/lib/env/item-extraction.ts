@@ -16,7 +16,7 @@ const optionalModel = z.preprocess(
     .optional(),
 );
 
-export function getItemExtractionEnvironment() {
+export function getItemExtractionEnvironment(modelOverride?: string) {
   return z
     .object({
       OPENAI_API_KEY: z.string().trim().min(1),
@@ -25,7 +25,9 @@ export function getItemExtractionEnvironment() {
     .parse({
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
       ITEM_EXTRACTION_MODEL:
-        process.env.ITEM_EXTRACTION_MODEL ?? DEFAULT_ITEM_EXTRACTION_MODEL,
+        modelOverride ??
+        process.env.ITEM_EXTRACTION_MODEL ??
+        DEFAULT_ITEM_EXTRACTION_MODEL,
     });
 }
 

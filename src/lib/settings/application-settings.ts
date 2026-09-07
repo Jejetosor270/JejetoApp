@@ -5,8 +5,8 @@ import type { ApplicationSettingsInput } from "@/domain/settings/validation";
 import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
 
-const SETTING_ID = "company";
-const DEFAULT_COMPANY_NAME = "Procurement Finance ERP";
+export const APPLICATION_SETTING_ID = "company";
+export const DEFAULT_COMPANY_NAME = "Procurement Finance ERP";
 
 export interface ApplicationSettingsView {
   companyName: string;
@@ -16,7 +16,7 @@ export interface ApplicationSettingsView {
 
 export async function getApplicationSettings(): Promise<ApplicationSettingsView> {
   const settings = await getDatabase().applicationSetting.findUnique({
-    where: { id: SETTING_ID },
+    where: { id: APPLICATION_SETTING_ID },
     select: {
       companyName: true,
       companyReportingCurrencyCode: true,
@@ -42,12 +42,12 @@ export async function updateItemManagementSetting(
 ): Promise<void> {
   await getDatabase().$transaction(async (transaction) => {
     await transaction.applicationSetting.upsert({
-      where: { id: SETTING_ID },
+      where: { id: APPLICATION_SETTING_ID },
       create: {
         companyName: DEFAULT_COMPANY_NAME,
         companyReportingCurrencyCode: COMPANY_REPORTING_CURRENCY_CODE,
         createdById: actorId,
-        id: SETTING_ID,
+        id: APPLICATION_SETTING_ID,
         itemManagementEnabled: enabled,
         updatedById: actorId,
       },
@@ -55,7 +55,7 @@ export async function updateItemManagementSetting(
     });
     await writeAuditEvent(transaction, actorId, {
       action: enabled ? "ACTIVATED" : "DEACTIVATED",
-      entityId: SETTING_ID,
+      entityId: APPLICATION_SETTING_ID,
       entityReference: "Item Management (Beta)",
       entityType: "SETTING",
       metadata: { itemManagementEnabled: enabled },
@@ -70,19 +70,19 @@ export async function updateApplicationSettings(
 ): Promise<void> {
   await getDatabase().$transaction(async (transaction) => {
     await transaction.applicationSetting.upsert({
-      where: { id: SETTING_ID },
+      where: { id: APPLICATION_SETTING_ID },
       create: {
         companyName: input.companyName,
         companyReportingCurrencyCode: COMPANY_REPORTING_CURRENCY_CODE,
         createdById: actorId,
-        id: SETTING_ID,
+        id: APPLICATION_SETTING_ID,
         updatedById: actorId,
       },
       update: { companyName: input.companyName, updatedById: actorId },
     });
     await writeAuditEvent(transaction, actorId, {
       action: "UPDATED",
-      entityId: SETTING_ID,
+      entityId: APPLICATION_SETTING_ID,
       entityReference: "Company settings",
       entityType: "SETTING",
       metadata: { changedFields: ["companyName"] },

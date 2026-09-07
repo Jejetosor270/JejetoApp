@@ -1,3 +1,4 @@
+import { getAiProcessingModel } from "@/lib/settings/ai-processing-settings";
 import "server-only";
 
 import { z } from "zod";
@@ -151,9 +152,14 @@ function failExtraction(
   throw new QuoteExtractionProviderError(message, category);
 }
 
-function requiredProviderConfiguration(): { apiKey: string; model: string } {
+async function requiredProviderConfiguration(): Promise<{
+  apiKey: string;
+  model: string;
+}> {
   try {
-    const environment = getQuoteExtractionEnvironment();
+    const environment = getQuoteExtractionEnvironment(
+      await getAiProcessingModel("quoteExtractionModel"),
+    );
     return {
       apiKey: environment.OPENAI_API_KEY,
       model:
@@ -289,7 +295,7 @@ Add concise warnings for discrepancies, multiple VAT rates, illegible content, o
 
 export class OpenAIQuoteExtractionProvider implements QuoteExtractionProvider {
   async extract(file: TemporaryQuoteFile): Promise<QuoteExtractionResult> {
-    const { apiKey, model } = requiredProviderConfiguration();
+    const { apiKey, model } = await requiredProviderConfiguration();
     let response: Response;
     try {
       response = await fetch("https://api.openai.com/v1/responses", {

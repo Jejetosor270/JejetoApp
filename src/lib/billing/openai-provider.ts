@@ -1,3 +1,4 @@
+import { getAiProcessingModel } from "@/lib/settings/ai-processing-settings";
 import "server-only";
 
 import { z } from "zod";
@@ -99,7 +100,9 @@ export class OpenAIClientDocumentExtractionProvider implements ClientDocumentExt
       typeof getClientDocumentExtractionEnvironment
     >;
     try {
-      configuration = getClientDocumentExtractionEnvironment();
+      configuration = getClientDocumentExtractionEnvironment(
+        await getAiProcessingModel("clientDocumentExtractionModel"),
+      );
     } catch (error) {
       logFailure("configuration", {
         error: error instanceof Error ? error.message : typeof error,

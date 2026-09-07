@@ -197,6 +197,13 @@ before persistence. Supplier intake's selected Project remains authoritative; Su
 matching never silently creates a Supplier. Inline creation is a separate explicit action.
 XLSX mapping is deterministic first, with at most one optional semantic mapping call.
 
+Settings → AI processing stores independent Supplier, Item/mapping, and Client Billing
+model choices (Terra, Luna, Sol). Saved choices override environment defaults for new
+requests without process caching. ADMIN/MANAGER changes are validated and audited.
+The additive `20260910000000_ai_processing_models` migration is required before rollout.
+Import metadata retains the model used during extraction, not a later settings choice;
+legacy Supplier review drafts without model metadata are recorded as unknown.
+
 Aggregate Order review must work without Items Beta. A recognized optional
 Item-provider failure becomes a warning; it must not discard successful aggregate
 extraction. Billing allocation and reviewed payment-term proposals are optional.

@@ -1,3 +1,4 @@
+import { getAiProcessingModel } from "@/lib/settings/ai-processing-settings";
 import "server-only";
 
 import { z } from "zod";
@@ -113,7 +114,9 @@ export class OpenAIItemExtractionProvider implements ItemExtractionProvider {
   ): Promise<{ model: string; value: T }> {
     let environment: ReturnType<typeof getItemExtractionEnvironment>;
     try {
-      environment = getItemExtractionEnvironment();
+      environment = getItemExtractionEnvironment(
+        await getAiProcessingModel("itemExtractionModel"),
+      );
     } catch (error) {
       console.error("Item extraction configuration failed.", {
         error: error instanceof Error ? error.message : typeof error,

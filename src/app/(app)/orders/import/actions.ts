@@ -53,7 +53,7 @@ import {
 } from "@/lib/quote-intake/operational-guard";
 import { isItemManagementEnabled } from "@/lib/settings/application-settings";
 import { QUOTE_EXTRACTION_PROVIDER } from "@/config/quote-extraction";
-import { getQuoteExtractionModel } from "@/lib/env/quote-extraction";
+import { getAiProcessingModel } from "@/lib/settings/ai-processing-settings";
 import { logSupplierOrderImportLifecycle } from "@/lib/quote-intake/lifecycle";
 
 function importRequestId(formData: FormData): string {
@@ -66,9 +66,9 @@ function importRequestId(formData: FormData): string {
     : randomUUID();
 }
 
-function extractionModelForLogging(): string {
+async function extractionModelForLogging(): Promise<string> {
   try {
-    return getQuoteExtractionModel();
+    return await getAiProcessingModel("quoteExtractionModel");
   } catch {
     return "invalid-configuration";
   }
@@ -104,7 +104,7 @@ export async function processSupplierQuoteAction(
   const actor = await requireMasterDataEditor();
   const requestId = randomUUID();
   const projectId = formData.get("projectId");
-  const model = extractionModelForLogging();
+  const model = await extractionModelForLogging();
   logSupplierOrderImportLifecycle("supplier_order_import.started", {
     model,
     provider: QUOTE_EXTRACTION_PROVIDER,

@@ -672,6 +672,9 @@ model ApplicationSetting {
   companyName                  String   @db.VarChar(160)
   companyReportingCurrencyCode String   @default("EUR") @db.Char(3)
   itemManagementEnabled        Boolean  @default(false)
+  quoteExtractionModel         String?  @db.VarChar(100)
+  itemExtractionModel          String?  @db.VarChar(100)
+  clientDocumentExtractionModel String? @db.VarChar(100)
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
   createdById                  String?  @db.Uuid

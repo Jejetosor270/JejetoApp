@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+const modelSettings = vi.hoisted(() => ({
+  findUnique: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/lib/db", () => ({
+  getDatabase: () => ({ applicationSetting: modelSettings }),
+}));
 
 const fixture = await import("@/test/client-document-extraction-fixture");
 const {
@@ -105,3 +111,32 @@ describe("OpenAI Client document provider", () => {
     ).rejects.toBeInstanceOf(ClientDocumentExtractionProviderError);
   });
 });
+
+it.each(["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol"])(
+  "sends the saved client document model %s to OpenAI",
+  async (model) => {
+    process.env.OPENAI_API_KEY = "test-key";
+    modelSettings.findUnique.mockResolvedValueOnce({
+      clientDocumentExtractionModel: model,
+    });
+    const request = vi.fn().mockResolvedValue(
+      providerResponse({
+        id: "resp_saved",
+        status: "completed",
+        output_text: JSON.stringify(fixture.clientDocumentExtractionFixture()),
+      }),
+    );
+    vi.stubGlobal("fetch", request);
+    try {
+      const result = await new OpenAIClientDocumentExtractionProvider().extract(
+        file,
+      );
+      expect(JSON.parse(String(request.mock.calls[0]?.[1]?.body)).model).toBe(
+        model,
+      );
+      expect(result.model).toBe(model);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  },
+);

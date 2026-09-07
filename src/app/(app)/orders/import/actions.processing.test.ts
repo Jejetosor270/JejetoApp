@@ -30,8 +30,8 @@ vi.mock("@/lib/items/extraction-provider", () => ({
 vi.mock("@/lib/quote-intake/extractor", () => extractor);
 vi.mock("@/lib/settings/application-settings", () => settings);
 vi.mock("@/lib/quote-intake/lifecycle", () => lifecycle);
-vi.mock("@/lib/env/quote-extraction", () => ({
-  getQuoteExtractionModel: () => "mock-model",
+vi.mock("@/lib/settings/ai-processing-settings", () => ({
+  getAiProcessingModel: async () => "mock-model",
 }));
 vi.mock("@/lib/quote-intake/operational-guard", () => ({
   ...guard,

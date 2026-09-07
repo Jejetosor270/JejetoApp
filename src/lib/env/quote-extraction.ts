@@ -28,10 +28,12 @@ export type QuoteExtractionEnvironment = z.infer<
   typeof quoteExtractionEnvironmentSchema
 >;
 
-export function getQuoteExtractionEnvironment(): QuoteExtractionEnvironment {
+export function getQuoteExtractionEnvironment(
+  modelOverride?: string,
+): QuoteExtractionEnvironment {
   const environment = quoteExtractionEnvironmentSchema.parse({
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-    QUOTE_EXTRACTION_MODEL: process.env.QUOTE_EXTRACTION_MODEL,
+    QUOTE_EXTRACTION_MODEL: modelOverride ?? process.env.QUOTE_EXTRACTION_MODEL,
   });
   return {
     ...environment,

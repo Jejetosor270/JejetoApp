@@ -216,6 +216,16 @@ const confirmationSchema = z
       z.uuid().optional(),
     ),
     orderNumber: optionalString(50),
+    extractionModel: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(100)
+        .regex(/^[A-Za-z0-9._:-]+$/)
+        .optional(),
+    ),
     originalFilename: z
       .string()
       .trim()
@@ -512,6 +522,7 @@ export function quoteConfirmationValues(formData: FormData): unknown {
     orderId: stringValue(formData, "orderId"),
     orderNumber: stringValue(formData, "orderNumber"),
     originalFilename: stringValue(formData, "originalFilename"),
+    extractionModel: stringValue(formData, "extractionModel"),
     packageName: stringValue(formData, "packageName"),
     paymentTermsRaw: stringValue(formData, "paymentTermsRaw"),
     payments: approveSchedule
