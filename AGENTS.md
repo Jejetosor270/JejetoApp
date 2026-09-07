@@ -10,6 +10,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # MB Procurement ERP agent guide
 
+## Cross-platform development
+
+This repository is actively developed from both Windows and macOS machines. Before starting work, check Git synchronization and working-tree status. Keep tracked files and scripts cross-platform, preserve LF line endings, avoid machine-specific paths/configuration, and never commit local environment secrets.
+
 ## Mission and boundaries
 
 Build MB Interiors' internal procurement-finance ERP incrementally. The business spine is:
