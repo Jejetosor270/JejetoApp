@@ -1,4 +1,6 @@
 "use client";
+import { DocumentReviewWorkspace } from "@/components/intake/document-review-workspace";
+import { useDocumentPreview } from "@/components/intake/use-document-preview";
 import { AllocationInputs } from "@/components/billing/allocation-inputs";
 import { calculateOrderPricingDraft } from "@/domain/finance/order-pricing";
 import { orderSellingBasisInBillingCurrency } from "@/domain/billing/calculations";
@@ -8,6 +10,7 @@ import Decimal from "decimal.js";
 import Link from "next/link";
 import { IntakeReviewLayout } from "@/components/intake/intake-review-layout";
 import {
+  useEffect,
   useActionState,
   useCallback,
   useState,
@@ -22,6 +25,7 @@ import {
 } from "@/app/(app)/orders/import/actions";
 import {
   ACCEPTED_QUOTE_FILE_TYPES,
+  MAX_QUOTE_FILE_BYTES,
   MAX_QUOTE_FILE_LABEL,
 } from "@/config/quote-extraction";
 import { countries } from "@/config/countries";
@@ -158,7 +162,11 @@ function percentValue(value: string | null): string {
 export function QuoteReview({
   options,
   review,
+  onCompleted,
+  withDocumentPreview = false,
 }: {
+  onCompleted?: () => void;
+  withDocumentPreview?: boolean;
   options: QuoteIntakeOptions;
   review: ProcessedQuoteReview & { requestId: string };
 }) {
@@ -296,6 +304,9 @@ export function QuoteReview({
     }
   }
 
+  useEffect(() => {
+    if (state.status === "success" && state.orderId) onCompleted?.();
+  }, [state.status, state.orderId, onCompleted]);
   if (state.status === "success" && state.orderId) {
     return (
       <section className="bg-card rounded-lg border p-5">
@@ -310,6 +321,7 @@ export function QuoteReview({
 
   return (
     <IntakeReviewLayout
+      compactEvidence={withDocumentPreview}
       evidence={
         <>
           <section className="bg-card rounded-lg border p-4 sm:p-5">
@@ -320,10 +332,12 @@ export function QuoteReview({
                 title="Review and correct"
               />
               <p className="text-positive text-sm" role="status">
-                Source file released after processing
+                {withDocumentPreview
+                  ? "Temporary document preview"
+                  : "Source file released after processing"}
               </p>
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+            <div className="mt-4 grid gap-3 @md:grid-cols-2 @4xl:grid-cols-2">
               <ExtractedFact
                 label="Supplier legal name"
                 observation={extraction.supplier.legalName}
@@ -433,7 +447,7 @@ export function QuoteReview({
             {extraction.financials.vatLines.length > 0 ? (
               <div className="mt-4">
                 <h3 className="text-sm font-semibold">Observed VAT lines</h3>
-                <div className="mt-2 grid gap-3 md:grid-cols-3">
+                <div className="mt-2 grid gap-3 @lg:grid-cols-3">
                   {extraction.financials.vatLines.map((line, index) => (
                     <div
                       className="bg-background grid gap-2 rounded-md border p-3"
@@ -581,7 +595,7 @@ export function QuoteReview({
                 Update existing Order
               </label>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-2">
+            <div className="mt-4 grid gap-3 @lg:grid-cols-2 @4xl:grid-cols-2">
               {actionType === "CREATE" ? (
                 <Field
                   error={fieldErrors.orderNumber}
@@ -598,7 +612,7 @@ export function QuoteReview({
                   />
                 </Field>
               ) : (
-                <div className="md:col-span-2">
+                <div className="@lg:col-span-2">
                   <Field
                     error={fieldErrors.orderId}
                     label="Existing Order in this Project"
@@ -688,7 +702,7 @@ export function QuoteReview({
               Unchecked fields are ignored. On update, ignored or missing fields
               preserve the existing authoritative value.
             </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-2">
+            <div className="mt-4 grid gap-3 @lg:grid-cols-2 @4xl:grid-cols-2">
               <ApplyField
                 checked={financial.supplierQuoteReference !== null}
                 error={fieldErrors.supplierQuoteReference}
@@ -873,7 +887,7 @@ export function QuoteReview({
                   Enter either a VAT rate or a VAT amount override.
                 </p>
               ) : null}
-              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <div className="mt-3 grid gap-3 @lg:grid-cols-2 @4xl:grid-cols-5">
                 <Field
                   error={fieldErrors.inputVatTreatment}
                   label="Treatment"
@@ -978,7 +992,7 @@ export function QuoteReview({
                   </select>
                 </Field>
                 {inputVatTreatment === "CUSTOM" ? (
-                  <div className="md:col-span-2 xl:col-span-4">
+                  <div className="@lg:col-span-2 @4xl:col-span-4">
                     <Field
                       error={fieldErrors.inputVatCustomTreatmentNote}
                       label="Custom VAT treatment note"
@@ -1011,7 +1025,7 @@ export function QuoteReview({
                 Link the reviewed Order to an existing Billing Event from this
                 Project, or skip and reconcile later.
               </p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+              <div className="mt-4 grid gap-3 @md:grid-cols-2 @4xl:grid-cols-2">
                 <Field label="Billing Event">
                   <select
                     className={inputClassName}
@@ -1045,7 +1059,7 @@ export function QuoteReview({
                       value="FIXED_AMOUNT"
                     />
                     {actionType === "UPDATE" ? (
-                      <div className="sm:col-span-2">
+                      <div className="@md:col-span-2">
                         <Button
                           type="button"
                           variant="outline"
@@ -1086,7 +1100,7 @@ export function QuoteReview({
                       name="billingAllocatedAmount"
                       error={fieldErrors.billingAllocatedAmount}
                     />
-                    <div className="bg-background grid gap-2 rounded-md border p-3 text-xs sm:col-span-2 sm:grid-cols-3 xl:col-span-4">
+                    <div className="bg-background grid gap-2 rounded-md border p-3 text-xs @md:col-span-2 @md:grid-cols-3 @4xl:col-span-4">
                       <p>
                         Billing HT:{" "}
                         {formatMoney(
@@ -1114,7 +1128,7 @@ export function QuoteReview({
                         )}
                       </p>
                     </div>
-                    <label className="flex items-center gap-2 text-xs sm:col-span-2 xl:col-span-4">
+                    <label className="flex items-center gap-2 text-xs @md:col-span-2 @4xl:col-span-4">
                       <input
                         checked={billingRemainderApproved}
                         name="billingRemainderApproved"
@@ -1166,68 +1180,87 @@ export function QuoteReview({
 }
 
 export function QuoteIntake({ options }: { options: QuoteIntakeOptions }) {
+  const { preview, select, clear } = useDocumentPreview(MAX_QUOTE_FILE_BYTES);
   const [state, action, pending] = useActionState(
     processSupplierQuoteAction,
     initialQuoteProcessingState,
   );
 
-  return (
-    <div className="space-y-6">
-      <section className="bg-card rounded-lg border p-4 sm:p-5">
-        <IntakeStageHeader
-          description={`PDF, JPG, JPEG, or PNG up to ${MAX_QUOTE_FILE_LABEL}. The source is held only for this extraction request and is not saved.`}
-          processing={pending}
-          stage={1}
-          title="Upload and extract"
+  if (state.review)
+    return (
+      <DocumentReviewWorkspace source={preview}>
+        <QuoteReview
+          key={state.review.requestId}
+          options={options}
+          review={state.review}
+          onCompleted={clear}
+          withDocumentPreview={Boolean(preview)}
         />
-        <form
-          action={action}
-          className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end"
-        >
-          <Field label="Project" required>
-            <select className={inputClassName} name="projectId" required>
-              <option value="">Choose Project</option>
-              {options.projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Supplier document file" required>
-            <input
-              accept={ACCEPTED_QUOTE_FILE_TYPES}
-              className="border-input bg-background file:bg-muted file:text-foreground h-9 w-full rounded-lg border px-2 py-1 text-sm file:mr-3 file:rounded-md file:border-0 file:px-2 file:py-1"
-              name="quoteFile"
-              required
-              type="file"
-            />
-          </Field>
-          <SubmitButton pending={pending}>
-            {pending ? "Processing document…" : "Process document"}
-          </SubmitButton>
-        </form>
-        {pending ? (
-          <p className="text-muted-foreground mt-3 text-sm" role="status">
-            Uploading securely and extracting one structured review…
-          </p>
-        ) : null}
-        {state.message ? (
-          <p
-            className={
-              state.status === "error"
-                ? "text-destructive mt-3 text-sm"
-                : "text-positive mt-3 text-sm"
-            }
-            role={state.status === "error" ? "alert" : "status"}
+      </DocumentReviewWorkspace>
+    );
+  return (
+    <DocumentReviewWorkspace source={preview}>
+      <div className="space-y-6">
+        <section className="bg-card rounded-lg border p-4 sm:p-5">
+          <IntakeStageHeader
+            description={`PDF, JPG, JPEG, or PNG up to ${MAX_QUOTE_FILE_LABEL}. The source is previewed temporarily while you review, then cleared when you save or close.`}
+            processing={pending}
+            stage={1}
+            title="Upload and extract"
+          />
+          <form
+            action={action}
+            className="mt-4 grid gap-3 md:items-end @lg:grid-cols-[1fr_1fr_auto]"
           >
-            {state.message}
-          </p>
-        ) : null}
-      </section>
-      {state.review ? (
-        <QuoteReview options={options} review={state.review} />
-      ) : null}
-    </div>
+            <Field label="Project" required>
+              <select
+                disabled={pending}
+                className={inputClassName}
+                name="projectId"
+                required
+              >
+                <option value="">Choose Project</option>
+                {options.projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Supplier document file" required>
+              <input
+                accept={ACCEPTED_QUOTE_FILE_TYPES}
+                className="border-input bg-background file:bg-muted file:text-foreground h-9 w-full rounded-lg border px-2 py-1 text-sm file:mr-3 file:rounded-md file:border-0 file:px-2 file:py-1"
+                name="quoteFile"
+                required
+                disabled={pending}
+                onChange={(event) => select(event.target.files?.[0])}
+                type="file"
+              />
+            </Field>
+            <SubmitButton pending={pending}>
+              {pending ? "Processing document…" : "Process document"}
+            </SubmitButton>
+          </form>
+          {pending ? (
+            <p className="text-muted-foreground mt-3 text-sm" role="status">
+              Uploading securely and extracting one structured review…
+            </p>
+          ) : null}
+          {state.message ? (
+            <p
+              className={
+                state.status === "error"
+                  ? "text-destructive mt-3 text-sm"
+                  : "text-positive mt-3 text-sm"
+              }
+              role={state.status === "error" ? "alert" : "status"}
+            >
+              {state.message}
+            </p>
+          ) : null}
+        </section>
+      </div>
+    </DocumentReviewWorkspace>
   );
 }

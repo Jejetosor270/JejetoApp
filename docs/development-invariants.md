@@ -308,3 +308,7 @@ checks. Report migration/deployment requirements explicitly.
 ## Billing freight coverage
 
 `freightCoverageHt` is a reviewed subset of Billing HT and of each Order allocation HT, never extra revenue. Order freight/non-freight allocations must fit the corresponding document portions; unassigned freight remains at Project level. Active Invoices provide actual freight coverage, Quotes planned coverage, and cancelled documents neither. Preserve manual FX incompleteness. AI freight extraction is a proposal requiring employee confirmation.
+
+## Temporary onboarding previews
+
+Client and Supplier onboarding may keep a browser-only object URL for a side-by-side PDF/image preview during review. Revoke it on replacement, successful save, or onboarding unmount/close. Do not persist sources in database, browser storage, or uploaded-file storage; server extraction inputs remain request-scoped and are still cleared after processing.

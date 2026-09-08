@@ -1,4 +1,6 @@
 "use client";
+import { DocumentReviewWorkspace } from "@/components/intake/document-review-workspace";
+import { useDocumentPreview } from "@/components/intake/use-document-preview";
 import { manualBillingReview } from "@/domain/billing/manual-review";
 import { MoneyInput } from "@/components/master-data/form-ui";
 
@@ -10,7 +12,7 @@ import Decimal from "decimal.js";
 import Link from "next/link";
 import { IntakeReviewLayout } from "@/components/intake/intake-review-layout";
 import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 
 import {
   confirmClientDocumentAction,
@@ -22,6 +24,7 @@ import type {
 } from "@/domain/billing/action-state";
 import {
   ACCEPTED_CLIENT_DOCUMENT_TYPES,
+  MAX_CLIENT_DOCUMENT_BYTES,
   MAX_CLIENT_DOCUMENT_LABEL,
 } from "@/config/client-document-extraction";
 import {
@@ -173,7 +176,11 @@ function scheduleFromReview(
 export function ClientDocumentReview({
   options,
   review,
+  onCompleted,
+  withDocumentPreview = false,
 }: {
+  onCompleted?: () => void;
+  withDocumentPreview?: boolean;
   options: BillingOptions;
   review: ProcessedClientDocumentReview;
 }) {
@@ -270,6 +277,9 @@ export function ClientDocumentReview({
     allocation.overallocated,
   ).greaterThan(0);
 
+  useEffect(() => {
+    if (state.status === "success" && state.recordId) onCompleted?.();
+  }, [state.status, state.recordId, onCompleted]);
   if (state.status === "success" && state.recordId) {
     return (
       <section className="bg-card rounded-lg border p-5">
@@ -327,6 +337,7 @@ export function ClientDocumentReview({
         value={proposal.paymentTermsRaw ?? ""}
       />
       <IntakeReviewLayout
+        compactEvidence={withDocumentPreview}
         evidence={
           <section className="bg-card rounded-lg border p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -335,9 +346,13 @@ export function ClientDocumentReview({
                 stage={2}
                 title="Review and correct"
               />
-              <span className="text-positive text-xs">Source PDF released</span>
+              <span className="text-positive text-xs">
+                {withDocumentPreview
+                  ? "Temporary document preview"
+                  : "Source PDF released"}
+              </span>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="mt-4 grid gap-3 @lg:grid-cols-3">
               <div className="rounded-md border p-3 text-sm">
                 <span className="text-muted-foreground text-xs">
                   Extracted Client
@@ -424,7 +439,7 @@ export function ClientDocumentReview({
             The AI suggestions remain non-authoritative until you save this
             review.
           </p>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-2">
+          <div className="mt-4 grid gap-3 @lg:grid-cols-2 @4xl:grid-cols-2">
             <ReviewField
               error={state.fieldErrors?.clientId}
               label="Client"
@@ -804,7 +819,7 @@ export function ClientDocumentReview({
             <div className="mt-3 space-y-2">
               {schedule.map((item, index) => (
                 <div
-                  className="grid gap-2 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-6"
+                  className="grid gap-2 rounded-md border p-3 @lg:grid-cols-2 @4xl:grid-cols-6"
                   key={index}
                 >
                   <ReviewField
@@ -997,7 +1012,7 @@ export function ClientDocumentReview({
           <div className="mt-3 space-y-2">
             {allocations.map((item, index) => (
               <div
-                className="grid gap-2 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-2"
+                className="grid gap-2 rounded-md border p-3 @lg:grid-cols-2 @4xl:grid-cols-2"
                 key={index}
               >
                 <ReviewField
@@ -1139,6 +1154,9 @@ export function ClientDocumentReview({
 }
 
 export function ClientDocumentIntake({ options }: { options: BillingOptions }) {
+  const { preview, select, clear } = useDocumentPreview(
+    MAX_CLIENT_DOCUMENT_BYTES,
+  );
   const [manualReview, setManualReview] =
     useState<ProcessedClientDocumentReview | null>(null);
   const [state, action, pending] = useActionState(
@@ -1146,53 +1164,73 @@ export function ClientDocumentIntake({ options }: { options: BillingOptions }) {
     initialProcessing,
   );
   if (manualReview)
-    return <ClientDocumentReview options={options} review={manualReview} />;
+    return (
+      <DocumentReviewWorkspace source={null}>
+        <ClientDocumentReview options={options} review={manualReview} />
+      </DocumentReviewWorkspace>
+    );
   if (state.status === "ready" && state.review) {
-    return <ClientDocumentReview options={options} review={state.review} />;
+    return (
+      <DocumentReviewWorkspace source={preview}>
+        <ClientDocumentReview
+          options={options}
+          review={state.review}
+          onCompleted={clear}
+          withDocumentPreview={Boolean(preview)}
+        />
+      </DocumentReviewWorkspace>
+    );
   }
   return (
-    <section className="bg-card rounded-lg border p-5">
-      <IntakeStageHeader
-        description="Upload one temporary PDF. AI proposes structured values; an ADMIN or MANAGER must review before anything is saved."
-        processing={pending}
-        stage={1}
-        title="Upload and extract"
-      />
-      <Button
-        type="button"
-        variant="outline"
-        disabled={pending}
-        onClick={() => setManualReview(manualBillingReview())}
-      >
-        Create billing manually
-      </Button>
-      <form action={action} className="mt-4 flex flex-wrap items-end gap-3">
-        <label className="grid gap-1.5 text-sm font-medium">
-          Client PDF
-          <input
-            accept={ACCEPTED_CLIENT_DOCUMENT_TYPES}
-            className="border-input bg-background max-w-xl rounded-lg border px-3 py-2 text-sm"
-            name="clientDocument"
-            required
-            type="file"
-          />
-          <span className="text-muted-foreground text-xs font-normal">
-            PDF only · maximum {MAX_CLIENT_DOCUMENT_LABEL}
-          </span>
-        </label>
-        <SubmitButton pending={pending}>Extract for review</SubmitButton>
-      </form>
-      {state.message ? (
-        <p
-          className={
-            state.status === "error"
-              ? "text-destructive mt-3 text-sm"
-              : "mt-3 text-sm"
-          }
+    <DocumentReviewWorkspace source={preview}>
+      <section className="bg-card rounded-lg border p-5">
+        <IntakeStageHeader
+          description="Upload one temporary PDF. AI proposes structured values; an ADMIN or MANAGER must review before anything is saved."
+          processing={pending}
+          stage={1}
+          title="Upload and extract"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          disabled={pending}
+          onClick={() => {
+            clear();
+            setManualReview(manualBillingReview());
+          }}
         >
-          {state.message}
-        </p>
-      ) : null}
-    </section>
+          Create billing manually
+        </Button>
+        <form action={action} className="mt-4 flex flex-wrap items-end gap-3">
+          <label className="grid gap-1.5 text-sm font-medium">
+            Client PDF
+            <input
+              accept={ACCEPTED_CLIENT_DOCUMENT_TYPES}
+              className="border-input bg-background max-w-xl rounded-lg border px-3 py-2 text-sm"
+              name="clientDocument"
+              required
+              disabled={pending}
+              onChange={(event) => select(event.target.files?.[0])}
+              type="file"
+            />
+            <span className="text-muted-foreground text-xs font-normal">
+              PDF only · maximum {MAX_CLIENT_DOCUMENT_LABEL}
+            </span>
+          </label>
+          <SubmitButton pending={pending}>Extract for review</SubmitButton>
+        </form>
+        {state.message ? (
+          <p
+            className={
+              state.status === "error"
+                ? "text-destructive mt-3 text-sm"
+                : "mt-3 text-sm"
+            }
+          >
+            {state.message}
+          </p>
+        ) : null}
+      </section>
+    </DocumentReviewWorkspace>
   );
 }
