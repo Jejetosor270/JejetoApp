@@ -701,6 +701,7 @@ model ClientBillingDocument {
   dueDate                    DateTime?                 @db.Date
   currencyCode               String                    @db.Char(3)
   fxRateToReporting          Decimal?                  @db.Decimal(20, 10)
+  freightCoverageHt          Decimal                   @default(0) @db.Decimal(19, 4)
   totalHt                    Decimal                   @db.Decimal(19, 4)
   vatTreatment               VatTreatment?
   vatRate                    Decimal?                  @db.Decimal(9, 6)
@@ -799,6 +800,7 @@ model ClientBillingAllocation {
   orderId           String                       @db.Uuid
   basis             ClientBillingAllocationBasis
   percentageRate    Decimal?                     @db.Decimal(9, 6)
+  freightCoverageHt Decimal                      @default(0) @db.Decimal(19, 4)
   allocatedAmount   Decimal                      @db.Decimal(19, 4)
   createdAt         DateTime                     @default(now())
   updatedAt         DateTime                     @updatedAt

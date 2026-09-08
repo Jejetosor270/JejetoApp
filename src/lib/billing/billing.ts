@@ -1,3 +1,4 @@
+import { freightCoverageBreakdown } from "@/domain/billing/freight-coverage";
 import "server-only";
 
 import Decimal from "decimal.js";
@@ -126,6 +127,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
   );
   return {
     allocations: record.allocations.map((allocation) => ({
+      freightCoverageHt: allocation.freightCoverageHt?.toString() ?? "0",
       allocatedAmount: allocation.allocatedAmount.toString(),
       basis: allocation.basis,
       id: allocation.id,
@@ -197,6 +199,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
     projectId: record.projectId,
     reference: record.reference,
     status: calculated.status,
+    freightCoverageHt: record.freightCoverageHt?.toString() ?? "0",
     totalHt: record.totalHt.toString(),
     totalTtc: record.totalTtc.toString(),
     updatedAt: record.updatedAt.toISOString(),
@@ -411,6 +414,11 @@ async function assertRelations(input: ClientBillingConfirmation) {
       );
     }
   }
+  validateFreight(
+    input.totalHt,
+    input.freightCoverageHt ?? "0",
+    input.allocations,
+  );
   const allocation = allocationReconciliation(
     input.totalHt,
     input.allocations.map((item) => item.allocatedAmount),
@@ -470,6 +478,7 @@ export async function confirmClientBillingDocument(
         paymentTermsRaw: input.paymentTermsRaw ?? null,
         projectId: input.projectId,
         reference: input.reference,
+        freightCoverageHt: input.freightCoverageHt ?? "0",
         totalHt: input.totalHt,
         totalTtc: input.totalTtc,
         updatedById: actorId,
@@ -571,6 +580,7 @@ export async function confirmClientBillingDocument(
       });
       await transaction.clientBillingAllocation.createMany({
         data: input.allocations.map((allocation) => ({
+          freightCoverageHt: allocation.freightCoverageHt ?? "0",
           allocatedAmount: allocation.allocatedAmount,
           basis: allocation.basis,
           billingDocumentId: document.id,
@@ -607,6 +617,7 @@ export async function confirmClientBillingDocument(
         entityReference: input.reference,
         entityType: "BILLING_DOCUMENT",
         metadata: {
+          freightCoverageHt: input.freightCoverageHt ?? "0",
           allocationCount: input.allocations.length,
           documentType: input.documentType,
           installmentCount: installmentsToCreate.length,
@@ -1168,7 +1179,29 @@ export async function deleteClientBillingInstallment(
   });
 }
 
+function validateFreight(
+  total: string,
+  freight: string,
+  allocations: readonly BillingAllocationInput[],
+) {
+  if (
+    new Decimal(freight).isZero() &&
+    allocations.every((item) =>
+      new Decimal(item.freightCoverageHt ?? "0").isZero(),
+    )
+  )
+    return;
+  try {
+    return freightCoverageBreakdown(total, freight, allocations);
+  } catch (error) {
+    throw new ClientBillingValidationError(
+      error instanceof Error ? error.message : "Check freight coverage.",
+    );
+  }
+}
+
 interface AllocationDocumentContext {
+  freightCoverageHt?: { toString(): string };
   id: string;
   isProjectRemainderApproved: boolean;
   projectId: string;
@@ -1177,6 +1210,7 @@ interface AllocationDocumentContext {
 }
 
 interface ExistingAllocationRecord {
+  freightCoverageHt?: { toString(): string };
   allocatedAmount: { toString(): string };
   basis: ClientBillingAllocationBasis;
   id: string;
@@ -1196,6 +1230,11 @@ async function validateBillingAllocations(
     throw new ClientBillingValidationError(
       "Each Order can appear only once in a Billing Event.",
     );
+  validateFreight(
+    document.totalHt,
+    document.freightCoverageHt?.toString() ?? "0",
+    allocations,
+  );
   const matchingOrders = await transaction.procurementOrder.count({
     where: {
       id: { in: allocations.map((item) => item.orderId) },
@@ -1264,7 +1303,10 @@ async function reconcileBillingAllocationsInTransaction(
     const current = currentByOrder.get(item.orderId);
     return (
       current !== undefined &&
-      (current.basis !== item.basis ||
+      (!new Decimal(current.freightCoverageHt?.toString() ?? "0").equals(
+        item.freightCoverageHt ?? "0",
+      ) ||
+        current.basis !== item.basis ||
         !new Decimal(current.allocatedAmount.toString()).equals(
           item.allocatedAmount,
         ) ||
@@ -1282,6 +1324,7 @@ async function reconcileBillingAllocationsInTransaction(
     await transaction.clientBillingAllocation.update({
       where: { id: current.id },
       data: {
+        freightCoverageHt: allocation.freightCoverageHt ?? "0",
         allocatedAmount: allocation.allocatedAmount,
         basis: allocation.basis,
         percentageRate:
@@ -1295,6 +1338,7 @@ async function reconcileBillingAllocationsInTransaction(
   if (added.length)
     await transaction.clientBillingAllocation.createMany({
       data: added.map((allocation) => ({
+        freightCoverageHt: allocation.freightCoverageHt ?? "0",
         allocatedAmount: allocation.allocatedAmount,
         basis: allocation.basis,
         billingDocumentId: document.id,
@@ -1329,6 +1373,10 @@ async function reconcileBillingAllocationsInTransaction(
       entityReference: document.reference,
       entityType: "BILLING_DOCUMENT",
       metadata: {
+        freightAllocations: [...added, ...changed].map((item) => ({
+          orderId: item.orderId,
+          freightCoverageHt: item.freightCoverageHt ?? "0",
+        })),
         allocationAddedOrderIds: added.map((item) => item.orderId),
         allocationChangedOrderIds: changed.map((item) => item.orderId),
         allocationRemovedOrderIds: removed.map((item) => item.orderId),
@@ -1353,6 +1401,7 @@ export async function updateClientBillingAllocations(
           isProjectRemainderApproved: true,
           projectId: true,
           reference: true,
+          freightCoverageHt: true,
           totalHt: true,
         },
       });
@@ -1386,6 +1435,7 @@ export async function updateOrderBillingLinkInTransaction(
         isProjectRemainderApproved: true,
         projectId: true,
         reference: true,
+        freightCoverageHt: true,
         totalHt: true,
       },
     }),
@@ -1407,6 +1457,7 @@ export async function updateOrderBillingLinkInTransaction(
   const allocations: BillingAllocationInput[] = document.allocations
     .filter((item) => item.orderId !== input.orderId)
     .map((item) => ({
+      freightCoverageHt: item.freightCoverageHt?.toString() ?? "0",
       allocatedAmount: item.allocatedAmount.toString(),
       basis: item.basis,
       orderId: item.orderId,
@@ -1451,6 +1502,12 @@ export async function updateOrderBillingLinkInTransaction(
         "Allocation exceeds the remaining Billing Event amount.",
       );
     allocations.push({
+      freightCoverageHt:
+        input.freightCoverageHt ??
+        document.allocations
+          .find((item) => item.orderId === input.orderId)
+          ?.freightCoverageHt?.toString() ??
+        "0",
       allocatedAmount,
       basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
       orderId: input.orderId,
@@ -1585,6 +1642,7 @@ export async function updateClientBillingDocument(
         isProjectRemainderApproved: existing.isProjectRemainderApproved,
         projectId: input.projectId,
         reference: input.reference,
+        freightCoverageHt: input.freightCoverageHt ?? "0",
         totalHt: input.totalHt,
       };
       await validateBillingAllocations(
@@ -1609,6 +1667,7 @@ export async function updateClientBillingDocument(
           notes: input.notes ?? null,
           projectId: input.projectId,
           reference: input.reference,
+          freightCoverageHt: input.freightCoverageHt ?? "0",
           totalHt: input.totalHt,
           totalTtc: input.totalTtc,
           updatedById: actorId,
@@ -2008,6 +2067,7 @@ export async function getOrderBillingReconciliation(orderId: string) {
     return {
       allocation: allocation
         ? {
+            freightCoverageHt: allocation.freightCoverageHt ?? "0",
             allocatedAmount: allocation.allocatedAmount,
             basis: allocation.basis,
             percentageRate: allocation.percentageRate,

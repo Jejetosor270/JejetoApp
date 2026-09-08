@@ -18,13 +18,14 @@ import type { BillingActionState } from "@/domain/billing/action-state";
 import { formatMoney } from "@/domain/procurement/presentation";
 
 export interface SavedBillingAllocation {
+  freightCoverageHt?: string;
   amount: string;
   orderId: string;
   isProjectRemainderApproved: boolean;
 }
 
 interface AllocationEditorProps {
-  allocation?: { amount: string; orderId: string };
+  allocation?: { amount: string; orderId: string; freightCoverageHt?: string };
   availableHt: string;
   billing: {
     id: string;
@@ -51,6 +52,9 @@ function AllocationForm({
   onSaved,
 }: AllocationEditorProps) {
   const [orderId, setOrderId] = useState(allocation?.orderId ?? "");
+  const [freightCoverageHt, setFreightCoverageHt] = useState(
+    allocation?.freightCoverageHt ?? "0",
+  );
   const [amount, setAmount] = useState(allocation?.amount ?? "");
   const [approveRemainder, setApproveRemainder] = useState(
     billing.isProjectRemainderApproved,
@@ -73,6 +77,9 @@ function AllocationForm({
       onSubmit={(event) => {
         const data = new FormData(event.currentTarget);
         submitted.current = {
+          freightCoverageHt: String(
+            data.get("allocatedAmount.freightCoverageHt") ?? "0",
+          ),
           orderId,
           amount: String(data.get("allocatedAmount") ?? ""),
           isProjectRemainderApproved: approveRemainder,
@@ -82,6 +89,7 @@ function AllocationForm({
     >
       <input type="hidden" name="billingDocumentId" value={billing.id} />
       <input type="hidden" name="orderId" value={orderId} />
+      <input type="hidden" name="freightCoverageHt" value={freightCoverageHt} />
       <input type="hidden" name="basis" value="FIXED_AMOUNT" />
       <input type="hidden" name="remove" value="false" />
       <fieldset disabled={pending} className="grid gap-4">
@@ -111,6 +119,8 @@ function AllocationForm({
           </p>
         </div>
         <AllocationInputs
+          freightCoverageHt={freightCoverageHt}
+          onFreightChange={setFreightCoverageHt}
           amount={amount}
           onAmountChange={setAmount}
           billingTotalHt={billing.totalHt}

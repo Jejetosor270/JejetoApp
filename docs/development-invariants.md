@@ -304,3 +304,7 @@ checks. Report migration/deployment requirements explicitly.
   links redirect to Supplier or Client, and old Receipts links redirect to Record Payment.
 - Rollout requires `20260909000000_project_order_packages` before the new application.
   Migration creation/generation does not authorize applying it to the configured database.
+
+## Billing freight coverage
+
+`freightCoverageHt` is a reviewed subset of Billing HT and of each Order allocation HT, never extra revenue. Order freight/non-freight allocations must fit the corresponding document portions; unassigned freight remains at Project level. Active Invoices provide actual freight coverage, Quotes planned coverage, and cancelled documents neither. Preserve manual FX incompleteness. AI freight extraction is a proposal requiring employee confirmation.

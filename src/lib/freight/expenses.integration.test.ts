@@ -1,3 +1,9 @@
+vi.mock("@/lib/billing/freight-reporting", () => ({
+  getBilledFreight: vi.fn(async () => ({
+    invoicedFreightHt: "0.0000",
+    quotedFreightHt: "0.0000",
+  })),
+}));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const transaction = vi.hoisted(() => ({

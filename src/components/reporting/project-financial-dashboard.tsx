@@ -30,6 +30,10 @@ interface FreightReconciliationView {
   expectedFreightAllowanceHt: string | null;
   expectedProductPurchaseCostHt: string | null;
   freightEstimateRate: string | null;
+  invoicedFreightHt?: string | null;
+  quotedFreightHt?: string | null;
+  actualFreightProfitHt?: string | null;
+  freightRecoveryGapHt?: string | null;
   freightGrossProfitHt: string | null;
   headroomHt: string | null;
   planningComplete: boolean;
@@ -521,11 +525,27 @@ export function ProjectFinancialDashboard({
                 [
                   ["Actual Freight Cost HT", freight?.actualCostHt ?? null],
                   [
+                    "Invoiced Freight Coverage HT",
+                    freight?.invoicedFreightHt ?? null,
+                  ],
+                  [
+                    "Quoted Freight Coverage HT (planned)",
+                    freight?.quotedFreightHt ?? null,
+                  ],
+                  [
+                    "Actual Freight Profit HT",
+                    freight?.actualFreightProfitHt ?? null,
+                  ],
+                  [
+                    "Freight Recovery Gap HT",
+                    freight?.freightRecoveryGapHt ?? null,
+                  ],
+                  [
                     "Freight Recovery Target HT",
                     freight?.recoveryTargetHt ?? null,
                   ],
                   [
-                    "Freight Gross Profit HT",
+                    "Target Freight Profit HT",
                     freight?.freightGrossProfitHt ?? null,
                   ],
                   ["Freight Headroom HT", freight?.headroomHt ?? null],

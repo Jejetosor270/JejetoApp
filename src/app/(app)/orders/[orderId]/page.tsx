@@ -1,3 +1,4 @@
+import { OrderFreightCoverage } from "@/components/billing/order-freight-coverage";
 import { carrierName } from "@/config/carriers";
 import { OrderBudgetComparison } from "@/components/procurement/order-budget-comparison";
 import { ProjectPurchaseBudget } from "@/components/procurement/project-purchase-budget";
@@ -107,6 +108,7 @@ export default async function OrderPage({
                     </p>
                   )}
                   <OrderBudgetComparison order={order} />
+                  <OrderFreightCoverage order={order} />
                   <ProjectPurchaseBudget projectId={order.project.id} />
                   <OrderBillingReconciliation
                     canEdit={canEditMasterData(user.role)}

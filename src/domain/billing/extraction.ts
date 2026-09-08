@@ -55,6 +55,7 @@ export const clientDocumentExtractionSchema = z
     dueDate: date,
     currencyCode: observed(z.string().regex(/^[A-Z]{3}$/)),
     totalHt: observed(money),
+    freightCoverageHt: observed(money),
     vatLines: z
       .array(
         z

@@ -1,6 +1,7 @@
 "use client";
 import { MoneyInput } from "@/components/master-data/form-ui";
 
+import { freightCoverageBreakdown } from "@/domain/billing/freight-coverage";
 import { AllocationInputs } from "@/components/billing/allocation-inputs";
 import {
   BillingAllocationEditor,
@@ -74,6 +75,7 @@ interface OrderFinancialView {
 }
 
 type AllocationDraft = {
+  freightCoverageHt?: string;
   amount: string;
   basis: "PERCENTAGE" | "FIXED_AMOUNT";
   orderId: string;
@@ -81,6 +83,7 @@ type AllocationDraft = {
 };
 
 type BillingDraft = {
+  freightCoverageHt: string;
   allocations: AllocationDraft[];
   clientId: string;
   currencyCode: string;
@@ -126,6 +129,7 @@ function calculationDecimal(value: string): string {
 function initialDraft(document: ClientBillingView): BillingDraft {
   return {
     allocations: document.allocations.map((item) => ({
+      freightCoverageHt: item.freightCoverageHt ?? "0",
       amount: item.allocatedAmount,
       basis: item.basis,
       orderId: item.orderId,
@@ -143,6 +147,7 @@ function initialDraft(document: ClientBillingView): BillingDraft {
     notes: document.notes ?? "",
     projectId: document.projectId,
     reference: document.reference,
+    freightCoverageHt: document.freightCoverageHt ?? "0",
     totalHt: document.totalHt,
     totalTtc: document.totalTtc,
     vatAmount: document.vatAmount,
@@ -218,6 +223,14 @@ export function BillingDetail({
       calculationDecimal(allocation.amount),
     ),
   );
+  const freightBreakdown = freightCoverageBreakdown(
+    saved.totalHt,
+    saved.freightCoverageHt,
+    saved.allocations.map((item) => ({
+      allocatedAmount: item.amount,
+      freightCoverageHt: item.freightCoverageHt ?? "0",
+    })),
+  );
   const saveAllocation = (allocation: SavedBillingAllocation) => {
     const update = (current: BillingDraft): BillingDraft => ({
       ...current,
@@ -227,6 +240,7 @@ export function BillingDetail({
           (item) => item.orderId !== allocation.orderId,
         ),
         {
+          freightCoverageHt: allocation.freightCoverageHt ?? "0",
           amount: decimal(allocation.amount),
           basis: "FIXED_AMOUNT",
           orderId: allocation.orderId,
@@ -305,6 +319,7 @@ export function BillingDetail({
     });
   };
   const serializedAllocations = draft.allocations.map((item) => ({
+    freightCoverageHt: decimal(item.freightCoverageHt ?? "0"),
     allocatedAmount: decimal(item.amount),
     basis: item.basis,
     orderId: item.orderId,
@@ -506,6 +521,25 @@ export function BillingDetail({
                     />
                   </Field>
                   <Field
+                    label="Of total: freight coverage HT"
+                    error={fieldErrors.freightCoverageHt}
+                  >
+                    <MoneyInput
+                      name="freightCoverageHt"
+                      value={draft.freightCoverageHt}
+                      onValueChange={(value) =>
+                        setDraft((current) => ({
+                          ...current,
+                          freightCoverageHt: value,
+                        }))
+                      }
+                    />
+                    <p className="text-muted-foreground text-xs">
+                      Included in total HT. Freight not assigned to Orders stays
+                      at Project level.
+                    </p>
+                  </Field>
+                  <Field
                     error={fieldErrors.totalHt}
                     label={`HT (${draft.currencyCode})`}
                   >
@@ -689,6 +723,17 @@ export function BillingDetail({
                         </select>
                       </Field>
                       <AllocationInputs
+                        freightCoverageHt={allocation.freightCoverageHt ?? "0"}
+                        onFreightChange={(value) =>
+                          setDraft((current) => ({
+                            ...current,
+                            allocations: current.allocations.map((item, i) =>
+                              i === index
+                                ? { ...item, freightCoverageHt: value }
+                                : item,
+                            ),
+                          }))
+                        }
                         amount={allocation.amount}
                         billingTotalHt={draft.totalHt}
                         currencyCode={draft.currencyCode}
@@ -903,6 +948,13 @@ export function BillingDetail({
                       <h2 className="text-sm font-semibold">Financial</h2>
                       <dl className="mt-4 grid gap-3 sm:grid-cols-2">
                         <DetailValue
+                          label="Freight coverage HT (included)"
+                          value={formatMoney(
+                            saved.freightCoverageHt,
+                            saved.currencyCode,
+                          )}
+                        />
+                        <DetailValue
                           label="HT"
                           value={formatMoney(saved.totalHt, saved.currencyCode)}
                         />
@@ -1029,6 +1081,25 @@ export function BillingDetail({
                       Order Reconciliation
                     </h2>
                     {canEdit ? allocationEditor() : null}
+                    <p className="text-muted-foreground w-full text-xs">
+                      {saved.documentType === "QUOTE"
+                        ? "Planned"
+                        : saved.isCancelled
+                          ? "Cancelled (excluded from actuals)"
+                          : "Invoiced"}{" "}
+                      freight:{" "}
+                      {formatMoney(saved.freightCoverageHt, saved.currencyCode)}{" "}
+                      · Assigned to Orders:{" "}
+                      {formatMoney(
+                        freightBreakdown.allocatedFreightHt,
+                        saved.currencyCode,
+                      )}{" "}
+                      · Retained at Project level:{" "}
+                      {formatMoney(
+                        freightBreakdown.projectFreightHt,
+                        saved.currencyCode,
+                      )}
+                    </p>
                   </div>
                   <div className="mt-3 overflow-x-auto">
                     <table className="w-full min-w-[760px] text-left text-sm">
@@ -1037,6 +1108,7 @@ export function BillingDetail({
                           <th className="py-2">Order</th>
                           <th>Supplier</th>
                           <th className="text-right">Allocated HT</th>
+                          <th className="text-right">Of which freight HT</th>
                           <th className="text-right">% of Billing</th>
                           <th className="text-right">Planned Sell HT</th>
                           <th className="text-right">Effective markup</th>
@@ -1065,6 +1137,12 @@ export function BillingDetail({
                               <td className="financial-figure text-right">
                                 {formatMoney(
                                   allocation.amount,
+                                  saved.currencyCode,
+                                )}
+                              </td>
+                              <td className="financial-figure text-right">
+                                {formatMoney(
+                                  allocation.freightCoverageHt ?? "0",
                                   saved.currencyCode,
                                 )}
                               </td>

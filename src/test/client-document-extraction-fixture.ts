@@ -9,6 +9,7 @@ const observed = <T>(value: T) => ({
 
 export function clientDocumentExtractionFixture(): ClientDocumentExtraction {
   return {
+    freightCoverageHt: missing,
     clientName: observed("Example Client"),
     currencyCode: observed("EUR"),
     documentDate: observed("2026-09-01"),

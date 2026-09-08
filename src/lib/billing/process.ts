@@ -170,6 +170,7 @@ export async function processClientDocument(
         notes: extractedValue(extraction.notes),
         paymentTermsRaw: extractedValue(extraction.paymentTerms.raw),
         reference,
+        freightCoverageHt: extractedValue(extraction.freightCoverageHt),
         totalHt,
         totalTtc: extractedValue(extraction.totalTtc),
         vatAmount: extractedValue(extraction.vatAmount),

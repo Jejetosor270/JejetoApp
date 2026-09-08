@@ -1,3 +1,4 @@
+import { freightCoverageBreakdown } from "@/domain/billing/freight-coverage";
 import Decimal from "decimal.js";
 import { z } from "zod";
 
@@ -78,6 +79,7 @@ export const billingAllocationSchema = z
   .object({
     orderId: requiredUuid("Select a valid Order."),
     basis: z.enum(ClientBillingAllocationBasis),
+    freightCoverageHt: money.optional(),
     allocatedAmount: money,
     percentageRate: optionalFraction,
   })
@@ -140,6 +142,7 @@ export const clientBillingConfirmationSchema = z
     model: z.string().trim().min(1).max(120),
     reference: z.string().trim().min(1).max(120),
     replaceSchedule: z.boolean(),
+    freightCoverageHt: money.optional(),
     totalHt: money,
     totalTtc: money,
     vatAmount: money,
@@ -152,6 +155,26 @@ export const clientBillingConfirmationSchema = z
       .regex(/^[A-Z]{3}$/),
   })
   .superRefine((value, context) => {
+    try {
+      if (
+        new Decimal(value.freightCoverageHt ?? "0").greaterThan(0) ||
+        value.allocations.some((item) =>
+          new Decimal(item.freightCoverageHt ?? "0").greaterThan(0),
+        )
+      )
+        freightCoverageBreakdown(
+          value.totalHt,
+          value.freightCoverageHt ?? "0",
+          value.allocations,
+        );
+    } catch (error) {
+      context.addIssue({
+        code: "custom",
+        path: ["freightCoverageHt"],
+        message:
+          error instanceof Error ? error.message : "Check freight coverage.",
+      });
+    }
     if (value.action === "UPDATE" && !value.existingDocumentId) {
       context.addIssue({
         code: "custom",
@@ -280,6 +303,7 @@ export const inlineClientBillingSchema = z.object({
 });
 
 const billingEditFields = z.object({
+  freightCoverageHt: money.optional(),
   allocations: z.array(billingAllocationSchema).max(100),
   clientId: requiredUuid("Select a Client."),
   currencyCode: z
@@ -306,6 +330,26 @@ const billingEditFields = z.object({
 
 export const billingDocumentEditSchema = billingEditFields.superRefine(
   (value, context) => {
+    try {
+      if (
+        new Decimal(value.freightCoverageHt ?? "0").greaterThan(0) ||
+        value.allocations.some((item) =>
+          new Decimal(item.freightCoverageHt ?? "0").greaterThan(0),
+        )
+      )
+        freightCoverageBreakdown(
+          value.totalHt,
+          value.freightCoverageHt ?? "0",
+          value.allocations,
+        );
+    } catch (error) {
+      context.addIssue({
+        code: "custom",
+        path: ["freightCoverageHt"],
+        message:
+          error instanceof Error ? error.message : "Check freight coverage.",
+      });
+    }
     if (
       !new Decimal(value.totalHt).plus(value.vatAmount).equals(value.totalTtc)
     ) {
@@ -326,6 +370,7 @@ export const billingAllocationsEditSchema = z.object({
 
 export const orderBillingLinkSchema = z
   .object({
+    freightCoverageHt: money.optional(),
     allocatedAmount: money.optional(),
     basis: z.enum(ClientBillingAllocationBasis).optional(),
     billingDocumentId: requiredUuid("Select a valid billing document."),

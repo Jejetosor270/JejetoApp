@@ -44,6 +44,11 @@ describe("temporary Client document processing", () => {
       },
     ]);
     const extraction = clientDocumentExtractionFixture();
+    extraction.freightCoverageHt = {
+      status: "EXTRACTED",
+      value: "1000",
+      diagnostic: null,
+    };
     extraction.vatLines.push({
       amount: { diagnostic: null, status: "EXTRACTED", value: "50" },
       label: { diagnostic: null, status: "EXTRACTED", value: "VAT 10%" },
@@ -70,7 +75,7 @@ describe("temporary Client document processing", () => {
     expect(result).toMatchObject({
       clientSuggestionId: "client-1",
       projectSuggestionId: "project-1",
-      proposal: { vatRate: null },
+      proposal: { vatRate: null, freightCoverageHt: "1000", totalHt: "100000" },
     });
     expect(result.duplicateCandidates[0]?.reasons).toEqual(
       expect.arrayContaining([

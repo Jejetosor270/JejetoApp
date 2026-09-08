@@ -81,6 +81,7 @@ describe("dedicated Billing allocation editor", () => {
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await enter("allocatedAmount", "800");
+    await enter("allocatedAmount.freightCoverageHt", "25,12");
     await submit();
     expect(onSaved).not.toHaveBeenCalled();
     expect(select.value).toBe("order-id");
@@ -96,10 +97,12 @@ describe("dedicated Billing allocation editor", () => {
     expect(data.get("billingDocumentId")).toBe("billing-id");
     expect(data.get("orderId")).toBe("order-id");
     expect(data.get("allocatedAmount")).toBe("250.12");
+    expect(data.get("freightCoverageHt")).toBe("25.12");
     expect(data.get("basis")).toBe("FIXED_AMOUNT");
     expect(data.has("totalHt")).toBe(false);
     expect(data.has("reference")).toBe(false);
     expect(onSaved).toHaveBeenCalledWith({
+      freightCoverageHt: "25.12",
       amount: "250.12",
       orderId: "order-id",
       isProjectRemainderApproved: true,
@@ -272,6 +275,7 @@ describe("dedicated Billing allocation editor", () => {
       );
       expect(JSON.parse(allocationsInput?.value ?? "[]")).toEqual([
         {
+          freightCoverageHt: "0.0000",
           allocatedAmount: "250.0000",
           basis: "FIXED_AMOUNT",
           orderId: "order-id",

@@ -471,6 +471,46 @@ describe("Billing persistence", () => {
     });
   });
 
+  it("persists freight as a subset of unchanged billing and allocation HT", async () => {
+    database.procurementOrder.findMany.mockResolvedValue([
+      { id: firstOrderId },
+    ]);
+    await confirmClientBillingDocument(
+      "actor-1",
+      confirmation({
+        freightCoverageHt: "20",
+        isProjectRemainderApproved: true,
+        allocations: [
+          {
+            orderId: firstOrderId,
+            basis: "FIXED_AMOUNT",
+            allocatedAmount: "85",
+            freightCoverageHt: "10",
+          },
+        ],
+      }),
+    );
+    expect(transaction.clientBillingDocument.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          totalHt: "100.0000",
+          totalTtc: "120.0000",
+          freightCoverageHt: "20.0000",
+        }),
+      }),
+    );
+    expect(transaction.clientBillingAllocation.createMany).toHaveBeenCalledWith(
+      {
+        data: [
+          expect.objectContaining({
+            allocatedAmount: "85.0000",
+            freightCoverageHt: "10.0000",
+          }),
+        ],
+      },
+    );
+  });
+
   it("creates a Quote schedule from approved TTC terms", async () => {
     await confirmClientBillingDocument(
       "actor-1",

@@ -1,4 +1,5 @@
 "use client";
+import { manualBillingReview } from "@/domain/billing/manual-review";
 import { MoneyInput } from "@/components/master-data/form-ui";
 
 import { AllocationInputs } from "@/components/billing/allocation-inputs";
@@ -94,7 +95,11 @@ type ScheduleRow = {
   percentage: string;
 };
 
-type AllocationRow = { amount: string; orderId: string };
+type AllocationRow = {
+  freightCoverageHt?: string;
+  amount: string;
+  orderId: string;
+};
 type AllocationDraftRow = AllocationRow & {
   basis: "PERCENTAGE" | "FIXED_AMOUNT";
   percentage: string;
@@ -187,6 +192,9 @@ export function ClientDocumentReview({
   const [dueDate, setDueDate] = useState(proposal.dueDate ?? "");
   const [currencyCode, setCurrencyCode] = useState(proposal.currencyCode ?? "");
   const [fxRate, setFxRate] = useState("");
+  const [freightCoverageHt, setFreightCoverageHt] = useState(
+    proposal.freightCoverageHt ?? "0",
+  );
   const [totalHt, setTotalHt] = useState(proposal.totalHt ?? "");
   const [vatAmount, setVatAmount] = useState(proposal.vatAmount ?? "0");
   const [vatRate, setVatRate] = useState(
@@ -244,6 +252,7 @@ export function ClientDocumentReview({
     }),
   );
   const serializedAllocations = allocations.map((item) => ({
+    freightCoverageHt: fixedDecimal(item.freightCoverageHt ?? "0"),
     allocatedAmount: fixedDecimal(item.amount),
     basis: item.basis,
     orderId: item.orderId,
@@ -560,6 +569,23 @@ export function ClientDocumentReview({
                 onChange={(event) => setFxRate(event.target.value)}
                 value={fxRate}
               />
+            </ReviewField>
+            <ReviewField
+              label="Of total: freight coverage HT"
+              error={state.fieldErrors?.freightCoverageHt}
+            >
+              <MoneyInput
+                name="freightCoverageHt"
+                value={freightCoverageHt}
+                onValueChange={setFreightCoverageHt}
+              />
+              <p className="text-muted-foreground text-xs">
+                {review.provider === "manual"
+                  ? "Enter the freight portion."
+                  : `AI freight evidence: ${review.extraction.freightCoverageHt?.status ?? "MISSING"}. ${review.extraction.freightCoverageHt?.diagnostic ?? ""} Review the proposal.`}{" "}
+                Included in total HT. Any freight not assigned to an Order stays
+                at Project level.
+              </p>
             </ReviewField>
             <ReviewField
               error={state.fieldErrors?.totalHt}
@@ -1001,6 +1027,16 @@ export function ClientDocumentReview({
                   </select>
                 </ReviewField>
                 <AllocationInputs
+                  freightCoverageHt={item.freightCoverageHt ?? "0"}
+                  onFreightChange={(value) =>
+                    setAllocations((current) =>
+                      current.map((row, i) =>
+                        i === index
+                          ? { ...row, freightCoverageHt: value }
+                          : row,
+                      ),
+                    )
+                  }
                   amount={item.amount}
                   billingTotalHt={totalHt}
                   currencyCode={currencyCode}
@@ -1103,10 +1139,14 @@ export function ClientDocumentReview({
 }
 
 export function ClientDocumentIntake({ options }: { options: BillingOptions }) {
+  const [manualReview, setManualReview] =
+    useState<ProcessedClientDocumentReview | null>(null);
   const [state, action, pending] = useActionState(
     processClientDocumentAction,
     initialProcessing,
   );
+  if (manualReview)
+    return <ClientDocumentReview options={options} review={manualReview} />;
   if (state.status === "ready" && state.review) {
     return <ClientDocumentReview options={options} review={state.review} />;
   }
@@ -1118,6 +1158,14 @@ export function ClientDocumentIntake({ options }: { options: BillingOptions }) {
         stage={1}
         title="Upload and extract"
       />
+      <Button
+        type="button"
+        variant="outline"
+        disabled={pending}
+        onClick={() => setManualReview(manualBillingReview())}
+      >
+        Create billing manually
+      </Button>
       <form action={action} className="mt-4 flex flex-wrap items-end gap-3">
         <label className="grid gap-1.5 text-sm font-medium">
           Client PDF

@@ -12,6 +12,8 @@ import {
 
 /** Three entry perspectives, all resolving to the single persisted HT amount. */
 export function AllocationInputs({
+  freightCoverageHt,
+  onFreightChange,
   amount,
   onAmountChange,
   billingTotalHt,
@@ -20,6 +22,8 @@ export function AllocationInputs({
   name = "allocatedAmount",
   error,
 }: {
+  freightCoverageHt?: string;
+  onFreightChange?: (amount: string) => void;
   amount: string;
   onAmountChange: (amount: string) => void;
   billingTotalHt: string;
@@ -30,6 +34,18 @@ export function AllocationInputs({
 }) {
   return (
     <>
+      {onFreightChange && (
+        <Field label={`Of allocation: freight HT (${currencyCode})`}>
+          <MoneyInput
+            name={`${name}.freightCoverageHt`}
+            value={freightCoverageHt ?? "0"}
+            onValueChange={onFreightChange}
+          />
+          <span className="text-muted-foreground text-xs">
+            Included in allocation HT, not added to it.
+          </span>
+        </Field>
+      )}
       <Field label={`Allocation HT (${currencyCode})`} error={error}>
         <MoneyInput
           name={name}

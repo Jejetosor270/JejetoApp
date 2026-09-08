@@ -1,3 +1,5 @@
+import { getBilledFreight } from "@/lib/billing/freight-reporting";
+import { freightDifference } from "@/domain/billing/freight-reporting";
 import "server-only";
 
 import Decimal from "decimal.js";
@@ -349,15 +351,28 @@ export async function getProjectFreightReconciliation(projectId: string) {
         value: expense[field],
       })),
     );
+  const billed = await getBilledFreight(
+    { projectId },
+    project.reportingCurrencyCode,
+  );
+  const reconciliation = reconcileProjectFreight({
+    expenses: convertedExpenses,
+    orders: convertedOrders,
+    projectExpectedProductPurchaseCostHt:
+      project.estimatedPurchaseCostHt?.toString() ?? null,
+    projectFreightEstimateRate: project.freightEstimateRate?.toString() ?? null,
+  });
   return {
-    ...reconcileProjectFreight({
-      expenses: convertedExpenses,
-      orders: convertedOrders,
-      projectExpectedProductPurchaseCostHt:
-        project.estimatedPurchaseCostHt?.toString() ?? null,
-      projectFreightEstimateRate:
-        project.freightEstimateRate?.toString() ?? null,
-    }),
+    ...reconciliation,
+    ...billed,
+    actualFreightProfitHt: freightDifference(
+      billed.invoicedFreightHt,
+      reconciliation.actualCostHt,
+    ),
+    freightRecoveryGapHt: freightDifference(
+      reconciliation.recoveryTargetHt,
+      billed.invoicedFreightHt,
+    ),
     defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
     freightEstimateRate: project.freightEstimateRate?.toString() ?? null,
     projectExpenseDeductibleInputVat: expenseAggregate("deductibleInputVat"),
