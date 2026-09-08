@@ -1,6 +1,12 @@
 "use client";
 
-import { useId, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { useSearchParams } from "next/navigation";
 import { tabClassName, tabListClassName } from "./tab-styles";
 
@@ -24,28 +30,42 @@ export function WorkspaceTabs({
   tabs,
   label,
   queryKey = "tab",
+  aliases,
 }: {
   tabs: WorkspaceTab[];
   label: string;
   queryKey?: string;
+  aliases?: Readonly<Record<string, string>>;
 }) {
   const search = useSearchParams();
   const id = useId();
+  const root = useRef<HTMLDivElement>(null);
   const hash = useSyncExternalStore(
     subscribeHash,
     () => window.location.hash.slice(1),
     () => "",
   );
-  const selected =
-    tabs.find((tab) => tab.id === (search.get(queryKey) || hash))?.id ??
-    tabs[0]?.id;
+  const requested = search.get(queryKey) || hash;
+  const target =
+    aliases && Object.hasOwn(aliases, requested)
+      ? aliases[requested]
+      : requested;
+  const selected = tabs.find((tab) => tab.id === target)?.id ?? tabs[0]?.id;
+  useEffect(() => {
+    if (!requested || requested === selected) return;
+    const section = Array.from(
+      root.current?.querySelectorAll<HTMLElement>("[data-workspace-section]") ??
+        [],
+    ).find((element) => element.dataset.workspaceSection === requested);
+    section?.scrollIntoView?.({ block: "start" });
+  }, [requested, selected]);
   function select(tabId: string) {
     const next = new URLSearchParams(window.location.search);
     next.set(queryKey, tabId);
     window.history.pushState(null, "", `${window.location.pathname}?${next}`);
   }
   return (
-    <div className="space-y-6">
+    <div ref={root} className="space-y-6">
       <div
         role="tablist"
         aria-label={label}

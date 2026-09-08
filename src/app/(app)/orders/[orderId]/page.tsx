@@ -2,7 +2,7 @@ import { OrderFreightCoverage } from "@/components/billing/order-freight-coverag
 import { carrierName } from "@/config/carriers";
 import { OrderBudgetComparison } from "@/components/procurement/order-budget-comparison";
 import Link from "next/link";
-import { WorkspaceSections } from "@/components/layout/workspace-sections";
+import { RecordWorkspace } from "@/components/layout/record-workspace";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
@@ -69,11 +69,12 @@ export default async function OrderPage({
             </p>
           ) : null}
         </div>
-        <WorkspaceSections
+        <RecordWorkspace
           label="Order workspace"
           sections={[
             {
               id: "overview",
+              group: "details",
               label: "Overview",
               content: (
                 <>
@@ -111,6 +112,7 @@ export default async function OrderPage({
             },
             {
               id: "commercial",
+              group: "details",
               label: "Commercial breakdown & VAT",
               content: (
                 <section className="grid gap-3 lg:grid-cols-2">
@@ -304,6 +306,7 @@ export default async function OrderPage({
             },
             {
               id: "payments",
+              group: "related",
               label: "Payments",
               content: (
                 <div className="space-y-4">
@@ -349,6 +352,7 @@ export default async function OrderPage({
             },
             {
               id: "delivery",
+              group: "details",
               label: "Delivery",
               content: (
                 <section className="bg-card rounded-lg border p-4">
@@ -426,6 +430,7 @@ export default async function OrderPage({
             },
             {
               id: "billing",
+              group: "related",
               label: "Linked Billing",
               content: (
                 <OrderBillingReconciliation
@@ -445,6 +450,7 @@ export default async function OrderPage({
             },
             {
               id: "budget",
+              group: "details",
               label: "Budget & freight checks",
               content: (
                 <>
@@ -455,6 +461,7 @@ export default async function OrderPage({
             },
             {
               id: "history",
+              group: "related",
               label: "Document history",
               content: (
                 <>

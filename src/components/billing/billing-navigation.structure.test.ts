@@ -57,12 +57,11 @@ describe("Billing operational navigation", () => {
     expect(table).not.toContain("<form");
   });
 
-  it("keeps the grouped payment manager at the bottom of Billing detail", () => {
-    expect(detail.lastIndexOf("BillingScheduleManager")).toBeGreaterThan(
-      detail.lastIndexOf("Import metadata"),
-    );
+  it("keeps payment management under Related and cash totals under Details", () => {
+    expect(detail).toMatch(/id: "schedule",\s*group: "related"/);
+    expect(detail).toMatch(/id: "history",[\s\S]*?group: "related"/);
     expect(detail).toContain('label="Total TTC"');
-    expect(detail).toContain("WorkspaceSections");
+    expect(detail).toContain("RecordWorkspace");
     expect(paymentManager).toContain("Scheduled TTC");
     expect(detail).toContain('label="Received"');
     expect(paymentManager).not.toContain('label="Received TTC"');

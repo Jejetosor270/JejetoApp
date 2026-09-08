@@ -12,7 +12,7 @@ import { DateInput } from "@/components/forms/date-input";
 
 import Decimal from "decimal.js";
 import Link from "next/link";
-import { WorkspaceSections } from "@/components/layout/workspace-sections";
+import { RecordWorkspace } from "@/components/layout/record-workspace";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { SheetClose } from "@/components/ui/sheet";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -33,12 +33,17 @@ import type { BillingActionState } from "@/domain/billing/action-state";
 import {
   addAllocationAmount,
   allocationReconciliation,
+  calculateClientBillingAmounts,
   orderSellingBasisInBillingCurrency,
   amountFromPercentage,
   percentageFromAmount,
 } from "@/domain/billing/calculations";
 import { amountIncludingVat } from "@/domain/finance/calculations";
-import { formatDateOnly, formatTimestamp } from "@/domain/payments/dates";
+import {
+  businessToday,
+  formatDateOnly,
+  formatTimestamp,
+} from "@/domain/payments/dates";
 import {
   formatFxRate,
   formatMoney,
@@ -218,6 +223,14 @@ export function BillingDetail({
   const savedProject = options.projects.find(
     (item) => item.id === saved.projectId,
   );
+  const collection = calculateClientBillingAmounts({
+    documentType: saved.documentType,
+    dueDate: saved.dueDate || null,
+    isCancelled: saved.isCancelled,
+    paidAmounts: [document.paid],
+    today: businessToday(),
+    totalTtc: calculationDecimal(saved.totalTtc),
+  });
   const savedReconciliation = allocationReconciliation(
     calculationDecimal(saved.totalHt),
     saved.allocations.map((allocation) =>
@@ -442,6 +455,30 @@ export function BillingDetail({
                       <option value="INVOICE">Invoice</option>
                     </select>
                   </Field>
+                  <Field error={fieldErrors.isCancelled} label="Status">
+                    <select
+                      name="recordStatus"
+                      className={inputClassName}
+                      value={draft.isCancelled ? "CANCELLED" : "ACTIVE"}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          isCancelled: event.target.value === "CANCELLED",
+                        }))
+                      }
+                    >
+                      <option value="ACTIVE">Active</option>
+                      <option value="CANCELLED">Cancelled</option>
+                    </select>
+                    <input
+                      type="hidden"
+                      name="isCancelled"
+                      value={draft.isCancelled ? "on" : ""}
+                    />
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      Payment status is calculated from receipts and due dates.
+                    </p>
+                  </Field>
                   <Field error={fieldErrors.reference} label="Reference">
                     <input
                       className={inputClassName}
@@ -642,20 +679,6 @@ export function BillingDetail({
                     value={draft.notes}
                   />
                 </Field>
-                <label className="mt-3 flex items-center gap-2 text-sm">
-                  <input
-                    checked={draft.isCancelled}
-                    name="isCancelled"
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        isCancelled: event.target.checked,
-                      }))
-                    }
-                    type="checkbox"
-                  />
-                  Cancelled
-                </label>
               </section>
 
               <section className="bg-card rounded-lg border p-4">
@@ -884,11 +907,12 @@ export function BillingDetail({
           </form>
         </EditorDrawer>
       ) : null}
-      <WorkspaceSections
+      <RecordWorkspace
         label="Billing workspace"
         sections={[
           {
             id: "overview",
+            group: "details",
             label: "Overview",
             content: (
               <>
@@ -899,26 +923,31 @@ export function BillingDetail({
                   />
                   <DetailValue
                     label="Received"
-                    value={formatMoney(document.paid, saved.currencyCode)}
+                    value={formatMoney(collection.paid, saved.currencyCode)}
                   />
                   <DetailValue
                     label="Outstanding"
                     value={formatMoney(
-                      document.outstanding,
+                      collection.outstanding,
                       saved.currencyCode,
                     )}
                   />
                 </dl>
-                <details className="rounded-lg border p-4">
-                  <summary className="cursor-pointer text-sm font-medium">
-                    Document detail · dates, HT & VAT
-                  </summary>
+                <section aria-label="Details" className="space-y-4">
                   <section className="grid gap-4 lg:grid-cols-2">
                     <article className="bg-card rounded-lg border p-4">
                       <h2 className="text-sm font-semibold">
                         Dates & exchange rate
                       </h2>
                       <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <DetailValue
+                          label="Status"
+                          value={saved.isCancelled ? "Cancelled" : "Active"}
+                        />
+                        <DetailValue
+                          label="Payment status"
+                          value={formatEnumLabel(collection.status)}
+                        />
                         <DetailValue
                           label="Document date"
                           value={formatDateOnly(saved.documentDate)}
@@ -943,7 +972,7 @@ export function BillingDetail({
                       <h2 className="text-sm font-semibold">Financial</h2>
                       <dl className="mt-4 grid gap-3 sm:grid-cols-2">
                         <DetailValue
-                          label="Freight coverage HT (included)"
+                          label="Total freight HT (included)"
                           value={formatMoney(
                             saved.freightCoverageHt,
                             saved.currencyCode,
@@ -974,6 +1003,27 @@ export function BillingDetail({
                         />
 
                         <DetailValue
+                          label="Unallocated Billing HT"
+                          value={formatMoney(
+                            savedReconciliation.remaining,
+                            saved.currencyCode,
+                          )}
+                        />
+                        <DetailValue
+                          label="Freight allocated to Orders HT"
+                          value={formatMoney(
+                            freightBreakdown.allocatedFreightHt,
+                            saved.currencyCode,
+                          )}
+                        />
+                        <DetailValue
+                          label="Freight remaining at Project level HT"
+                          value={formatMoney(
+                            freightBreakdown.projectFreightHt,
+                            saved.currencyCode,
+                          )}
+                        />
+                        <DetailValue
                           label="VAT treatment"
                           value={
                             saved.vatTreatment
@@ -984,63 +1034,25 @@ export function BillingDetail({
                       </dl>
                     </article>
                   </section>
-                </details>
-                <details className="rounded-lg border p-4">
-                  <summary className="text-sm font-medium">
-                    Notes & document history
-                  </summary>
-
-                  <section className="grid gap-4 lg:grid-cols-2">
-                    <article className="bg-card rounded-lg border p-4">
-                      <h2 className="text-sm font-semibold">Notes</h2>
-                      <p className="text-muted-foreground mt-3 text-sm whitespace-pre-wrap">
-                        {saved.notes || "No notes."}
-                      </p>
-                      {document.paymentTermsRaw ? (
-                        <p className="mt-3 border-t pt-3 text-xs">
-                          <span className="font-medium">Payment terms:</span>{" "}
-                          {document.paymentTermsRaw}
-                        </p>
-                      ) : null}
-                    </article>
-                    <article className="bg-card rounded-lg border p-4">
-                      <div className="flex items-center justify-between gap-2">
-                        <h2 className="text-sm font-semibold">
-                          Import metadata
-                        </h2>
-                        {canEdit ? (
-                          <Link
-                            className="text-primary text-xs underline"
-                            href="/admin/activity?entityType=BILLING_DOCUMENT"
-                          >
-                            Activity history
-                          </Link>
-                        ) : null}
-                      </div>
-                      <div className="mt-3 space-y-2 text-xs">
-                        {document.imports.map((item) => (
-                          <p key={item.id}>
-                            {formatTimestamp(item.processedAt)} ·{" "}
-                            {item.action.toLowerCase()} ·{" "}
-                            {item.originalFilename} · {item.extractionProvider}/
-                            {item.extractionModel} ·{" "}
-                            {item.processedByName ?? "Historical user"}
-                          </p>
-                        ))}
-                        {document.imports.length === 0 ? (
-                          <p className="text-muted-foreground">
-                            No import metadata.
-                          </p>
-                        ) : null}
-                      </div>
-                    </article>
-                  </section>
-                </details>
+                </section>
+                <article className="bg-card rounded-lg border p-4">
+                  <h2 className="text-sm font-semibold">Notes</h2>
+                  <p className="text-muted-foreground mt-3 text-sm whitespace-pre-wrap">
+                    {saved.notes || "No notes."}
+                  </p>
+                  {document.paymentTermsRaw ? (
+                    <p className="mt-3 border-t pt-3 text-xs">
+                      <span className="font-medium">Payment terms:</span>{" "}
+                      {document.paymentTermsRaw}
+                    </p>
+                  ) : null}
+                </article>
               </>
             ),
           },
           {
             id: "schedule",
+            group: "related",
             label: "Schedule & receipts",
             content: (
               <BillingScheduleManager canEdit={canEdit} document={document} />
@@ -1048,13 +1060,12 @@ export function BillingDetail({
           },
           {
             id: "allocations",
+            group: "related",
             label: "Linked Orders",
             content: (
               <section className="bg-card rounded-lg border p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-sm font-semibold">
-                    Order Reconciliation
-                  </h2>
+                  <h2 className="text-sm font-semibold">Linked Orders</h2>
                   {canEdit ? (
                     <div className="flex gap-2">
                       <BillingFreightEditor
@@ -1078,23 +1089,8 @@ export function BillingDetail({
                     </div>
                   ) : null}
                   <p className="text-muted-foreground w-full text-xs">
-                    {saved.documentType === "QUOTE"
-                      ? "Planned"
-                      : saved.isCancelled
-                        ? "Cancelled (excluded from actuals)"
-                        : "Invoiced"}{" "}
-                    freight:{" "}
-                    {formatMoney(saved.freightCoverageHt, saved.currencyCode)} ·
-                    Assigned to Orders:{" "}
-                    {formatMoney(
-                      freightBreakdown.allocatedFreightHt,
-                      saved.currencyCode,
-                    )}{" "}
-                    · Retained at Project level:{" "}
-                    {formatMoney(
-                      freightBreakdown.projectFreightHt,
-                      saved.currencyCode,
-                    )}
+                    Allocate Billing HT to Orders. These amounts are commercial
+                    attribution, not Client receipts.
                   </p>
                 </div>
                 <div className="mt-3 overflow-x-auto">
@@ -1173,7 +1169,7 @@ export function BillingDetail({
                       {saved.allocations.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={canEdit ? 7 : 6}
+                            colSpan={canEdit ? 8 : 7}
                             className="text-muted-foreground py-6 text-center"
                           >
                             No Order allocations yet. Billing remains at Project
@@ -1184,26 +1180,40 @@ export function BillingDetail({
                     </tbody>
                   </table>
                 </div>
-                <div className="bg-muted/30 mt-3 grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-3">
-                  <p>
-                    Billing HT: {formatMoney(saved.totalHt, saved.currencyCode)}
-                  </p>
-                  <p>
-                    Allocated HT:{" "}
-                    {formatMoney(
-                      savedReconciliation.allocated,
-                      saved.currencyCode,
-                    )}
-                  </p>
-                  <p>
-                    Project-level remainder:{" "}
-                    {formatMoney(
-                      savedReconciliation.remaining,
-                      saved.currencyCode,
-                    )}
-                  </p>
-                </div>
               </section>
+            ),
+          },
+          {
+            id: "history",
+            label: "Document history",
+            group: "related",
+            content: (
+              <article className="bg-card rounded-lg border p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold">Import metadata</h2>
+                  {canEdit ? (
+                    <Link
+                      className="text-primary text-xs underline"
+                      href="/admin/activity?entityType=BILLING_DOCUMENT"
+                    >
+                      Activity history
+                    </Link>
+                  ) : null}
+                </div>
+                <div className="mt-3 space-y-2 text-xs">
+                  {document.imports.map((item) => (
+                    <p key={item.id}>
+                      {formatTimestamp(item.processedAt)} ·{" "}
+                      {item.action.toLowerCase()} · {item.originalFilename} ·{" "}
+                      {item.extractionProvider}/{item.extractionModel} ·{" "}
+                      {item.processedByName ?? "Historical user"}
+                    </p>
+                  ))}
+                  {document.imports.length === 0 ? (
+                    <p className="text-muted-foreground">No import metadata.</p>
+                  ) : null}
+                </div>
+              </article>
             ),
           },
         ]}
