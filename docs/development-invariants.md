@@ -318,11 +318,16 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
 - Projects are hubs, not duplicate operational workspaces. Purchasing, Billing, Payments,
   and Reports links open the canonical lists with the Project filter applied. Purchase
   budgets and Order Packages remain Project configuration; they never replace Order totals.
-- Order records (including those opened from Purchasing) and Billing records have exactly
+- Project, Order (including those opened from Purchasing), and Billing records have exactly
   two mounted tabs: Details and Related. Details owns fields, financial breakdowns, dates,
   delivery and notes; Related owns linked records, allocations, schedules, payments,
-  receipts and document history. Switching tabs must preserve drafts. Project hubs and
-  Settings retain their existing section layouts.
+  receipts and document history. Switching tabs must preserve drafts. Project Details includes
+  planning, pricing defaults and financial reporting; Project Related links to scoped operational
+  lists and owns Packages, Buildings/Rooms and freight-expense management. Settings retains its
+  existing section layout.
+- Purchasing is the record presentation reference: shared compact summaries, two-column financial
+  label/value cards, and Related category headings with descriptions and adjacent actions. Use
+  `record-presentation.tsx` and `RecordWorkspace` to keep Project, Order and Billing views aligned.
 - Billing Edit exposes Active/Cancelled through the existing cancellation field and audited
   action; receipt/cancellation safeguards remain unchanged. Collection status stays derived
   from receipts and dates, never a manual Paid/Overdue override.
@@ -340,8 +345,8 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
   action is shown to USER employees; server authorization remains authoritative.
 - Billing and Order allocation changes use BillingAllocationEditor and the existing
   audited action, preserving the freight subset and manual-FX percentage behavior.
-- Existing Order/Billing tab/hash links select Details or Related and locate the original
-  subsection. Project and Settings disclosure links remain supported. Legacy Project tab
+- Existing Project/Order/Billing tab/hash links select Details or Related and locate the original
+  subsection. Settings disclosure links remain supported. Legacy Project tab
   links for Orders/Billing/Items open scoped workspaces; Cash opens the scoped cash report.
   Historical Order Client schedules are displayed only when installments exist; no historical
   records are deleted.

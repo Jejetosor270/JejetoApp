@@ -1,3 +1,4 @@
+import { RecordSectionHeading } from "@/components/layout/record-presentation";
 import Link from "next/link";
 import { getDatabase } from "@/lib/db";
 import { listProjectOrders } from "@/lib/procurement/orders";
@@ -25,16 +26,12 @@ export async function ProjectPackages({
     listPaymentInstallments({ projectId, direction: "SUPPLIER_PAYMENT" }),
   ]);
   return (
-    <section className="space-y-4 rounded-lg border p-4">
-      <div className="flex justify-between">
-        <h2 className="font-semibold">Packages</h2>
-        {canEdit ? <PackageEditor projectId={projectId} /> : null}
-      </div>
-      <p className="text-muted-foreground text-sm">
-        Commercial totals use active Orders. Allocated Billing is confirmed
-        Invoice HT; paid is actual Supplier settlements; outstanding is
-        scheduled Supplier cash. — indicates missing values or FX.
-      </p>
+    <section className="bg-card space-y-4 rounded-lg border p-4">
+      <RecordSectionHeading
+        title="Order Packages"
+        description="Group Orders without changing their financial totals. Commercial totals use active Orders; paid is actual Supplier cash, outstanding is scheduled cash. — indicates missing values or FX."
+        actions={canEdit ? <PackageEditor projectId={projectId} /> : null}
+      />
       {[...packages, { id: "", name: "Unassigned", isActive: true }].map(
         (group) => {
           const grouped = orders.filter(

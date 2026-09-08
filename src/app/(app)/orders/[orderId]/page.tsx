@@ -1,3 +1,7 @@
+import {
+  RecordSummary,
+  RecordSectionHeading,
+} from "@/components/layout/record-presentation";
 import { OrderFreightCoverage } from "@/components/billing/order-freight-coverage";
 import { carrierName } from "@/config/carriers";
 import { OrderBudgetComparison } from "@/components/procurement/order-budget-comparison";
@@ -78,26 +82,31 @@ export default async function OrderPage({
               label: "Overview",
               content: (
                 <>
-                  <section className="grid gap-4 sm:grid-cols-3">
-                    {[
-                      [
-                        "Economic landed cost HT",
-                        cost.reportingEconomicLandedCost,
-                      ],
-                      ["Planned sell HT", cost.reportingSellingRevenue],
-                      ["Planned gross profit HT", cost.grossProfit],
-                    ].map(([label, value]) => (
-                      <article key={label} className="border-b py-4">
-                        <p className="text-muted-foreground text-xs">{label}</p>
-                        <p className="financial-figure mt-2 text-lg font-semibold">
-                          {formatMoney(
-                            value ?? null,
-                            order.project.reportingCurrencyCode,
-                          )}
-                        </p>
-                      </article>
-                    ))}
-                  </section>
+                  <RecordSummary
+                    values={[
+                      {
+                        label: "Economic landed cost HT",
+                        value: formatMoney(
+                          cost.reportingEconomicLandedCost,
+                          order.project.reportingCurrencyCode,
+                        ),
+                      },
+                      {
+                        label: "Planned sell HT",
+                        value: formatMoney(
+                          cost.reportingSellingRevenue,
+                          order.project.reportingCurrencyCode,
+                        ),
+                      },
+                      {
+                        label: "Planned gross profit HT",
+                        value: formatMoney(
+                          cost.grossProfit,
+                          order.project.reportingCurrencyCode,
+                        ),
+                      },
+                    ]}
+                  />
                   {cost.missingFx.length > 0 && (
                     <p
                       role="status"
@@ -467,9 +476,10 @@ export default async function OrderPage({
                 <>
                   {quoteImports.length > 0 ? (
                     <section className="bg-card rounded-lg border p-4">
-                      <h2 className="text-sm font-semibold">
-                        Supplier quote history
-                      </h2>
+                      <RecordSectionHeading
+                        title="Document history"
+                        description="Reviewed Supplier quote imports."
+                      />
                       <div className="mt-3 overflow-x-auto">
                         <table className="w-full min-w-[720px] text-left text-sm">
                           <thead className="text-muted-foreground text-xs">

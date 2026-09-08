@@ -3,7 +3,9 @@ import { DateInput } from "@/components/forms/date-input";
 
 import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
 import Link from "next/link";
-import { WorkspaceSections } from "@/components/layout/workspace-sections";
+import { RecordWorkspace } from "@/components/layout/record-workspace";
+import { RecordSectionHeading } from "@/components/layout/record-presentation";
+import { ProjectRecordDetails } from "@/components/master-data/project-record-details";
 import { FormSection } from "@/components/forms/form-section";
 import type { MasterDataActionState } from "@/components/master-data/action-state";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
@@ -49,7 +51,7 @@ interface CurrencyOption {
   code: string;
   name: string;
 }
-interface ProjectView {
+export interface ProjectView {
   clientBudgetTargetHt: { toString(): string } | string | null;
   client: { id: string; displayName: string };
   clientId: string;
@@ -662,7 +664,9 @@ export function ProjectDetail({
   workspace: {
     overview: ReactNode;
     finance: ReactNode;
-    orders: ReactNode;
+    budget: ReactNode;
+    packages: ReactNode;
+    freightExpenses: ReactNode;
     items: ReactNode;
   };
   managers: Option[];
@@ -676,7 +680,7 @@ export function ProjectDetail({
   const [addingBuilding, setAddingBuilding] = useState(false);
   const [addingRoomTo, setAddingRoomTo] = useState<string | null>(null);
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {
         <>
           {
@@ -702,11 +706,6 @@ export function ProjectDetail({
                     {project.client.displayName} ·{" "}
                     {project.reportingCurrencyCode}
                   </span>
-                  {project.notes ? (
-                    <p className="mt-4 border-t pt-4 leading-6">
-                      {project.notes}
-                    </p>
-                  ) : null}
                 </>
               }
               status={project.status}
@@ -733,39 +732,104 @@ export function ProjectDetail({
           ) : null}
         </>
       }
-      <nav aria-label="Project work" className="flex flex-wrap gap-2">
-        {[
-          ["/orders", "Purchasing"],
-          ["/billing", "Billing"],
-          ["/payments", "Payments"],
-          ["/reports", "Reports"],
-        ].map(([path, label]) => (
-          <Link
-            key={path}
-            href={path + "?projectId=" + project.id}
-            className="bg-card hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium"
-          >
-            {label}
-          </Link>
-        ))}
-        {workspace.items}
-      </nav>
-      <WorkspaceSections
-        label="Project details"
+      <RecordWorkspace
+        label="Project workspace"
         sections={[
-          { id: "overview", label: "Overview", content: workspace.overview },
+          {
+            id: "overview",
+            group: "details",
+            label: "Overview",
+            content: workspace.overview,
+          },
+          {
+            id: "general",
+            group: "details",
+            label: "General & planning",
+            content: <ProjectRecordDetails project={project} />,
+          },
           {
             id: "finance",
+            group: "details",
             label: "Financial detail · targets, freight & VAT",
             content: workspace.finance,
           },
           {
+            id: "budget",
+            group: "details",
+            label: "Purchase budget",
+            content: workspace.budget,
+          },
+          {
+            id: "work",
+            group: "related",
+            label: "Project work",
+            content: (
+              <nav aria-label="Project work" className="space-y-4">
+                {(
+                  [
+                    [
+                      "/orders",
+                      "Purchasing",
+                      "Supplier Orders for this Project.",
+                    ],
+                    [
+                      "/billing",
+                      "Billing",
+                      "Client Quotes, Invoices and Order allocations.",
+                    ],
+                    [
+                      "/payments",
+                      "Payments",
+                      "Supplier payments and Client receipts.",
+                    ],
+                    [
+                      "/reports",
+                      "Reports",
+                      "Financial and cash-flow reports for this Project.",
+                    ],
+                  ] as const
+                ).map(([path, title, description]) => (
+                  <section key={path} className="bg-card rounded-lg border p-4">
+                    <RecordSectionHeading
+                      title={title}
+                      description={description}
+                      actions={
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={path + "?projectId=" + project.id}>
+                            Open {title}
+                          </Link>
+                        </Button>
+                      }
+                    />
+                  </section>
+                ))}
+                {workspace.items ? (
+                  <section className="bg-card rounded-lg border p-4">
+                    <RecordSectionHeading
+                      title="Items (Beta)"
+                      description="Project-specific supporting detail."
+                      actions={workspace.items}
+                    />
+                  </section>
+                ) : null}
+              </nav>
+            ),
+          },
+          {
             id: "orders",
-            label: "Purchase budget & Order Packages",
-            content: workspace.orders,
+            group: "related",
+            label: "Order Packages",
+            content: workspace.packages,
+          },
+          {
+            id: "freight",
+            group: "related",
+            label: "Freight expenses",
+            content: workspace.freightExpenses,
           },
           {
             id: "buildings",
+            group: "related",
             label: "Buildings & Rooms",
             content: (
               <>
@@ -827,25 +891,23 @@ export function ProjectDetail({
                   </EditorDrawer>
                 ) : null}
                 <section className="bg-card overflow-hidden rounded-lg border">
-                  <div className="flex items-center justify-between border-b px-4 py-3">
-                    <div>
-                      <h2 className="text-sm font-semibold">
-                        Buildings / Units
-                      </h2>
-                      <p className="text-muted-foreground mt-0.5 text-xs">
-                        Buildings are managed within this project.
-                      </p>
-                    </div>
-                    {canEdit ? (
-                      <Button
-                        onClick={() => setAddingBuilding(true)}
-                        size="sm"
-                        type="button"
-                      >
-                        <Plus data-icon="inline-start" />
-                        Add building
-                      </Button>
-                    ) : null}
+                  <div className="border-b p-4">
+                    <RecordSectionHeading
+                      title="Buildings & Rooms"
+                      description="Project locations and their Rooms."
+                      actions={
+                        canEdit ? (
+                          <Button
+                            onClick={() => setAddingBuilding(true)}
+                            size="sm"
+                            type="button"
+                          >
+                            <Plus data-icon="inline-start" />
+                            Add building
+                          </Button>
+                        ) : null
+                      }
+                    />
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[35rem] text-left text-sm">

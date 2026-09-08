@@ -1,4 +1,5 @@
 "use client";
+import { RecordSectionHeading } from "@/components/layout/record-presentation";
 
 import Decimal from "decimal.js";
 import { BillingAllocationEditor } from "@/components/billing/billing-allocation-editor";
@@ -143,13 +144,10 @@ export function OrderBillingReconciliation({
   return (
     <section className="bg-card rounded-lg border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold">Linked Billing</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Commercial attribution only. Client receipts remain separate cash
-            records.
-          </p>
-        </div>
+        <RecordSectionHeading
+          title="Linked Billing"
+          description="Commercial attribution only. Client receipts remain separate cash records."
+        />
         <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-right text-xs sm:grid-cols-3 xl:grid-cols-4">
           <p>
             Quoted{" "}

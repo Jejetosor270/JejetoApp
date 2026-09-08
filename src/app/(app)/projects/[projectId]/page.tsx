@@ -145,46 +145,43 @@ export default async function ProjectPage({
           />
         ),
         finance: (
-          <>
-            {" "}
-            <ProjectFinancialDashboard
-              section="finance"
-              billing={billing}
-              financialPerformance={financialPerformance}
-              freight={freight}
-              fundingCoverage={fundingCoverage}
-              horizon={horizon}
-              phase11CashPosition={phase11CashPosition}
-              projectId={projectId}
-              report={reporting}
-              vatPosition={vatPosition}
-            />{" "}
-            <ProjectFreightExpenses
-              canEdit={canEditMasterData(user.role)}
-              currencies={options.currencies}
-              expenses={freightExpenses}
-              projectId={projectId}
-              reportingCurrencyCode={project.reportingCurrencyCode}
-              suppliers={options.suppliers}
-            />
-          </>
+          <ProjectFinancialDashboard
+            section="finance"
+            billing={billing}
+            financialPerformance={financialPerformance}
+            freight={freight}
+            fundingCoverage={fundingCoverage}
+            horizon={horizon}
+            phase11CashPosition={phase11CashPosition}
+            projectId={projectId}
+            report={reporting}
+            vatPosition={vatPosition}
+          />
         ),
-        orders: (
-          <>
-            <ProjectPurchaseBudget projectId={projectId} />
-            <ProjectPackages
-              projectId={projectId}
-              currency={project.reportingCurrencyCode}
-              canEdit={canEditMasterData(user.role)}
-            />
-          </>
+        freightExpenses: (
+          <ProjectFreightExpenses
+            canEdit={canEditMasterData(user.role)}
+            currencies={options.currencies}
+            expenses={freightExpenses}
+            projectId={projectId}
+            reportingCurrencyCode={project.reportingCurrencyCode}
+            suppliers={options.suppliers}
+          />
+        ),
+        budget: <ProjectPurchaseBudget projectId={projectId} />,
+        packages: (
+          <ProjectPackages
+            projectId={projectId}
+            currency={project.reportingCurrencyCode}
+            canEdit={canEditMasterData(user.role)}
+          />
         ),
         items: settings.itemManagementEnabled ? (
           <Link
-            className="text-primary text-sm underline"
+            className="border-input hover:bg-muted rounded-md border px-3 py-1.5 text-xs font-medium"
             href={"/items?projectId=" + projectId}
           >
-            Items (Beta)
+            Open Items
           </Link>
         ) : null,
       }}

@@ -1,3 +1,4 @@
+import { RecordSectionHeading } from "@/components/layout/record-presentation";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { Badge } from "@/components/ui/badge";
 import { formatDateOnly } from "@/domain/payments/dates";
@@ -47,19 +48,21 @@ export function PaymentSchedule({
   const settledLabel = supplierSide ? "Paid" : "Legacy settlements";
   return (
     <section className={`bg-card rounded-lg border p-4`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            {supplierSide ? "Supplier cash out" : "Historical planning"}
-          </p>
-          <h2 className="mt-1 text-base font-semibold">{noun}</h2>
-        </div>
-        {summary.foreignCurrencyInstallmentCount > 0 ? (
-          <Badge variant="destructive">
-            {summary.foreignCurrencyInstallmentCount} foreign-currency item(s)
-          </Badge>
-        ) : null}
-      </div>
+      <RecordSectionHeading
+        title={noun}
+        description={
+          supplierSide
+            ? "Supplier cash out · planned installments and actual payments."
+            : "Historical planning only."
+        }
+        actions={
+          summary.foreignCurrencyInstallmentCount > 0 ? (
+            <Badge variant="destructive">
+              {summary.foreignCurrencyInstallmentCount} foreign-currency item(s)
+            </Badge>
+          ) : null
+        }
+      />
       <dl className="mt-4 grid gap-3 sm:grid-cols-3">
         {(
           [

@@ -12,6 +12,11 @@ import { DateInput } from "@/components/forms/date-input";
 
 import Decimal from "decimal.js";
 import Link from "next/link";
+import {
+  RecordFields,
+  RecordSummary,
+  RecordSectionHeading,
+} from "@/components/layout/record-presentation";
 import { RecordWorkspace } from "@/components/layout/record-workspace";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { SheetClose } from "@/components/ui/sheet";
@@ -916,127 +921,134 @@ export function BillingDetail({
             label: "Overview",
             content: (
               <>
-                <dl className="grid gap-4 sm:grid-cols-3">
-                  <DetailValue
-                    label="Total TTC"
-                    value={formatMoney(saved.totalTtc, saved.currencyCode)}
-                  />
-                  <DetailValue
-                    label="Received"
-                    value={formatMoney(collection.paid, saved.currencyCode)}
-                  />
-                  <DetailValue
-                    label="Outstanding"
-                    value={formatMoney(
-                      collection.outstanding,
-                      saved.currencyCode,
-                    )}
-                  />
-                </dl>
-                <section aria-label="Details" className="space-y-4">
-                  <section className="grid gap-4 lg:grid-cols-2">
-                    <article className="bg-card rounded-lg border p-4">
-                      <h2 className="text-sm font-semibold">
-                        Dates & exchange rate
-                      </h2>
-                      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <DetailValue
-                          label="Status"
-                          value={saved.isCancelled ? "Cancelled" : "Active"}
-                        />
-                        <DetailValue
-                          label="Payment status"
-                          value={formatEnumLabel(collection.status)}
-                        />
-                        <DetailValue
-                          label="Document date"
-                          value={formatDateOnly(saved.documentDate)}
-                        />
-                        <DetailValue
-                          label="Due date"
-                          value={formatDateOnly(saved.dueDate)}
-                        />
-                        <DetailValue
-                          label="FX to reporting"
-                          value={
-                            (saved.fxRate ? formatFxRate(saved.fxRate) : "") ||
-                            (saved.currencyCode ===
-                            savedProject?.reportingCurrencyCode
-                              ? "1 · same currency"
-                              : "Missing")
-                          }
-                        />
-                      </dl>
-                    </article>
-                    <article className="bg-card rounded-lg border p-4">
-                      <h2 className="text-sm font-semibold">Financial</h2>
-                      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <DetailValue
-                          label="Total freight HT (included)"
-                          value={formatMoney(
-                            saved.freightCoverageHt,
-                            saved.currencyCode,
-                          )}
-                        />
-                        <DetailValue
-                          label="HT"
-                          value={formatMoney(saved.totalHt, saved.currencyCode)}
-                        />
-                        <DetailValue
-                          label="VAT"
-                          value={formatMoney(
+                <RecordSummary
+                  values={[
+                    {
+                      label: "Total TTC",
+                      value: formatMoney(saved.totalTtc, saved.currencyCode),
+                    },
+                    {
+                      label: "Received",
+                      value: formatMoney(collection.paid, saved.currencyCode),
+                    },
+                    {
+                      label: "Outstanding",
+                      value: formatMoney(
+                        collection.outstanding,
+                        saved.currencyCode,
+                      ),
+                    },
+                  ]}
+                />
+                <section
+                  aria-label="Details"
+                  className="grid gap-3 lg:grid-cols-2"
+                >
+                  <article className="bg-card rounded-lg border p-4">
+                    <RecordSectionHeading title="Amounts & VAT" />
+                    <RecordFields
+                      values={[
+                        {
+                          label: "HT",
+                          value: formatMoney(saved.totalHt, saved.currencyCode),
+                        },
+                        {
+                          label: "VAT",
+                          value: formatMoney(
                             saved.vatAmount,
                             saved.currencyCode,
-                          )}
-                        />
-                        <DetailValue
-                          label="VAT rate"
-                          value={
-                            saved.vatRate
-                              ? formatRate(
-                                  humanPercentageToFraction(saved.vatRate, {
-                                    maximumPercent: "100",
-                                  }),
-                                )
-                              : "—"
-                          }
-                        />
-
-                        <DetailValue
-                          label="Unallocated Billing HT"
-                          value={formatMoney(
+                          ),
+                        },
+                        {
+                          label: "VAT rate",
+                          value: saved.vatRate
+                            ? formatRate(
+                                humanPercentageToFraction(saved.vatRate, {
+                                  maximumPercent: "100",
+                                }),
+                              )
+                            : "—",
+                        },
+                        {
+                          label: "VAT treatment",
+                          value: saved.vatTreatment
+                            ? formatEnumLabel(saved.vatTreatment)
+                            : "—",
+                        },
+                        {
+                          label: "FX to reporting",
+                          value: saved.fxRate
+                            ? formatFxRate(saved.fxRate)
+                            : saved.currencyCode ===
+                                savedProject?.reportingCurrencyCode
+                              ? "1 · same currency"
+                              : "Missing",
+                        },
+                      ]}
+                    />
+                  </article>
+                  <article className="bg-card rounded-lg border p-4">
+                    <RecordSectionHeading
+                      title="Allocation & freight"
+                      description="Commercial Billing HT attribution, separate from cash received."
+                    />
+                    <RecordFields
+                      values={[
+                        {
+                          label: "Unallocated Billing HT",
+                          value: formatMoney(
                             savedReconciliation.remaining,
                             saved.currencyCode,
-                          )}
-                        />
-                        <DetailValue
-                          label="Freight allocated to Orders HT"
-                          value={formatMoney(
+                          ),
+                        },
+                        {
+                          label: "Total freight HT (included)",
+                          value: formatMoney(
+                            saved.freightCoverageHt,
+                            saved.currencyCode,
+                          ),
+                        },
+                        {
+                          label: "Freight allocated to Orders HT",
+                          value: formatMoney(
                             freightBreakdown.allocatedFreightHt,
                             saved.currencyCode,
-                          )}
-                        />
-                        <DetailValue
-                          label="Freight remaining at Project level HT"
-                          value={formatMoney(
+                          ),
+                        },
+                        {
+                          label: "Freight remaining at Project level HT",
+                          value: formatMoney(
                             freightBreakdown.projectFreightHt,
                             saved.currencyCode,
-                          )}
-                        />
-                        <DetailValue
-                          label="VAT treatment"
-                          value={
-                            saved.vatTreatment
-                              ? formatEnumLabel(saved.vatTreatment)
-                              : "—"
-                          }
-                        />
-                      </dl>
-                    </article>
-                  </section>
+                          ),
+                        },
+                      ]}
+                    />
+                  </article>
+                </section>
+                <section className="bg-card rounded-lg border p-4">
+                  <RecordSectionHeading title="Status & dates" />
+                  <dl className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <DetailValue
+                      label="Status"
+                      value={saved.isCancelled ? "Cancelled" : "Active"}
+                    />
+                    <DetailValue
+                      label="Payment status"
+                      value={formatEnumLabel(collection.status)}
+                    />
+                    <DetailValue
+                      label="Document date"
+                      value={formatDateOnly(saved.documentDate)}
+                    />
+                    <DetailValue
+                      label="Due date"
+                      value={formatDateOnly(saved.dueDate)}
+                    />
+                  </dl>
                 </section>
                 <article className="bg-card rounded-lg border p-4">
-                  <h2 className="text-sm font-semibold">Notes</h2>
+                  <RecordSectionHeading title="Notes" />
                   <p className="text-muted-foreground mt-3 text-sm whitespace-pre-wrap">
                     {saved.notes || "No notes."}
                   </p>
@@ -1064,35 +1076,36 @@ export function BillingDetail({
             label: "Linked Orders",
             content: (
               <section className="bg-card rounded-lg border p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-sm font-semibold">Linked Orders</h2>
-                  {canEdit ? (
-                    <div className="flex gap-2">
-                      <BillingFreightEditor
-                        billingId={document.id}
-                        totalHt={saved.totalHt}
-                        currencyCode={saved.currencyCode}
-                        freightCoverageHt={saved.freightCoverageHt}
-                        allocatedFreightHt={freightBreakdown.allocatedFreightHt}
-                        onSaved={(amount) => {
-                          setSaved((current) => ({
-                            ...current,
-                            freightCoverageHt: amount,
-                          }));
-                          setDraft((current) => ({
-                            ...current,
-                            freightCoverageHt: amount,
-                          }));
-                        }}
-                      />
-                      {allocationEditor()}
-                    </div>
-                  ) : null}
-                  <p className="text-muted-foreground w-full text-xs">
-                    Allocate Billing HT to Orders. These amounts are commercial
-                    attribution, not Client receipts.
-                  </p>
-                </div>
+                <RecordSectionHeading
+                  title="Linked Orders"
+                  description="Commercial attribution only. Client receipts remain separate cash records."
+                  actions={
+                    canEdit ? (
+                      <div className="flex flex-wrap gap-2">
+                        <BillingFreightEditor
+                          billingId={document.id}
+                          totalHt={saved.totalHt}
+                          currencyCode={saved.currencyCode}
+                          freightCoverageHt={saved.freightCoverageHt}
+                          allocatedFreightHt={
+                            freightBreakdown.allocatedFreightHt
+                          }
+                          onSaved={(amount) => {
+                            setSaved((current) => ({
+                              ...current,
+                              freightCoverageHt: amount,
+                            }));
+                            setDraft((current) => ({
+                              ...current,
+                              freightCoverageHt: amount,
+                            }));
+                          }}
+                        />
+                        {allocationEditor()}
+                      </div>
+                    ) : null
+                  }
+                />
                 <div className="mt-3 overflow-x-auto">
                   <table className="w-full min-w-[760px] text-left text-sm">
                     <thead className="text-muted-foreground border-b text-xs">
@@ -1189,17 +1202,20 @@ export function BillingDetail({
             group: "related",
             content: (
               <article className="bg-card rounded-lg border p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-sm font-semibold">Import metadata</h2>
-                  {canEdit ? (
-                    <Link
-                      className="text-primary text-xs underline"
-                      href="/admin/activity?entityType=BILLING_DOCUMENT"
-                    >
-                      Activity history
-                    </Link>
-                  ) : null}
-                </div>
+                <RecordSectionHeading
+                  title="Document history"
+                  description="Reviewed Billing imports."
+                  actions={
+                    canEdit ? (
+                      <Link
+                        className="text-primary text-xs underline"
+                        href="/admin/activity?entityType=BILLING_DOCUMENT"
+                      >
+                        Activity history
+                      </Link>
+                    ) : null
+                  }
+                />
                 <div className="mt-3 space-y-2 text-xs">
                   {document.imports.map((item) => (
                     <p key={item.id}>

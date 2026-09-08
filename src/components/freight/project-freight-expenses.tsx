@@ -1,4 +1,5 @@
 "use client";
+import { RecordSectionHeading } from "@/components/layout/record-presentation";
 import { DateInput } from "@/components/forms/date-input";
 
 import { EditorDrawer } from "@/components/forms/editor-drawer";
@@ -189,7 +190,7 @@ export function ProjectFreightExpenses({
   const fieldErrors = state.fieldErrors ?? {};
   return (
     <section className="bg-card rounded-lg border p-4">
-      <h2 className="text-sm font-semibold">Project-level freight expenses</h2>
+      <RecordSectionHeading title="Project-level freight expenses" />
       <p className="text-muted-foreground mt-1 text-xs">
         Use this only for freight not already recorded on a Order.
       </p>

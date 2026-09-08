@@ -1,4 +1,5 @@
 "use client";
+import { RecordSectionHeading } from "@/components/layout/record-presentation";
 import { DateInput } from "@/components/forms/date-input";
 
 import Decimal from "decimal.js";
@@ -120,12 +121,10 @@ export function BillingScheduleManager({
 
   return (
     <section className="bg-card rounded-lg border p-4">
-      <div>
-        <h2 className="text-sm font-semibold">Payment Schedule & Receipts</h2>
-        <p className="text-muted-foreground mt-1 text-xs">
-          Planned Client cash dates and authoritative actual receipts.
-        </p>
-      </div>
+      <RecordSectionHeading
+        title="Client Receipts"
+        description="Client cash in · planned installments and actual receipts."
+      />
 
       <dl className="bg-muted/20 mt-4 grid gap-3 rounded-md border p-3 text-sm sm:grid-cols-2">
         <SummaryValue

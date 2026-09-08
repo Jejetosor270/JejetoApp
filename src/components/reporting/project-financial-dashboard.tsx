@@ -1,3 +1,4 @@
+import { RecordSummary } from "@/components/layout/record-presentation";
 import Link from "next/link";
 
 import { CashFlowPanel } from "@/components/reporting/cash-flow-panel";
@@ -410,23 +411,31 @@ export function ProjectFinancialDashboard({
       )}
       {section === "overview" && (
         <div>
-          <section className="grid gap-4 sm:grid-cols-3">
-            {[
-              ["Actual invoiced HT", financialPerformance.actual.sellHt],
-              ["Actual economic cost HT", financialPerformance.actual.costHt],
-              [
-                "Actual gross profit HT",
-                financialPerformance.actual.grossProfitHt,
-              ],
-            ].map(([label, value]) => (
-              <article key={label} className="border-b py-4">
-                <p className="text-muted-foreground text-xs">{label}</p>
-                <p className="financial-figure mt-2 text-xl font-semibold">
-                  {formatMoney(value ?? null, currency)}
-                </p>
-              </article>
-            ))}
-          </section>
+          <RecordSummary
+            values={[
+              {
+                label: "Actual invoiced HT",
+                value: formatMoney(
+                  financialPerformance.actual.sellHt,
+                  currency,
+                ),
+              },
+              {
+                label: "Actual economic cost HT",
+                value: formatMoney(
+                  financialPerformance.actual.costHt,
+                  currency,
+                ),
+              },
+              {
+                label: "Actual gross profit HT",
+                value: formatMoney(
+                  financialPerformance.actual.grossProfitHt,
+                  currency,
+                ),
+              },
+            ]}
+          />
           {(!vatPosition.complete ||
             !freight?.complete ||
             financialPerformance.actual.costHt === null ||
@@ -437,7 +446,7 @@ export function ProjectFinancialDashboard({
                 className="underline"
                 href={`/projects/${projectId}?tab=finance`}
               >
-                Review planning and FX in Finance.
+                Review planning and FX in Details.
               </Link>
             </p>
           )}
