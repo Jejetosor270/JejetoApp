@@ -1,3 +1,4 @@
+import { ProjectPurchaseBudget } from "@/components/procurement/project-purchase-budget";
 import { ProjectPackages } from "@/components/procurement/project-packages";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -177,6 +178,7 @@ export default async function ProjectPage({
         ),
         orders: (
           <>
+            <ProjectPurchaseBudget projectId={projectId} />
             <ProjectPackages
               projectId={projectId}
               currency={project.reportingCurrencyCode}

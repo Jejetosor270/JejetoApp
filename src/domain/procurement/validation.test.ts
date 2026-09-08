@@ -169,3 +169,55 @@ describe("single procurement order cost validation", () => {
     ).toThrow();
   });
 });
+
+describe("Order carrier and budget validation", () => {
+  it("requires a name for Other and rejects unknown carriers", () => {
+    expect(
+      createOrderInputSchema.safeParse({
+        ...base,
+        carrierCode: "OTHER",
+        carrierOtherName: "   ",
+      }).success,
+    ).toBe(false);
+    expect(
+      createOrderInputSchema.safeParse({ ...base, carrierCode: "INVALID" })
+        .success,
+    ).toBe(false);
+    expect(
+      createOrderInputSchema.safeParse({
+        ...base,
+        carrierCode: "OTHER",
+        carrierOtherName: "Local freight",
+      }).success,
+    ).toBe(true);
+  });
+  it("keeps absent fields unchanged and blank fields explicitly cleared", () => {
+    expect(
+      createOrderInputSchema.parse(base).budgetPurchaseAmountHt,
+    ).toBeUndefined();
+    expect(
+      createOrderInputSchema.parse({
+        ...base,
+        budgetPurchaseAmountHt: "",
+        carrierCode: "",
+        trackingReference: "",
+      }),
+    ).toMatchObject({
+      budgetPurchaseAmountHt: null,
+      carrierCode: null,
+      trackingReference: null,
+    });
+  });
+  it("accepts zero and rejects negative budgets", () => {
+    expect(
+      createOrderInputSchema.parse({ ...base, budgetPurchaseAmountHt: "0" })
+        .budgetPurchaseAmountHt,
+    ).toBe("0.0000");
+    expect(
+      createOrderInputSchema.safeParse({
+        ...base,
+        budgetPurchaseAmountHt: "-1",
+      }).success,
+    ).toBe(false);
+  });
+});

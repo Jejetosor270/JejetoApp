@@ -1,4 +1,5 @@
 "use client";
+import { carriers } from "@/config/carriers";
 import { AllocationInputs } from "@/components/billing/allocation-inputs";
 import {
   PackageSelect,
@@ -154,6 +155,10 @@ export interface EditableOrder {
   status: string;
   supplier: SupplierOption;
   supplierOrderConfirmationReference: string | null;
+  carrierCode?: string | null;
+  carrierOtherName?: string | null;
+  trackingReference?: string | null;
+  budgetPurchaseAmountHt?: string | null;
   supplierQuoteReference: string | null;
 }
 
@@ -481,6 +486,10 @@ export function OrderForm({
     supplierOrderConfirmationReference:
       order?.supplierOrderConfirmationReference ?? "",
     supplierQuoteReference: order?.supplierQuoteReference ?? "",
+    carrierCode: order?.carrierCode ?? "",
+    carrierOtherName: order?.carrierOtherName ?? "",
+    trackingReference: order?.trackingReference ?? "",
+    budgetPurchaseAmountHt: order?.budgetPurchaseAmountHt ?? "",
   }));
   const [billingDocumentId, setBillingDocumentId] = useState("");
   const [packageId, setPackageId] = useState(order?.packageId ?? "");
@@ -825,6 +834,7 @@ export function OrderForm({
                   (item) => item.id === event.target.value,
                 );
                 changeDraft("projectId", event.target.value);
+                changeDraft("budgetPurchaseAmountHt", "");
                 setPackageId("");
                 setBillingDocumentId("");
                 setBillingAllocatedAmount("");
@@ -914,6 +924,72 @@ export function OrderForm({
                 </option>
               ))}
             </select>
+          </Field>
+          <Field label="Carrier" error={fieldErrors.carrierCode}>
+            <select
+              name="carrierCode"
+              className={errorClass("carrierCode")}
+              value={draft.carrierCode ?? ""}
+              onChange={(event) =>
+                changeDraft("carrierCode", event.target.value)
+              }
+            >
+              <option value="">Not selected</option>
+              {carriers.map((carrier) => (
+                <option key={carrier.code} value={carrier.code}>
+                  {carrier.name}
+                </option>
+              ))}
+              <option value="OTHER">Other</option>
+            </select>
+          </Field>
+          {draft.carrierCode === "OTHER" && (
+            <Field
+              label="Other carrier name"
+              error={fieldErrors.carrierOtherName}
+            >
+              <input
+                name="carrierOtherName"
+                maxLength={160}
+                required
+                className={errorClass("carrierOtherName")}
+                value={draft.carrierOtherName ?? ""}
+                onChange={(event) =>
+                  changeDraft("carrierOtherName", event.target.value)
+                }
+              />
+            </Field>
+          )}
+          <Field
+            label="Transit / freight / tracking reference"
+            error={fieldErrors.trackingReference}
+          >
+            <input
+              name="trackingReference"
+              maxLength={200}
+              className={errorClass("trackingReference")}
+              value={draft.trackingReference ?? ""}
+              onChange={(event) =>
+                changeDraft("trackingReference", event.target.value)
+              }
+            />
+          </Field>
+          <Field
+            label={`Allocated product budget HT (${project?.reportingCurrencyCode ?? "reporting currency"})`}
+            error={fieldErrors.budgetPurchaseAmountHt}
+          >
+            <MoneyInput
+              invalid={Boolean(fieldErrors.budgetPurchaseAmountHt)}
+              name="budgetPurchaseAmountHt"
+              value={draft.budgetPurchaseAmountHt ?? ""}
+              onValueChange={(value) =>
+                changeDraft("budgetPurchaseAmountHt", value)
+              }
+            />
+            <p className="text-muted-foreground text-xs">
+              This Order’s share of the Project product purchase budget,
+              excluding freight and other costs.
+            </p>
           </Field>
           <Field
             error={fieldErrors.supplierQuoteReference}

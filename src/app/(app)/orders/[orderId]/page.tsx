@@ -1,3 +1,6 @@
+import { carrierName } from "@/config/carriers";
+import { OrderBudgetComparison } from "@/components/procurement/order-budget-comparison";
+import { ProjectPurchaseBudget } from "@/components/procurement/project-purchase-budget";
 import Link from "next/link";
 import { WorkspaceTabs } from "@/components/layout/workspace-tabs";
 import type { Metadata } from "next";
@@ -103,6 +106,8 @@ export default async function OrderPage({
                       {cost.missingFx.join(", ")}.
                     </p>
                   )}
+                  <OrderBudgetComparison order={order} />
+                  <ProjectPurchaseBudget projectId={order.project.id} />
                   <OrderBillingReconciliation
                     canEdit={canEditMasterData(user.role)}
                     difference={orderBillingDifference(
@@ -471,7 +476,23 @@ export default async function OrderPage({
               label: "Delivery",
               content: (
                 <section className="bg-card rounded-lg border p-4">
-                  <h2 className="text-sm font-semibold">Procurement timing</h2>
+                  <h2 className="text-sm font-semibold">Delivery & tracking</h2>
+                  <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="text-muted-foreground text-xs">Carrier</dt>
+                      <dd>
+                        {carrierName(order.carrierCode, order.carrierOtherName)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground text-xs">
+                        Transit / freight / tracking reference
+                      </dt>
+                      <dd className="break-all">
+                        {order.trackingReference || "—"}
+                      </dd>
+                    </div>
+                  </dl>
                   <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-6">
                     <div>
                       <dt className="text-muted-foreground text-xs">

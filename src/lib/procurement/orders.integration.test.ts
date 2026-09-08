@@ -39,6 +39,10 @@ function sellingOrder(
   treatment: VatTreatment,
 ): Parameters<typeof summarizeOrder>[0] {
   return {
+    carrierCode: null,
+    carrierOtherName: null,
+    trackingReference: null,
+    budgetPurchaseAmountHt: null,
     acknowledgementDate: null,
     actualDeliveryDate: null,
     actualDispatchAt: null,
@@ -143,6 +147,10 @@ describe("single order cost write", () => {
       id: "e12b6b9b-10e9-4e42-b93f-38796de4f65a",
     });
     const input = createOrderInputSchema.parse({
+      carrierCode: "OTHER",
+      carrierOtherName: "Local freight",
+      trackingReference: "BOL-123",
+      budgetPurchaseAmountHt: "70000",
       buildingIds: [],
       freightTreatment: "NOT_APPLICABLE",
       inputVatRecoverability: "NON_RECOVERABLE",
@@ -165,6 +173,16 @@ describe("single order cost write", () => {
       supplierId: "b12b6b9b-10e9-4e42-b93f-38796de4f65a",
     });
     await createOrder("d1ba89a0-c7d0-4657-a922-80cdf9f9b94e", input);
+    expect(transaction.procurementOrder.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          carrierCode: "OTHER",
+          carrierOtherName: "Local freight",
+          trackingReference: "BOL-123",
+          budgetPurchaseAmountHt: "70000.0000",
+        }),
+      }),
+    );
     expect(
       transaction.procurementOrderCostLine.createMany,
     ).toHaveBeenCalledWith(

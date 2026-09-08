@@ -5,6 +5,10 @@ function stringValue(formData: FormData, name: string): string | undefined {
 
 export function orderFormValues(formData: FormData) {
   return {
+    carrierCode: stringValue(formData, "carrierCode"),
+    carrierOtherName: stringValue(formData, "carrierOtherName"),
+    trackingReference: stringValue(formData, "trackingReference"),
+    budgetPurchaseAmountHt: stringValue(formData, "budgetPurchaseAmountHt"),
     actualDeliveryDate: stringValue(formData, "actualDeliveryDate"),
     buildingIds: formData
       .getAll("buildingIds")

@@ -1,6 +1,10 @@
 import type { OrderPricingMethod } from "@/domain/finance/order-pricing";
 
 export interface OrderDraft {
+  carrierCode?: string;
+  carrierOtherName?: string;
+  trackingReference?: string;
+  budgetPurchaseAmountHt?: string;
   actualDeliveryDate: string;
   buildingIds: string[];
   category: string;

@@ -144,6 +144,11 @@ export interface OrderCostSummary {
   sellingFxRate: string | null;
 }
 export interface OrderSummary {
+  carrierCode?: string | null;
+  carrierOtherName?: string | null;
+  trackingReference?: string | null;
+  budgetPurchaseAmountHt?: string | null;
+
   billing: {
     actualGrossProfit: string | null;
     actualMarginRate: string | null;
@@ -811,6 +816,10 @@ export function summarizeOrder(order: OrderRecord): OrderSummary {
             ? "SCHEDULED"
             : "NOT_SCHEDULED";
   return {
+    carrierCode: order.carrierCode,
+    carrierOtherName: order.carrierOtherName,
+    trackingReference: order.trackingReference,
+    budgetPurchaseAmountHt: order.budgetPurchaseAmountHt?.toFixed(4) ?? null,
     billing: {
       actualGrossProfit: actualMetrics?.grossProfit.toString() ?? null,
       actualMarginRate: actualMetrics?.marginRate.toString() ?? null,
@@ -1173,6 +1182,21 @@ function orderData(input: CreateOrderInput, project: ProjectPricingContext) {
     supplierOrderConfirmationReference:
       input.supplierOrderConfirmationReference ?? null,
     supplierQuoteReference: input.supplierQuoteReference ?? null,
+    ...(input.carrierCode === undefined
+      ? {}
+      : {
+          carrierCode: input.carrierCode,
+          carrierOtherName:
+            input.carrierCode === "OTHER"
+              ? (input.carrierOtherName ?? null)
+              : null,
+        }),
+    ...(input.trackingReference === undefined
+      ? {}
+      : { trackingReference: input.trackingReference }),
+    ...(input.budgetPurchaseAmountHt === undefined
+      ? {}
+      : { budgetPurchaseAmountHt: input.budgetPurchaseAmountHt }),
     targetMarginRate: null,
   };
 }
@@ -1539,6 +1563,10 @@ async function createOrderRecord(
     entityType: "ORDER",
     metadata: {
       ...(input.packageId === undefined ? {} : { packageId: input.packageId }),
+      carrierCode: input.carrierCode ?? null,
+      carrierOtherName: input.carrierOtherName ?? null,
+      trackingReference: input.trackingReference ?? null,
+      budgetPurchaseAmountHt: input.budgetPurchaseAmountHt ?? null,
       fields: [
         "packageId",
         "supplierId",
@@ -1700,6 +1728,10 @@ async function updateOrderRecord(
     entityType: "ORDER",
     metadata: {
       ...(input.packageId === undefined ? {} : { packageId: input.packageId }),
+      carrierCode: input.carrierCode ?? null,
+      carrierOtherName: input.carrierOtherName ?? null,
+      trackingReference: input.trackingReference ?? null,
+      budgetPurchaseAmountHt: input.budgetPurchaseAmountHt ?? null,
       fields: [
         "packageId",
         "supplierId",

@@ -411,6 +411,10 @@ model ProcurementOrder {
   supplierId                         String                 @db.Uuid
   orderCurrencyCode                  String                 @db.Char(3)
   supplierQuoteReference             String?                @db.VarChar(120)
+  carrierCode                       String?                @db.VarChar(40)
+  carrierOtherName                  String?                @db.VarChar(160)
+  trackingReference                String?                @db.VarChar(200)
+  budgetPurchaseAmountHt           Decimal?               @db.Decimal(19, 4)
   supplierOrderConfirmationReference String?                @db.VarChar(120)
   status                             ProcurementOrderStatus @default(DRAFT)
   freightTreatment                   FreightTreatment       @default(NOT_APPLICABLE)

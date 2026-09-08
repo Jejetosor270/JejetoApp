@@ -1,3 +1,4 @@
+import { carriers } from "@/config/carriers";
 import Decimal from "decimal.js";
 import { z } from "zod";
 import {
@@ -162,6 +163,37 @@ const orderFields = {
   supplierId: z.uuid("Choose a valid supplier."),
   supplierOrderConfirmationReference: optionalText(120),
   supplierQuoteReference: optionalText(120),
+  carrierCode: z.preprocess(
+    (value) => (value === "" ? null : value),
+    z
+      .string()
+      .refine(
+        (value) =>
+          value === "OTHER" ||
+          carriers.some((carrier) => carrier.code === value),
+        "Choose a listed carrier or Other.",
+      )
+      .nullable()
+      .optional(),
+  ),
+  carrierOtherName: z.preprocess(
+    (value) => (value === "" ? null : value),
+    z.string().trim().max(160).nullable().optional(),
+  ),
+  trackingReference: z.preprocess(
+    (value) => (value === "" ? null : value),
+    z.string().trim().max(200).nullable().optional(),
+  ),
+  budgetPurchaseAmountHt: z.preprocess(
+    (value) => (value === "" ? null : value),
+    optionalMoney("Order budget")
+      .nullable()
+      .refine(
+        (value) =>
+          value == null || new Decimal(value).lessThan("1000000000000000"),
+        "Order budget exceeds the supported amount.",
+      ),
+  ),
 };
 
 const baseOrderSchema = z.object(orderFields);
@@ -239,6 +271,13 @@ function validOrder(
   value: z.infer<typeof baseOrderSchema>,
   context: z.RefinementCtx,
 ): void {
+  if (value.carrierCode === "OTHER" && !value.carrierOtherName?.trim()) {
+    context.addIssue({
+      code: "custom",
+      path: ["carrierOtherName"],
+      message: "Enter the carrier name.",
+    });
+  }
   if (
     value.freightTreatment !== FreightTreatment.RECHARGED_SEPARATELY &&
     value.freightResaleAmount &&
