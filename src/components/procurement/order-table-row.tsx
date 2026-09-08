@@ -1,5 +1,6 @@
 "use client";
 
+import { carriers, carrierName } from "@/config/carriers";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { updateOrderInlineAction } from "@/app/(app)/orders/actions";
@@ -42,6 +43,9 @@ export function OrderRow({
   view: OrderViewMode;
 }) {
   const initial = () => ({
+    carrierCode: order.carrierCode ?? "",
+    carrierOtherName: order.carrierOtherName ?? "",
+    trackingReference: order.trackingReference ?? "",
     expectedDeliveryDate: dateOnlyToEuropeanInput(order.expectedDeliveryDate),
     expectedReadyDate: dateOnlyToEuropeanInput(order.expectedReadyDate),
     orderNumber: order.orderNumber,
@@ -63,11 +67,22 @@ export function OrderRow({
     data.set("status", draft.status);
     data.set("expectedReadyDate", serverDate(draft.expectedReadyDate));
     data.set("expectedDeliveryDate", serverDate(draft.expectedDeliveryDate));
+    if (view === "delivery") {
+      data.set("carrierCode", draft.carrierCode);
+      data.set(
+        "carrierOtherName",
+        draft.carrierCode === "OTHER" ? draft.carrierOtherName : "",
+      );
+      data.set("trackingReference", draft.trackingReference);
+    }
     startTransition(async () => {
       const result = await updateOrderInlineAction(data);
       setFeedback(result.message ?? "");
       if (result.status === "success" && result.values) {
         const next = {
+          carrierCode: result.values.carrierCode ?? "",
+          carrierOtherName: result.values.carrierOtherName ?? "",
+          trackingReference: result.values.trackingReference ?? "",
           expectedDeliveryDate: dateOnlyToEuropeanInput(
             result.values.expectedDeliveryDate,
           ),
@@ -262,8 +277,47 @@ export function OrderRow({
         <td className="px-4 py-3">
           {order.orderPackage?.name ?? "Unassigned"}
         </td>
-        <td className="max-w-64 px-4 py-3">
-          {order.buildings.join(", ") || "—"}
+        <td className="min-w-44 px-4 py-3">
+          {editing ? (
+            <div className="grid gap-2">
+              <InlineSelect
+                disabled={pending}
+                ariaLabel={`Carrier for ${saved.orderNumber}`}
+                value={draft.carrierCode}
+                onChange={(value) => set("carrierCode", value)}
+              >
+                <option value="">Not selected</option>
+                {carriers.map((carrier) => (
+                  <option key={carrier.code} value={carrier.code}>
+                    {carrier.name}
+                  </option>
+                ))}
+                <option value="OTHER">Other</option>
+              </InlineSelect>
+              {draft.carrierCode === "OTHER" && (
+                <InlineTextInput
+                  disabled={pending}
+                  ariaLabel={`Other carrier name for ${saved.orderNumber}`}
+                  value={draft.carrierOtherName}
+                  onChange={(value) => set("carrierOtherName", value)}
+                />
+              )}
+            </div>
+          ) : (
+            carrierName(saved.carrierCode, saved.carrierOtherName)
+          )}
+        </td>
+        <td className="min-w-44 px-4 py-3 break-all">
+          {editing ? (
+            <InlineTextInput
+              disabled={pending}
+              ariaLabel={`Tracking reference for ${saved.orderNumber}`}
+              value={draft.trackingReference}
+              onChange={(value) => set("trackingReference", value)}
+            />
+          ) : (
+            saved.trackingReference || "—"
+          )}
         </td>
         {actionsCell}
       </tr>

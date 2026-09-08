@@ -1629,11 +1629,26 @@ export async function updateOrderInline(
           expectedReadyDate: input.expectedReadyDate
             ? dateOnlyToDate(input.expectedReadyDate)
             : null,
+          ...(input.carrierCode === undefined
+            ? {}
+            : {
+                carrierCode: input.carrierCode,
+                carrierOtherName:
+                  input.carrierCode === "OTHER"
+                    ? (input.carrierOtherName ?? null)
+                    : null,
+              }),
+          ...(input.trackingReference === undefined
+            ? {}
+            : { trackingReference: input.trackingReference }),
           orderNumber: input.orderNumber,
           status: input.status,
           updatedById: actorId,
         },
         select: {
+          carrierCode: true,
+          carrierOtherName: true,
+          trackingReference: true,
           expectedDeliveryDate: true,
           expectedReadyDate: true,
           id: true,
@@ -1647,6 +1662,15 @@ export async function updateOrderInline(
         entityReference: order.orderNumber,
         entityType: "ORDER",
         metadata: {
+          ...(input.carrierCode === undefined
+            ? {}
+            : {
+                carrierCode: order.carrierCode,
+                carrierOtherName: order.carrierOtherName,
+              }),
+          ...(input.trackingReference === undefined
+            ? {}
+            : { trackingReference: order.trackingReference }),
           fields: [
             "orderNumber",
             "status",

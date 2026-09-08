@@ -109,6 +109,9 @@ describe("Purchasing inline edits on every tab", () => {
     await clickText("Save");
     expect(save).toHaveBeenCalledOnce();
     expect(Object.fromEntries(save.mock.calls[0]?.[0] as FormData)).toEqual({
+      ...(view === "delivery"
+        ? { carrierCode: "", carrierOtherName: "", trackingReference: "" }
+        : {}),
       id: "order-id",
       orderNumber: "PO-002",
       status: "ORDERED",
@@ -148,6 +151,28 @@ describe("Purchasing inline edits on every tab", () => {
       ).toBe("PO-001");
     },
   );
+
+  it("saves custom carrier and tracking directly in Delivery", async () => {
+    save.mockImplementation(async (data: FormData) => ({
+      status: "success",
+      values: Object.fromEntries(data),
+    }));
+    mounted = await mountForm(row("delivery"));
+    await clickText("Edit");
+    await change("Carrier", "OTHER");
+    await change("Other carrier name", "Local Freight");
+    await change("Tracking reference", "AWB-123");
+    await clickText("Save");
+    expect(
+      Object.fromEntries(save.mock.calls[0]?.[0] as FormData),
+    ).toMatchObject({
+      carrierCode: "OTHER",
+      carrierOtherName: "Local Freight",
+      trackingReference: "AWB-123",
+    });
+    expect(mounted.container.textContent).toContain("Local Freight");
+    expect(mounted.container.textContent).toContain("AWB-123");
+  });
 
   it.each(views)("keeps %s read-only for viewers", async (view) => {
     mounted = await mountForm(row(view, false));

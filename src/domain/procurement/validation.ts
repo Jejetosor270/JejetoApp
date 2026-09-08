@@ -372,13 +372,25 @@ export const createOrderInputSchema = baseOrderSchema.superRefine(validOrder);
 export const updateOrderInputSchema = z
   .object({ id: z.uuid("Invalid order."), ...orderFields })
   .superRefine(validOrder);
-export const inlineOrderInputSchema = z.object({
-  expectedDeliveryDate: optionalDateOnly,
-  expectedReadyDate: optionalDateOnly,
-  id: z.uuid("Invalid order."),
-  orderNumber: z.string().trim().min(1).max(50),
-  status: z.enum(ProcurementOrderStatus),
-});
+export const inlineOrderInputSchema = z
+  .object({
+    carrierCode: orderFields.carrierCode,
+    carrierOtherName: orderFields.carrierOtherName,
+    trackingReference: orderFields.trackingReference,
+    expectedDeliveryDate: optionalDateOnly,
+    expectedReadyDate: optionalDateOnly,
+    id: z.uuid("Invalid order."),
+    orderNumber: z.string().trim().min(1).max(50),
+    status: z.enum(ProcurementOrderStatus),
+  })
+  .superRefine((value, context) => {
+    if (value.carrierCode === "OTHER" && !value.carrierOtherName?.trim())
+      context.addIssue({
+        code: "custom",
+        path: ["carrierOtherName"],
+        message: "Enter the carrier name.",
+      });
+  });
 export type CreateOrderInput = z.infer<typeof createOrderInputSchema>;
 export type InlineOrderInput = z.infer<typeof inlineOrderInputSchema>;
 export type UpdateOrderInput = z.infer<typeof updateOrderInputSchema>;

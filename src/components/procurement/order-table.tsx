@@ -136,7 +136,8 @@ export function OrderTable({
                   <th className="px-4 py-3">Supplier</th>
                   <th className="px-4 py-3">Project</th>
                   <th className="px-4 py-3">Package</th>
-                  <th className="px-4 py-3">Buildings</th>
+                  <th className="px-4 py-3">Carrier</th>
+                  <th className="px-4 py-3">Tracking reference</th>
                 </>
               )}
               {canEdit ? <th className="px-4 py-3 text-right">Edit</th> : null}
