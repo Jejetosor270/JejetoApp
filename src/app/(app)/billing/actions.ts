@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  billingFreightEditSchema,
   clientBillingInstallmentCreateSchema,
   clientBillingInstallmentDeleteSchema,
   clientReceiptDeleteSchema,
@@ -21,6 +22,7 @@ import type {
 } from "@/domain/billing/action-state";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import {
+  updateBillingFreightCoverage,
   ClientBillingNotFoundError,
   ClientBillingValidationError,
   confirmClientBillingDocument,
@@ -528,5 +530,39 @@ export async function updateOrderBillingLinkAction(
       message: "The Billing allocation could not be saved.",
       status: "error",
     };
+  }
+}
+
+export async function updateBillingFreightCoverageAction(
+  _: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = billingFreightEditSchema.safeParse(
+    Object.fromEntries(formData),
+  );
+  if (!input.success)
+    return {
+      status: "error",
+      message: input.error.issues[0]?.message ?? "Check freight coverage.",
+      fieldErrors: fieldErrorMap(input.error.issues),
+    };
+  try {
+    await updateBillingFreightCoverage(actor.id, input.data);
+    revalidatePath("/billing");
+    revalidatePath(`/billing/${input.data.billingDocumentId}`);
+    revalidateProjectFinancialViews();
+    return {
+      status: "success",
+      message: "Freight coverage saved.",
+      values: { freightCoverageHt: input.data.freightCoverageHt },
+    };
+  } catch (error) {
+    return (
+      expectedBillingError(error) ?? {
+        status: "error",
+        message: "Freight coverage could not be saved. Please retry.",
+      }
+    );
   }
 }

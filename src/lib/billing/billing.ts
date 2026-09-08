@@ -2097,3 +2097,54 @@ export async function getOrderBillingReconciliation(orderId: string) {
     };
   });
 }
+
+export async function updateBillingFreightCoverage(
+  actorId: string,
+  input: { billingDocumentId: string; freightCoverageHt: string },
+) {
+  return getDatabase().$transaction(
+    async (transaction) => {
+      const document = await transaction.clientBillingDocument.findUnique({
+        where: { id: input.billingDocumentId },
+        select: {
+          id: true,
+          reference: true,
+          totalHt: true,
+          freightCoverageHt: true,
+          allocations: true,
+        },
+      });
+      if (!document) throw new ClientBillingNotFoundError();
+      validateFreight(
+        document.totalHt.toString(),
+        input.freightCoverageHt,
+        document.allocations.map((item) => ({
+          orderId: item.orderId,
+          basis: "FIXED_AMOUNT",
+          allocatedAmount: item.allocatedAmount.toString(),
+          freightCoverageHt: item.freightCoverageHt.toString(),
+        })),
+      );
+      await transaction.clientBillingDocument.update({
+        where: { id: document.id },
+        data: {
+          freightCoverageHt: input.freightCoverageHt,
+          updatedById: actorId,
+        },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityType: "BILLING_DOCUMENT",
+        entityId: document.id,
+        entityReference: document.reference,
+        metadata: {
+          previousFreightCoverageHt: document.freightCoverageHt.toString(),
+          freightCoverageHt: input.freightCoverageHt,
+        },
+        summary:
+          "Updated Billing freight coverage; Order allocations and Billing totals preserved.",
+      });
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}

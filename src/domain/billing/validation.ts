@@ -531,3 +531,8 @@ export type OrderBillingLinkInput = z.infer<typeof orderBillingLinkSchema>;
 export type OrderCreationBillingLinkInput = z.infer<
   typeof orderCreationBillingLinkSchema
 >;
+
+export const billingFreightEditSchema = z.object({
+  billingDocumentId: requiredUuid("Select a valid billing document."),
+  freightCoverageHt: money,
+});

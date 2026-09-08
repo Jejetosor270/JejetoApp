@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const auth = vi.hoisted(() => ({ requireMasterDataEditor: vi.fn() }));
 const billing = vi.hoisted(() => ({
+  updateBillingFreightCoverage: vi.fn(),
   confirmClientBillingDocument: vi.fn(),
   createClientBillingInstallment: vi.fn(),
   deleteClientBillingInstallment: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock("@/lib/billing/billing", () => ({
 }));
 
 import {
+  updateBillingFreightCoverageAction,
   confirmClientDocumentAction,
   createClientBillingInstallmentAction,
   deleteClientBillingInstallmentAction,
@@ -39,6 +41,14 @@ import {
 
 describe("Billing authorization", () => {
   it.each([
+    [
+      "freight coverage",
+      () =>
+        updateBillingFreightCoverageAction(
+          { message: "", status: "idle" },
+          new FormData(),
+        ),
+    ],
     [
       "Billing installment creation",
       () =>

@@ -6,6 +6,7 @@ import type { ClientBillingView } from "@/lib/billing/billing";
 
 const actions = vi.hoisted(() => ({ save: vi.fn(), refresh: vi.fn() }));
 vi.mock("@/app/(app)/billing/actions", () => ({
+  updateBillingFreightCoverageAction: actions.save,
   updateOrderBillingLinkAction: actions.save,
   updateClientBillingDocumentAction: vi.fn(),
 }));
@@ -18,6 +19,7 @@ vi.mock("./billing-schedule-manager", () => ({
 }));
 
 import { BillingAllocationEditor } from "./billing-allocation-editor";
+import { BillingFreightEditor } from "./billing-freight-editor";
 import { BillingDetail } from "./billing-detail";
 
 const billing = {
@@ -50,6 +52,43 @@ describe("dedicated Billing allocation editor", () => {
       );
     });
   }
+
+  it("opens freight coverage without an Order and preserves a rejected draft", async () => {
+    const onSaved = vi.fn();
+    actions.save
+      .mockResolvedValueOnce({
+        status: "error",
+        message: "Freight exceeds available HT.",
+      })
+      .mockResolvedValueOnce({
+        status: "success",
+        message: "Saved",
+        values: { freightCoverageHt: "100.0000" },
+      });
+    view = await mountForm(
+      <BillingFreightEditor
+        billingId="billing-id"
+        totalHt="1000"
+        currencyCode="EUR"
+        freightCoverageHt="0"
+        allocatedFreightHt="0"
+        onSaved={onSaved}
+      />,
+    );
+    await clickText("Allocate freight");
+    await enter("freightCoverageHt", "1100");
+    await submit();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      "Freight exceeds available HT.",
+    );
+    await enter("freightCoverageHt", "100");
+    await submit();
+    expect(onSaved).toHaveBeenCalledWith("100.0000");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    const data = actions.save.mock.calls[1]?.[1] as FormData;
+    expect(data.has("orderId")).toBe(false);
+    expect(data.get("freightCoverageHt")).toBe("100");
+  });
 
   it("adds only an allocation, preserves rejected values, then closes and refreshes after success", async () => {
     const onSaved = vi.fn();

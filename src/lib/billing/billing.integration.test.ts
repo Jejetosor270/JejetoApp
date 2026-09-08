@@ -64,6 +64,7 @@ vi.mock("@/lib/procurement/orders", () => procurementOrders);
 
 import {
   ClientBillingValidationError,
+  updateBillingFreightCoverage,
   confirmClientBillingDocument,
   createClientBillingInstallment,
   deleteClientBillingInstallment,
@@ -509,6 +510,37 @@ describe("Billing persistence", () => {
         ],
       },
     );
+  });
+
+  it("changes only Project freight coverage and rejects conflicts with Order allocations", async () => {
+    transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      id: "bill",
+      reference: "INV",
+      totalHt: new Decimal("100"),
+      freightCoverageHt: new Decimal("0"),
+      allocations: [
+        {
+          orderId: firstOrderId,
+          allocatedAmount: new Decimal("80"),
+          freightCoverageHt: new Decimal("0"),
+        },
+      ],
+    });
+    await updateBillingFreightCoverage("actor", {
+      billingDocumentId: "bill",
+      freightCoverageHt: "20",
+    });
+    expect(transaction.clientBillingDocument.update).toHaveBeenCalledWith({
+      where: { id: "bill" },
+      data: { freightCoverageHt: "20", updatedById: "actor" },
+    });
+    expect(transaction.clientBillingAllocation.update).not.toHaveBeenCalled();
+    await expect(
+      updateBillingFreightCoverage("actor", {
+        billingDocumentId: "bill",
+        freightCoverageHt: "30",
+      }),
+    ).rejects.toThrow("non-freight");
   });
 
   it("creates a Quote schedule from approved TTC terms", async () => {

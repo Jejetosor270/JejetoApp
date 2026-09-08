@@ -1,6 +1,7 @@
 "use client";
 import { MoneyInput } from "@/components/master-data/form-ui";
 
+import { BillingFreightEditor } from "@/components/billing/billing-freight-editor";
 import { freightCoverageBreakdown } from "@/domain/billing/freight-coverage";
 import { AllocationInputs } from "@/components/billing/allocation-inputs";
 import {
@@ -1080,7 +1081,30 @@ export function BillingDetail({
                     <h2 className="text-sm font-semibold">
                       Order Reconciliation
                     </h2>
-                    {canEdit ? allocationEditor() : null}
+                    {canEdit ? (
+                      <div className="flex gap-2">
+                        <BillingFreightEditor
+                          billingId={document.id}
+                          totalHt={saved.totalHt}
+                          currencyCode={saved.currencyCode}
+                          freightCoverageHt={saved.freightCoverageHt}
+                          allocatedFreightHt={
+                            freightBreakdown.allocatedFreightHt
+                          }
+                          onSaved={(amount) => {
+                            setSaved((current) => ({
+                              ...current,
+                              freightCoverageHt: amount,
+                            }));
+                            setDraft((current) => ({
+                              ...current,
+                              freightCoverageHt: amount,
+                            }));
+                          }}
+                        />
+                        {allocationEditor()}
+                      </div>
+                    ) : null}
                     <p className="text-muted-foreground w-full text-xs">
                       {saved.documentType === "QUOTE"
                         ? "Planned"
