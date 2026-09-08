@@ -21,6 +21,7 @@ vi.mock("./billing-schedule-manager", () => ({
 import { BillingAllocationEditor } from "./billing-allocation-editor";
 import { BillingFreightEditor } from "./billing-freight-editor";
 import { BillingDetail } from "./billing-detail";
+import { OrderBillingReconciliation } from "./order-billing-reconciliation";
 
 const billing = {
   id: "billing-id",
@@ -52,6 +53,56 @@ describe("dedicated Billing allocation editor", () => {
       );
     });
   }
+
+  it("uses the shared allocation drawer from an Order without losing its freight subset", async () => {
+    actions.save.mockResolvedValue({
+      status: "error",
+      message: "Review allocation",
+    });
+    view = await mountForm(
+      <OrderBillingReconciliation
+        canEdit
+        orderId="order-id"
+        reportingCurrencyCode="EUR"
+        plannedSell="500"
+        invoicedAllocated="100"
+        quotedAllocated="0"
+        difference={{ amount: "400", state: "UNBILLED" }}
+        documents={[
+          {
+            ...billing,
+            documentDate: "2026-09-01",
+            documentType: "INVOICE",
+            isCancelled: false,
+            status: "PARTIALLY_PAID",
+            allocatedToOtherOrdersHt: "0",
+            availableForOrderHt: "1000",
+            projectRemainder: "900",
+            orderSellingBasisHt: "500",
+            allocation: {
+              allocatedAmount: "100",
+              freightCoverageHt: "25",
+              basis: "FIXED_AMOUNT",
+              percentageRate: null,
+            },
+          },
+        ]}
+      />,
+    );
+    await clickText("Edit allocation");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      "Available for this Order",
+    );
+    await enter("allocatedAmount", "120");
+    await submit();
+    const data = actions.save.mock.calls[0]?.[1] as FormData;
+    expect(data.get("orderId")).toBe("order-id");
+    expect(data.get("freightCoverageHt")).toBe("25");
+    expect(data.get("allocatedAmount")).toBe("120");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      "Review allocation",
+    );
+  });
 
   it("opens freight coverage without an Order and preserves a rejected draft", async () => {
     const onSaved = vi.fn();
@@ -305,9 +356,9 @@ describe("dedicated Billing allocation editor", () => {
       await enter("allocatedAmount", "250");
       await submit();
       expect(document.querySelector('[role="dialog"]')).toBeNull();
-      expect(
-        document.querySelector('[role="tabpanel"]:not([hidden])')?.textContent,
-      ).toContain("250.00");
+      expect(document.querySelector("#allocations")?.textContent).toContain(
+        "250.00",
+      );
       await clickText("Edit");
       const allocationsInput = document.querySelector<HTMLInputElement>(
         'input[name="allocations"]',

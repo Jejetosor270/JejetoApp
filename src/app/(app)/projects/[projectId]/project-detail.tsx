@@ -2,7 +2,8 @@
 import { DateInput } from "@/components/forms/date-input";
 
 import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
-import { WorkspaceTabs } from "@/components/layout/workspace-tabs";
+import Link from "next/link";
+import { WorkspaceSections } from "@/components/layout/workspace-sections";
 import { FormSection } from "@/components/forms/form-section";
 import type { MasterDataActionState } from "@/components/master-data/action-state";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
@@ -661,9 +662,7 @@ export function ProjectDetail({
   workspace: {
     overview: ReactNode;
     finance: ReactNode;
-    cash: ReactNode;
     orders: ReactNode;
-    billing: ReactNode;
     items: ReactNode;
   };
   managers: Option[];
@@ -734,18 +733,37 @@ export function ProjectDetail({
           ) : null}
         </>
       }
-      <WorkspaceTabs
-        label="Project workspace"
-        tabs={[
+      <nav aria-label="Project work" className="flex flex-wrap gap-2">
+        {[
+          ["/orders", "Purchasing"],
+          ["/billing", "Billing"],
+          ["/payments", "Payments"],
+          ["/reports", "Reports"],
+        ].map(([path, label]) => (
+          <Link
+            key={path}
+            href={path + "?projectId=" + project.id}
+            className="bg-card hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium"
+          >
+            {label}
+          </Link>
+        ))}
+        {workspace.items}
+      </nav>
+      <WorkspaceSections
+        label="Project details"
+        sections={[
           { id: "overview", label: "Overview", content: workspace.overview },
-          { id: "orders", label: "Orders", content: workspace.orders },
           {
-            id: "billing",
-            label: "Billing",
-            content: workspace.billing,
+            id: "finance",
+            label: "Financial detail · targets, freight & VAT",
+            content: workspace.finance,
           },
-          { id: "finance", label: "Finance", content: workspace.finance },
-          { id: "cash", label: "Cash", content: workspace.cash },
+          {
+            id: "orders",
+            label: "Purchase budget & Order Packages",
+            content: workspace.orders,
+          },
           {
             id: "buildings",
             label: "Buildings & Rooms",
@@ -906,9 +924,6 @@ export function ProjectDetail({
               </>
             ),
           },
-          ...(workspace.items
-            ? [{ id: "items", label: "Items (Beta)", content: workspace.items }]
-            : []),
         ]}
       />
     </div>

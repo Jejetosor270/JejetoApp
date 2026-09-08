@@ -216,7 +216,7 @@ Do not introduce an Item dependency without explicit feature design.
 
 ## Lasting UX and compatibility rules
 
-Keep planned versus actual terminology explicit. Payments has Supplier (default), Client, and Record Payment tabs; Supplier schedules remain supplier-side;
+Keep planned versus actual terminology explicit. Payments has Supplier (default) and Client views plus a direct Record Payment header action; Supplier schedules remain supplier-side;
 Client cash belongs to Billing/Receipts. Use progressive financial disclosure rather
 than duplicate blocks or renamed copies of the same financial concept. Preserve shared
 filtering, sorting, pagination, tables, and visible-page selection mechanics. Reports
@@ -293,7 +293,7 @@ checks. Report migration/deployment requirements explicitly.
   navigation/draft behavior. Clearing list filters must preserve the selected view/tab
   and page size while resetting pagination. Headers, filter actions and pagination
   wrap at narrow widths; financial table cells remain right-aligned and formatted.
-- Payments → Record Payment is the central entry drawer for Supplier payments and Client
+- The Payments header’s Record Payment action is the central entry drawer for Supplier payments and Client
   receipts. Reuse `recordSettlement` and `recordClientReceipt`, including their
   transactional audit and overpayment checks. Central entry validates the selected
   Project/document within the write transaction. Supplier payments require an
@@ -312,3 +312,28 @@ checks. Report migration/deployment requirements explicitly.
 ## Temporary onboarding previews
 
 Client and Supplier onboarding may keep a browser-only object URL for a side-by-side PDF/image preview during review. Revoke it on replacement, successful save, or onboarding unmount/close. Do not persist sources in database, browser storage, or uploaded-file storage; server extraction inputs remain request-scoped and are still cleared after processing.
+
+## Simplified workspaces
+
+- Projects are hubs, not duplicate operational workspaces. Purchasing, Billing, Payments,
+  and Reports links open the canonical lists with the Project filter applied. Purchase
+  budgets and Order Packages remain Project configuration; they never replace Order totals.
+- Order and Billing details use mounted, native expandable sections instead of tabs.
+  Keep one primary summary; cost/VAT detail, schedules, linked records, and history remain
+  accessible without duplicating their editors or discarding drafts on collapse.
+- Purchasing and Items use a standard operational table with secondary column-set selectors;
+  Billing combines commercial amounts and collection status in one table. Do not create a
+  second record list for each column set. Shared filters, sorting, pagination and exports
+  preserve the current scope.
+- Reports use one report selector, optional portfolio columns, and one applied-filter summary.
+  Supplier directory pages link to the canonical scoped Purchasing and Payments lists.
+- Record Payment is available directly in either Payments view; the current Project and
+  cash direction prefill the drawer. Legacy entry URLs still open the drawer. No entry
+  action is shown to USER employees; server authorization remains authoritative.
+- Billing and Order allocation changes use BillingAllocationEditor and the existing
+  audited action, preserving the freight subset and manual-FX percentage behavior.
+- Existing tab/hash detail links open the corresponding disclosure. Legacy Project tab
+  links for Orders/Billing/Items open scoped workspaces; Cash opens the scoped cash report.
+  Historical Order Client schedules are displayed only when installments exist; no historical
+  records are deleted.
+- This presentation cleanup introduces no schema changes or new migration.

@@ -42,7 +42,7 @@ beforeEach(() => {
   mocks.user.mockResolvedValue({ role: "MANAGER" });
 });
 it.each(["supplier", "client", "entry"])(
-  "offers exactly three operational tabs on %s",
+  "offers two direction tabs and a direct entry action on %s",
   async (tab) => {
     const html = renderToStaticMarkup(
       await PaymentsPage({ searchParams: Promise.resolve({ tab }) }),
@@ -50,10 +50,11 @@ it.each(["supplier", "client", "entry"])(
     const nav =
       html.match(/<nav aria-label="Payments sections"[\s\S]*?<\/nav>/)?.[0] ??
       "";
-    expect(nav.match(/<a /g)).toHaveLength(3);
-    for (const label of ["Supplier", "Client", "Record Payment"])
-      expect(nav).toContain(label);
+    expect(nav.match(/<a /g)).toHaveLength(2);
+    for (const label of ["Supplier", "Client"]) expect(nav).toContain(label);
     expect(html).not.toMatch(/Overview|Transactions|tab=receipts/);
+    expect(nav).not.toContain("Record Payment");
+    expect(html).toContain("<button>Record Payment");
     expect(html.match(/<h1 /g)).toHaveLength(1);
     expect(html.indexOf("<h1 ")).toBeLessThan(
       html.indexOf('<nav aria-label="Payments sections"'),
@@ -76,7 +77,7 @@ it("keeps the entry action unavailable to read-only employees", async () => {
     await PaymentsPage({ searchParams: Promise.resolve({ tab: "entry" }) }),
   );
   expect(html).not.toContain("<button>Record Payment");
-  expect(html).toContain("ADMIN or MANAGER");
+  expect(html).toContain("Supplier installments");
 });
 it.each([undefined, "unknown"])("defaults to Supplier for %s", async (tab) => {
   const html = renderToStaticMarkup(

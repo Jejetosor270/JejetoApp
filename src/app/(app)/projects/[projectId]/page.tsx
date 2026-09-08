@@ -1,8 +1,9 @@
 import { ProjectPurchaseBudget } from "@/components/procurement/project-purchase-budget";
+import { optionalUuid } from "@/domain/listing/validation";
 import { ProjectPackages } from "@/components/procurement/project-packages";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { ProjectDetail } from "@/app/(app)/projects/[projectId]/project-detail";
 import { ProjectFinancialDashboard } from "@/components/reporting/project-financial-dashboard";
@@ -10,8 +11,6 @@ import { isCashFlowHorizon, type CashFlowHorizon } from "@/config/reporting";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listProjectFormOptions } from "@/lib/master-data/lookups";
 import { getProject } from "@/lib/master-data/projects";
-import { projectItemSummary } from "@/lib/items/items";
-import { formatMoney } from "@/domain/procurement/presentation";
 import { getProjectReportingSnapshot } from "@/lib/reporting/reports";
 import { getApplicationSettings } from "@/lib/settings/application-settings";
 import { getProjectClientBillingSummary } from "@/lib/billing/reporting";
@@ -36,35 +35,43 @@ export default async function ProjectPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ horizon?: string }>;
+  searchParams: Promise<{ horizon?: string; tab?: string }>;
 }) {
   const [{ projectId }, query] = await Promise.all([params, searchParams]);
+  if (!optionalUuid(projectId)) notFound();
+  const destinations: Record<string, string> = {
+    orders: "/orders",
+    billing: "/billing",
+    cash: "/reports",
+    items: "/items",
+  };
+  const legacyDestination = Object.hasOwn(destinations, query.tab ?? "")
+    ? destinations[query.tab ?? ""]
+    : undefined;
+  if (legacyDestination) {
+    await requireUser();
+    const destinationQuery = new URLSearchParams({ projectId });
+    if (query.tab === "cash") {
+      destinationQuery.set("view", "cash-flow");
+      if (query.horizon) destinationQuery.set("horizon", query.horizon);
+    }
+    redirect(legacyDestination + "?" + destinationQuery);
+  }
   const requestedHorizon = query.horizon ?? "";
   const horizon: CashFlowHorizon = isCashFlowHorizon(requestedHorizon)
     ? requestedHorizon
     : "12m";
   const settings = await getApplicationSettings();
-  const [
-    user,
-    options,
-    result,
-    reporting,
-    itemSummary,
-    billing,
-    freight,
-    freightExpenses,
-  ] = await Promise.all([
-    requireUser(),
-    listProjectFormOptions(),
-    getProject(projectId),
-    getProjectReportingSnapshot(projectId, { horizon }),
-    settings.itemManagementEnabled
-      ? projectItemSummary(projectId)
-      : Promise.resolve(null),
-    getProjectClientBillingSummary(projectId),
-    getProjectFreightReconciliation(projectId),
-    listProjectFreightExpenses(projectId),
-  ]);
+  const [user, options, result, reporting, billing, freight, freightExpenses] =
+    await Promise.all([
+      requireUser(),
+      listProjectFormOptions(),
+      getProject(projectId),
+      getProjectReportingSnapshot(projectId, { horizon }),
+      getProjectClientBillingSummary(projectId),
+      getProjectFreightReconciliation(projectId),
+      listProjectFreightExpenses(projectId),
+    ]);
   if (!result || !reporting) notFound();
   const { buildings, project } = result;
   const targets = calculateProjectTargets({
@@ -162,20 +169,6 @@ export default async function ProjectPage({
             />
           </>
         ),
-        cash: (
-          <ProjectFinancialDashboard
-            section="cash"
-            billing={billing}
-            financialPerformance={financialPerformance}
-            freight={freight}
-            fundingCoverage={fundingCoverage}
-            horizon={horizon}
-            phase11CashPosition={phase11CashPosition}
-            projectId={projectId}
-            report={reporting}
-            vatPosition={vatPosition}
-          />
-        ),
         orders: (
           <>
             <ProjectPurchaseBudget projectId={projectId} />
@@ -184,102 +177,15 @@ export default async function ProjectPage({
               currency={project.reportingCurrencyCode}
               canEdit={canEditMasterData(user.role)}
             />
-            <Link
-              className="text-primary text-sm underline"
-              href={`/orders?projectId=${projectId}`}
-            >
-              Open all Orders for this Project
-            </Link>{" "}
-            <ProjectFinancialDashboard
-              section="orders"
-              billing={billing}
-              financialPerformance={financialPerformance}
-              freight={freight}
-              fundingCoverage={fundingCoverage}
-              horizon={horizon}
-              phase11CashPosition={phase11CashPosition}
-              projectId={projectId}
-              report={reporting}
-              vatPosition={vatPosition}
-            />
           </>
         ),
-        billing: (
-          <section className="space-y-4">
-            <h2 className="font-semibold">Billing</h2>
-            <p className="text-muted-foreground text-sm">
-              Quotes, Invoices, payment schedules and actual Client Receipts for
-              this Project.
-            </p>
-            <Link
-              className="text-primary text-sm underline"
-              href={`/billing?projectId=${projectId}`}
-            >
-              Open Project Billing
-            </Link>
-            <dl className="grid gap-4 sm:grid-cols-3">
-              {[
-                [
-                  "Invoiced HT",
-                  billing?.invoicedComplete ? billing.invoicedHt : null,
-                ],
-                [
-                  "Client receipts TTC",
-                  billing?.complete ? billing.paidTtc : null,
-                ],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <dt className="text-muted-foreground text-xs">{label}</dt>
-                  <dd className="financial-figure mt-2 text-lg font-semibold">
-                    {formatMoney(value ?? null, project.reportingCurrencyCode)}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        ),
-        items: itemSummary ? (
-          <>
-            {" "}
-            {itemSummary ? (
-              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <div className="rounded-lg border p-3">
-                  <p className="text-muted-foreground text-xs">Items</p>
-                  <p className="mt-1 text-xl font-semibold">
-                    {itemSummary.count}
-                  </p>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-muted-foreground text-xs">
-                    Item purchase HT
-                  </p>
-                  <p className="financial-figure mt-1 font-semibold">
-                    {formatMoney(
-                      itemSummary.purchase,
-                      project.reportingCurrencyCode,
-                    )}
-                  </p>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-muted-foreground text-xs">
-                    Item selling HT
-                  </p>
-                  <p className="financial-figure mt-1 font-semibold">
-                    {formatMoney(
-                      itemSummary.selling,
-                      project.reportingCurrencyCode,
-                    )}
-                  </p>
-                </div>
-              </section>
-            ) : null}
-            <Link
-              className="text-primary text-sm underline"
-              href={`/items?projectId=${projectId}`}
-            >
-              Open Project Items (Beta)
-            </Link>
-          </>
+        items: settings.itemManagementEnabled ? (
+          <Link
+            className="text-primary text-sm underline"
+            href={"/items?projectId=" + projectId}
+          >
+            Items (Beta)
+          </Link>
         ) : null,
       }}
       managers={options.managers}

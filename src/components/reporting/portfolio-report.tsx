@@ -1,4 +1,4 @@
-import { ViewShortcuts } from "@/components/listing/view-shortcuts";
+import { ViewSelector } from "@/components/listing/view-selector";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -233,7 +233,7 @@ export function ProjectPortfolioTable({
             coverage, separate from cash.
           </p>
         </div>
-        <ViewShortcuts
+        <ViewSelector
           pathname="/reports"
           queryString={queryString}
           field="portfolioView"

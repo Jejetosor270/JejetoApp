@@ -34,6 +34,7 @@ describe("Phase 11.12 Directory structure", () => {
     expect(supplierDetail).toContain("Payments");
     expect(supplierDetail).toContain("Recent activity");
     expect(supplierDetail).toContain("activity.map");
-    expect(supplierDetail).toContain("WorkspaceTabs");
+    expect(supplierDetail).not.toContain("WorkspaceTabs");
+    expect(supplierDetail).toContain('aria-label="Supplier work"');
   });
 });

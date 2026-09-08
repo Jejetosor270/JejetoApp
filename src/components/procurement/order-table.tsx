@@ -79,6 +79,8 @@ export function OrderTable({
                     defaultSort="updated"
                     defaultDirection="desc"
                   />
+                  <th className="px-4 py-3 text-right">Purchase HT</th>
+                  <th className="px-4 py-3">Payment status</th>
                   <th className="px-4 py-3">Expected delivery</th>
                 </>
               ) : view === "financial" ? (

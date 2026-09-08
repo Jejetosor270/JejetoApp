@@ -219,6 +219,24 @@ describe("workspace accessibility and navigation contracts", () => {
     expect(html).toContain('href="/payments?tab=client"');
     expect(html).toContain("Clear filters");
   });
+  it("shows a single cash-direction chip and clears it without clearing the report", () => {
+    location.pathname = "/reports";
+    location.search = "view=payments&direction=CLIENT_RECEIPT&projectId=demo";
+    const html = renderToStaticMarkup(
+      <FilterBar>
+        <FilterField label="Cash direction">
+          <select name="direction" defaultValue="CLIENT_RECEIPT">
+            <option value="CLIENT_RECEIPT">Client receipts</option>
+          </select>
+        </FilterField>
+      </FilterBar>,
+    );
+    expect(html.match(/aria-label="Applied filters"/g)).toHaveLength(1);
+    expect(html).toContain("Cash direction: Client receipts");
+    expect(
+      clearFiltersHref("/reports", new URLSearchParams(location.search)),
+    ).toBe("/reports?view=payments");
+  });
   it("keeps header titles and actions flexible at narrow widths", () => {
     for (const html of [
       renderToStaticMarkup(

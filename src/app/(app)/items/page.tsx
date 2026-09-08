@@ -1,3 +1,4 @@
+import { ViewSelector } from "@/components/listing/view-selector";
 import { PageHeader } from "@/components/layout/page-header";
 import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
@@ -5,7 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ExportLink } from "@/components/export/export-link";
-import { ItemTable, type ItemViewMode } from "@/components/items/item-table";
+import { ItemTable } from "@/components/items/item-table";
 import { PageSizeField, Pagination } from "@/components/listing/pagination";
 import {
   FilterField,
@@ -120,29 +121,18 @@ export default async function ItemsPage({
           </>
         }
       />
-      <nav aria-label="Item view" className="flex flex-wrap gap-2">
-        {(
-          [
-            ["general", "General"],
-            ["financial", "Financial"],
-            ["status", "Status"],
-            ["tracking", "Tracking / warehouse"],
-          ] as Array<[ItemViewMode, string]>
-        ).map(([mode, label]) => (
-          <Link
-            aria-current={view === mode ? "page" : undefined}
-            className={
-              view === mode
-                ? "bg-primary text-primary-foreground rounded-lg px-3 py-2 text-sm font-medium"
-                : "border-input bg-background rounded-lg border px-3 py-2 text-sm font-medium"
-            }
-            href={`/items?${queryStringFromParams({ ...params, page: "1", view: mode })}`}
-            key={mode}
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
+      <ViewSelector
+        pathname="/items"
+        queryString={queryStringFromParams(params)}
+        field="view"
+        defaultValue="general"
+        options={[
+          { value: "general", label: "Standard" },
+          { value: "financial", label: "Financial detail" },
+          { value: "status", label: "Commercial status detail" },
+          { value: "tracking", label: "Logistics detail" },
+        ]}
+      />
       <FilterBar>
         <input name="view" type="hidden" value={view} />
         <FilterField label="Search">

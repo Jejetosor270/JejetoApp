@@ -1,6 +1,6 @@
 import { DateInput } from "@/components/forms/date-input";
 import { CreateOrderActions } from "@/components/procurement/create-order-actions";
-import { ViewShortcuts } from "@/components/listing/view-shortcuts";
+import { ViewSelector } from "@/components/listing/view-selector";
 import { PageHeader } from "@/components/layout/page-header";
 import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
@@ -97,9 +97,7 @@ export default async function OrdersPage({
     <div className="space-y-6">
       <PageHeader
         title="Purchasing"
-        description={
-          <>Supplier-level packages, cost progression, and commercial markup.</>
-        }
+        description={<>Supplier Orders, payment status and delivery dates.</>}
         actions={
           <>
             <ExportLink
@@ -114,16 +112,16 @@ export default async function OrdersPage({
           </>
         }
       />
-      <ViewShortcuts
+      <ViewSelector
         pathname="/orders"
         queryString={queryStringFromParams(params)}
         field="view"
         defaultValue="general"
         options={[
-          { label: "Overview", value: "general" },
-          { label: "Commercial", value: "financial" },
-          { label: "Payments", value: "supplier-payment" },
-          { label: "Delivery", value: "delivery" },
+          { label: "Standard", value: "general" },
+          { label: "Cost & pricing detail", value: "financial" },
+          { label: "Supplier payment detail", value: "supplier-payment" },
+          { label: "Delivery & tracking detail", value: "delivery" },
         ]}
       />
       <FilterBar>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   loadReceiptEntryOptions,
@@ -27,23 +27,33 @@ interface Props {
   projects: { id: string; name: string }[];
   currencies: { code: string }[];
   today: string;
+  initialType?: "SUPPLIER" | "CLIENT";
+  initialProjectId?: string;
+  initiallyOpen?: boolean;
 }
 
 export function ReceiptEntry(props: Props) {
+  const [open, setOpen] = useState(props.initiallyOpen ?? false);
   return (
-    <EditorDrawer
-      title="Record Payment"
-      trigger={<Button>Record Payment</Button>}
-    >
-      <ReceiptEntryForm {...props} />
-    </EditorDrawer>
+    <>
+      <Button onClick={() => setOpen(true)}>Record Payment</Button>
+      <EditorDrawer title="Record Payment" open={open} onOpenChange={setOpen}>
+        <ReceiptEntryForm {...props} />
+      </EditorDrawer>
+    </>
   );
 }
 
-export function ReceiptEntryForm({ projects, currencies, today }: Props) {
+export function ReceiptEntryForm({
+  projects,
+  currencies,
+  today,
+  initialType = "SUPPLIER",
+  initialProjectId = "",
+}: Props) {
   const router = useRouter();
-  const [type, setType] = useState("SUPPLIER");
-  const [projectId, setProjectId] = useState("");
+  const [type, setType] = useState(initialType);
+  const [projectId, setProjectId] = useState(initialProjectId);
   const [documentId, setDocumentId] = useState("");
   const [installmentId, setInstallmentId] = useState("");
   const [amount, setAmount] = useState("");
@@ -52,7 +62,7 @@ export function ReceiptEntryForm({ projects, currencies, today }: Props) {
   const [notes, setNotes] = useState("");
   const [fxRate, setFxRate] = useState("");
   const [options, setOptions] = useState<ReceiptEntryOptions | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(initialProjectId));
   const [loadError, setLoadError] = useState("");
   const [addingInstallment, setAddingInstallment] = useState(false);
   const request = useRef(0);
@@ -101,6 +111,28 @@ export function ReceiptEntryForm({ projects, currencies, today }: Props) {
       if (current === request.current) setLoading(false);
     }
   }
+  useEffect(() => {
+    if (!initialProjectId) return;
+    let active = true;
+    const current = request.current;
+    void loadReceiptEntryOptions(initialProjectId)
+      .then((result) => {
+        if (active && current === request.current) {
+          setOptions(result.options);
+          setLoadError(result.message);
+        }
+      })
+      .catch(() => {
+        if (active && current === request.current)
+          setLoadError("Documents could not be loaded. Please retry.");
+      })
+      .finally(() => {
+        if (active && current === request.current) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [initialProjectId]);
   if (state.status === "success")
     return (
       <div className="space-y-4">
@@ -137,7 +169,9 @@ export function ReceiptEntryForm({ projects, currencies, today }: Props) {
               className={inputClassName}
               value={type}
               onChange={(event) => {
-                setType(event.target.value);
+                setType(
+                  event.target.value === "CLIENT" ? "CLIENT" : "SUPPLIER",
+                );
                 resetDocument();
               }}
             >

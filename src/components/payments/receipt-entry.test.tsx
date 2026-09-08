@@ -78,6 +78,22 @@ describe("central receipt drawer", () => {
       }),
     );
   }
+  it("opens with Project and cash direction preselected without writing records", async () => {
+    view = await mountForm(
+      <ReceiptEntryForm
+        projects={[{ id: "project", name: "Villa" }]}
+        currencies={[{ code: "EUR" }]}
+        today="2026-09-06"
+        initialType="CLIENT"
+        initialProjectId="project"
+      />,
+    );
+    expect(control("type").value).toBe("CLIENT");
+    expect(control("projectId").value).toBe("project");
+    expect(mocks.load).toHaveBeenCalledOnce();
+    expect(control("billingDocumentId").textContent).toContain("INV-1");
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
   async function submit() {
     await act(async () => {
       control("type").form?.dispatchEvent(

@@ -3,8 +3,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { FilterBar } from "@/components/listing/filter-bar";
 import { queryStringFromParams } from "@/domain/listing/validation";
 import type { Metadata } from "next";
-import Link from "next/link";
-import { NavigationTabs } from "@/components/layout/navigation-tabs";
+import { ViewSelector } from "@/components/listing/view-selector";
 
 import { CashFlowPanel } from "@/components/reporting/cash-flow-panel";
 import {
@@ -22,7 +21,7 @@ import {
   ProjectPortfolioTable,
 } from "@/components/reporting/portfolio-report";
 import { isCashFlowHorizon, type CashFlowHorizon } from "@/config/reporting";
-import { formatDateOnly, isDateOnly } from "@/domain/payments/dates";
+import { isDateOnly } from "@/domain/payments/dates";
 import { formatEnumLabel } from "@/domain/presentation/labels";
 import { PaymentDirection, ProjectStatus } from "@/generated/prisma/client";
 import { requireUser } from "@/lib/auth/current-user";
@@ -60,37 +59,6 @@ function selected<T extends string>(
   value: string | undefined,
 ): T | undefined {
   return values.find((item) => item === value);
-}
-
-function viewHref(
-  view: ReportView,
-  params: Record<string, string | string[] | undefined>,
-): string {
-  const query = new URLSearchParams();
-  query.set("view", view);
-  for (const key of [
-    "projectId",
-    "clientId",
-    "supplierId",
-    "projectStatus",
-    "horizon",
-    "direction",
-    "portfolioView",
-  ]) {
-    const value = first(params, key);
-    if (value) query.set(key, value);
-  }
-  const currentView = first(params, "view") ?? "projects";
-  if (
-    (view === "payments" || view === "cash-flow") &&
-    (currentView === "payments" || currentView === "cash-flow")
-  ) {
-    for (const key of ["dateFrom", "dateTo"]) {
-      const value = first(params, key);
-      if (value) query.set(key, value);
-    }
-  }
-  return `/reports?${query.toString()}`;
 }
 
 function cashFlowHref(
@@ -254,106 +222,7 @@ function ReportingFilters({
       >
         Apply filters
       </button>
-      <Link
-        className="border-input flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium"
-        href={`/reports?view=${view}`}
-      >
-        Reset all
-      </Link>
     </FilterBar>
-  );
-}
-
-function ActiveReportFilters({
-  options,
-  params,
-  view,
-}: {
-  options: Awaited<ReturnType<typeof listReportingOptions>>;
-  params: Record<string, string | string[] | undefined>;
-  view: ReportView;
-}) {
-  const projectId = first(params, "projectId");
-  const clientId = first(params, "clientId");
-  const supplierId = first(params, "supplierId");
-  const entries: Array<[string, string, string | undefined]> = [
-    [
-      "projectId",
-      "Project",
-      options.projects.find((item) => item.id === projectId)?.name,
-    ],
-    [
-      "clientId",
-      "Client",
-      options.clients.find((item) => item.id === clientId)?.displayName,
-    ],
-    [
-      "supplierId",
-      "Supplier",
-      options.suppliers.find((item) => item.id === supplierId)?.displayName,
-    ],
-    [
-      "projectStatus",
-      "Project status",
-      first(params, "projectStatus")
-        ? formatEnumLabel(first(params, "projectStatus") ?? "")
-        : undefined,
-    ],
-    [
-      "dateFrom",
-      "From",
-      first(params, "dateFrom") && isDateOnly(first(params, "dateFrom") ?? "")
-        ? formatDateOnly(first(params, "dateFrom") ?? null)
-        : undefined,
-    ],
-    [
-      "dateTo",
-      "To",
-      first(params, "dateTo") && isDateOnly(first(params, "dateTo") ?? "")
-        ? formatDateOnly(first(params, "dateTo") ?? null)
-        : undefined,
-    ],
-    [
-      "direction",
-      "Direction",
-      view === "payments" && first(params, "direction")
-        ? formatEnumLabel(first(params, "direction") ?? "")
-        : undefined,
-    ],
-    [
-      "horizon",
-      "Horizon",
-      view === "cash-flow" ? first(params, "horizon") : undefined,
-    ],
-  ];
-  const active = entries.filter((entry): entry is [string, string, string] =>
-    Boolean(entry[2]),
-  );
-  if (active.length === 0) return null;
-  return (
-    <div
-      aria-label="Active report filters"
-      className="flex flex-wrap items-center gap-2"
-    >
-      <span className="text-muted-foreground text-xs font-medium">Active:</span>
-      {active.map(([key, label, value]) => {
-        const query = new URLSearchParams();
-        for (const [name, raw] of Object.entries(params)) {
-          if (typeof raw === "string" && name !== key) query.set(name, raw);
-        }
-        query.set("view", view);
-        return (
-          <Link
-            className="bg-muted rounded-full border px-2.5 py-1 text-xs"
-            href={`/reports?${query.toString()}`}
-            key={key}
-            title={`Remove ${label} filter`}
-          >
-            {label}: {value} ×
-          </Link>
-        );
-      })}
-    </div>
   );
 }
 
@@ -428,39 +297,24 @@ export default async function ReportsPage({
         }
       />
 
-      <NavigationTabs
-        label="Report view"
-        tabs={views
-          .filter((item) => item.value !== "payments")
-          .map((item) => ({
-            id: item.value,
-            label: item.label,
-            href: viewHref(item.value, params),
-            active:
-              item.value === view ||
-              (item.value === "cash-flow" && view === "payments"),
-          }))}
+      <ViewSelector
+        pathname="/reports"
+        queryString={queryStringFromParams(params)}
+        field="view"
+        label="Report"
+        defaultValue="projects"
+        options={views.map((item) => ({
+          value: item.value,
+          label:
+            item.value === "cash-flow"
+              ? "Cash forecast"
+              : item.value === "payments"
+                ? "Cash transactions"
+                : item.label,
+        }))}
       />
 
-      {(view === "cash-flow" || view === "payments") && (
-        <NavigationTabs
-          label="Cash report"
-          tabs={(
-            [
-              { value: "cash-flow", label: "Forecast" },
-              { value: "payments", label: "Transactions" },
-            ] as const
-          ).map((item) => ({
-            id: item.value,
-            label: item.label,
-            active: view === item.value,
-            href: viewHref(item.value, params),
-          }))}
-        />
-      )}
-
       <ReportingFilters options={options} params={params} view={view} />
-      <ActiveReportFilters options={options} params={params} view={view} />
 
       {view === "projects" && report ? (
         <>

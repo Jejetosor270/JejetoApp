@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { SettingsNavigation } from "@/components/layout/settings-navigation";
-import { WorkspaceTabs } from "@/components/layout/workspace-tabs";
+import { WorkspaceSections } from "@/components/layout/workspace-sections";
 import type { Metadata } from "next";
 
 import {
@@ -34,9 +34,9 @@ export default async function SettingsPage() {
           <>Company details, optional modules, and operational preferences.</>
         }
       />
-      <WorkspaceTabs
+      <WorkspaceSections
         label="Settings sections"
-        tabs={[
+        sections={[
           {
             id: "company",
             label: "Company",

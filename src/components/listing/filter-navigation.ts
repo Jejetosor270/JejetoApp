@@ -19,7 +19,12 @@ export function hasListFilters(params: URLSearchParams) {
 export function clearFiltersHref(pathname: string, params: URLSearchParams) {
   const query = new URLSearchParams(params);
   for (const key of [...query.keys()]) {
-    if (!presentationKeys.has(key) || key === "page") query.delete(key);
+    if (
+      !presentationKeys.has(key) ||
+      key === "page" ||
+      (pathname === "/reports" && key === "direction")
+    )
+      query.delete(key);
   }
   return query.size ? `${pathname}?${query}` : pathname;
 }

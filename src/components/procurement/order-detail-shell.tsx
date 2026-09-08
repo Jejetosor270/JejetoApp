@@ -1,6 +1,6 @@
 "use client";
 
-import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { Pencil } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
@@ -23,22 +23,6 @@ export function OrderDetailShell({
   order: EditableOrder;
 }) {
   const [editing, setEditing] = useState(false);
-  if (editing) {
-    return (
-      <OrderForm
-        onCancel={() => {
-          if (
-            !hasUnsavedDrafts() ||
-            window.confirm("Discard your unsaved Order changes?")
-          )
-            setEditing(false);
-        }}
-        onSaved={() => setEditing(false)}
-        options={options}
-        order={order}
-      />
-    );
-  }
   return (
     <div className="relative space-y-6">
       {canEdit ? (
@@ -52,6 +36,15 @@ export function OrderDetailShell({
         </Button>
       ) : null}
       {children}
+      {canEdit && editing ? (
+        <EditorDrawer open wide title="Edit Order" onOpenChange={setEditing}>
+          <OrderForm
+            onSaved={() => setEditing(false)}
+            options={options}
+            order={order}
+          />
+        </EditorDrawer>
+      ) : null}
     </div>
   );
 }

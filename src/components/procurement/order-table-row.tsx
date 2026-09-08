@@ -339,6 +339,12 @@ export function OrderRow({
       <td className="px-4 py-3">{order.orderPackage?.name ?? "Unassigned"}</td>
       <td className="px-4 py-3">{order.supplier.displayName}</td>
       <td className="px-4 py-3">{status}</td>
+      <td className="financial-figure px-4 py-3 text-right">
+        {formatMoney(cost.purchaseCost, order.orderCurrencyCode)}
+      </td>
+      <td className="px-4 py-3">
+        {formatEnumLabel(order.supplierPayment.status)}
+      </td>
       <td className="px-4 py-3">
         {editing ? (
           <div className="grid gap-2">

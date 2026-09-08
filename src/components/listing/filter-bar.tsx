@@ -28,7 +28,9 @@ export function FilterBar({ children }: { children: ReactNode }) {
         }>(control) ||
         !control.props.name ||
         !control.props.defaultValue ||
-        ["sort", "direction", "sortDirection"].includes(control.props.name)
+        ["sort", "sortDirection"].includes(control.props.name) ||
+        (control.props.name === "direction" &&
+          node.props.label !== "Cash direction")
       )
         continue;
       const options = flatten(control.props.children).flatMap((child) =>

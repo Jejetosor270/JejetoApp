@@ -51,9 +51,7 @@ export default async function PaymentsPage({
     query.delete("direction");
     redirect(`/payments?${query}`);
   }
-  const tab = ["supplier", "client", "entry"].includes(text("tab") ?? "")
-    ? text("tab")
-    : "supplier";
+  const tab = text("tab") === "client" ? "client" : "supplier";
   const projectId = optionalUuid(text("projectId"));
   const tabs = (
     <NavigationTabs
@@ -62,12 +60,12 @@ export default async function PaymentsPage({
         [
           ["supplier", "Supplier"],
           ["client", "Client"],
-          ["entry", "Record Payment"],
         ] as const
       ).map(([item, label]) => {
         const query = new URLSearchParams(queryStringFromParams(params));
         query.set("tab", item);
         query.delete("page");
+        query.delete("entry");
         return {
           id: item,
           label,
@@ -77,47 +75,40 @@ export default async function PaymentsPage({
       })}
     />
   );
-  if (tab === "entry") {
-    const canEdit = canEditMasterData(user.role);
-    const [projects, currencies] = canEdit
-      ? await Promise.all([
-          getDatabase().project.findMany({
-            select: { id: true, name: true },
-            orderBy: { name: "asc" },
-          }),
-          getDatabase().currency.findMany({
-            select: { code: true },
-            orderBy: { code: "asc" },
-          }),
-        ])
-      : [[], []];
-    return (
-      <div className="space-y-5">
-        <PageHeader title="Payments" />
-        {tabs}
-        <section className="space-y-4">
-          <p className="text-muted-foreground text-sm">
-            Record a Supplier payment made or a Client payment received.
-          </p>
-          {canEdit ? (
-            <ReceiptEntry
-              projects={projects}
-              currencies={currencies}
-              today={businessToday()}
-            />
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              An ADMIN or MANAGER can record payments and receipts.
-            </p>
-          )}
-        </section>
-      </div>
-    );
-  }
+  const canEdit = canEditMasterData(user.role);
+  const [entryProjects, entryCurrencies] = canEdit
+    ? await Promise.all([
+        getDatabase().project.findMany({
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        }),
+        getDatabase().currency.findMany({
+          select: { code: true },
+          orderBy: { code: "asc" },
+        }),
+      ])
+    : [[], []];
+  const header = (
+    <PageHeader
+      title="Payments"
+      actions={
+        canEdit ? (
+          <ReceiptEntry
+            projects={entryProjects}
+            currencies={entryCurrencies}
+            today={businessToday()}
+            initialType={tab === "client" ? "CLIENT" : "SUPPLIER"}
+            initialProjectId={projectId ?? ""}
+            initiallyOpen={text("tab") === "entry"}
+          />
+        ) : undefined
+      }
+    />
+  );
   if (tab === "supplier")
     return (
       <div className="space-y-5">
-        <PageHeader title="Payments" />
+        {header}
         {tabs}
         <SupplierPaymentsPage
           searchParams={Promise.resolve({
@@ -267,7 +258,7 @@ export default async function PaymentsPage({
   const { page, pageSize } = parsePageInput(params);
   return (
     <div className="space-y-5">
-      <PageHeader title="Payments" />
+      {header}
       {tabs}
       {filters}
       <p className="text-muted-foreground text-sm">

@@ -1,7 +1,8 @@
 "use client";
 
 import Decimal from "decimal.js";
-import { AllocationInputs } from "@/components/billing/allocation-inputs";
+import { BillingAllocationEditor } from "@/components/billing/billing-allocation-editor";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -12,7 +13,6 @@ import {
   inputClassName,
   ActionFeedback,
   Field,
-  SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
 import type { BillingActionState } from "@/domain/billing/action-state";
@@ -29,6 +29,7 @@ interface BillingLinkDocument {
   availableForOrderHt: string;
   allocation: {
     allocatedAmount: string;
+    freightCoverageHt?: string;
     basis: "PERCENTAGE" | "FIXED_AMOUNT";
     percentageRate: string | null;
   } | null;
@@ -46,98 +47,6 @@ interface BillingLinkDocument {
 }
 
 const initialState: BillingActionState = { message: "", status: "idle" };
-
-function BillingLinkForm({
-  document,
-  orderId,
-}: {
-  document: BillingLinkDocument;
-  orderId: string;
-}) {
-  const router = useRouter();
-  const [amount, setAmount] = useState(
-    document.allocation?.allocatedAmount ?? "",
-  );
-  const [approveRemainder, setApproveRemainder] = useState(
-    document.isProjectRemainderApproved,
-  );
-  const { onSubmit, pending, state } = usePersistentActionState(
-    updateOrderBillingLinkAction,
-    initialState,
-  );
-  useEffect(() => {
-    if (state.status === "success") router.refresh();
-  }, [router, state.status]);
-  return (
-    <form
-      className="mt-3 grid gap-3 border-t pt-3 lg:grid-cols-4"
-      onSubmit={onSubmit}
-    >
-      <input name="billingDocumentId" type="hidden" value={document.id} />
-      <input name="orderId" type="hidden" value={orderId} />
-      <input name="remove" type="hidden" value="false" />
-      <input name="basis" type="hidden" value="FIXED_AMOUNT" />
-      <AllocationInputs
-        amount={amount}
-        onAmountChange={setAmount}
-        billingTotalHt={document.totalHt}
-        orderSellHt={document.orderSellingBasisHt}
-        currencyCode={document.currencyCode}
-        error={state.fieldErrors?.allocatedAmount}
-      />
-      <div className="flex items-end gap-2">
-        <SubmitButton pending={pending}>
-          {document.allocation ? "Save allocation" : "Link Billing"}
-        </SubmitButton>
-      </div>
-      <div className="bg-muted/30 grid gap-2 rounded-md border p-3 text-xs sm:grid-cols-4 lg:col-span-4">
-        <p>
-          Order Sell HT:{" "}
-          {formatMoney(document.orderSellingBasisHt, document.currencyCode)}
-        </p>
-        <p>
-          Billing HT: {formatMoney(document.totalHt, document.currencyCode)}
-        </p>
-        <p>
-          Allocated to other Orders:{" "}
-          {formatMoney(
-            document.allocatedToOtherOrdersHt,
-            document.currencyCode,
-          )}
-        </p>
-        <p>
-          Available for this Order:{" "}
-          {formatMoney(document.availableForOrderHt, document.currencyCode)}
-          {document.orderSellingBasisHt ? (
-            <span className="text-muted-foreground block">
-              Maximum now{" "}
-              {formatRate(
-                fractionFromAmount(
-                  document.orderSellingBasisHt,
-                  Decimal.min(
-                    document.availableForOrderHt,
-                    document.orderSellingBasisHt,
-                  ).toString(),
-                ),
-              )}{" "}
-              of Order
-            </span>
-          ) : null}
-        </p>
-      </div>
-      <label className="flex items-center gap-2 text-xs lg:col-span-3">
-        <input
-          checked={approveRemainder}
-          name="isProjectRemainderApproved"
-          onChange={(event) => setApproveRemainder(event.target.checked)}
-          type="checkbox"
-        />
-        Approve any remaining Billing HT at Project level
-      </label>
-      <ActionFeedback state={state} />
-    </form>
-  );
-}
 
 function RemoveBillingLink({
   document,
@@ -200,30 +109,48 @@ export function OrderBillingReconciliation({
   reportingCurrencyCode: string;
 }) {
   const [selectedId, setSelectedId] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
   const linked = documents.filter((document) => document.allocation);
   const available = documents.filter(
     (document) => !document.allocation && !document.isCancelled,
   );
   const selected = available.find((document) => document.id === selectedId);
   const coverage = orderBillingCoverage(plannedSell, invoicedAllocated);
+  function allocationEditor(document: BillingLinkDocument) {
+    return (
+      <BillingAllocationEditor
+        billing={document}
+        availableHt={document.availableForOrderHt}
+        orders={[
+          {
+            id: orderId,
+            label: "This Order",
+            sellingBasisHt: document.orderSellingBasisHt,
+          },
+        ]}
+        {...(document.allocation
+          ? {
+              allocation: {
+                orderId,
+                amount: document.allocation.allocatedAmount,
+                freightCoverageHt: document.allocation.freightCoverageHt ?? "0",
+              },
+            }
+          : {})}
+        onSaved={() => setSelectedId("")}
+      />
+    );
+  }
   return (
     <section className="bg-card rounded-lg border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">Billing</h2>
+          <h2 className="text-sm font-semibold">Linked Billing</h2>
           <p className="text-muted-foreground mt-1 text-xs">
             Commercial attribution only. Client receipts remain separate cash
             records.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-right text-xs sm:grid-cols-3 xl:grid-cols-6">
-          <p>
-            Order Sell HT{" "}
-            <span className="financial-figure block font-medium">
-              {formatMoney(plannedSell, reportingCurrencyCode)}
-            </span>
-          </p>
+        <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-right text-xs sm:grid-cols-3 xl:grid-cols-4">
           <p>
             Quoted{" "}
             <span className="financial-figure block font-medium">
@@ -248,12 +175,6 @@ export function OrderBillingReconciliation({
               : "Unbilled HT"}{" "}
             <span className="financial-figure block font-medium">
               {formatMoney(difference?.amount ?? null, reportingCurrencyCode)}
-            </span>
-          </p>
-          <p>
-            Remaining %{" "}
-            <span className="financial-figure block font-medium">
-              {formatRate(coverage?.remainingRate ?? null)}
             </span>
           </p>
         </div>
@@ -300,25 +221,12 @@ export function OrderBillingReconciliation({
                     )
                   : "—"}
               </p>
-              {canEdit ? (
-                <Button
-                  onClick={() =>
-                    setEditingId((current) =>
-                      current === document.id ? null : document.id,
-                    )
-                  }
-                  type="button"
-                  variant="outline"
-                >
-                  Edit Allocation
-                </Button>
-              ) : null}
+              {canEdit ? allocationEditor(document) : null}
             </div>
-            {canEdit && editingId === document.id ? (
-              <>
-                <BillingLinkForm document={document} orderId={orderId} />
+            {canEdit ? (
+              <EditorDrawer title="Remove allocation">
                 <RemoveBillingLink document={document} orderId={orderId} />
-              </>
+              </EditorDrawer>
             ) : null}
           </article>
         ))}
@@ -345,9 +253,7 @@ export function OrderBillingReconciliation({
               ))}
             </select>
           </Field>
-          {selected ? (
-            <BillingLinkForm document={selected} orderId={orderId} />
-          ) : null}
+          {selected ? allocationEditor(selected) : null}
         </div>
       ) : null}
     </section>

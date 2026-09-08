@@ -127,23 +127,7 @@ export function BillingScheduleManager({
         </p>
       </div>
 
-      <dl className="bg-muted/20 mt-4 grid gap-3 rounded-md border p-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
-        <SummaryValue
-          label="Document TTC"
-          value={formatMoney(document.totalTtc, document.currencyCode)}
-        />
-        <SummaryValue
-          label="Scheduled TTC"
-          value={formatMoney(scheduled.toString(), document.currencyCode)}
-        />
-        <SummaryValue
-          label="Received TTC"
-          value={formatMoney(document.paid, document.currencyCode)}
-        />
-        <SummaryValue
-          label="Outstanding TTC"
-          value={formatMoney(document.outstanding, document.currencyCode)}
-        />
+      <dl className="bg-muted/20 mt-4 grid gap-3 rounded-md border p-3 text-sm sm:grid-cols-2">
         <SummaryValue
           label="Next due"
           value={nextDue ? formatDateOnly(nextDue.dueDate) : "—"}

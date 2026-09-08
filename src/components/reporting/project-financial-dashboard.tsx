@@ -450,7 +450,7 @@ export function ProjectFinancialDashboard({
           projectId={projectId}
         />
       )}
-      {(section === "overview" || section === "finance") && (
+      {section === "overview" && (
         <FundingCoverageSummary
           coverage={fundingCoverage}
           currencyCode={currency}
@@ -579,7 +579,7 @@ export function ProjectFinancialDashboard({
         </div>
       )}
       {section === "finance" && (
-        <details open className="bg-card rounded-lg border p-4">
+        <details className="bg-card rounded-lg border p-4">
           <summary className="cursor-pointer text-sm font-semibold">
             Order plan & VAT position
           </summary>

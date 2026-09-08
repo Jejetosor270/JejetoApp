@@ -51,7 +51,9 @@ function AllocationForm({
   orders,
   onSaved,
 }: AllocationEditorProps) {
-  const [orderId, setOrderId] = useState(allocation?.orderId ?? "");
+  const [orderId, setOrderId] = useState(
+    allocation?.orderId ?? (orders.length === 1 ? (orders[0]?.id ?? "") : ""),
+  );
   const [freightCoverageHt, setFreightCoverageHt] = useState(
     allocation?.freightCoverageHt ?? "0",
   );

@@ -1,7 +1,6 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { Button } from "@/components/ui/button";
-import { ViewShortcuts } from "@/components/listing/view-shortcuts";
 import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
 
@@ -96,22 +95,7 @@ export default async function BillingPage({
           </>
         }
       />
-      <ViewShortcuts
-        pathname="/billing"
-        queryString={queryStringFromParams(params)}
-        field="documentType"
-        options={[
-          { label: "All", value: "" },
-          { label: "Invoices", value: "INVOICE" },
-          { label: "Quotes", value: "QUOTE" },
-        ]}
-      />
       <FilterBar>
-        <input
-          name="view"
-          type="hidden"
-          value={firstQueryValue(params, "view") ?? "collection"}
-        />
         <FilterField label="Search">
           <input
             className={filterControlClassName}
@@ -203,25 +187,7 @@ export default async function BillingPage({
           Filter
         </button>
       </FilterBar>
-      <ViewShortcuts
-        pathname="/billing"
-        queryString={queryStringFromParams(params)}
-        field="view"
-        defaultValue="collection"
-        options={[
-          { label: "Collection", value: "collection" },
-          { label: "Commercial", value: "commercial" },
-        ]}
-      />
-      <BillingTable
-        canEdit={canEdit}
-        documents={result.items}
-        view={
-          firstQueryValue(params, "view") === "commercial"
-            ? "commercial"
-            : "collection"
-        }
-      />
+      <BillingTable canEdit={canEdit} documents={result.items} />
       <Pagination
         page={pageInput.page}
         pageSize={pageInput.pageSize}

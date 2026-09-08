@@ -17,11 +17,10 @@ import {
 function BillingRow({
   canEdit,
   document,
-  view,
 }: {
   canEdit: boolean;
   document: ClientBillingView;
-  view: "commercial" | "collection";
+  view?: "commercial" | "collection";
 }) {
   const router = useRouter();
   const href = `/billing/${document.id}`;
@@ -49,35 +48,23 @@ function BillingRow({
           {document.project.name}
         </span>
       </td>
-      {view === "commercial" && (
-        <td className="px-3 py-3">{formatDateOnly(document.documentDate)}</td>
-      )}
-      {view === "collection" && (
-        <td className="px-3 py-3">{formatDateOnly(document.dueDate)}</td>
-      )}
-      {view === "commercial" && (
-        <td className="financial-figure px-3 py-3 text-right">
-          {formatMoney(document.totalHt, document.currencyCode)}
-        </td>
-      )}
-      {view === "commercial" && (
-        <td className="financial-figure px-3 py-3 text-right">
-          {formatMoney(document.vatAmount, document.currencyCode)}
-        </td>
-      )}
+
+      <td className="px-3 py-3">{formatDateOnly(document.dueDate)}</td>
+
+      <td className="financial-figure px-3 py-3 text-right">
+        {formatMoney(document.totalHt, document.currencyCode)}
+      </td>
       <td className="financial-figure px-3 py-3 text-right">
         {formatMoney(document.totalTtc, document.currencyCode)}
       </td>
-      {view === "collection" && (
-        <td className="financial-figure px-3 py-3 text-right">
-          {formatMoney(document.paid, document.currencyCode)}
-        </td>
-      )}
-      {view === "collection" && (
-        <td className="financial-figure px-3 py-3 text-right">
-          {formatMoney(document.outstanding, document.currencyCode)}
-        </td>
-      )}
+
+      <td className="financial-figure px-3 py-3 text-right">
+        {formatMoney(document.paid, document.currencyCode)}
+      </td>
+
+      <td className="financial-figure px-3 py-3 text-right">
+        {formatMoney(document.outstanding, document.currencyCode)}
+      </td>
       <td className="px-3 py-3">{formatEnumLabel(document.status)}</td>
       <td className="px-3 py-3 whitespace-nowrap">
         {canEdit ? (
@@ -96,11 +83,10 @@ function BillingRow({
 export function BillingTable({
   canEdit,
   documents,
-  view,
 }: {
   canEdit: boolean;
   documents: ClientBillingView[];
-  view: "commercial" | "collection";
+  view?: "commercial" | "collection";
 }) {
   return (
     <section className={tableContainerClassName}>
@@ -121,37 +107,23 @@ export function BillingTable({
                 defaultDirection="desc"
               />
               <th className="px-3 py-3">Client / Project</th>
-              {view === "commercial" && (
-                <SortHeader
-                  className="px-3 py-3"
-                  label="Date"
-                  field="date"
-                  defaultSort="updated"
-                  defaultDirection="desc"
-                />
-              )}
-              {view === "collection" && (
-                <SortHeader
-                  className="px-3 py-3"
-                  label="Due"
-                  field="dueDate"
-                  defaultSort="updated"
-                  defaultDirection="desc"
-                />
-              )}
-              {view === "commercial" && (
-                <th className="px-3 py-3 text-right">HT</th>
-              )}
-              {view === "commercial" && (
-                <th className="px-3 py-3 text-right">VAT</th>
-              )}
+
+              <SortHeader
+                className="px-3 py-3"
+                label="Due"
+                field="dueDate"
+                defaultSort="updated"
+                defaultDirection="desc"
+              />
+
+              <th className="px-3 py-3 text-right">HT</th>
+
               <th className="px-3 py-3 text-right">TTC</th>
-              {view === "collection" && (
-                <th className="px-3 py-3 text-right">Received</th>
-              )}
-              {view === "collection" && (
-                <th className="px-3 py-3 text-right">Outstanding</th>
-              )}
+
+              <th className="px-3 py-3 text-right">Received</th>
+
+              <th className="px-3 py-3 text-right">Outstanding</th>
+
               <th className="px-3 py-3">Status</th>
               <th className="px-3 py-3">Actions</th>
             </tr>
@@ -161,7 +133,6 @@ export function BillingTable({
               <BillingRow
                 canEdit={canEdit}
                 document={document}
-                view={view}
                 key={document.id}
               />
             ))}

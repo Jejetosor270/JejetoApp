@@ -61,10 +61,12 @@ describe("Billing operational navigation", () => {
     expect(detail.lastIndexOf("BillingScheduleManager")).toBeGreaterThan(
       detail.lastIndexOf("Import metadata"),
     );
-    expect(paymentManager).toContain("Document TTC");
+    expect(detail).toContain('label="Total TTC"');
+    expect(detail).toContain("WorkspaceSections");
     expect(paymentManager).toContain("Scheduled TTC");
-    expect(paymentManager).toContain("Received TTC");
-    expect(paymentManager).toContain("Outstanding TTC");
+    expect(detail).toContain('label="Received"');
+    expect(paymentManager).not.toContain('label="Received TTC"');
+    expect(detail).toContain('label="Outstanding"');
     expect(paymentManager).toContain("Add installment");
     expect(paymentManager).toContain("Record receipt");
   });

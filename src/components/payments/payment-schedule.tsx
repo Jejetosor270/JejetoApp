@@ -60,21 +60,18 @@ export function PaymentSchedule({
           </Badge>
         ) : null}
       </div>
-      <dl className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <dl className="mt-4 grid gap-3 sm:grid-cols-3">
         {(
           [
             [
               supplierSide ? "Supplier payable" : "Client receivable",
               summary.baseAmount,
             ],
-            ["Scheduled", summary.scheduled],
             [settledLabel, summary.paid],
-            ["Scheduled outstanding", summary.scheduledOutstanding],
-            ["Unscheduled", summary.unscheduled],
             ["Total remaining", summary.remainingTotal],
           ] as const
         ).map(([label, amount]) => (
-          <div className="bg-muted/30 rounded-md border p-3" key={label}>
+          <div className="border-b py-2" key={label}>
             <dt className="text-muted-foreground text-xs">{label}</dt>
             <dd className="financial-figure mt-1 text-sm font-semibold">
               {formatMoney(amount, summary.baseCurrencyCode)}
@@ -82,6 +79,31 @@ export function PaymentSchedule({
           </div>
         ))}
       </dl>
+      <details className="mt-3 text-sm">
+        <summary className="cursor-pointer font-medium">
+          Schedule breakdown
+        </summary>
+        <dl className="mt-2 grid gap-3 sm:grid-cols-3">
+          {[
+            ["Scheduled", summary.scheduled],
+            ["Scheduled outstanding", summary.scheduledOutstanding],
+            ["Unscheduled", summary.unscheduled],
+          ].map(([label, amount]) => (
+            <div key={label}>
+              <dt className="text-muted-foreground text-xs">{label}</dt>
+              <dd className="financial-figure">
+                {formatMoney(amount ?? null, summary.baseCurrencyCode)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </details>
+      {summary.unscheduled !== "0" ? (
+        <p className="mt-3 text-sm" role="status">
+          {formatMoney(summary.unscheduled, summary.baseCurrencyCode)} still
+          needs scheduling.
+        </p>
+      ) : null}
       {summary.overallocated !== "0" ? (
         <p className="text-destructive mt-3 text-xs">
           Over-allocated by{" "}
