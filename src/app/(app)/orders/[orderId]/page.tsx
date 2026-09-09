@@ -1,3 +1,4 @@
+import { RecordPaymentStatus } from "@/components/payments/record-payment-status";
 import { RelatedCashCreate } from "@/components/payments/related-cash-create";
 import { RelatedItems } from "@/components/items/related-items";
 import {
@@ -71,8 +72,17 @@ export default async function OrderPage({
             backLabel="Purchasing"
             eyebrow={order.orderNumber}
             meta={`${order.project.name} · ${order.supplier.displayName}`}
-            status={order.status}
             title={order.packageName}
+          />
+          <RecordPaymentStatus
+            key={`${order.id}:${order.paymentStatusOverride}:${order.status}`}
+            kind="order"
+            id={order.id}
+            automatic={order.supplierPayment.status}
+            override={order.paymentStatusOverride}
+            cancelled={order.status === "CANCELLED"}
+            canEdit={canEditMasterData(user.role)}
+            showCancel
           />
           {order.description ? (
             <p className="bg-card text-muted-foreground -mt-px rounded-b-lg border px-5 py-4 text-sm leading-6">

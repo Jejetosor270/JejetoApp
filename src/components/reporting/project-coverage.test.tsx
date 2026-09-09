@@ -71,6 +71,7 @@ it("renders the simplified Financials rows and money totals without the removed 
     "Recovery less budgeted cost",
     "Recovery less recorded cost",
     "Recovery less budget selling target",
+    "Recovery less recorded-cost selling target",
     "Commercial freight allowance:",
   ])
     expect(html).not.toContain(label);

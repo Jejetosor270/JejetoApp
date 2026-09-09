@@ -1,4 +1,5 @@
 import "server-only";
+import { projectFreightBudget } from "@/domain/freight/calculations";
 
 import {
   ItemCommercialStatus,
@@ -267,7 +268,7 @@ async function projectsCsv(params: Params): Promise<string> {
       code: true,
       countryCode: true,
       expectedCompletionDate: true,
-      estimatedFreightCostHt: true,
+      freightEstimateRate: true,
       estimatedPurchaseCostHt: true,
       expectedSellHt: true,
       name: true,
@@ -309,7 +310,12 @@ async function projectsCsv(params: Params): Promise<string> {
         : "",
       money(item.clientBudgetTargetHt?.toString() ?? null),
       money(item.estimatedPurchaseCostHt?.toString() ?? null),
-      money(item.estimatedFreightCostHt?.toString() ?? null),
+      money(
+        projectFreightBudget(
+          item.estimatedPurchaseCostHt?.toString(),
+          item.freightEstimateRate?.toString(),
+        ),
+      ),
       trustedCsvValue(item.defaultProductMarkupRate.toString()),
       trustedCsvValue(item.defaultFreightMarkupRate.toString()),
       trustedCsvValue(item.defaultOtherCostMarkupRate.toString()),

@@ -1,3 +1,4 @@
+import { projectFreightBudget } from "@/domain/freight/calculations";
 import { ProjectPaymentTerms } from "@/components/payments/project-payment-terms";
 import { ProjectCoverage } from "@/components/reporting/project-coverage";
 import { getProjectControl } from "@/lib/reporting/project-control";
@@ -94,7 +95,10 @@ export default async function ProjectPage({
   const targets = calculateProjectTargets({
     defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
     defaultProductMarkupRate: project.defaultProductMarkupRate.toString(),
-    estimatedFreightCostHt: project.estimatedFreightCostHt?.toString() ?? null,
+    estimatedFreightCostHt: projectFreightBudget(
+      project.estimatedPurchaseCostHt?.toString(),
+      project.freightEstimateRate?.toString(),
+    ),
     estimatedPurchaseCostHt:
       project.estimatedPurchaseCostHt?.toString() ?? null,
     expectedSellHt: project.expectedSellHt?.toString() ?? null,
@@ -272,8 +276,10 @@ export default async function ProjectPage({
         expectedCompletionDate:
           project.expectedCompletionDate?.toISOString() ?? null,
         freightEstimateRate: project.freightEstimateRate?.toString() ?? null,
-        estimatedFreightCostHt:
-          project.estimatedFreightCostHt?.toString() ?? null,
+        estimatedFreightCostHt: projectFreightBudget(
+          project.estimatedPurchaseCostHt?.toString(),
+          project.freightEstimateRate?.toString(),
+        ),
         estimatedPurchaseCostHt:
           project.estimatedPurchaseCostHt?.toString() ?? null,
         expectedSellHt: project.expectedSellHt?.toString() ?? null,

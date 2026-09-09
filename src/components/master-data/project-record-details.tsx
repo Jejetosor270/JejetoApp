@@ -1,3 +1,4 @@
+import { projectFreightBudget } from "@/domain/freight/calculations";
 import type { ProjectView } from "@/app/(app)/projects/[projectId]/project-detail";
 import {
   RecordFields,
@@ -64,8 +65,13 @@ export function ProjectRecordDetails({ project }: { project: ProjectView }) {
                 value: money(project.estimatedPurchaseCostHt),
               },
               {
-                label: "Estimated freight / logistics HT",
-                value: money(project.estimatedFreightCostHt),
+                label: "Budgeted freight HT (automatic)",
+                value: money(
+                  projectFreightBudget(
+                    project.estimatedPurchaseCostHt?.toString(),
+                    project.freightEstimateRate?.toString(),
+                  ),
+                ),
               },
               {
                 label: "Freight estimate",

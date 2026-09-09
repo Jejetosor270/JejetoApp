@@ -1,4 +1,5 @@
 import "server-only";
+import { projectFreightBudget } from "@/domain/freight/calculations";
 
 import {
   Prisma,
@@ -83,7 +84,10 @@ function projectData(input: CreateProjectInput) {
   const targets = calculateProjectTargets({
     defaultFreightMarkupRate: input.defaultFreightMarkupRate ?? null,
     defaultProductMarkupRate: input.defaultProductMarkupRate ?? null,
-    estimatedFreightCostHt: input.estimatedFreightCostHt ?? null,
+    estimatedFreightCostHt: projectFreightBudget(
+      input.estimatedPurchaseCostHt,
+      input.freightEstimateRate,
+    ),
     estimatedPurchaseCostHt: input.estimatedPurchaseCostHt ?? null,
     expectedSellHt: input.expectedSellHt ?? null,
     targetMarkupRate: input.targetMarkupRate ?? null,
@@ -98,7 +102,10 @@ function projectData(input: CreateProjectInput) {
     code: input.code,
     countryCode: input.countryCode ?? null,
     expectedCompletionDate: dateOrNull(input.expectedCompletionDate),
-    estimatedFreightCostHt: input.estimatedFreightCostHt ?? null,
+    estimatedFreightCostHt: projectFreightBudget(
+      input.estimatedPurchaseCostHt,
+      input.freightEstimateRate,
+    ),
     estimatedPurchaseCostHt: input.estimatedPurchaseCostHt ?? null,
     expectedSellHt: targets.expectedSellHt,
     freightEstimateNotes: input.freightEstimateNotes ?? null,

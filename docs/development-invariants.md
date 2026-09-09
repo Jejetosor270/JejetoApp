@@ -324,9 +324,11 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
 - Purchasing is the record presentation reference: shared compact summaries, two-column financial
   label/value cards, and Related category headings with descriptions and adjacent actions. Use
   `record-presentation.tsx` and `RecordWorkspace` to keep Project, Order and Billing views aligned.
-- Billing Edit exposes Active/Cancelled through the existing cancellation field and audited
-  action; receipt/cancellation safeguards remain unchanged. Collection status stays derived
-  from receipts and dates, never a manual Paid/Overdue override.
+- Billing and Order details use a confirmed Cancel button instead of Active/Cancelled selection.
+  Existing cancellation/receipt safeguards remain unchanged. Fulfilment statuses remain a separate
+  Order concern. Payment status defaults to automatic; nullable display-only manual overrides are
+  explicitly marked and can be reset to Automatic. All cash, outstanding, overdue amounts,
+  forecasts and financial reports continue to use actual receipts/settlements, not the override.
 - Billing Details displays unallocated Billing HT, total included freight HT, freight allocated
   to Orders HT and freight remaining at Project level HT using existing Decimal helpers.
   These are commercial allocation amounts, not uncollected or unallocated cash.
@@ -411,3 +413,21 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 - Client Freight paid HT is reporting-only proportional attribution: receipt TTC × active Invoice freight HT ÷ Invoice TTC, converted with the receipt's actual FX. An active owning Invoice takes precedence; a Quote receipt uses its single active matched Invoice once. Ambiguous Invoice attribution or missing required FX remains incomplete. Coverage compares Client freight invoiced/paid HT separately against Supplier Freight Sell HT; no revenue, receipt or allocation records are rewritten.
 - Financials retains Merchandise, Freight and Other/services with a Total money column. Missing category values keep the total incomplete; markup defaults are neither summed nor averaged. Budgeted Sell HT, Target Revenue HT, Allocated Client Invoice Amount HT and Invoiced Coverage HT rename existing measures without changing their financial authority. Invoiced Coverage HT in this table means Invoice HT outside active Order allocations, not the separate funding-coverage formula.
 - This presentation and derived-reporting change requires no new migration.
+
+## Payment-status and Billing-entry refinement
+
+- ADMIN/MANAGER may save an audited display-only Paid, Partially Paid, Unpaid or Overdue status
+  on Orders/Billing. A manual choice persists until reset to Automatic; subsequent cash updates
+  continue to update the underlying derived status. No status choice records money or changes
+  financial totals. Cancellation takes precedence. Requires the separately deployed migration
+  `20260918000000_manual_payment_status`; preparing it does not authorize running it on a database.
+- Billing's New Billing menu exposes Import Client document and Enter manually. Manual creation
+  opens the existing reviewed form and authenticated confirmation service without upload or AI calls.
+- Budgeted Project freight HT is now automatically expected Product Purchase Cost HT × Project
+  freight estimate rate. This applies to Financials, target calculations, Project details and exports;
+  Project saves derive the legacy estimatedFreightCostHt column rather than trusting manual input.
+  Existing Projects calculate it on read without backfill. Missing planning inputs remain incomplete.
+  Actual freight expenses and Order AUTO allocation remain separate and unchanged.
+- Financials omits Recovery less recorded-cost selling target. Freight coverage uses the concise
+  Invoiced Freight Coverage HT and Paid Freight Coverage HT labels; both still subtract Supplier
+  Freight Sell HT from the corresponding Client value.

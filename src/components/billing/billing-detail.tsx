@@ -1,4 +1,6 @@
 "use client";
+import { RecordPaymentStatus } from "@/components/payments/record-payment-status";
+import { recordPaymentStatusLabel } from "@/domain/payments/record-status";
 
 import {
   RelatedRecords,
@@ -395,6 +397,22 @@ export function BillingDetail({
         title={saved.reference}
       />
 
+      {!editing && (
+        <RecordPaymentStatus
+          key={`${document.id}:${document.paymentStatusOverride}:${saved.isCancelled}`}
+          kind="billing"
+          id={document.id}
+          automatic={collection.status}
+          override={document.paymentStatusOverride}
+          cancelled={saved.isCancelled}
+          canEdit={canEdit}
+          showCancel
+          onCancelled={() => {
+            setSaved((current) => ({ ...current, isCancelled: true }));
+            setDraft((current) => ({ ...current, isCancelled: true }));
+          }}
+        />
+      )}
       {editing ? (
         <EditorDrawer
           open={editing}
@@ -480,30 +498,11 @@ export function BillingDetail({
                       <option value="INVOICE">Invoice</option>
                     </select>
                   </Field>
-                  <Field error={fieldErrors.isCancelled} label="Status">
-                    <select
-                      name="recordStatus"
-                      className={inputClassName}
-                      value={draft.isCancelled ? "CANCELLED" : "ACTIVE"}
-                      onChange={(event) =>
-                        setDraft((current) => ({
-                          ...current,
-                          isCancelled: event.target.value === "CANCELLED",
-                        }))
-                      }
-                    >
-                      <option value="ACTIVE">Active</option>
-                      <option value="CANCELLED">Cancelled</option>
-                    </select>
-                    <input
-                      type="hidden"
-                      name="isCancelled"
-                      value={draft.isCancelled ? "on" : ""}
-                    />
-                    <p className="text-muted-foreground mt-1 text-xs">
-                      Payment status is calculated from receipts and due dates.
-                    </p>
-                  </Field>
+                  <input
+                    type="hidden"
+                    name="isCancelled"
+                    value={draft.isCancelled ? "on" : ""}
+                  />
                   <Field error={fieldErrors.reference} label="Reference">
                     <input
                       className={inputClassName}
@@ -1111,12 +1110,12 @@ export function BillingDetail({
                   <RecordSectionHeading title="Status & dates" />
                   <dl className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <DetailValue
-                      label="Status"
-                      value={saved.isCancelled ? "Cancelled" : "Active"}
-                    />
-                    <DetailValue
                       label="Payment status"
-                      value={formatEnumLabel(collection.status)}
+                      value={recordPaymentStatusLabel(
+                        collection.status,
+                        document.paymentStatusOverride,
+                        saved.isCancelled,
+                      )}
                     />
                     <DetailValue
                       label="Document date"

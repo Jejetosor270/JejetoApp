@@ -43,6 +43,7 @@ function sellingOrder(
 } {
   return {
     trashedAt: null,
+    paymentStatusOverride: null,
     detachedReportingCurrencyCode: null,
     carrierCode: null,
     carrierOtherName: null,

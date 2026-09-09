@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+vi.mock("@/app/(app)/payments/record-status-actions", () => ({
+  saveRecordStatusAction: vi.fn(),
+}));
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clickText, enter, mountForm } from "@/test/dom-form";
@@ -345,8 +348,8 @@ describe("dedicated Billing allocation editor", () => {
       if (!canEdit) return;
       await clickText("Add allocation");
       expect(
-        [...document.querySelectorAll("select option")].map((option) =>
-          option.getAttribute("value"),
+        [...document.querySelectorAll('[role="dialog"] select option')].map(
+          (option) => option.getAttribute("value"),
         ),
       ).toEqual(["", "new-order-id"]);
       await clickText("Close");

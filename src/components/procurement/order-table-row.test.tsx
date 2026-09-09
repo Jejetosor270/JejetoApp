@@ -1,4 +1,8 @@
 // @vitest-environment happy-dom
+vi.mock("@/app/(app)/payments/record-status-actions", () => ({
+  saveRecordStatusAction: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clickText, mountForm } from "@/test/dom-form";

@@ -28,6 +28,9 @@ it("counts matched Quote receipts once, using Invoice freight and each receipt's
       code: "coverage",
       reportingCurrencyCode: "EUR",
       defaultFreightMarkupRate: "0.15",
+      estimatedPurchaseCostHt: "591700",
+      freightEstimateRate: "0.10",
+      estimatedFreightCostHt: "999",
     },
   });
   const quote = await db.clientBillingDocument.create({
@@ -164,6 +167,9 @@ it("counts matched Quote receipts once, using Invoice freight and each receipt's
     paidCoverageHt: "-45.0000",
   });
   expect(report.totals.billed).toBe("800.0000");
+  expect(
+    report.categories.find((row) => row.category === "freight")?.budget,
+  ).toBe("59170.0000");
   expect(report.totals.budget).toBeNull();
   await db.clientReceipt.update({
     where: { id: payment.id },

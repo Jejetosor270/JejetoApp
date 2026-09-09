@@ -258,15 +258,11 @@ function ProjectFields({
             name="estimatedPurchaseCostHt"
           />
         </Field>
-        <Field
-          error={fieldErrors?.estimatedFreightCostHt}
-          label="Estimated Freight / Logistics HT"
-        >
-          <MoneyInput
-            className={inputClassName}
-            defaultValue={project.estimatedFreightCostHt?.toString() ?? ""}
-            name="estimatedFreightCostHt"
-          />
+        <Field label="Budgeted freight HT (automatic)">
+          <p className="text-muted-foreground text-sm">
+            Calculated from expected Product Purchase Cost HT × Project freight
+            %.
+          </p>
         </Field>
         <Field
           error={fieldErrors?.freightEstimateRate}

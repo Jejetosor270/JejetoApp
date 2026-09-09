@@ -1,4 +1,5 @@
 "use client";
+import { RecordPaymentStatus } from "@/components/payments/record-payment-status";
 import { trashSelectedAction } from "@/app/(app)/settings/trash/actions";
 import {
   BulkActionBar,
@@ -14,7 +15,6 @@ import { updateClientBillingInlineAction } from "@/app/(app)/billing/actions";
 import {
   InlineEditActions,
   InlineTextInput,
-  InlineSelect,
 } from "@/components/inline-editing/inline-edit";
 import { DateInput } from "@/components/forms/date-input";
 import { SortHeader } from "@/components/listing/sort-header";
@@ -22,7 +22,6 @@ import { useRouter } from "next/navigation";
 
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney } from "@/domain/procurement/presentation";
-import { formatEnumLabel } from "@/domain/presentation/labels";
 import type { ClientBillingView } from "@/lib/billing/billing";
 import {
   tableContainerClassName,
@@ -136,18 +135,15 @@ function BillingRow({
         {formatMoney(document.outstanding, document.currencyCode)}
       </td>
       <td className="px-3 py-3">
-        {formatEnumLabel(document.status)}
-        {editing && (
-          <InlineSelect
-            ariaLabel="Record status"
-            value={draft.isCancelled}
-            disabled={pending}
-            onChange={(isCancelled) => setDraft({ ...draft, isCancelled })}
-          >
-            <option value="false">Active</option>
-            <option value="true">Cancelled</option>
-          </InlineSelect>
-        )}
+        <RecordPaymentStatus
+          key={`${document.id}:${document.paymentStatusOverride}:${document.isCancelled}`}
+          kind="billing"
+          id={document.id}
+          automatic={document.status}
+          override={document.paymentStatusOverride}
+          cancelled={document.isCancelled}
+          canEdit={canEdit && !editing}
+        />
       </td>
       <td className="px-3 py-3 whitespace-nowrap">
         {canEdit ? (

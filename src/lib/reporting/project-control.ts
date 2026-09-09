@@ -1,5 +1,6 @@
 import "server-only";
 import Decimal from "decimal.js";
+import { projectFreightBudget } from "@/domain/freight/calculations";
 import {
   financialCategoryTotals,
   freightReceiptHt,
@@ -217,7 +218,10 @@ export async function getProjectControl(projectId: string) {
   };
   const budgets = {
     merchandise: project.estimatedPurchaseCostHt?.toString() ?? null,
-    freight: project.estimatedFreightCostHt?.toString() ?? null,
+    freight: projectFreightBudget(
+      project.estimatedPurchaseCostHt?.toString(),
+      project.freightEstimateRate?.toString(),
+    ),
     other: null,
   };
   const targets = {

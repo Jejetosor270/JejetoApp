@@ -1,4 +1,5 @@
 "use client";
+import { RecordPaymentStatus } from "@/components/payments/record-payment-status";
 
 import { carriers, carrierName } from "@/config/carriers";
 import Link from "next/link";
@@ -120,11 +121,15 @@ export function OrderRow({
       onChange={(value) => set("status", value)}
       value={draft.status}
     >
-      {statuses.map((status) => (
-        <option key={status} value={status}>
-          {formatEnumLabel(status)}
-        </option>
-      ))}
+      {statuses
+        .filter(
+          (status) => status !== "CANCELLED" || saved.status === "CANCELLED",
+        )
+        .map((status) => (
+          <option key={status} value={status}>
+            {formatEnumLabel(status)}
+          </option>
+        ))}
     </InlineSelect>
   ) : (
     formatEnumLabel(saved.status)
@@ -258,7 +263,15 @@ export function OrderRow({
           {formatDateOnly(order.supplierPayment.nextDueDate)}
         </td>
         <td className="px-4 py-3">
-          {formatEnumLabel(order.supplierPayment.status)}
+          <RecordPaymentStatus
+            key={`${order.id}:${order.paymentStatusOverride}:${order.status}`}
+            kind="order"
+            id={order.id}
+            automatic={order.supplierPayment.status}
+            override={order.paymentStatusOverride}
+            cancelled={order.status === "CANCELLED"}
+            canEdit={canEdit && !editing}
+          />
         </td>
         {actionsCell}
       </tr>
@@ -343,7 +356,15 @@ export function OrderRow({
         {formatMoney(cost.purchaseCost, order.orderCurrencyCode)}
       </td>
       <td className="px-4 py-3">
-        {formatEnumLabel(order.supplierPayment.status)}
+        <RecordPaymentStatus
+          key={`${order.id}:${order.paymentStatusOverride}:${order.status}`}
+          kind="order"
+          id={order.id}
+          automatic={order.supplierPayment.status}
+          override={order.paymentStatusOverride}
+          cancelled={order.status === "CANCELLED"}
+          canEdit={canEdit && !editing}
+        />
       </td>
       <td className="px-4 py-3">
         {editing ? (

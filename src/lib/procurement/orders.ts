@@ -265,6 +265,7 @@ export interface OrderSummary {
   };
   supplierOrderConfirmationReference: string | null;
   supplierQuoteReference: string | null;
+  paymentStatusOverride?: string | null;
   supplierPayment: {
     nextDueDate: string | null;
     outstanding: string | null;
@@ -974,6 +975,7 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
     supplierOrderConfirmationReference:
       order.supplierOrderConfirmationReference,
     supplierQuoteReference: order.supplierQuoteReference,
+    paymentStatusOverride: order.paymentStatusOverride,
     supplierPayment: {
       nextDueDate: nextSupplierDue
         ? dateToDateOnly(nextSupplierDue.dueDate)

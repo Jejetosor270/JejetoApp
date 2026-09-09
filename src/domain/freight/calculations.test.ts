@@ -3,11 +3,19 @@ import { describe, expect, it } from "vitest";
 
 import {
   freightAllowanceFromPurchaseCost,
+  projectFreightBudget,
   reconcileProjectFreight,
   resolveOrderFreightAllowance,
 } from "@/domain/freight/calculations";
 
 describe("freight commercial allowance", () => {
+  it("derives the Project freight budget from expected purchases and the Project rate", () => {
+    expect(projectFreightBudget("591700", "0.10")).toBe("59170.0000");
+    expect(projectFreightBudget("0.3", "0.1")).toBe("0.0300");
+    expect(projectFreightBudget("591700", "0")).toBe("0.0000");
+    expect(projectFreightBudget(null, "0.1")).toBeNull();
+    expect(projectFreightBudget("591700", null)).toBeNull();
+  });
   it("derives the allowance from Product Purchase Cost HT", () => {
     expect(freightAllowanceFromPurchaseCost("50000", "0.10").toFixed(4)).toBe(
       "5000.0000",

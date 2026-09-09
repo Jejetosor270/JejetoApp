@@ -108,15 +108,11 @@ export function ProjectCoverage({
             currency={data.currency}
             values={[
               [
-                "Invoiced less Supplier Freight Sell HT",
+                "Invoiced Freight Coverage HT",
                 freight.invoicedCoverageHt,
                 true,
               ],
-              [
-                "Paid less Supplier Freight Sell HT",
-                freight.paidCoverageHt,
-                true,
-              ],
+              ["Paid Freight Coverage HT", freight.paidCoverageHt, true],
             ]}
           />
         </div>

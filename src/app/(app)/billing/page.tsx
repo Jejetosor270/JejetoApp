@@ -1,11 +1,9 @@
 import { PageHeader } from "@/components/layout/page-header";
-import { EditorDrawer } from "@/components/forms/editor-drawer";
-import { Button } from "@/components/ui/button";
 import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
 
 import { BillingTable } from "@/components/billing/billing-table";
-import { ClientDocumentIntake } from "@/components/billing/client-document-intake";
+import { CreateBillingActions } from "@/components/billing/create-billing-actions";
 import { PageSizeField, Pagination } from "@/components/listing/pagination";
 import {
   FilterField,
@@ -82,15 +80,7 @@ export default async function BillingPage({
                 entity="billing"
                 queryString={queryStringFromParams(params)}
               />
-              {canEdit ? (
-                <EditorDrawer
-                  title="Import Client Document"
-                  wide
-                  trigger={<Button>Import Client Document</Button>}
-                >
-                  <ClientDocumentIntake options={options} />
-                </EditorDrawer>
-              ) : null}
+              {canEdit ? <CreateBillingActions options={options} /> : null}
             </div>
           </>
         }

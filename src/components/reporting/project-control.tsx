@@ -12,7 +12,6 @@ export function ProjectFinancialControl({ data }: { data: ProjectControl }) {
     ["Invoiced revenue HT", "billed"],
     ["Allocated Client Invoice Amount HT", "allocated"],
     ["Invoiced Coverage HT", "projectRemainder"],
-    ["Recovery less recorded-cost selling target", "recordedTargetSurplus"],
   ] as const;
   return (
     <section className="space-y-4">

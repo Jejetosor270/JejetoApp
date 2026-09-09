@@ -40,6 +40,19 @@ export function freightAllowanceFromPurchaseCost(
   );
 }
 
+/** Project planning only; never substitutes live Order purchases or actual freight. */
+export function projectFreightBudget(
+  expectedPurchaseHt: string | null | undefined,
+  freightEstimateRate: string | null | undefined,
+): string | null {
+  return expectedPurchaseHt == null || freightEstimateRate == null
+    ? null
+    : freightAllowanceFromPurchaseCost(
+        expectedPurchaseHt,
+        freightEstimateRate,
+      ).toFixed(4);
+}
+
 export function resolveOrderFreightAllowance(input: {
   allowanceOverrideHt?: string | null;
   productPurchaseCostHt: string;

@@ -9,7 +9,14 @@ vi.mock("@/components/payments/related-cash-create", () => ({
   RelatedCashCreate: () => <button>Add related cash record</button>,
 }));
 
-const actions = vi.hoisted(() => ({ save: vi.fn(), refresh: vi.fn() }));
+const actions = vi.hoisted(() => ({
+  save: vi.fn(),
+  refresh: vi.fn(),
+  status: vi.fn(),
+}));
+vi.mock("@/app/(app)/payments/record-status-actions", () => ({
+  saveRecordStatusAction: actions.status,
+}));
 vi.mock("@/app/(app)/billing/actions", () => ({
   updateClientBillingDocumentAction: actions.save,
   updateOrderBillingLinkAction: vi.fn(),
@@ -132,7 +139,7 @@ it("shows allocation and freight figures in Details, separately from Client outs
   expect(value("Freight allocated to Orders HT")).toBe("25.00 EUR");
   expect(value("Freight remaining at Project level HT")).toBe("175.00 EUR");
   expect(value("Outstanding")).toBe("1 100.00 EUR");
-  expect(value("Status")).toBe("Active");
+  expect(value("Status")).toBeUndefined();
   expect(value("Payment status")).toBe("Partially Paid");
   const visible = document.querySelector('[role="tabpanel"]:not([hidden])');
   expect(visible?.textContent).not.toContain("Payment manager");
@@ -189,52 +196,41 @@ it("preserves Other/services classification and allocation through a rejected fu
   expect(control("otherCoverageHt").value).toBe("125.00");
 });
 
-it("offers only Active/Cancelled and retains rejected status changes and the complete draft", async () => {
-  actions.save.mockResolvedValue({
+it("uses a confirmed Cancel Billing button and retains cancellation errors", async () => {
+  actions.status.mockResolvedValue({
     status: "error",
-    message:
-      "A Billing Event with recorded Client receipts cannot be cancelled.",
+    message: "Billing with receipts cannot be cancelled.",
   });
   await mount();
-  await clickText("Edit");
-  expect(
-    [...document.querySelectorAll('select[name="recordStatus"] option')].map(
-      (option) => option.textContent,
-    ),
-  ).toEqual(["Active", "Cancelled"]);
-  await enter("recordStatus", "CANCELLED");
-  await enter("notes", "Keep this edit");
-  await act(async () => {
-    control("recordStatus").form?.dispatchEvent(
-      new Event("submit", { bubbles: true, cancelable: true }),
-    );
+  await clickText("Cancel Billing");
+  expect(actions.status).not.toHaveBeenCalled();
+  await clickText("Confirm cancellation");
+  expect(actions.status).toHaveBeenCalledWith({
+    kind: "billing",
+    id: record.id,
+    value: "CANCEL",
   });
-  const data = actions.save.mock.calls[0]?.[1] as FormData;
-  expect(data.get("isCancelled")).toBe("on");
-  expect(data.has("status")).toBe(false);
-  expect(control("recordStatus").value).toBe("CANCELLED");
-  expect(control("notes").value).toBe("Keep this edit");
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
     "cannot be cancelled",
   );
-  expect(value("Status")).toBe("Active");
+  expect(value("Status")).toBeUndefined();
 });
 
-it("can reactivate a cancelled record without setting a payment status", async () => {
-  actions.save.mockResolvedValue({ status: "success", message: "Saved" });
+it("retains a cancelled record during ordinary edits without an Active/Cancelled selector", async () => {
+  actions.save.mockResolvedValue({ status: "error", message: "Review notes" });
   await mount({ ...record, isCancelled: true, paid: "0", status: "CANCELLED" });
   await clickText("Edit");
-  await enter("recordStatus", "ACTIVE");
+  expect(document.querySelector('[name="recordStatus"]')).toBeNull();
+  await enter("notes", "Keep this edit");
   await act(async () => {
-    control("recordStatus").form?.dispatchEvent(
+    control("notes").form?.dispatchEvent(
       new Event("submit", { bubbles: true, cancelable: true }),
     );
   });
-  const data = actions.save.mock.calls[0]?.[1] as FormData;
-  expect(data.get("isCancelled")).toBe("");
-  expect(data.has("status")).toBe(false);
-  expect(value("Status")).toBe("Active");
-  expect(value("Payment status")).toBe("Invoiced");
+  expect((actions.save.mock.calls[0]?.[1] as FormData).get("isCancelled")).toBe(
+    "on",
+  );
+  expect(control("notes").value).toBe("Keep this edit");
 });
 
 it("does not expose editing to read-only employees", async () => {

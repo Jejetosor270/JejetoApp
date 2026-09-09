@@ -1,3 +1,4 @@
+import { projectFreightBudget } from "@/domain/freight/calculations";
 import { PageHeader } from "@/components/layout/page-header";
 import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
@@ -218,8 +219,10 @@ export default async function ProjectsPage({
           defaultOtherCostMarkupRate:
             project.defaultOtherCostMarkupRate.toString(),
           defaultProductMarkupRate: project.defaultProductMarkupRate.toString(),
-          estimatedFreightCostHt:
-            project.estimatedFreightCostHt?.toString() ?? null,
+          estimatedFreightCostHt: projectFreightBudget(
+            project.estimatedPurchaseCostHt?.toString(),
+            project.freightEstimateRate?.toString(),
+          ),
           estimatedPurchaseCostHt:
             project.estimatedPurchaseCostHt?.toString() ?? null,
           expectedSellHt: project.expectedSellHt?.toString() ?? null,

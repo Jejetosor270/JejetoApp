@@ -163,6 +163,9 @@ function billingView(record: BillingRecord, today = businessToday()) {
     dueDate: record.dueDate ? dateToDateOnly(record.dueDate) : null,
     fxRate: record.fxRateToReporting?.toString() ?? null,
     id: record.id,
+    ...(record.paymentStatusOverride
+      ? { paymentStatusOverride: record.paymentStatusOverride }
+      : {}),
     isCancelled: record.isCancelled,
     isProjectRemainderApproved: record.isProjectRemainderApproved,
     imports: record.imports.map((item) => ({

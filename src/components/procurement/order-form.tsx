@@ -809,7 +809,7 @@ export function OrderForm({
               value={draft.quoteDate}
             />
           </Field>
-          <Field error={fieldErrors.status} label="Status">
+          <Field error={fieldErrors.status} label="Fulfilment status">
             <select
               aria-invalid={Boolean(fieldErrors.status) || undefined}
               className={errorClass("status")}
@@ -817,11 +817,16 @@ export function OrderForm({
               onChange={(event) => changeDraft("status", event.target.value)}
               value={draft.status}
             >
-              {options.statuses.map((item) => (
-                <option key={item} value={item}>
-                  {label(item)}
-                </option>
-              ))}
+              {options.statuses
+                .filter(
+                  (item) =>
+                    item !== "CANCELLED" || draft.status === "CANCELLED",
+                )
+                .map((item) => (
+                  <option key={item} value={item}>
+                    {label(item)}
+                  </option>
+                ))}
             </select>
           </Field>
           <Field error={fieldErrors.projectId} label="Project">

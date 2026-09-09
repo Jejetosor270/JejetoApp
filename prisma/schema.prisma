@@ -417,6 +417,7 @@ model Building {
 }
 
 model ProcurementOrder {
+  paymentStatusOverride String? @db.VarChar(24)
   trashedAt DateTime?
   @@index([trashedAt])
   packageId String? @db.Uuid
@@ -750,6 +751,7 @@ model ApplicationSetting {
 }
 
 model ClientBillingDocument {
+  paymentStatusOverride String? @db.VarChar(24)
   trashedAt DateTime?
   @@index([trashedAt])
   id                         String                    @id @default(uuid()) @db.Uuid
