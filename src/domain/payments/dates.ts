@@ -15,8 +15,10 @@ export function dateOnlyToDate(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
-export function dateToDateOnly(value: Date): string {
-  return value.toISOString().slice(0, 10);
+export function dateToDateOnly(value: Date): string;
+export function dateToDateOnly(value: Date | null): string | null;
+export function dateToDateOnly(value: Date | null): string | null {
+  return value ? value.toISOString().slice(0, 10) : null;
 }
 
 export function addWeeksToDateOnly(value: string, weeks: number): string {

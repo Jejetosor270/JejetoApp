@@ -1,5 +1,4 @@
 "use client";
-import { RelatedCashCreate } from "@/components/payments/related-cash-create";
 
 import {
   RelatedRecords,
@@ -1147,40 +1146,10 @@ export function BillingDetail({
           {
             id: "schedule",
             group: "related",
-            label: "Schedule & receipts",
+            label: "Payment terms",
             content: (
               <div className="space-y-4">
-                <RelatedRecords
-                  actions={
-                    canEdit
-                      ? {
-                          "client-installments": (
-                            <RelatedCashCreate
-                              scope={{ kind: "billing", id: document.id }}
-                              kind="client-installment"
-                            />
-                          ),
-                          receipts: (
-                            <RelatedCashCreate
-                              scope={{ kind: "billing", id: document.id }}
-                              kind="receipt"
-                            />
-                          ),
-                        }
-                      : {}
-                  }
-                  tables={relatedTables.filter((table) =>
-                    ["client-installments", "receipts"].includes(table.id),
-                  )}
-                />
-                {canEdit ? (
-                  <EditorDrawer title="Manage installments & receipts" wide>
-                    <BillingScheduleManager
-                      canEdit={canEdit}
-                      document={document}
-                    />
-                  </EditorDrawer>
-                ) : null}
+                <BillingScheduleManager canEdit={canEdit} document={document} />
               </div>
             ),
           },

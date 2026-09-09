@@ -342,9 +342,9 @@ export async function updateClientBillingInstallmentAction(
     revalidatePath("/payments");
     revalidateProjectFinancialViews();
     return {
-      message: "Payment installment updated.",
+      message: "Payment term updated.",
       status: "success",
-      values,
+      values: { ...values, dueDate: values.dueDate ?? "" },
     };
   } catch (error) {
     if (

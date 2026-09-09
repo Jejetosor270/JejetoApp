@@ -1,3 +1,7 @@
+import {
+  earliestUnpaidTermDate,
+  overdueTermAmount,
+} from "@/domain/payments/terms";
 import { retainedCurrency } from "@/lib/related-records/context";
 import { freightCoverageBreakdown } from "@/domain/billing/freight-coverage";
 import "server-only";
@@ -116,7 +120,17 @@ function billingView(record: BillingRecord, today = businessToday()) {
     : record.paymentInstallments;
   const calculated = calculateClientBillingAmounts({
     documentType: record.documentType,
-    dueDate: record.dueDate ? dateToDateOnly(record.dueDate) : null,
+    dueDate: earliestUnpaidTermDate(
+      visibleInstallments.map((term) => ({
+        dueDate: dateToDateOnly(term.dueDate),
+        isCancelled: term.isCancelled,
+        scheduledAmount: term.scheduledAmount.toString(),
+        payments: term.receipts.map((payment) => ({
+          amount: payment.amount.toString(),
+        })),
+      })),
+      dateToDateOnly(record.dueDate),
+    ),
     isCancelled: record.isCancelled,
     paidAmounts: receipts.map((receipt) => receipt.amount.toString()),
     today,
@@ -169,6 +183,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
       amount: receipt.amount.toString(),
       fxRate: receipt.fxRateToReporting?.toString() ?? null,
       id: receipt.id,
+      billingDocumentId: receipt.billingDocumentId,
       installmentId: receipt.installmentId,
       notes: receipt.notes,
       receivedAt: dateToDateOnly(receipt.receivedAt),
@@ -192,6 +207,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
         amount: receipt.amount.toString(),
         fxRate: receipt.fxRateToReporting?.toString() ?? null,
         id: receipt.id,
+        billingDocumentId: receipt.billingDocumentId,
         installmentId: receipt.installmentId,
         notes: receipt.notes,
         receivedAt: dateToDateOnly(receipt.receivedAt),
@@ -586,7 +602,20 @@ export async function confirmClientBillingDocument(
       }
       const installmentsToCreate = usesMatchedSchedule
         ? []
-        : input.installments;
+        : input.installments.length ||
+            input.action !== "CREATE" ||
+            !new Decimal(input.totalTtc).greaterThan(0)
+          ? input.installments
+          : [
+              {
+                basis: InstallmentBasis.PERCENTAGE,
+                label: "Full amount",
+                percentageRate: "1",
+                fixedAmount: undefined,
+                notes: undefined,
+                dueDate: input.dueDate,
+              },
+            ];
       if (
         installmentsToCreate.length > 0 &&
         (input.action === "CREATE" || input.replaceSchedule)
@@ -601,7 +630,9 @@ export async function confirmClientBillingDocument(
             billingDocumentId: document.id,
             createdById: actorId,
             currencyCode: input.currencyCode,
-            dueDate: dateOnlyToDate(installment.dueDate),
+            dueDate: installment.dueDate
+              ? dateOnlyToDate(installment.dueDate)
+              : null,
             expectedFxRateToReporting:
               input.currencyCode === project.reportingCurrencyCode
                 ? null
@@ -687,10 +718,10 @@ export async function recordClientReceipt(
         where: { id: input.billingDocumentId },
         include: {
           matchedInstallment: {
-            include: { receipts: { select: { amount: true } } },
+            include: { receipts: { select: { amount: true, id: true } } },
           },
           project: { select: { reportingCurrencyCode: true } },
-          receipts: { select: { amount: true } },
+          receipts: { select: { amount: true, id: true } },
         },
       });
       if (!document) throw new ClientBillingNotFoundError();
@@ -706,25 +737,39 @@ export async function recordClientReceipt(
       const installment = input.installmentId
         ? await transaction.clientPaymentInstallment.findUnique({
             where: { id: input.installmentId },
-            include: { receipts: { select: { amount: true } } },
+            include: { receipts: { select: { amount: true, id: true } } },
           })
         : null;
       if (input.installmentId && !installment)
         throw new ClientBillingNotFoundError();
       if (
         installment &&
-        installment.billingDocumentId !== input.billingDocumentId
+        installment.billingDocumentId !== input.billingDocumentId &&
+        (!document.matchedInstallmentId ||
+          installment.id !== document.matchedInstallmentId)
       )
         throw new ClientBillingValidationError(
           "The selected installment belongs to another Billing Event.",
         );
       const paid = [
-        ...document.receipts,
-        ...(document.matchedInstallment?.receipts ?? []),
+        ...new Map(
+          [
+            ...document.receipts,
+            ...(document.matchedInstallment?.receipts ?? []),
+          ].map((receipt) => [receipt.id, receipt]),
+        ).values(),
       ].reduce((sum, receipt) => sum.plus(receipt.amount), new Decimal(0));
       if (paid.plus(input.amount).greaterThan(document.totalTtc))
         throw new ClientBillingValidationError(
           "The receipt would exceed the Billing Event outstanding balance.",
+        );
+      if (installment && installment.currencyCode !== document.currencyCode)
+        throw new ClientBillingValidationError(
+          "The term and Invoice must use the same currency.",
+        );
+      if (installment?.isCancelled)
+        throw new ClientBillingValidationError(
+          "Reactivate the payment term before recording payment.",
         );
       if (installment) {
         const installmentPaid = installment.receipts.reduce(
@@ -830,15 +875,21 @@ export async function updateClientReceipt(
         throw new ClientBillingNotFoundError();
       if (
         installment &&
-        installment.billingDocumentId !== input.billingDocumentId
+        installment.billingDocumentId !== input.billingDocumentId &&
+        (!document.matchedInstallmentId ||
+          installment.id !== document.matchedInstallmentId)
       )
         throw new ClientBillingValidationError(
           "The selected installment belongs to another Billing Event.",
         );
 
       const paidWithoutCurrent = [
-        ...document.receipts,
-        ...(document.matchedInstallment?.receipts ?? []),
+        ...new Map(
+          [
+            ...document.receipts,
+            ...(document.matchedInstallment?.receipts ?? []),
+          ].map((receipt) => [receipt.id, receipt]),
+        ).values(),
       ].reduce(
         (sum, receipt) =>
           receipt.id === input.id ? sum : sum.plus(receipt.amount),
@@ -1093,7 +1144,7 @@ export async function updateClientBillingInstallment(
       where: { id: current.id },
       data: {
         basis: input.basis,
-        dueDate: dateOnlyToDate(input.dueDate),
+        dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
         label: input.label,
         notes: input.notes ?? null,
         percentageRate:
@@ -1178,7 +1229,7 @@ export async function createClientBillingInstallment(
           billingDocumentId: document.id,
           createdById: actorId,
           currencyCode: document.currencyCode,
-          dueDate: dateOnlyToDate(input.dueDate),
+          dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
           expectedFxRateToReporting: document.fxRateToReporting,
           label: input.label,
           notes: input.notes ?? null,
@@ -1942,7 +1993,17 @@ function summarizeClientBillingRecords(
     ) {
       const view = calculateClientBillingAmounts({
         documentType: record.documentType,
-        dueDate: record.dueDate ? dateToDateOnly(record.dueDate) : null,
+        dueDate: earliestUnpaidTermDate(
+          visibleInstallments.map((term) => ({
+            dueDate: dateToDateOnly(term.dueDate),
+            isCancelled: term.isCancelled,
+            scheduledAmount: term.scheduledAmount.toString(),
+            payments: term.receipts.map((payment) => ({
+              amount: payment.amount.toString(),
+            })),
+          })),
+          dateToDateOnly(record.dueDate),
+        ),
         isCancelled: record.isCancelled,
         paidAmounts: receiptRecords(record).map((receipt) =>
           receipt.amount.toString(),
@@ -1959,7 +2020,26 @@ function summarizeClientBillingRecords(
       if (outstanding === null) missingIds.add(record.id);
       else {
         invoiceOutstanding = invoiceOutstanding.plus(outstanding);
-        if (view.status === "OVERDUE") overdue = overdue.plus(outstanding);
+        const overdueValue = converted(
+          overdueTermAmount({
+            terms: visibleInstallments.map((term) => ({
+              dueDate: dateToDateOnly(term.dueDate),
+              isCancelled: term.isCancelled,
+              scheduledAmount: term.scheduledAmount.toString(),
+              payments: term.receipts.map((payment) => ({
+                amount: payment.amount.toString(),
+              })),
+            })),
+            outstanding: view.outstanding,
+            fallbackDate: dateToDateOnly(record.dueDate),
+            today,
+          }),
+          record.currencyCode,
+          reportingCurrencyCode,
+          record.fxRateToReporting?.toString() ?? null,
+        );
+        if (overdueValue === null) missingIds.add(record.id);
+        else overdue = overdue.plus(overdueValue);
       }
     }
   }
@@ -1984,7 +2064,7 @@ function summarizeClientBillingRecords(
       received,
     );
     const dueDate = dateToDateOnly(installment.dueDate);
-    if (outstanding.isZero() || dueDate < today) continue;
+    if (!dueDate || outstanding.isZero() || dueDate < today) continue;
     nextDueDate = earlierDate(nextDueDate, dueDate);
     const convertedOutstanding = converted(
       outstanding.toString(),

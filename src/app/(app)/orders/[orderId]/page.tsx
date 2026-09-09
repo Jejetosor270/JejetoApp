@@ -343,50 +343,18 @@ export default async function OrderPage({
             {
               id: "payments",
               group: "related",
-              label: "Payments",
+              label: "Payment terms",
               content: (
                 <div className="space-y-4">
-                  <RelatedRecords
-                    actions={
-                      canEditMasterData(user.role)
-                        ? {
-                            payments: (
-                              <RelatedCashCreate
-                                scope={{ kind: "order", id: order.id }}
-                                kind="payment"
-                              />
-                            ),
-                            "supplier-installments": (
-                              <RelatedCashCreate
-                                scope={{ kind: "order", id: order.id }}
-                                kind="supplier-installment"
-                              />
-                            ),
-                          }
-                        : {}
-                    }
-                    tables={relations.filter((table) =>
-                      ["payments", "supplier-installments"].includes(table.id),
-                    )}
+                  <PaymentSchedule
+                    canEdit={canEditMasterData(user.role)}
+                    currencies={options.currencies}
+                    direction="SUPPLIER_PAYMENT"
+                    orderId={order.id}
+                    reportingCurrencyCode={order.project.reportingCurrencyCode}
+                    summary={paymentSummary.supplier}
+                    today={businessToday()}
                   />
-                  {canEditMasterData(user.role) ? (
-                    <EditorDrawer
-                      title="Manage Supplier installments & payments"
-                      wide
-                    >
-                      <PaymentSchedule
-                        canEdit={canEditMasterData(user.role)}
-                        currencies={options.currencies}
-                        direction="SUPPLIER_PAYMENT"
-                        orderId={order.id}
-                        reportingCurrencyCode={
-                          order.project.reportingCurrencyCode
-                        }
-                        summary={paymentSummary.supplier}
-                        today={businessToday()}
-                      />
-                    </EditorDrawer>
-                  ) : null}
                   {paymentSummary.client.installments.length > 0 ? (
                     <details className="rounded-lg border p-4">
                       <summary className="text-sm font-medium">

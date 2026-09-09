@@ -60,7 +60,7 @@ interface BillingOptions {
       reference: string;
     };
     currencyCode: string;
-    dueDate: string;
+    dueDate: string | null;
     id: string;
     label: string;
     scheduledAmount: string;
@@ -808,7 +808,7 @@ export function ClientDocumentReview({
                   Proposed Client payment schedule
                 </h2>
                 <p className="text-muted-foreground mt-1 text-xs">
-                  Cash installments use TTC and are saved only with this
+                  Payment terms use TTC and are saved only with this
                   confirmation.
                 </p>
               </div>
@@ -823,14 +823,14 @@ export function ClientDocumentReview({
                       basis: "FIXED_AMOUNT",
                       dueDate: dueDate,
                       fixedAmount: "",
-                      label: `Installment ${current.length + 1}`,
+                      label: `Payment term ${current.length + 1}`,
                       notes: "",
                       percentage: "",
                     },
                   ])
                 }
               >
-                Add installment
+                Add payment term
               </Button>
             </div>
             <div className="mt-3 space-y-2">
@@ -841,7 +841,7 @@ export function ClientDocumentReview({
                 >
                   <ReviewField
                     error={state.fieldErrors?.[`installments.${index}.label`]}
-                    label="Installment label"
+                    label="Payment term label"
                     required
                   >
                     <input
@@ -864,7 +864,7 @@ export function ClientDocumentReview({
                         `installments.${index}.percentageRate`
                       ]
                     }
-                    label="Installment %"
+                    label="Payment term %"
                     required
                   >
                     <PercentageInput
@@ -894,7 +894,7 @@ export function ClientDocumentReview({
                     error={
                       state.fieldErrors?.[`installments.${index}.fixedAmount`]
                     }
-                    label={`Installment amount (${currencyCode || "currency"})`}
+                    label={`Payment term amount (${currencyCode || "currency"})`}
                     required
                   >
                     <MoneyInput
@@ -926,7 +926,6 @@ export function ClientDocumentReview({
                   <ReviewField
                     error={state.fieldErrors?.[`installments.${index}.dueDate`]}
                     label="Due date"
-                    required
                   >
                     <DateInput
                       className={inputClassName}

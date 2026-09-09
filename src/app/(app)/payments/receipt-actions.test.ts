@@ -86,6 +86,7 @@ beforeEach(() => {
     matchedInstallment: null,
   });
   mocks.tx.clientPaymentInstallment.findUnique.mockResolvedValue({
+    currencyCode: "EUR",
     id: installmentId,
     billingDocumentId,
     scheduledAmount: "100",

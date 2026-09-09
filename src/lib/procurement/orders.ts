@@ -1,3 +1,4 @@
+import { createDefaultSupplierTerm } from "@/lib/payments/default-term";
 import "server-only";
 
 import Decimal from "decimal.js";
@@ -270,7 +271,12 @@ export interface OrderSummary {
     paid: string;
     scheduled: string;
     status:
-      "NOT_SCHEDULED" | "SCHEDULED" | "OVERDUE" | "PARTIALLY_PAID" | "PAID";
+      | "DATE_NEEDED"
+      | "NOT_SCHEDULED"
+      | "SCHEDULED"
+      | "OVERDUE"
+      | "PARTIALLY_PAID"
+      | "PAID";
     totalPayable: string | null;
   };
   targetMarginRate: string | null;
@@ -840,27 +846,35 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
   const outstandingSupplier = supplierPayable
     ? Decimal.max(supplierPayable.minus(paidSupplier), 0)
     : null;
-  const nextSupplierDue = order.paymentInstallments.find(
-    (installment) =>
-      !installment.isCancelled &&
-      installment.settlements
-        .reduce(
-          (sum, settlement) => sum.plus(settlement.amount),
-          new Decimal(0),
-        )
-        .lessThan(installment.scheduledAmount),
-  );
+  const nextSupplierDue = order.paymentInstallments
+    .toSorted(
+      (a, b) =>
+        (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity),
+    )
+    .find(
+      (installment) =>
+        !installment.isCancelled &&
+        installment.settlements
+          .reduce(
+            (sum, settlement) => sum.plus(settlement.amount),
+            new Decimal(0),
+          )
+          .lessThan(installment.scheduledAmount),
+    );
   const today = businessToday();
   const supplierPaymentStatus =
     supplierPayable && paidSupplier.greaterThanOrEqualTo(supplierPayable)
       ? "PAID"
-      : paidSupplier.greaterThan(0)
-        ? "PARTIALLY_PAID"
-        : nextSupplierDue && dateToDateOnly(nextSupplierDue.dueDate) < today
-          ? "OVERDUE"
-          : order.paymentInstallments.length
-            ? "SCHEDULED"
-            : "NOT_SCHEDULED";
+      : nextSupplierDue?.dueDate &&
+          dateToDateOnly(nextSupplierDue.dueDate) < today
+        ? "OVERDUE"
+        : paidSupplier.greaterThan(0)
+          ? "PARTIALLY_PAID"
+          : nextSupplierDue && !nextSupplierDue.dueDate
+            ? "DATE_NEEDED"
+            : order.paymentInstallments.length
+              ? "SCHEDULED"
+              : "NOT_SCHEDULED";
   return {
     carrierCode: order.carrierCode,
     carrierOtherName: order.carrierOtherName,
@@ -1575,7 +1589,7 @@ export async function createOrder(
 ): Promise<string> {
   const project = await assertRelations(input);
   return getDatabase().$transaction((transaction) =>
-    createOrderRecord(transaction, actorId, input, project),
+    createOrderRecord(transaction, actorId, input, project, true),
   );
 }
 
@@ -1584,6 +1598,7 @@ async function createOrderRecord(
   actorId: string,
   input: CreateOrderInput,
   project: ProjectPricingContext,
+  createDefaultTerm = false,
 ): Promise<string> {
   const order = await transaction.procurementOrder.create({
     data: {
@@ -1622,6 +1637,7 @@ async function createOrderRecord(
         "supplierId",
         "pricingMode",
         "costLines",
+        "paymentTerms",
         "productMarkupOverrideRate",
         "freightMarkupOverrideRate",
         "freightAllowanceOverrideAmount",
@@ -1633,6 +1649,8 @@ async function createOrderRecord(
     },
     summary: "Created the Order.",
   });
+  if (createDefaultTerm)
+    await createDefaultSupplierTerm(transaction, actorId, order.id, input);
   return order.id;
 }
 

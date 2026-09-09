@@ -19,7 +19,7 @@ export interface CashListRow {
   project: string;
   counterparty: string;
   document: string;
-  date: string;
+  date: string | null;
   amount: string;
   currency: string;
   status: string;
@@ -170,7 +170,7 @@ export async function listCashRecords(
   }
   const status = (
     r: {
-      dueDate: Date;
+      dueDate: Date | null;
       isCancelled: boolean;
       scheduledAmount: { toString(): string };
     },

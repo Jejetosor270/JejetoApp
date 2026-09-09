@@ -28,9 +28,6 @@ describe("Workspace navigation", () => {
       (group) => group.label === "More",
     );
     expect(directory?.items.map((item) => item.href)).toEqual([
-      "/payments",
-      "/installments",
-      "/receipts",
       "/unassigned-cash",
       "/unassigned",
       "/clients",

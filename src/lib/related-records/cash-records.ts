@@ -65,7 +65,7 @@ const billingContext = {
     client: { select: partySelect },
   },
 } as const;
-const date = (value: Date) => formatDateOnly(dateToDateOnly(value));
+const date = (value: Date | null) => formatDateOnly(dateToDateOnly(value));
 function fx(
   value: { toString(): string } | null,
   currency: string,
@@ -210,7 +210,7 @@ function installmentFields(
   record: {
     scheduledAmount: { toString(): string };
     currencyCode: string;
-    dueDate: Date;
+    dueDate: Date | null;
     basis: string;
     percentageRate: { toString(): string } | null;
     expectedFxRateToReporting: { toString(): string } | null;

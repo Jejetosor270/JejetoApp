@@ -144,7 +144,7 @@ async function paymentsCsv(params: Params): Promise<string> {
     ],
     items.map((item) => [
       trustedCsvValue(item.direction),
-      trustedCsvValue(item.dueDate),
+      trustedCsvValue(item.dueDate ?? ""),
       item.projectName,
       item.orderNumber,
       item.direction === PaymentDirection.SUPPLIER_PAYMENT

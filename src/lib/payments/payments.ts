@@ -89,7 +89,7 @@ export interface PaymentInstallmentView {
   clientName: string;
   currencyCode: string;
   direction: PaymentDirection;
-  dueDate: string;
+  dueDate: string | null;
   expectedFxRate: string | null;
   id: string;
   impliedPercentageRate: string | null;
@@ -356,7 +356,7 @@ export async function createInstallment(
           createdById: actorId,
           currencyCode: input.currencyCode,
           direction: input.direction,
-          dueDate: dateOnlyToDate(input.dueDate),
+          dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
           expectedFxRateToReporting:
             input.currencyCode === order.project.reportingCurrencyCode
               ? null
@@ -430,7 +430,7 @@ export async function updateInstallment(
       data: {
         basis: input.basis,
         currencyCode: input.currencyCode,
-        dueDate: dateOnlyToDate(input.dueDate),
+        dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
         expectedFxRateToReporting:
           input.currencyCode === order.project.reportingCurrencyCode
             ? null
@@ -484,7 +484,7 @@ export async function updateInstallmentInline(
         ...(amountChanged
           ? { basis: InstallmentBasis.FIXED_AMOUNT, percentageRate: null }
           : {}),
-        dueDate: dateOnlyToDate(input.dueDate),
+        dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
         label: input.label,
         notes: input.notes ?? null,
         scheduledAmount: amount.toFixed(4),
@@ -541,6 +541,7 @@ export async function recordSettlement(
           order: {
             select: {
               projectId: true,
+              status: true,
               detachedReportingCurrencyCode: true,
               project: { select: { reportingCurrencyCode: true } },
             },
@@ -559,6 +560,10 @@ export async function recordSettlement(
           "Choose a Supplier installment belonging to the selected Order and Project.",
         );
       }
+      if (installment.order?.status === "CANCELLED")
+        throw new PaymentValidationError(
+          "Reactivate the Order before recording a payment.",
+        );
       if (installment.isCancelled) {
         throw new PaymentValidationError(
           "A cancelled installment cannot be settled.",
@@ -1263,7 +1268,10 @@ export async function getProcurementCalendarEvents(
         scheduledAmount: item.scheduledAmount,
       })),
       ...clientInstallments
-        .filter((item) => item.dueDate >= from && item.dueDate <= to)
+        .filter(
+          (item) =>
+            item.dueDate !== null && item.dueDate >= from && item.dueDate <= to,
+        )
         .map((item) => ({
           currencyCode: item.currencyCode,
           direction: PaymentDirection.CLIENT_RECEIPT,

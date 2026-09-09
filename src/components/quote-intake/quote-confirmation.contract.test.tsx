@@ -38,7 +38,7 @@ const storage = vi.hoisted(() => ({
   user: { findUnique: vi.fn() },
   auditEvent: { create: vi.fn() },
   supplierQuoteImport: { create: vi.fn() },
-  paymentInstallment: { createMany: vi.fn() },
+  paymentInstallment: { create: vi.fn(), createMany: vi.fn() },
   item: { create: vi.fn() },
 }));
 const framework = vi.hoisted(() => ({

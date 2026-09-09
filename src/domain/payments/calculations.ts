@@ -6,7 +6,13 @@ const ZERO = new Decimal(0);
 const ONE = new Decimal(1);
 
 export type DerivedPaymentStatus =
-  "UPCOMING" | "DUE" | "OVERDUE" | "PARTIALLY_PAID" | "PAID" | "CANCELLED";
+  | "DATE_NEEDED"
+  | "UPCOMING"
+  | "DUE"
+  | "OVERDUE"
+  | "PARTIALLY_PAID"
+  | "PAID"
+  | "CANCELLED";
 
 export type VendorPaymentStatus =
   "NOT_PAID" | "DEPOSIT_PAID" | "PARTIALLY_PAID" | "PAID_IN_FULL";
@@ -69,7 +75,7 @@ export function installmentOutstanding(
 }
 
 export function derivePaymentStatus(input: {
-  dueDate: string;
+  dueDate: string | null;
   isCancelled: boolean;
   paidAmount: FinancialDecimal;
   scheduledAmount: FinancialDecimal;
@@ -79,6 +85,7 @@ export function derivePaymentStatus(input: {
   const paid = nonNegative(input.paidAmount, "Paid amount");
   const scheduled = nonNegative(input.scheduledAmount, "Scheduled amount");
   if (paid.greaterThanOrEqualTo(scheduled)) return "PAID";
+  if (!input.dueDate) return "DATE_NEEDED";
   if (input.dueDate < input.today) return "OVERDUE";
   if (paid.greaterThan(ZERO)) return "PARTIALLY_PAID";
   return input.dueDate === input.today ? "DUE" : "UPCOMING";

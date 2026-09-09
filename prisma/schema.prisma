@@ -631,7 +631,7 @@ model PaymentInstallment {
   percentageRate            Decimal?         @db.Decimal(9, 6)
   scheduledAmount           Decimal          @db.Decimal(19, 4)
   currencyCode              String           @db.Char(3)
-  dueDate                   DateTime         @db.Date
+  dueDate                   DateTime?         @db.Date
   expectedFxRateToReporting Decimal?         @db.Decimal(20, 10)
   isCancelled               Boolean          @default(false)
   notes                     String?          @db.Text
@@ -814,7 +814,7 @@ model ClientPaymentInstallment {
   percentageRate            Decimal?         @db.Decimal(9, 6)
   scheduledAmount           Decimal          @db.Decimal(19, 4)
   currencyCode              String           @db.Char(3)
-  dueDate                   DateTime         @db.Date
+  dueDate                   DateTime?         @db.Date
   expectedFxRateToReporting Decimal?         @db.Decimal(20, 10)
   isCancelled               Boolean          @default(false)
   notes                     String?          @db.Text

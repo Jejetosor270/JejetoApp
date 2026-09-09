@@ -89,7 +89,7 @@ export function PaymentScheduleEditor({
         dueDate: "",
         fixedAmount: "",
         id: `manual-${nextId}`,
-        label: `Installment ${current.length + 1}`,
+        label: `Payment term ${current.length + 1}`,
         percentagePercent: "",
         timingDescription: "",
       },
@@ -101,7 +101,7 @@ export function PaymentScheduleEditor({
     <section className="bg-card rounded-lg border p-4 sm:p-5">
       <h2 className="text-sm font-semibold">Supplier payment proposal</h2>
       <p className="text-muted-foreground mt-1 text-xs">
-        Edit, add, remove, or split installments freely. Nothing is saved until
+        Edit, add, remove, or split payment terms freely. Nothing is saved until
         the approval checkbox is selected and the reviewed quote is confirmed.
       </p>
 
@@ -155,9 +155,9 @@ export function PaymentScheduleEditor({
           {summary.isReconciled
             ? "Schedule reconciled exactly to the Supplier payable."
             : new Decimal(summary.overallocated).greaterThan(0)
-              ? "The schedule is over-allocated. Adjust the entered installments before approval."
+              ? "The schedule is over-allocated. Adjust the entered payment terms before approval."
               : summary.invalidLineCount > 0
-                ? "Complete each installment basis value to reconcile the schedule."
+                ? "Complete each payment term amount or percentage to reconcile the schedule."
                 : "The schedule is under-allocated; the remaining amount is shown above."}
         </p>
       </div>
@@ -244,11 +244,7 @@ export function PaymentScheduleEditor({
                   value={payment.fixedAmount}
                 />
               </Field>
-              <Field
-                error={dueDateError}
-                label="Due date"
-                required={approveSchedule}
-              >
+              <Field error={dueDateError} label="Due date">
                 <DateInput
                   europeanValue
                   aria-invalid={Boolean(dueDateError) || undefined}
@@ -261,7 +257,6 @@ export function PaymentScheduleEditor({
                   }
                   pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
                   placeholder="DD/MM/YYYY"
-                  required={approveSchedule}
                   title="Enter a date as DD/MM/YYYY"
 
                   value={payment.dueDate}
@@ -300,7 +295,8 @@ export function PaymentScheduleEditor({
         })}
         {payments.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            No installments. Add one to prepare a schedule.
+            No payment terms. Saving a new record creates one term for the full
+            amount.
           </p>
         ) : null}
       </div>
@@ -311,7 +307,7 @@ export function PaymentScheduleEditor({
         type="button"
         variant="outline"
       >
-        <Plus data-icon="inline-start" /> Add installment
+        <Plus data-icon="inline-start" /> Add payment term
       </Button>
       <label className="mt-4 flex items-start gap-2 text-sm font-medium">
         <input
@@ -322,8 +318,8 @@ export function PaymentScheduleEditor({
           type="checkbox"
         />
         <span>
-          I approve creating these supplier-payment installments with the
-          reviewed amounts, percentages, and due dates.
+          I approve creating these Supplier payment terms with the reviewed
+          amounts, percentages, and due dates.
         </span>
       </label>
       {fieldErrors.payments ? (

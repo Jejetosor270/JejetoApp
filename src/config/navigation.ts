@@ -58,24 +58,6 @@ export const navigationGroups: readonly NavigationGroup[] = [
     label: "More",
     items: [
       {
-        href: "/payments",
-        icon: CircleDollarSign,
-        isAvailable: true,
-        label: "Payments",
-      },
-      {
-        href: "/installments",
-        icon: CalendarDays,
-        isAvailable: true,
-        label: "Installments",
-      },
-      {
-        href: "/receipts",
-        icon: WalletCards,
-        isAvailable: true,
-        label: "Receipts",
-      },
-      {
         href: "/unassigned-cash",
         icon: CircleDollarSign,
         isAvailable: true,

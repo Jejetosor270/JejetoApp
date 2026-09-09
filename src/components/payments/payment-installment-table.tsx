@@ -36,7 +36,7 @@ import { tableHeaderClassName } from "@/components/listing/table-styles";
 interface PaymentInstallmentRow {
   actualDate: string | null;
   currencyCode: string;
-  dueDate: string;
+  dueDate: string | null;
   id: string;
   label: string;
   notes: string | null;

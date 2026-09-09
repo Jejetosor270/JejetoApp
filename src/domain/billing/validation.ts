@@ -100,7 +100,7 @@ export const billingAllocationSchema = z
 const installmentSchema = z
   .object({
     basis: z.enum(InstallmentBasis),
-    dueDate: dateOnly,
+    dueDate: optionalDate,
     fixedAmount: positiveMoney.optional(),
     label: z.string().trim().min(1).max(200),
     notes: optionalText(4000),
@@ -246,7 +246,7 @@ export const clientBillingInstallmentCreateSchema = z
   .object({
     basis: z.enum(InstallmentBasis),
     billingDocumentId: requiredUuid("Select a valid Billing Event."),
-    dueDate: dateOnly,
+    dueDate: optionalDate,
     label: z.string().trim().min(1, "Enter an installment label.").max(200),
     notes: optionalText(4000),
     percentageRate: optionalPercentageFraction({
@@ -276,7 +276,7 @@ export const clientBillingInstallmentUpdateSchema = z
   .object({
     basis: z.enum(InstallmentBasis),
     billingDocumentId: requiredUuid("Select a valid Billing Event."),
-    dueDate: dateOnly,
+    dueDate: optionalDate,
     id: requiredUuid("Select a valid installment."),
     label: z.string().trim().min(1, "Enter an installment label.").max(200),
     notes: optionalText(4000),

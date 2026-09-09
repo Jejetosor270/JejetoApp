@@ -11,6 +11,9 @@ export function revalidateProjectFinancialViews(projectId?: string): void {
   if (projectId) revalidatePath(`/projects/${projectId}`);
   else revalidatePath("/projects/[projectId]", "page");
   revalidatePath("/projects");
+  revalidatePath("/calendar");
+  revalidatePath("/orders");
+  revalidatePath("/orders/[orderId]", "page");
   revalidatePath("/reports");
   revalidatePath("/");
 }

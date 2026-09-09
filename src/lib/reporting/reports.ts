@@ -164,7 +164,7 @@ export interface OverdueReportingItem {
   currencyCode: string;
   daysOverdue: number;
   direction: PaymentDirection;
-  dueDate: string;
+  dueDate: string | null;
   id: string;
   label: string;
   orderId: string;

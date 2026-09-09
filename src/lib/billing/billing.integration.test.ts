@@ -550,6 +550,23 @@ describe("Billing persistence", () => {
     ).rejects.toThrow("non-freight");
   });
 
+  it.each([undefined, "2026-10-01"])(
+    "creates a 100%% fallback term with due date %s",
+    async (dueDate) => {
+      await confirmClientBillingDocument("actor-1", confirmation({ dueDate }));
+      expect(
+        transaction.clientPaymentInstallment.createMany,
+      ).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            scheduledAmount: "120.0000",
+            percentageRate: "1",
+            dueDate: dueDate ? new Date(dueDate + "T00:00:00.000Z") : null,
+          }),
+        ],
+      });
+    },
+  );
   it("creates a Quote schedule from approved TTC terms", async () => {
     await confirmClientBillingDocument(
       "actor-1",
@@ -692,6 +709,7 @@ describe("Billing persistence", () => {
       totalTtc: "120",
     });
     transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
+      currencyCode: "EUR",
       billingDocumentId: projectId,
       receipts: [{ amount: "20" }],
       scheduledAmount: "120",
@@ -759,6 +777,7 @@ describe("Billing persistence", () => {
       totalTtc: new Decimal("100000"),
     });
     transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
+      currencyCode: "EUR",
       billingDocumentId: projectId,
       receipts: [{ amount: new Decimal("30000"), id: receiptId }],
       scheduledAmount: new Decimal("100000"),
@@ -837,6 +856,7 @@ describe("Billing persistence", () => {
       totalTtc: "100000",
     });
     transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
+      currencyCode: "EUR",
       billingDocumentId: "another-document",
       receipts: [],
       scheduledAmount: "100000",
@@ -854,6 +874,7 @@ describe("Billing persistence", () => {
 
   it("updates an existing Billing installment in both directions without creating a duplicate", async () => {
     transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
+      currencyCode: "EUR",
       billingDocument: {
         id: "document-1",
         reference: "INV-1",
@@ -947,6 +968,7 @@ describe("Billing persistence", () => {
     );
 
     transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
+      currencyCode: "EUR",
       billingDocument: { reference: "INV-1" },
       billingDocumentId: projectId,
       id: installmentId,
@@ -1028,6 +1050,7 @@ describe("Billing persistence", () => {
 
   it("rejects removing an installment with an attributed receipt", async () => {
     transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
+      currencyCode: "EUR",
       billingDocument: { reference: "INV-1" },
       billingDocumentId: projectId,
       id: installmentId,
@@ -1047,6 +1070,7 @@ describe("Billing persistence", () => {
 
   it("rejects reducing a Billing installment below receipts without an audit write", async () => {
     transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
+      currencyCode: "EUR",
       billingDocument: {
         id: "document-1",
         reference: "INV-1",

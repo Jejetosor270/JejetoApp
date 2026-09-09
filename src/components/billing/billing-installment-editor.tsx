@@ -57,7 +57,7 @@ function installmentDraft(installment: Installment): InstallmentDraft {
   return {
     amount: installment.scheduledAmount,
     basis: installment.basis,
-    dueDate: installment.dueDate,
+    dueDate: installment.dueDate ?? "",
     label: installment.label,
     notes: installment.notes ?? "",
     percentage: rateToPercentInput(
@@ -88,11 +88,13 @@ export function BillingInstallmentEditor({
   billingDocumentId,
   canEdit,
   actionOnly = false,
+  actionLabel = "Edit",
   installment,
 }: {
   billingDocumentId: string;
   canEdit: boolean;
   actionOnly?: boolean;
+  actionLabel?: string;
   installment: Installment;
 }) {
   const router = useRouter();
@@ -186,7 +188,7 @@ export function BillingInstallmentEditor({
                 value={draft.label}
               />
             </Field>
-            <Field error={fieldErrors.dueDate} label="Due date" required>
+            <Field error={fieldErrors.dueDate} label="Due date">
               <DateInput
                 className={inputClassName}
                 name="dueDate"
@@ -196,16 +198,11 @@ export function BillingInstallmentEditor({
                     dueDate: event.target.value,
                   }))
                 }
-                required
 
                 value={draft.dueDate}
               />
             </Field>
-            <Field
-              error={fieldErrors.percentageRate}
-              label="Installment %"
-              required
-            >
+            <Field error={fieldErrors.percentageRate} label="Payment term %">
               <PercentageInput
                 className={inputClassName}
                 name="percentageRate"
@@ -262,7 +259,7 @@ export function BillingInstallmentEditor({
               />
             </Field>
             <div className="flex items-end gap-2 sm:col-span-2">
-              <SubmitButton pending={pending}>Save installment</SubmitButton>
+              <SubmitButton pending={pending}>Save payment term</SubmitButton>
               <Button
                 disabled={pending}
                 onClick={() => {
@@ -298,7 +295,7 @@ export function BillingInstallmentEditor({
             setEditing(true);
           }}
         >
-          Edit
+          {actionLabel}
         </Button>
       ) : (
         <>

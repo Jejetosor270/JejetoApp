@@ -146,7 +146,7 @@ export function InstallmentForm({
           value={label}
         />
       </Field>
-      <Field error={fieldErrors.percentageRate} label="Installment %" required>
+      <Field error={fieldErrors.percentageRate} label="Payment term %" required>
         <PercentageInput
           className={inputClassName}
           onValueChange={(next) => {
@@ -159,11 +159,7 @@ export function InstallmentForm({
           value={percentage}
         />
       </Field>
-      <Field
-        error={fieldErrors.fixedAmount}
-        label="Installment amount"
-        required
-      >
+      <Field error={fieldErrors.fixedAmount} label="Term amount" required>
         <MoneyInput
           name="amountDisplay"
           onValueChange={(next) => {
@@ -190,12 +186,11 @@ export function InstallmentForm({
           ))}
         </select>
       </Field>
-      <Field error={fieldErrors.dueDate} label="Due date" required>
+      <Field error={fieldErrors.dueDate} label="Due date">
         <DateInput
           className={inputClassName}
           name="dueDate"
           onChange={(event) => setDueDate(event.target.value)}
-          required
 
           value={dueDate}
         />
@@ -231,7 +226,7 @@ export function InstallmentForm({
       </Field>
       <div className="flex items-end gap-2 md:col-span-2 xl:col-span-2">
         <SubmitButton pending={pending}>
-          {installment ? "Save installment" : "Add installment"}
+          {installment ? "Save payment term" : "Add payment term"}
         </SubmitButton>
         <Feedback state={state} />
       </div>
@@ -280,7 +275,9 @@ export function SettlementForm({
   today,
   settlement,
   onSaved,
+  initialAmount,
 }: {
+  initialAmount?: string;
   installment: PaymentInstallmentView;
   today: string;
   settlement?: PaymentSettlementView;
@@ -296,7 +293,7 @@ export function SettlementForm({
   const wording =
     installment.direction === "SUPPLIER_PAYMENT" ? "payment" : "receipt";
   const [amount, setAmount] = useState(
-    settlement?.amount ?? installment.outstandingAmount,
+    settlement?.amount ?? initialAmount ?? installment.outstandingAmount,
   );
   const [settledAt, setSettledAt] = useState(settlement?.settledAt ?? today);
   const [fxRate, setFxRate] = useState(settlement?.fxRate ?? "");

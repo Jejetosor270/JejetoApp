@@ -63,12 +63,12 @@ describe("Billing operational navigation", () => {
     expect(detail).toMatch(/id: "history",[\s\S]*?group: "related"/);
     expect(detail).toContain('label: "Total TTC"');
     expect(detail).toContain("RecordWorkspace");
-    expect(paymentManager).toContain("Scheduled TTC");
+    expect(paymentManager).toContain("Client payment terms");
     expect(detail).toContain('label: "Received"');
     expect(paymentManager).not.toContain('label="Received TTC"');
     expect(detail).toContain('label: "Outstanding"');
-    expect(paymentManager).toContain("Add installment");
-    expect(paymentManager).toContain("Record receipt");
+    expect(paymentManager).toContain("RelatedCashCreate");
+    expect(paymentManager).toContain("TermPaymentActions");
   });
 
   it("routes Billing search results to the same detail page", () => {
@@ -83,6 +83,8 @@ describe("Billing operational navigation", () => {
     expect(receiptEditor).toContain("usePersistentActionState");
     expect(receiptEditor).toContain('if (state.status !== "success") return;');
     expect(receiptEditor).toContain("value={draft.amount}");
-    expect(paymentManager).toContain("value={receiptAmount}");
+    expect(
+      readFileSync("src/components/payments/related-cash-create.tsx", "utf8"),
+    ).toContain("value={amount}");
   });
 });

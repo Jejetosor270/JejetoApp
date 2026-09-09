@@ -29,7 +29,7 @@ export function buildCalendarEvents(input: {
   installments: readonly {
     currencyCode: string;
     direction: "SUPPLIER_PAYMENT" | "CLIENT_RECEIPT";
-    dueDate: string;
+    dueDate: string | null;
     href?: string | undefined;
     id: string;
     isCancelled: boolean;
@@ -61,25 +61,30 @@ export function buildCalendarEvents(input: {
   }[];
   today: string;
 }): ProcurementCalendarEvent[] {
-  const paymentEvents = input.installments.map((item) => ({
-    amount: item.scheduledAmount,
-    currencyCode: item.currencyCode,
-    date: item.dueDate,
-    href: item.href ?? `/orders/${item.orderId}#payments`,
-    id: `payment-${item.id}`,
-    orderNumber: item.orderNumber,
-    partyName: item.partyName,
-    projectName: item.projectName,
-    status: derivePaymentStatus({
-      dueDate: item.dueDate,
-      isCancelled: item.isCancelled,
-      paidAmount: item.paidAmount,
-      scheduledAmount: item.scheduledAmount,
-      today: input.today,
-    }),
-    title: item.label,
-    type: item.direction,
-  }));
+  const paymentEvents = input.installments
+    .filter(
+      (item): item is typeof item & { dueDate: string } =>
+        item.dueDate !== null,
+    )
+    .map((item) => ({
+      amount: item.scheduledAmount,
+      currencyCode: item.currencyCode,
+      date: item.dueDate,
+      href: item.href ?? `/orders/${item.orderId}#payments`,
+      id: `payment-${item.id}`,
+      orderNumber: item.orderNumber,
+      partyName: item.partyName,
+      projectName: item.projectName,
+      status: derivePaymentStatus({
+        dueDate: item.dueDate,
+        isCancelled: item.isCancelled,
+        paidAmount: item.paidAmount,
+        scheduledAmount: item.scheduledAmount,
+        today: input.today,
+      }),
+      title: item.label,
+      type: item.direction,
+    }));
   const orderEvents = input.orders.flatMap((order) => {
     const dates = [
       ["EXPECTED_READY", order.expectedReadyDate, "Expected ready"],

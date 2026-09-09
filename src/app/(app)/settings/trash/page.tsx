@@ -1,3 +1,4 @@
+import { EmptyTrashButton } from "@/components/payments/empty-trash-button";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import { getDatabase } from "@/lib/db";
 import { SettingsNavigation } from "@/components/layout/settings-navigation";
@@ -42,6 +43,7 @@ export default async function TrashPage({
         title="Trash"
         description="Deleted business records are excluded from operational views and calculations. Restore a group to recover its records and relationships. Restore deleted parents first."
       />
+      {user.role === "ADMIN" && total > 0 && <EmptyTrashButton />}
       <section className={tableContainerClassName}>
         <div className="overflow-auto">
           <table className="w-full text-left text-sm">

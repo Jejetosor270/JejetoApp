@@ -416,13 +416,6 @@ const confirmationSchema = z
         });
       }
       value.payments.forEach((payment, index) => {
-        if (!payment.dueDate) {
-          context.addIssue({
-            code: "custom",
-            message: "Every approved installment needs an objective due date.",
-            path: ["payments", index, "dueDate"],
-          });
-        }
         if (payment.basis === "PERCENTAGE" && !payment.percentageRate) {
           context.addIssue({
             code: "custom",

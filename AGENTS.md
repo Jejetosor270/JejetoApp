@@ -205,3 +205,7 @@ SonarCloud should be connected through GitHub with generated Prisma, `.next`, an
 ## Prohibited shortcuts
 
 No floating-point finance, mutable supplier defaults as historical order truth, hardcoded currencies/VAT, dangerous cascade deletes, client-side authorization, direct client database access, core financial JSON blobs, fake operational dashboards, premature products/rooms/inventory, or unrelated future-phase implementation.
+
+## Payment terms workflow
+
+Billing, Purchasing and Projects expose editable payment terms with derived statuses and expandable actual cash history. Preserve the normalized settlement/receipt records underneath. New records default to reviewed terms or one 100% term; missing due dates remain null. Existing terms are never silently rewritten. Settings Empty Trash is an explicitly confirmed ADMIN-only permanent operation retaining audit history; normal business deletion remains recoverable.

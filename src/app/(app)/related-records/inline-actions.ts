@@ -155,7 +155,7 @@ export async function editRelatedFinancialRowAction(
           }
           const data = {
             label: draft.label,
-            dueDate: dateOnlyToDate(draft.dueDate),
+            dueDate: draft.dueDate ? dateOnlyToDate(draft.dueDate) : null,
             scheduledAmount: draft.scheduledAmount,
             updatedById: actor.id,
             ...(!nextAmount.equals(row.scheduledAmount.toString())

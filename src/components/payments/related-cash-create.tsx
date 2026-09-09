@@ -32,8 +32,8 @@ type Data = NonNullable<
 const titles: Record<CashRecordKind, string> = {
   payment: "Add payment",
   receipt: "Add receipt",
-  "supplier-installment": "Add Supplier installment",
-  "client-installment": "Add Client installment",
+  "supplier-installment": "Add Supplier payment term",
+  "client-installment": "Add Client payment term",
 };
 
 export function RelatedCashCreate({
@@ -260,10 +260,14 @@ function CreationContents({
   );
 }
 
-function ClientReceiptCreateForm({
+export function ClientReceiptCreateForm({
   document,
   onSaved,
+  termId,
+  initialAmount = "",
 }: {
+  termId?: string;
+  initialAmount?: string;
   document: ClientBillingView;
   onSaved: () => void;
 }) {
@@ -271,7 +275,7 @@ function ClientReceiptCreateForm({
     recordClientReceiptAction,
     { status: "idle", message: "" } as BillingActionState,
   );
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(initialAmount);
   const [date, setDate] = useState(businessToday());
   useEffect(() => {
     if (state.status === "success") onSaved();
@@ -287,7 +291,7 @@ function ClientReceiptCreateForm({
           required
         />
       </Field>
-      <Field label="Receipt date" required>
+      <Field label="Actual payment date" required>
         <DateInput
           name="receivedAt"
           value={date}
@@ -295,21 +299,25 @@ function ClientReceiptCreateForm({
           required
         />
       </Field>
-      <Field label="Installment">
-        <select className={inputClassName} name="installmentId">
-          <option value="">Billing level</option>
-          {document.paymentInstallments
-            .filter(
-              (row) =>
-                !row.isCancelled && row.billingDocumentId === document.id,
-            )
-            .map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.label}
-              </option>
-            ))}
-        </select>
-      </Field>
+      {termId ? (
+        <input type="hidden" name="installmentId" value={termId} />
+      ) : (
+        <Field label="Payment term">
+          <select className={inputClassName} name="installmentId">
+            <option value="">Billing level</option>
+            {document.paymentInstallments
+              .filter(
+                (row) =>
+                  !row.isCancelled && row.billingDocumentId === document.id,
+              )
+              .map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.label}
+                </option>
+              ))}
+          </select>
+        </Field>
+      )}
       <Field label="Reference">
         <input className={inputClassName} name="reference" />
       </Field>
@@ -330,7 +338,7 @@ function ClientReceiptCreateForm({
         <input className={inputClassName} name="notes" />
       </Field>
       <ActionFeedback state={state} />
-      <SubmitButton pending={pending}>Save receipt</SubmitButton>
+      <SubmitButton pending={pending}>Save payment</SubmitButton>
     </form>
   );
 }

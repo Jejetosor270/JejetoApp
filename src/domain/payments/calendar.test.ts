@@ -121,3 +121,12 @@ describe("procurement calendar derivation", () => {
     });
   });
 });
+
+it("omits undated terms from calendar without changing dated terms", () => {
+  const events = buildCalendarEvents({
+    installments: [{ ...installment, dueDate: null }],
+    orders: [],
+    today: "2026-09-09",
+  });
+  expect(events).toEqual([]);
+});

@@ -68,6 +68,11 @@ const dateOnly = z
   .trim()
   .refine(isDateOnly, "Enter a valid business date.");
 
+const optionalDate = z.preprocess(
+  (value) => (value === "" || value == null ? undefined : value),
+  dateOnly.optional(),
+);
+
 const installmentFields = {
   basis: z.enum(InstallmentBasis),
   currencyCode: z
@@ -76,7 +81,7 @@ const installmentFields = {
     .toUpperCase()
     .regex(/^[A-Z]{3}$/),
   direction: z.enum(PaymentDirection),
-  dueDate: dateOnly,
+  dueDate: optionalDate,
   expectedFxRate: optionalFxRate,
   fixedAmount: optionalPositiveMoney("Fixed amount"),
   label: z.string().trim().min(1).max(200),
@@ -112,7 +117,7 @@ export const updateInstallmentSchema = z
   .object({ id: z.uuid("Invalid installment."), ...installmentFields })
   .superRefine(validateInstallment);
 export const inlineInstallmentSchema = z.object({
-  dueDate: dateOnly,
+  dueDate: optionalDate,
   id: z.uuid("Invalid installment."),
   label: z.string().trim().min(1).max(200),
   notes: optionalText(4000),

@@ -366,7 +366,7 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
 
 ## Cash workspaces and recoverable Trash
 
-- More contains Payments (actual Supplier settlements), Receipts (actual Client cash), and Installments with Supplier/Client tabs. Lists use scoped database pagination; each record has Details/Related and its own Edit drawer using the existing validated services. Supplier settlement corrections update in place with audit and overpayment protection.
+- Payment terms are edited within Billing, Purchasing and Projects; Payments, Receipts and Installments are no longer separate navigation destinations. Historical record URLs remain compatible. Actual dated cash history stays normalized beneath each term and is expandable for corrections.
 - Billing and cash tables share visible-page checkbox selection and confirmed deletion. Business deletion now moves records and their dependents to Settings → Trash, retaining original normalized data, links, rates and dates. Employee deletion remains the existing separate permanent ADMIN workflow.
 - The Prisma visibility policy excludes trashed roots, nested lists/counts, supporting records and financial aggregates, and rejects mutations targeting trashed records. Raw SQL is reserved for transactional Trash operations, restoration checks and sequence reservations. Keep model-map.ts aligned with schema.prisma.
 - A deletion group restores together; previously trashed children retain their own group. Restoration verifies external parent fingerprints and rejects overpayments, duplicate collection schedules and excessive allocations. It never rewrites intervening business edits. Reserved installment sequences and identifiers are retained while in Trash.
@@ -394,3 +394,11 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 - Freight expense payments are normalized actual outflows with independent dates/FX, overpayment protection and audit. Expense due dates drive derived forecasts; missing due dates remain undated commitments. Overdue plus 30 days is the primary cash funding horizon; all remaining scheduled Supplier and freight commitments are also shown. Unscheduled Order balances stay distinct.
 - Freight payments affect Project/portfolio actual cash and cash-flow forecasts once, never freight economic cost. Expense deletion carries dependent payments into recoverable Trash; restoration checks overpayment. Related unlinking transfers the same payment UUID, amount, currency, FX and date to Unassigned cash.
 - Requires migration `20260916000000_project_financial_control`. Preparing/generating this migration does not authorize applying it to the configured database.
+
+## Simplified payment terms
+
+- New Billing/Order records create reviewed terms, otherwise one 100% term when the payable is positive. Billing uses its due date; absent dates remain null and display Date needed. Existing records are never backfilled or silently rescheduled. Quote/Invoice matches retain one forecast.
+- Terms support inline label/date/amount edits, detailed edits, full/partial payment recording and cancellation. Status derives from cash and dates; overdue partial payments show both facts. Actual cash dates, currency and independent FX remain authoritative. Cancelling a term removes its remaining forecast while retaining cash history.
+- Project and parent collection status use unpaid term dates. Overdue Client amounts include only overdue term balances, capped by Invoice outstanding; historical unscheduled documents retain their document-date fallback. Undated terms stay in all-remaining commitments but have no calendar event.
+- Settings Empty Trash is an ADMIN-only explicit permanent deletion, with typed confirmation and audit retention. It deletes only trashed business rows and dependent supporting data transactionally, rejecting active dependencies. Normal deletion remains recoverable Trash. Never invoke Empty Trash as part of development or verification against live data.
+- Requires `20260917000000_optional_payment_term_dates`, prepared only; applying it is a separate controlled step.

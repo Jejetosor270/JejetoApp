@@ -40,7 +40,7 @@ export function CashListTable({
           href: row.href,
           editValue: row.editReference ?? row.reference,
           editFields: [
-            { column: 4, name: "date", type: "date", value: row.date },
+            { column: 4, name: "date", type: "date", value: row.date ?? "" },
             {
               column: 5,
               name: "amount",

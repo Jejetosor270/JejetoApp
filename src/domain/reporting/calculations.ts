@@ -118,7 +118,7 @@ export interface ReportingSettlementInput {
 export interface ReportingInstallmentInput {
   currencyCode: string;
   direction: "SUPPLIER_PAYMENT" | "CLIENT_RECEIPT";
-  dueDate: string;
+  dueDate: string | null;
   expectedFxRate: string | null;
   id: string;
   isCancelled: boolean;
@@ -519,6 +519,7 @@ export function buildMonthlyCashFlow(input: {
   for (const installment of input.installments) {
     if (
       !installment.isCancelled &&
+      installment.dueDate !== null &&
       installment.dueDate >= input.start &&
       installment.dueDate <= input.end
     ) {
@@ -618,7 +619,8 @@ export function summarizeMonthlyCashFlow(
   };
 }
 
-export function daysOverdue(dueDate: string, today: string): number {
+export function daysOverdue(dueDate: string | null, today: string): number {
+  if (!dueDate) return 0;
   return Math.max(
     0,
     Math.round(

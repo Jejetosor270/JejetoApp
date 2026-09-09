@@ -304,7 +304,7 @@ export function receiptsTable(rows: Receipt[]) {
 function cashEditFields(
   dateColumn: number,
   amountColumn: number,
-  date: Date,
+  date: Date | null,
   amount: string,
   currency: string,
 ): NonNullable<RelatedRow["editFields"]> {
@@ -313,7 +313,7 @@ function cashEditFields(
       column: dateColumn,
       name: "date",
       type: "date",
-      value: dateToDateOnly(date),
+      value: dateToDateOnly(date) ?? "",
     },
     {
       column: amountColumn,

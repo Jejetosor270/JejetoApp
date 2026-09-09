@@ -91,7 +91,7 @@ it("creates billing installments through billing validation, preserving exact am
   view = await mountForm(
     <RelatedCashCreate scope={scope} kind="client-installment" />,
   );
-  await clickText("Add Client installment");
+  await clickText("Add Client payment term");
   await enter("label", "Deposit");
   await enter("amountDisplay", "300.25");
   await enter("dueDate", "2026-10-01");

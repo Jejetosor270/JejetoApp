@@ -13,6 +13,7 @@ import {
 } from "@/generated/prisma/client";
 
 const transaction = vi.hoisted(() => ({
+  paymentInstallment: { create: vi.fn() },
   procurementOrder: { create: vi.fn() },
   procurementOrderCostLine: { createMany: vi.fn(), deleteMany: vi.fn() },
   procurementOrderVatEntry: { createMany: vi.fn(), deleteMany: vi.fn() },

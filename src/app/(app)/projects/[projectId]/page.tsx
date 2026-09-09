@@ -1,3 +1,4 @@
+import { ProjectPaymentTerms } from "@/components/payments/project-payment-terms";
 import { ProjectFinancialControl } from "@/components/reporting/project-control";
 import { ProjectFreightPayments } from "@/components/freight/project-freight-payments";
 import { RelatedCashCreate } from "@/components/payments/related-cash-create";
@@ -146,39 +147,53 @@ export default async function ProjectPage({
       currencies={options.currencies}
       workspace={{
         related: (
-          <RelatedRecords
-            tables={relations}
-            actions={
-              canEditMasterData(user.role)
-                ? {
-                    payments: (
-                      <RelatedCashCreate
-                        scope={{ kind: "project", id: project.id }}
-                        kind="payment"
-                      />
-                    ),
-                    receipts: (
-                      <RelatedCashCreate
-                        scope={{ kind: "project", id: project.id }}
-                        kind="receipt"
-                      />
-                    ),
-                    "supplier-installments": (
-                      <RelatedCashCreate
-                        scope={{ kind: "project", id: project.id }}
-                        kind="supplier-installment"
-                      />
-                    ),
-                    "client-installments": (
-                      <RelatedCashCreate
-                        scope={{ kind: "project", id: project.id }}
-                        kind="client-installment"
-                      />
-                    ),
-                  }
-                : {}
-            }
-          />
+          <div className="space-y-4">
+            <ProjectPaymentTerms
+              projectId={project.id}
+              canEdit={canEditMasterData(user.role)}
+            />
+            <RelatedRecords
+              tables={relations.filter(
+                (table) =>
+                  ![
+                    "payments",
+                    "receipts",
+                    "supplier-installments",
+                    "client-installments",
+                  ].includes(table.id),
+              )}
+              actions={
+                canEditMasterData(user.role)
+                  ? {
+                      payments: (
+                        <RelatedCashCreate
+                          scope={{ kind: "project", id: project.id }}
+                          kind="payment"
+                        />
+                      ),
+                      receipts: (
+                        <RelatedCashCreate
+                          scope={{ kind: "project", id: project.id }}
+                          kind="receipt"
+                        />
+                      ),
+                      "supplier-installments": (
+                        <RelatedCashCreate
+                          scope={{ kind: "project", id: project.id }}
+                          kind="supplier-installment"
+                        />
+                      ),
+                      "client-installments": (
+                        <RelatedCashCreate
+                          scope={{ kind: "project", id: project.id }}
+                          kind="client-installment"
+                        />
+                      ),
+                    }
+                  : {}
+              }
+            />
+          </div>
         ),
         overview: (
           <ProjectFinancialDashboard

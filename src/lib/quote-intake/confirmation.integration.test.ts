@@ -12,7 +12,11 @@ const transaction = vi.hoisted(() => ({
   building: { findMany: vi.fn() },
   item: { create: vi.fn(), findMany: vi.fn(), update: vi.fn() },
   itemImport: { create: vi.fn() },
-  paymentInstallment: { createMany: vi.fn(), findFirst: vi.fn() },
+  paymentInstallment: {
+    create: vi.fn(),
+    createMany: vi.fn(),
+    findFirst: vi.fn(),
+  },
   project: { findUnique: vi.fn() },
   room: { findMany: vi.fn() },
   supplier: { findFirst: vi.fn() },

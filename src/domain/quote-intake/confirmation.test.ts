@@ -83,7 +83,7 @@ describe("quote confirmation validation", () => {
     );
   });
 
-  it("refuses to approve relative payment wording without an objective date", () => {
+  it("retains an approved undated term without fabricating a date", () => {
     const form = baseForm();
     form.set("applyCurrency", "on");
     form.set("approveSchedule", "on");
@@ -94,11 +94,9 @@ describe("quote confirmation validation", () => {
     form.set("payment.0.timingDescription", "Before dispatch");
 
     const result = parseQuoteConfirmation(form);
-    expect(result.success).toBe(false);
-    if (result.success) return;
-    expect(result.error.issues.map((item) => item.message)).toContain(
-      "Every approved installment needs an objective due date.",
-    );
+    expect(result.success).toBe(true);
+    if (result.success)
+      expect(result.data.payments[0]?.dueDate).toBeUndefined();
   });
 
   it("ignores an unfinished payment draft until the employee approves it", () => {

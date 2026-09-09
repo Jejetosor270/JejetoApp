@@ -1,3 +1,4 @@
+import { createDefaultSupplierTerm } from "@/lib/payments/default-term";
 import "server-only";
 
 import Decimal from "decimal.js";
@@ -258,7 +259,11 @@ async function createApprovedSchedule(
   reportingCurrencyCode: string,
   input: QuoteConfirmationInput,
 ): Promise<void> {
-  if (!input.approveSchedule) return;
+  if (!input.approveSchedule || input.payments.length === 0) {
+    if (input.action === "CREATE")
+      await createDefaultSupplierTerm(transaction, actorId, orderId, order);
+    return;
+  }
   const calculatedInputVat =
     order.inputVatAmount ??
     (order.inputVatTaxableBase && order.inputVatRate
@@ -279,11 +284,6 @@ async function createApprovedSchedule(
   });
   const firstSequence = (latest?.sequence ?? 0) + 1;
   const rows = input.payments.map((payment, index) => {
-    if (!payment.dueDate) {
-      throw new QuoteConfirmationError(
-        "Every approved installment requires a due date.",
-      );
-    }
     const scheduledAmount =
       payment.basis === InstallmentBasis.PERCENTAGE
         ? payment.percentageRate
@@ -307,7 +307,7 @@ async function createApprovedSchedule(
       createdById: actorId,
       currencyCode: order.orderCurrencyCode,
       direction: PaymentDirection.SUPPLIER_PAYMENT,
-      dueDate: dateOnlyToDate(payment.dueDate),
+      dueDate: payment.dueDate ? dateOnlyToDate(payment.dueDate) : null,
       expectedFxRateToReporting:
         order.orderCurrencyCode === reportingCurrencyCode
           ? null

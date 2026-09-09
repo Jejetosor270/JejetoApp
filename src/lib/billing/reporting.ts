@@ -1,3 +1,7 @@
+import {
+  earliestUnpaidTermDate,
+  overdueTermAmount,
+} from "@/domain/payments/terms";
 import "server-only";
 
 import Decimal from "decimal.js";
@@ -179,7 +183,17 @@ export function summarizeClientBillingRecords(
     ) {
       const view = calculateClientBillingAmounts({
         documentType: record.documentType,
-        dueDate: record.dueDate ? dateToDateOnly(record.dueDate) : null,
+        dueDate: earliestUnpaidTermDate(
+          visibleInstallments.map((term) => ({
+            dueDate: dateToDateOnly(term.dueDate),
+            isCancelled: term.isCancelled,
+            scheduledAmount: term.scheduledAmount.toString(),
+            payments: term.receipts.map((payment) => ({
+              amount: payment.amount.toString(),
+            })),
+          })),
+          dateToDateOnly(record.dueDate),
+        ),
         isCancelled: record.isCancelled,
         paidAmounts: receiptRecords(record).map((receipt) =>
           receipt.amount.toString(),
@@ -196,7 +210,26 @@ export function summarizeClientBillingRecords(
       if (outstanding === null) missingIds.add(record.id);
       else {
         invoiceOutstanding = invoiceOutstanding.plus(outstanding);
-        if (view.status === "OVERDUE") overdue = overdue.plus(outstanding);
+        const overdueValue = converted(
+          overdueTermAmount({
+            terms: visibleInstallments.map((term) => ({
+              dueDate: dateToDateOnly(term.dueDate),
+              isCancelled: term.isCancelled,
+              scheduledAmount: term.scheduledAmount.toString(),
+              payments: term.receipts.map((payment) => ({
+                amount: payment.amount.toString(),
+              })),
+            })),
+            outstanding: view.outstanding,
+            fallbackDate: dateToDateOnly(record.dueDate),
+            today,
+          }),
+          record.currencyCode,
+          reportingCurrencyCode,
+          record.fxRateToReporting?.toString() ?? null,
+        );
+        if (overdueValue === null) missingIds.add(record.id);
+        else overdue = overdue.plus(overdueValue);
       }
     }
   }
@@ -222,7 +255,7 @@ export function summarizeClientBillingRecords(
       received,
     );
     const dueDate = dateToDateOnly(installment.dueDate);
-    if (outstanding.isZero() || dueDate < today) continue;
+    if (!dueDate || outstanding.isZero() || dueDate < today) continue;
     nextDueDate = earlierDate(nextDueDate, dueDate);
     const convertedOutstanding = converted(
       outstanding.toString(),
@@ -344,7 +377,7 @@ export interface ClientCashInstallment {
   billingReference: string;
   clientName: string;
   currencyCode: string;
-  dueDate: string;
+  dueDate: string | null;
   expectedFxRate: string | null;
   id: string;
   isCancelled: boolean;
