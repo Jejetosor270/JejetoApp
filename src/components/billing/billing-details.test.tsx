@@ -5,6 +5,10 @@ import { mountForm, enter, control, clickText } from "@/test/dom-form";
 import type { ClientBillingView } from "@/lib/billing/billing";
 import { BillingDetail } from "./billing-detail";
 
+vi.mock("@/components/payments/related-cash-create", () => ({
+  RelatedCashCreate: () => <button>Add related cash record</button>,
+}));
+
 const actions = vi.hoisted(() => ({ save: vi.fn(), refresh: vi.fn() }));
 vi.mock("@/app/(app)/billing/actions", () => ({
   updateClientBillingDocumentAction: actions.save,

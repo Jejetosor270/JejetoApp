@@ -68,6 +68,8 @@ function Feedback({ state }: { state: PaymentActionState }) {
 }
 
 export function InstallmentForm({
+  action,
+  hideExpectedFx = false,
   baseAmount,
   currencies,
   defaultCurrencyCode,
@@ -77,6 +79,8 @@ export function InstallmentForm({
   reportingCurrencyCode,
   onSaved,
 }: {
+  action?: PaymentAction;
+  hideExpectedFx?: boolean;
   onSaved?: () => void;
   baseAmount: string;
   currencies: readonly { code: string }[];
@@ -86,9 +90,8 @@ export function InstallmentForm({
   orderId: string;
   reportingCurrencyCode: string;
 }) {
-  const serverAction = installment
-    ? updateInstallmentAction
-    : createInstallmentAction;
+  const serverAction =
+    action ?? (installment ? updateInstallmentAction : createInstallmentAction);
   const { state, onSubmit, pending } = usePersistentActionState(
     serverAction,
     initialPaymentActionState,
@@ -197,25 +200,27 @@ export function InstallmentForm({
           value={dueDate}
         />
       </Field>
-      <Field
-        error={fieldErrors.expectedFxRate}
-        label={`Expected FX to ${reportingCurrencyCode}`}
-        required={currencyCode !== reportingCurrencyCode}
-      >
-        <input
-          className={inputClassName}
-          disabled={currencyCode === reportingCurrencyCode}
-          inputMode="decimal"
-          name="expectedFxRate"
-          onChange={(event) => setExpectedFxRate(event.target.value)}
-          placeholder={
-            currencyCode === reportingCurrencyCode
-              ? "1 (automatic)"
-              : "0.860000"
-          }
-          value={expectedFxRate}
-        />
-      </Field>
+      {!hideExpectedFx && (
+        <Field
+          error={fieldErrors.expectedFxRate}
+          label={`Expected FX to ${reportingCurrencyCode}`}
+          required={currencyCode !== reportingCurrencyCode}
+        >
+          <input
+            className={inputClassName}
+            disabled={currencyCode === reportingCurrencyCode}
+            inputMode="decimal"
+            name="expectedFxRate"
+            onChange={(event) => setExpectedFxRate(event.target.value)}
+            placeholder={
+              currencyCode === reportingCurrencyCode
+                ? "1 (automatic)"
+                : "0.860000"
+            }
+            value={expectedFxRate}
+          />
+        </Field>
+      )}
       <Field error={fieldErrors.notes} label="Notes">
         <input
           className={inputClassName}

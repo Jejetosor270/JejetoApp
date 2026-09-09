@@ -1,3 +1,4 @@
+import { RelatedCashCreate } from "@/components/payments/related-cash-create";
 import { RelatedItems } from "@/components/items/related-items";
 import {
   RelatedRecords,
@@ -346,6 +347,24 @@ export default async function OrderPage({
               content: (
                 <div className="space-y-4">
                   <RelatedRecords
+                    actions={
+                      canEditMasterData(user.role)
+                        ? {
+                            payments: (
+                              <RelatedCashCreate
+                                scope={{ kind: "order", id: order.id }}
+                                kind="payment"
+                              />
+                            ),
+                            "supplier-installments": (
+                              <RelatedCashCreate
+                                scope={{ kind: "order", id: order.id }}
+                                kind="supplier-installment"
+                              />
+                            ),
+                          }
+                        : {}
+                    }
                     tables={relations.filter((table) =>
                       ["payments", "supplier-installments"].includes(table.id),
                     )}
@@ -484,6 +503,24 @@ export default async function OrderPage({
               content: (
                 <div className="space-y-4">
                   <RelatedRecords
+                    actions={
+                      canEditMasterData(user.role)
+                        ? {
+                            billing: (
+                              <div className="flex flex-wrap gap-2">
+                                <RelatedCashCreate
+                                  scope={{ kind: "order", id: order.id }}
+                                  kind="client-installment"
+                                />
+                                <RelatedCashCreate
+                                  scope={{ kind: "order", id: order.id }}
+                                  kind="receipt"
+                                />
+                              </div>
+                            ),
+                          }
+                        : {}
+                    }
                     tables={relations.filter((table) => table.id === "billing")}
                   />
                   {canEditMasterData(user.role) ? (

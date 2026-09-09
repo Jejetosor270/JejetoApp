@@ -1,3 +1,4 @@
+import { RelatedCashCreate } from "@/components/payments/related-cash-create";
 import { RelatedItems } from "@/components/items/related-items";
 import { RelatedRecords } from "@/components/layout/related-records";
 import { getProjectRelations } from "@/lib/related-records/records";
@@ -139,7 +140,41 @@ export default async function ProjectPage({
       clients={options.clients}
       currencies={options.currencies}
       workspace={{
-        related: <RelatedRecords tables={relations} />,
+        related: (
+          <RelatedRecords
+            tables={relations}
+            actions={
+              canEditMasterData(user.role)
+                ? {
+                    payments: (
+                      <RelatedCashCreate
+                        scope={{ kind: "project", id: project.id }}
+                        kind="payment"
+                      />
+                    ),
+                    receipts: (
+                      <RelatedCashCreate
+                        scope={{ kind: "project", id: project.id }}
+                        kind="receipt"
+                      />
+                    ),
+                    "supplier-installments": (
+                      <RelatedCashCreate
+                        scope={{ kind: "project", id: project.id }}
+                        kind="supplier-installment"
+                      />
+                    ),
+                    "client-installments": (
+                      <RelatedCashCreate
+                        scope={{ kind: "project", id: project.id }}
+                        kind="client-installment"
+                      />
+                    ),
+                  }
+                : {}
+            }
+          />
+        ),
         overview: (
           <ProjectFinancialDashboard
             section="overview"

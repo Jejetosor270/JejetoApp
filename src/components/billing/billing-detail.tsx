@@ -1,4 +1,6 @@
 "use client";
+import { RelatedCashCreate } from "@/components/payments/related-cash-create";
+
 import {
   RelatedRecords,
   RelatedRecordTable,
@@ -1092,6 +1094,24 @@ export function BillingDetail({
             content: (
               <div className="space-y-4">
                 <RelatedRecords
+                  actions={
+                    canEdit
+                      ? {
+                          "client-installments": (
+                            <RelatedCashCreate
+                              scope={{ kind: "billing", id: document.id }}
+                              kind="client-installment"
+                            />
+                          ),
+                          receipts: (
+                            <RelatedCashCreate
+                              scope={{ kind: "billing", id: document.id }}
+                              kind="receipt"
+                            />
+                          ),
+                        }
+                      : {}
+                  }
                   tables={relatedTables.filter((table) =>
                     ["client-installments", "receipts"].includes(table.id),
                   )}

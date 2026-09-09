@@ -389,3 +389,6 @@ vi.mock("@/app/(app)/related-records/inline-actions", () => ({
 vi.mock("@/app/(app)/settings/trash/actions", () => ({
   trashSelectedAction: vi.fn(),
 }));
+vi.mock("@/components/payments/related-cash-create", () => ({
+  RelatedCashCreate: () => <button>Add related cash record</button>,
+}));
