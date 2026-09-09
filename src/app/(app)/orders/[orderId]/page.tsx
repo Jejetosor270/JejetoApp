@@ -41,10 +41,13 @@ import { formatEnumLabel } from "@/domain/presentation/labels";
 export const metadata: Metadata = { title: "Order" };
 export default async function OrderPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orderId: string }>;
+  searchParams: Promise<{ edit?: string }>;
 }) {
   const { orderId } = await params;
+  const query = await searchParams;
   const [user, options, order] = await Promise.all([
     requireUser(),
     listOrderOptions(),
@@ -62,6 +65,7 @@ export default async function OrderPage({
   return (
     <div className="space-y-6">
       <OrderDetailShell
+        startEditing={query.edit === "1"}
         canEdit={canEditMasterData(user.role)}
         options={options}
         order={order}

@@ -1,6 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from "vitest";
 import { mountForm } from "@/test/dom-form";
+vi.mock("@/app/(app)/cell-actions", () => ({ saveTableCellAction: vi.fn() }));
+vi.mock("@/app/(app)/payments/record-status-actions", () => ({
+  saveRecordStatusAction: vi.fn(),
+}));
 import {
   orderViewColumns,
   orderSortLabels,
@@ -58,6 +62,7 @@ it("shows Billing invoice dates and HT without a TTC column; keeps cash amounts"
     id: "bill",
     reference: "INV-01",
     documentType: "INVOICE",
+    status: "PARTIALLY_PAID",
     documentDate: "2026-09-08",
     dueDate: "2026-09-30",
     client: { displayName: "Client" },

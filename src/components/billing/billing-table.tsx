@@ -1,5 +1,17 @@
 "use client";
-import { RecordPaymentStatus } from "@/components/payments/record-payment-status";
+import {
+  EditableCell,
+  SourceCell,
+} from "@/components/inline-editing/editable-cell";
+import { saveTableCellAction } from "@/app/(app)/cell-actions";
+import { saveRecordStatusAction } from "@/app/(app)/payments/record-status-actions";
+import {
+  manualPaymentStatuses,
+  recordPaymentStatusLabel,
+} from "@/domain/payments/record-status";
+import { formatEnumLabel } from "@/domain/presentation/labels";
+import type { CellEditInput } from "@/domain/listing/cell-edit";
+import type { ComponentProps, ReactNode } from "react";
 import { trashSelectedAction } from "@/app/(app)/settings/trash/actions";
 import {
   BulkActionBar,
@@ -9,16 +21,7 @@ import {
 } from "@/components/bulk-actions/bulk-selection";
 import { ListEmptyState } from "@/components/listing/empty-state";
 
-import Link from "next/link";
-import { useState, useTransition } from "react";
-import { updateClientBillingInlineAction } from "@/app/(app)/billing/actions";
-import {
-  InlineEditActions,
-  InlineTextInput,
-} from "@/components/inline-editing/inline-edit";
-import { DateInput } from "@/components/forms/date-input";
 import { SortHeader } from "@/components/listing/sort-header";
-import { useRouter } from "next/navigation";
 
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney } from "@/domain/procurement/presentation";
@@ -28,51 +31,57 @@ import {
   tableHeaderClassName,
 } from "@/components/listing/table-styles";
 
+export interface BillingTableOptions {
+  clients: { id: string; displayName: string }[];
+  projects: { id: string; clientId: string; name: string }[];
+}
 function BillingRow({
   canEdit,
   document,
   selected,
   onSelect,
+  options,
 }: {
   canEdit: boolean;
   document: ClientBillingView;
   selected: boolean;
   onSelect: () => void;
-  view?: "commercial" | "collection";
+  options: BillingTableOptions;
 }) {
-  const router = useRouter();
+  const editable = canEdit && !document.isCancelled;
   const href = `/billing/${document.id}`;
-  const initial = () => ({
-    reference: document.reference,
-    dueDate: document.dueDate ?? "",
-    isCancelled: String(document.isCancelled),
-    notes: document.notes ?? "",
-  });
-  const [draft, setDraft] = useState(initial);
-  const [editing, setEditing] = useState(false);
-  const [pending, startTransition] = useTransition();
-  const [feedback, setFeedback] = useState("");
-  const save = () =>
-    startTransition(async () => {
-      const data = new FormData();
-      data.set("id", document.id);
-      Object.entries(draft).forEach(([key, value]) => data.set(key, value));
-      const result = await updateClientBillingInlineAction(data);
-      setFeedback(result.message ?? "");
-      if (result.status === "success") {
-        setEditing(false);
-        router.refresh();
+  type Field = Extract<CellEditInput, { kind: "billing" }>["field"];
+  const cell = (
+    field: Field,
+    label: string,
+    value: string | null,
+    display: ReactNode,
+    extra: Partial<
+      Pick<
+        ComponentProps<typeof EditableCell>,
+        "type" | "options" | "href" | "hint"
+      >
+    > = {},
+  ) => (
+    <EditableCell
+      label={`${label} for ${document.reference}`}
+      value={value ?? ""}
+      display={display}
+      canEdit={editable}
+      onSave={(next, previous) =>
+        saveTableCellAction({
+          kind: "billing",
+          id: document.id,
+          field,
+          value: next,
+          previous,
+        })
       }
-    });
+      {...extra}
+    />
+  );
   return (
-    <tr
-      className="hover:bg-muted/30 cursor-pointer align-top"
-      onClick={(event) => {
-        const target = event.target as HTMLElement;
-        if (target.closest("a, button, input, select, textarea, form")) return;
-        router.push(href);
-      }}
-    >
+    <tr className="hover:bg-muted/30 align-top">
       {canEdit && (
         <SelectionCell
           checked={selected}
@@ -81,87 +90,130 @@ function BillingRow({
         />
       )}
       <td className="px-3 py-3 font-mono text-xs">
-        {editing ? (
-          <InlineTextInput
-            ariaLabel="Reference"
-            value={draft.reference}
-            disabled={pending}
-            onChange={(reference) => setDraft({ ...draft, reference })}
-          />
-        ) : (
-          <Link className="underline-offset-2 hover:underline" href={href}>
-            {document.reference}
-          </Link>
+        {cell(
+          "reference",
+          "Reference",
+          document.reference,
+          document.reference,
+          { href },
         )}
         <span className="text-muted-foreground mt-1 block font-sans">
-          {document.documentType === "QUOTE" ? "Quote / Devis" : "Invoice"}
+          <SourceCell
+            href={`${href}?edit=1`}
+            label={`Document type for ${document.reference}`}
+            canEdit={editable}
+          >
+            {document.documentType === "QUOTE" ? "Quote / Devis" : "Invoice"}
+          </SourceCell>
           {document.isCancelled ? " · Cancelled" : ""}
         </span>
       </td>
       <td className="px-3 py-3">
-        {document.client.displayName}
-        <span className="text-muted-foreground mt-1 block text-xs">
-          {document.project.name}
-        </span>
-      </td>
-
-      <td className="px-3 py-3">{formatDateOnly(document.documentDate)}</td>
-      <td className="px-3 py-3">
-        {editing ? (
-          <DateInput
-            aria-label="Due date"
-            value={draft.dueDate}
-            disabled={pending}
-            onChange={(event) =>
-              setDraft({ ...draft, dueDate: event.target.value })
-            }
-          />
-        ) : (
-          formatDateOnly(document.dueDate)
+        {cell(
+          "projectId",
+          "Client / Project",
+          document.projectId,
+          <span>
+            {document.client.displayName}
+            <span className="text-muted-foreground mt-1 block text-xs">
+              {document.project.name}
+            </span>
+          </span>,
+          {
+            type: "select",
+            options: options.projects.map((project) => ({
+              value: project.id,
+              label: `${options.clients.find((client) => client.id === project.clientId)?.displayName ?? "Client"} · ${project.name}`,
+            })),
+            hint: "Select the Project and its Client together. Existing allocations or payments must be reconciled first.",
+          },
         )}
       </td>
-
-      <td className="financial-figure px-3 py-3 text-right">
-        {formatMoney(document.totalHt, document.currencyCode)}
-      </td>
-
-      <td className="financial-figure px-3 py-3 text-right">
-        {formatMoney(document.paid, document.currencyCode)}
-      </td>
-
-      <td className="financial-figure px-3 py-3 text-right">
-        {formatMoney(document.outstanding, document.currencyCode)}
+      <td className="px-3 py-3">
+        {cell(
+          "documentDate",
+          "Invoice date",
+          document.documentDate,
+          formatDateOnly(document.documentDate),
+          { type: "date" },
+        )}
       </td>
       <td className="px-3 py-3">
-        <RecordPaymentStatus
-          key={`${document.id}:${document.paymentStatusOverride}:${document.isCancelled}`}
-          kind="billing"
-          id={document.id}
-          automatic={document.status}
-          override={document.paymentStatusOverride}
-          cancelled={document.isCancelled}
-          canEdit={canEdit && !editing}
-        />
+        {cell(
+          "dueDate",
+          "Due date",
+          document.dueDate,
+          formatDateOnly(document.dueDate),
+          {
+            type: "date",
+            hint: "Changes the document due date. Existing payment terms keep their own dates.",
+          },
+        )}
       </td>
-      <td className="px-3 py-3 whitespace-nowrap">
-        {canEdit ? (
-          <InlineEditActions
-            editing={editing}
-            pending={pending}
-            feedback={feedback}
-            onEdit={() => {
-              setDraft(initial());
-              setFeedback("");
-              setEditing(true);
-            }}
-            onCancel={() => {
-              setDraft(initial());
-              setEditing(false);
-              setFeedback("");
-            }}
-            onSave={save}
-          />
-        ) : null}
+      <td className="financial-figure px-3 py-3 text-right">
+        {cell(
+          "totalHt",
+          "HT",
+          document.totalHt,
+          formatMoney(document.totalHt, document.currencyCode),
+          {
+            type: "money",
+            hint: "VAT amount is preserved; TTC and percentage allocations recalculate. Use Details to change VAT. Payment limits are checked.",
+          },
+        )}
+      </td>
+      <td className="financial-figure px-3 py-3 text-right">
+        <SourceCell
+          href={`${href}?tab=related#schedule`}
+          label={`Received for ${document.reference}`}
+          canEdit={editable}
+        >
+          {formatMoney(document.paid, document.currencyCode)}
+        </SourceCell>
+      </td>
+      <td className="financial-figure px-3 py-3 text-right">
+        <SourceCell
+          href={`${href}?tab=related#schedule`}
+          label={`Outstanding for ${document.reference}`}
+          canEdit={editable}
+        >
+          {formatMoney(document.outstanding, document.currencyCode)}
+        </SourceCell>
+      </td>
+      <td className="px-3 py-3">
+        <EditableCell
+          label={`Payment status for ${document.reference}`}
+          value={document.paymentStatusOverride ?? "AUTO"}
+          display={recordPaymentStatusLabel(
+            document.status,
+            document.paymentStatusOverride,
+            document.isCancelled,
+          )}
+          canEdit={editable}
+          type="select"
+          options={[
+            {
+              value: "AUTO",
+              label: `Automatic · ${recordPaymentStatusLabel(document.status)}`,
+            },
+            ...manualPaymentStatuses.map((status) => ({
+              value: status,
+              label: `${formatEnumLabel(status)} (manual)`,
+            })),
+          ]}
+          hint="Manual status changes the label only, not cash or balances."
+          onSave={async (value) => {
+            const result = await saveRecordStatusAction({
+              kind: "billing",
+              id: document.id,
+              value,
+            });
+            return {
+              status: result.status === "success" ? "success" : "error",
+              ...(result.message ? { message: result.message } : {}),
+            };
+          }}
+        />
       </td>
     </tr>
   );
@@ -170,10 +222,12 @@ function BillingRow({
 export function BillingTable({
   canEdit,
   documents,
+  options = { clients: [], projects: [] },
 }: {
   canEdit: boolean;
   documents: ClientBillingView[];
   view?: "commercial" | "collection";
+  options?: BillingTableOptions;
 }) {
   const selection = useBulkSelection(documents.map((row) => row.id));
   return (
@@ -235,12 +289,12 @@ export function BillingTable({
               <th className="px-3 py-3 text-right">Outstanding</th>
 
               <th className="px-3 py-3">Status</th>
-              <th className="px-3 py-3">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {documents.map((document) => (
               <BillingRow
+                options={options}
                 canEdit={canEdit}
                 document={document}
                 selected={selection.isSelected(document.id)}

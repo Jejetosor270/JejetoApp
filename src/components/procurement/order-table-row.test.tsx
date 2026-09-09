@@ -5,14 +5,12 @@ vi.mock("@/app/(app)/payments/record-status-actions", () => ({
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clickText, mountForm } from "@/test/dom-form";
+import { mountForm } from "@/test/dom-form";
 import type { OrderSummary } from "@/lib/procurement/orders";
 import type { OrderViewMode } from "./order-table";
 
 const save = vi.hoisted(() => vi.fn());
-vi.mock("@/app/(app)/orders/actions", () => ({
-  updateOrderInlineAction: save,
-}));
+vi.mock("@/app/(app)/cell-actions", () => ({ saveTableCellAction: save }));
 
 import { OrderRow } from "./order-table-row";
 
@@ -50,20 +48,14 @@ const views: OrderViewMode[] = [
   "delivery",
 ];
 
-describe("Purchasing inline edits on every tab", () => {
+describe("Purchasing click-to-edit on every column set", () => {
   let mounted: Awaited<ReturnType<typeof mountForm>>;
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
   });
   afterEach(async () => {
     await mounted?.unmount();
-    vi.unstubAllGlobals();
   });
-
   const row = (view: OrderViewMode, canEdit = true) => (
     <table>
       <tbody>
@@ -78,119 +70,89 @@ describe("Purchasing inline edits on every tab", () => {
       </tbody>
     </table>
   );
-  it("shows only the linked reference in the standard Reference cell", async () => {
-    mounted = await mountForm(row("general", false));
-    const cell = mounted.container.querySelector("tbody td");
-    expect(cell?.textContent).toBe("PO-001");
-    expect(cell?.querySelector("a")?.getAttribute("href")).toBe(
-      "/orders/order-id",
+  const button = async (label: string) => {
+    const element = document.querySelector<HTMLButtonElement>(
+      `button[aria-label="${label}"]`,
     );
-    expect(cell?.textContent).not.toContain("Furniture");
-    expect(cell?.textContent).not.toContain("Buy");
-  });
-
-  async function change(label: string, value: string) {
-    const element = document.querySelector<
-      HTMLInputElement | HTMLSelectElement
-    >(`[aria-label="${label} for PO-001"]`);
-    if (!element) throw new Error(`Missing ${label}`);
+    if (!element) throw new Error(label);
+    await act(async () => element.click());
+  };
+  async function change(value: string) {
+    const input = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Reference for PO-001"]',
+    );
+    if (!input) throw new Error("Missing reference");
     await act(async () => {
       Object.getOwnPropertyDescriptor(
-        element instanceof HTMLSelectElement
-          ? HTMLSelectElement.prototype
-          : HTMLInputElement.prototype,
+        HTMLInputElement.prototype,
         "value",
-      )?.set?.call(element, value);
-      element.dispatchEvent(
-        new Event(element instanceof HTMLSelectElement ? "change" : "input", {
-          bubbles: true,
-        }),
-      );
+      )?.set?.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
     });
   }
-
-  it.each(views)("saves reference, status and dates in %s", async (view) => {
-    save.mockImplementation(async (data: FormData) => ({
-      status: "success",
-      message: "Saved",
-      values: Object.fromEntries(data),
-    }));
+  it.each(views)("saves just the reference in %s", async (view) => {
+    save.mockResolvedValue({ status: "success" });
     mounted = await mountForm(row(view));
-    await clickText("Edit");
-    await change("Internal reference", "PO-002");
-    await change("Delivery status", "ORDERED");
-    await change("Expected ready date", "12/09/2026");
-    await change("Expected delivery date", "25/09/2026");
-    await clickText("Save");
-    expect(save).toHaveBeenCalledOnce();
-    expect(Object.fromEntries(save.mock.calls[0]?.[0] as FormData)).toEqual({
-      ...(view === "delivery"
-        ? { carrierCode: "", carrierOtherName: "", trackingReference: "" }
-        : {}),
+    await button("Edit Reference for PO-001");
+    await change("PO-002");
+    await button("Save Reference for PO-001");
+    expect(save).toHaveBeenCalledExactlyOnceWith({
+      kind: "order",
       id: "order-id",
-      orderNumber: "PO-002",
-      status: "ORDERED",
-      expectedReadyDate: "2026-09-12",
-      expectedDeliveryDate: "2026-09-25",
+      field: "orderNumber",
+      previous: "PO-001",
+      value: "PO-002",
     });
-    expect(
-      document.querySelector('a[href="/orders/order-id"]')?.textContent,
-    ).toBe("PO-002");
-    if (view === "delivery")
-      expect(mounted.container.textContent).toContain("25/09/2026");
+    expect(document.querySelector("form")).toBeNull();
   });
-
   it.each(views)(
-    "retains failed edits and cancels without saving in %s",
+    "retains failed drafts and cancels without saving in %s",
     async (view) => {
       save.mockResolvedValue({
         status: "error",
         message: "Reference already exists.",
       });
       mounted = await mountForm(row(view));
-      await clickText("Edit");
-      await change("Internal reference", "Duplicate");
-      await clickText("Save");
+      await button("Edit Reference for PO-001");
+      await change("Duplicate");
+      await button("Save Reference for PO-001");
       expect(
         document.querySelector<HTMLInputElement>(
-          '[aria-label="Internal reference for PO-001"]',
+          'input[aria-label="Reference for PO-001"]',
         )?.value,
       ).toBe("Duplicate");
-      expect(mounted.container.textContent).toContain(
+      expect(document.querySelector('[role="alert"]')?.textContent).toContain(
         "Reference already exists.",
       );
-      await clickText("Cancel");
+      await button("Cancel editing Reference for PO-001");
       expect(save).toHaveBeenCalledOnce();
       expect(
         document.querySelector('a[href="/orders/order-id"]')?.textContent,
       ).toBe("PO-001");
     },
   );
-
-  it("saves custom carrier and tracking directly in Delivery", async () => {
-    save.mockImplementation(async (data: FormData) => ({
-      status: "success",
-      values: Object.fromEntries(data),
-    }));
-    mounted = await mountForm(row("delivery"));
-    await clickText("Edit");
-    await change("Carrier", "OTHER");
-    await change("Other carrier name", "Local Freight");
-    await change("Tracking reference", "AWB-123");
-    await clickText("Save");
-    expect(
-      Object.fromEntries(save.mock.calls[0]?.[0] as FormData),
-    ).toMatchObject({
-      carrierCode: "OTHER",
-      carrierOtherName: "Local Freight",
-      trackingReference: "AWB-123",
-    });
-    expect(mounted.container.textContent).toContain("Local Freight");
-    expect(mounted.container.textContent).toContain("AWB-123");
-  });
-
   it.each(views)("keeps %s read-only for viewers", async (view) => {
     mounted = await mountForm(row(view, false));
-    expect(document.querySelector('[data-inline-edit="start"]')).toBeNull();
+    expect(document.querySelector("button")).toBeNull();
+    expect(
+      document.querySelector('a[href="/orders/order-id"]')?.textContent,
+    ).toBe("PO-001");
+  });
+  it("keeps references as links without restoring title or currency sublines", async () => {
+    mounted = await mountForm(row("general", false));
+    expect(document.querySelector("tbody td")?.textContent).toBe("PO-001");
+  });
+  it("opens pricing and payment sources instead of directly overwriting calculated totals", async () => {
+    mounted = await mountForm(row("supplier-payment"));
+    expect(
+      document
+        .querySelector('a[aria-label="Edit Paid for PO-001"]')
+        ?.getAttribute("href"),
+    ).toBe("/orders/order-id?tab=related#payments");
+    expect(
+      document
+        .querySelector('a[aria-label="Edit Payable for PO-001"]')
+        ?.getAttribute("href"),
+    ).toBe("/orders/order-id?edit=1");
   });
 });

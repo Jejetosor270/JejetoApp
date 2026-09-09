@@ -16,13 +16,15 @@ export function OrderDetailShell({
   children,
   options,
   order,
+  startEditing = false,
 }: {
   canEdit: boolean;
   children: ReactNode;
   options: OrderFormOptions;
   order: EditableOrder;
+  startEditing?: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(canEdit && startEditing);
   return (
     <div className="relative space-y-6">
       {canEdit ? (

@@ -40,13 +40,12 @@ describe("Billing operational navigation", () => {
     expect(panel).toContain("<EditorDrawer");
     expect(panel).toContain("<QuoteIntake options={options}");
   });
-  it("opens table rows and edits table fields inline", () => {
-    expect(table).toContain("router.push(href)");
-    expect(table).toContain(
-      'target.closest("a, button, input, select, textarea, form")',
-    );
-    expect(table).toContain("<InlineEditActions");
-    expect(table).toContain("updateClientBillingInlineAction(data)");
+  it("edits individual cells while keeping record and source links", () => {
+    expect(table).not.toContain("router.push(href)");
+    expect(table).toContain("<EditableCell");
+    expect(table).toContain("<SourceCell");
+    expect(table).toContain("saveTableCellAction");
+    expect(table).not.toContain("<InlineEditActions");
     expect(route).toContain('startEditing={query.edit === "1"}');
   });
 

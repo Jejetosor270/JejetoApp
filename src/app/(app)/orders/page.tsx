@@ -286,6 +286,7 @@ export default async function OrdersPage({
       </FilterBar>
 
       <OrderTable
+        options={options}
         canEdit={canEditMasterData(user.role)}
         orders={result.items}
         statuses={options.statuses}

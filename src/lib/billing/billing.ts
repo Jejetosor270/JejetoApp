@@ -1692,182 +1692,189 @@ export async function updateClientBillingDocument(
   input: BillingDocumentEditInput,
 ) {
   return getDatabase().$transaction(
-    async (transaction) => {
-      const existing = await transaction.clientBillingDocument.findUnique({
-        where: { id: input.id },
-        select: {
-          allocations: true,
-          receipts: { select: { id: true, amount: true } },
-          clientId: true,
-          currencyCode: true,
-          id: true,
-          isCancelled: true,
-          isProjectRemainderApproved: true,
-          matchedInstallment: {
-            select: { receipts: { select: { id: true, amount: true } } },
-          },
-          matchedInstallmentId: true,
-          paymentInstallments: {
-            select: {
-              scheduledAmount: true,
-              receipts: { select: { id: true, amount: true } },
-            },
-          },
-          projectId: true,
-          reference: true,
-        },
-      });
-      if (!existing) throw new ClientBillingNotFoundError();
-      const [project, currency] = await Promise.all([
-        transaction.project.findFirst({
-          where: { clientId: input.clientId, id: input.projectId },
-          select: { id: true, reportingCurrencyCode: true },
-        }),
-        transaction.currency.findFirst({
-          where: { code: input.currencyCode, isActive: true },
-          select: { code: true },
-        }),
-      ]);
-      if (!project || !currency)
-        throw new ClientBillingValidationError(
-          "Choose a Client, one of that Client's Projects, and an active currency.",
-        );
-      const receipts = [
-        ...new Map(
-          [
-            ...(existing.receipts ?? []),
-            ...existing.paymentInstallments.flatMap(
-              (installment) => installment.receipts,
-            ),
-            ...(existing.matchedInstallment?.receipts ?? []),
-          ].map((receipt) => [receipt.id, receipt]),
-        ).values(),
-      ];
-      const relationshipChanged =
-        existing.clientId !== input.clientId ||
-        existing.projectId !== input.projectId;
-      if (
-        relationshipChanged &&
-        (existing.allocations.length > 0 ||
-          existing.paymentInstallments.length > 0 ||
-          existing.matchedInstallmentId !== null ||
-          receipts.length > 0)
-      )
-        throw new ClientBillingValidationError(
-          "Reconcile Order allocations and payment activity before changing the Billing Client or Project.",
-        );
-      if (
-        existing.currencyCode !== input.currencyCode &&
-        (existing.paymentInstallments.length > 0 ||
-          existing.matchedInstallmentId !== null ||
-          receipts.length > 0)
-      )
-        throw new ClientBillingValidationError(
-          "A Billing currency cannot change while a payment schedule is attached.",
-        );
-      if (input.currencyCode !== project.reportingCurrencyCode && !input.fxRate)
-        throw new ClientBillingValidationError(
-          "Enter the manual FX rate to the Project reporting currency.",
-        );
-      if (!existing.isCancelled && input.isCancelled && receipts.length > 0)
-        throw new ClientBillingValidationError(
-          "A Billing Event with recorded Client receipts cannot be cancelled.",
-        );
-      const paid = receipts.reduce(
-        (total, receipt) => total.plus(receipt.amount),
-        new Decimal(0),
-      );
-      if (paid.greaterThan(input.totalTtc))
-        throw new ClientBillingValidationError(
-          "Billing TTC cannot be reduced below the Client receipts already recorded.",
-        );
-      const scheduled = existing.paymentInstallments.reduce(
-        (total, installment) => total.plus(installment.scheduledAmount),
-        new Decimal(0),
-      );
-      if (scheduled.greaterThan(input.totalTtc))
-        throw new ClientBillingValidationError(
-          "The current payment schedule exceeds the edited Billing TTC.",
-        );
-      const allocationInput: BillingAllocationsEditInput = {
-        allocations: input.allocations,
-        billingDocumentId: input.id,
-        isProjectRemainderApproved: input.isProjectRemainderApproved,
-      };
-      const allocationDocument = {
-        id: existing.id,
-        isProjectRemainderApproved: existing.isProjectRemainderApproved,
-        projectId: input.projectId,
-        reference: input.reference,
-        freightCoverageHt: input.freightCoverageHt ?? "0",
-        otherCoverageHt: input.otherCoverageHt ?? "0",
-        totalHt: input.totalHt,
-      };
-      await validateBillingAllocations(
-        transaction,
-        allocationDocument,
-        input.allocations,
-        input.isProjectRemainderApproved,
-      );
-      await transaction.clientBillingDocument.update({
-        where: { id: input.id },
-        data: {
-          clientId: input.clientId,
-          currencyCode: input.currencyCode,
-          documentDate: dateOnlyToDate(input.documentDate),
-          documentType: input.documentType,
-          dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
-          fxRateToReporting:
-            input.currencyCode === project.reportingCurrencyCode
-              ? null
-              : (input.fxRate ?? null),
-          isCancelled: input.isCancelled,
-          notes: input.notes ?? null,
-          projectId: input.projectId,
-          reference: input.reference,
-          freightCoverageHt: input.freightCoverageHt ?? "0",
-          otherCoverageHt: input.otherCoverageHt ?? "0",
-          totalHt: input.totalHt,
-          totalTtc: input.totalTtc,
-          updatedById: actorId,
-          vatAmount: input.vatAmount,
-          vatRate: input.vatRate ?? null,
-          vatTreatment: input.vatTreatment ?? null,
-        },
-      });
-      await writeAuditEvent(transaction, actorId, {
-        action: "UPDATED",
-        entityId: input.id,
-        entityReference: input.reference,
-        entityType: "BILLING_DOCUMENT",
-        metadata: {
-          changedFields: [
-            "client",
-            "project",
-            "documentType",
-            "reference",
-            "documentDate",
-            "dueDate",
-            "currency",
-            "fxRate",
-            "totalHt",
-            "vat",
-            "totalTtc",
-            "notes",
-            "isCancelled",
-          ],
-        },
-        summary: "Updated the Billing Event.",
-      });
-      await reconcileBillingAllocationsInTransaction(
-        transaction,
-        actorId,
-        allocationDocument,
-        existing.allocations,
-        allocationInput,
-      );
-    },
+    (transaction) =>
+      updateClientBillingDocumentInTransaction(transaction, actorId, input),
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
+export async function updateClientBillingDocumentInTransaction(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  input: BillingDocumentEditInput,
+) {
+  const existing = await transaction.clientBillingDocument.findUnique({
+    where: { id: input.id },
+    select: {
+      allocations: true,
+      receipts: { select: { id: true, amount: true } },
+      clientId: true,
+      currencyCode: true,
+      id: true,
+      isCancelled: true,
+      isProjectRemainderApproved: true,
+      matchedInstallment: {
+        select: { receipts: { select: { id: true, amount: true } } },
+      },
+      matchedInstallmentId: true,
+      paymentInstallments: {
+        select: {
+          scheduledAmount: true,
+          receipts: { select: { id: true, amount: true } },
+        },
+      },
+      projectId: true,
+      reference: true,
+    },
+  });
+  if (!existing) throw new ClientBillingNotFoundError();
+  const [project, currency] = await Promise.all([
+    transaction.project.findFirst({
+      where: { clientId: input.clientId, id: input.projectId },
+      select: { id: true, reportingCurrencyCode: true },
+    }),
+    transaction.currency.findFirst({
+      where: { code: input.currencyCode, isActive: true },
+      select: { code: true },
+    }),
+  ]);
+  if (!project || !currency)
+    throw new ClientBillingValidationError(
+      "Choose a Client, one of that Client's Projects, and an active currency.",
+    );
+  const receipts = [
+    ...new Map(
+      [
+        ...(existing.receipts ?? []),
+        ...existing.paymentInstallments.flatMap(
+          (installment) => installment.receipts,
+        ),
+        ...(existing.matchedInstallment?.receipts ?? []),
+      ].map((receipt) => [receipt.id, receipt]),
+    ).values(),
+  ];
+  const relationshipChanged =
+    existing.clientId !== input.clientId ||
+    existing.projectId !== input.projectId;
+  if (
+    relationshipChanged &&
+    (existing.allocations.length > 0 ||
+      existing.paymentInstallments.length > 0 ||
+      existing.matchedInstallmentId !== null ||
+      receipts.length > 0)
+  )
+    throw new ClientBillingValidationError(
+      "Reconcile Order allocations and payment activity before changing the Billing Client or Project.",
+    );
+  if (
+    existing.currencyCode !== input.currencyCode &&
+    (existing.paymentInstallments.length > 0 ||
+      existing.matchedInstallmentId !== null ||
+      receipts.length > 0)
+  )
+    throw new ClientBillingValidationError(
+      "A Billing currency cannot change while a payment schedule is attached.",
+    );
+  if (input.currencyCode !== project.reportingCurrencyCode && !input.fxRate)
+    throw new ClientBillingValidationError(
+      "Enter the manual FX rate to the Project reporting currency.",
+    );
+  if (!existing.isCancelled && input.isCancelled && receipts.length > 0)
+    throw new ClientBillingValidationError(
+      "A Billing Event with recorded Client receipts cannot be cancelled.",
+    );
+  const paid = receipts.reduce(
+    (total, receipt) => total.plus(receipt.amount),
+    new Decimal(0),
+  );
+  if (paid.greaterThan(input.totalTtc))
+    throw new ClientBillingValidationError(
+      "Billing TTC cannot be reduced below the Client receipts already recorded.",
+    );
+  const scheduled = existing.paymentInstallments.reduce(
+    (total, installment) => total.plus(installment.scheduledAmount),
+    new Decimal(0),
+  );
+  if (scheduled.greaterThan(input.totalTtc))
+    throw new ClientBillingValidationError(
+      "The current payment schedule exceeds the edited Billing TTC.",
+    );
+  const allocationInput: BillingAllocationsEditInput = {
+    allocations: input.allocations,
+    billingDocumentId: input.id,
+    isProjectRemainderApproved: input.isProjectRemainderApproved,
+  };
+  const allocationDocument = {
+    id: existing.id,
+    isProjectRemainderApproved: existing.isProjectRemainderApproved,
+    projectId: input.projectId,
+    reference: input.reference,
+    freightCoverageHt: input.freightCoverageHt ?? "0",
+    otherCoverageHt: input.otherCoverageHt ?? "0",
+    totalHt: input.totalHt,
+  };
+  await validateBillingAllocations(
+    transaction,
+    allocationDocument,
+    input.allocations,
+    input.isProjectRemainderApproved,
+  );
+  await transaction.clientBillingDocument.update({
+    where: { id: input.id },
+    data: {
+      clientId: input.clientId,
+      currencyCode: input.currencyCode,
+      documentDate: dateOnlyToDate(input.documentDate),
+      documentType: input.documentType,
+      dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
+      fxRateToReporting:
+        input.currencyCode === project.reportingCurrencyCode
+          ? null
+          : (input.fxRate ?? null),
+      isCancelled: input.isCancelled,
+      notes: input.notes ?? null,
+      projectId: input.projectId,
+      reference: input.reference,
+      freightCoverageHt: input.freightCoverageHt ?? "0",
+      otherCoverageHt: input.otherCoverageHt ?? "0",
+      totalHt: input.totalHt,
+      totalTtc: input.totalTtc,
+      updatedById: actorId,
+      vatAmount: input.vatAmount,
+      vatRate: input.vatRate ?? null,
+      vatTreatment: input.vatTreatment ?? null,
+    },
+  });
+  await writeAuditEvent(transaction, actorId, {
+    action: "UPDATED",
+    entityId: input.id,
+    entityReference: input.reference,
+    entityType: "BILLING_DOCUMENT",
+    metadata: {
+      changedFields: [
+        "client",
+        "project",
+        "documentType",
+        "reference",
+        "documentDate",
+        "dueDate",
+        "currency",
+        "fxRate",
+        "totalHt",
+        "vat",
+        "totalTtc",
+        "notes",
+        "isCancelled",
+      ],
+    },
+    summary: "Updated the Billing Event.",
+  });
+  await reconcileBillingAllocationsInTransaction(
+    transaction,
+    actorId,
+    allocationDocument,
+    existing.allocations,
+    allocationInput,
   );
 }
 

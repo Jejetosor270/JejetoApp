@@ -13,7 +13,7 @@ import {
   tableHeaderClassName,
 } from "@/components/listing/table-styles";
 import type { OrderSummary } from "@/lib/procurement/orders";
-import { OrderRow } from "./order-table-row";
+import { OrderRow, type OrderTableOptions } from "./order-table-row";
 
 import {
   orderViewColumns,
@@ -28,11 +28,13 @@ export function OrderTable({
   orders,
   statuses,
   view,
+  options,
 }: {
   canEdit: boolean;
   orders: OrderSummary[];
   statuses: readonly string[];
   view: OrderViewMode;
+  options?: OrderTableOptions;
 }) {
   const selection = useBulkSelection(orders.map((order) => order.id));
   return (
@@ -75,7 +77,6 @@ export function OrderTable({
                   defaultDirection="desc"
                 />
               ))}
-              {canEdit ? <th className="px-4 py-3 text-right">Edit</th> : null}
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -88,6 +89,7 @@ export function OrderTable({
                 order={order}
                 statuses={statuses}
                 view={view}
+                {...(options ? { options } : {})}
               />
             ))}
           </tbody>

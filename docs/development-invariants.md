@@ -452,3 +452,19 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
   Financials, coverage, VAT and underlying reporting calculations remain unchanged.
 - More omits Unassigned cash records and Unassigned records. This is navigation-only removal;
   original records, unassignment workflows and historical direct URLs are preserved.
+
+## Purchasing and Billing cell editing
+
+- ADMIN/MANAGER can click editable list cells; Enter or the checkmark saves and Escape cancels.
+  One cell editor is open at a time. Blur does not discard a draft, failed saves retain it, and
+  duplicate submissions are blocked. References remain record links with a separate edit pencil.
+- Single-field changes validate permissions, current stored values and relationships server-side
+  inside an audited transaction. Stale cell values are rejected rather than overwriting newer edits.
+  Payment-status labels retain the existing display-only override workflow.
+- Calculated financial and cash cells open the authoritative Details or Related editor instead of
+  overwriting derived totals. Purchase HT uses the existing Order pricing/VAT service. Billing HT
+  preserves entered VAT, recalculates TTC and percentage allocations, and checks payment limits.
+  Existing payment terms are never silently rescheduled by a cell edit.
+- Billing Client/Project changes select the Project and its Client together. Linked allocations,
+  payment activity and currency/FX safeguards remain authoritative. Cancelled records are read-only.
+  This change introduces no schema migration.

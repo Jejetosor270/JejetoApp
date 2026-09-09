@@ -1,33 +1,39 @@
 "use client";
-import { RecordPaymentStatus } from "@/components/payments/record-payment-status";
-
-import { carriers, carrierName } from "@/config/carriers";
-import Link from "next/link";
-import { useState, useTransition } from "react";
-import { updateOrderInlineAction } from "@/app/(app)/orders/actions";
-import { SelectionCell } from "@/components/bulk-actions/bulk-selection";
+import type { ReactNode } from "react";
+import { saveTableCellAction } from "@/app/(app)/cell-actions";
+import { saveRecordStatusAction } from "@/app/(app)/payments/record-status-actions";
 import {
-  InlineDateInput,
-  InlineEditActions,
-  InlineSelect,
-  InlineTextInput,
-} from "@/components/inline-editing/inline-edit";
+  EditableCell,
+  SourceCell,
+} from "@/components/inline-editing/editable-cell";
+import { SelectionCell } from "@/components/bulk-actions/bulk-selection";
 import { tableRowClassName } from "@/components/listing/table-styles";
 import {
-  dateOnlyToEuropeanInput,
-  europeanInputToDateOnly,
-  formatDateOnly,
-} from "@/domain/payments/dates";
+  orderViewColumns,
+  orderSortLabels,
+  orderNumericColumns,
+  type OrderViewMode,
+  type OrderSort,
+} from "@/config/order-list";
+import { carriers, carrierName } from "@/config/carriers";
+import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
+import {
+  recordPaymentStatusLabel,
+  manualPaymentStatuses,
+} from "@/domain/payments/record-status";
 import { formatEnumLabel } from "@/domain/presentation/labels";
+import type { CellEditInput } from "@/domain/listing/cell-edit";
 import type { OrderSummary } from "@/lib/procurement/orders";
-import type { OrderViewMode } from "./order-table";
 
-function serverDate(value: string): string {
-  if (!value.trim()) return "";
-  return europeanInputToDateOnly(value) ?? value;
+export interface OrderTableOptions {
+  projects: {
+    id: string;
+    name: string;
+    orderPackages: { id: string; name: string; isActive: boolean }[];
+  }[];
+  suppliers: { id: string; displayName: string }[];
 }
-
 export function OrderRow({
   canEdit,
   isSelected,
@@ -35,6 +41,7 @@ export function OrderRow({
   order,
   statuses,
   view,
+  options = { projects: [], suppliers: [] },
 }: {
   canEdit: boolean;
   isSelected: boolean;
@@ -42,343 +49,309 @@ export function OrderRow({
   order: OrderSummary;
   statuses: readonly string[];
   view: OrderViewMode;
+  options?: OrderTableOptions;
 }) {
-  const initial = () => ({
-    carrierCode: order.carrierCode ?? "",
-    carrierOtherName: order.carrierOtherName ?? "",
-    trackingReference: order.trackingReference ?? "",
-    expectedDeliveryDate: dateOnlyToEuropeanInput(order.expectedDeliveryDate),
-    expectedReadyDate: dateOnlyToEuropeanInput(order.expectedReadyDate),
-    orderNumber: order.orderNumber,
-    status: order.status,
-  });
-  const [saved, setSaved] = useState(initial);
-  const [draft, setDraft] = useState(initial);
-  const [editing, setEditing] = useState(false);
-  const [feedback, setFeedback] = useState("");
-  const [pending, startTransition] = useTransition();
-  const cost = order.costs;
-  const set = (field: keyof typeof draft, value: string) =>
-    setDraft((current) => ({ ...current, [field]: value }));
-  const save = () => {
-    if (pending) return;
-    const data = new FormData();
-    data.set("id", order.id);
-    data.set("orderNumber", draft.orderNumber);
-    data.set("status", draft.status);
-    data.set("expectedReadyDate", serverDate(draft.expectedReadyDate));
-    data.set("expectedDeliveryDate", serverDate(draft.expectedDeliveryDate));
-    if (view === "delivery") {
-      data.set("carrierCode", draft.carrierCode);
-      data.set(
-        "carrierOtherName",
-        draft.carrierCode === "OTHER" ? draft.carrierOtherName : "",
-      );
-      data.set("trackingReference", draft.trackingReference);
-    }
-    startTransition(async () => {
-      const result = await updateOrderInlineAction(data);
-      setFeedback(result.message ?? "");
-      if (result.status === "success" && result.values) {
-        const next = {
-          carrierCode: result.values.carrierCode ?? "",
-          carrierOtherName: result.values.carrierOtherName ?? "",
-          trackingReference: result.values.trackingReference ?? "",
-          expectedDeliveryDate: dateOnlyToEuropeanInput(
-            result.values.expectedDeliveryDate,
-          ),
-          expectedReadyDate: dateOnlyToEuropeanInput(
-            result.values.expectedReadyDate,
-          ),
-          orderNumber: result.values.orderNumber,
-          status: result.values.status,
-        };
-        setSaved(next);
-        setDraft(next);
-        setEditing(false);
-      }
-    });
-  };
-  const reference = editing ? (
-    <InlineTextInput
-      disabled={pending}
-      ariaLabel={`Internal reference for ${saved.orderNumber}`}
-      onChange={(value) => set("orderNumber", value)}
-      value={draft.orderNumber}
-    />
-  ) : (
-    <Link
-      className="hover:text-primary underline-offset-4 hover:underline"
-      href={`/orders/${order.id}`}
-    >
-      {saved.orderNumber}
-    </Link>
-  );
-  const status = editing ? (
-    <InlineSelect
-      disabled={pending}
-      ariaLabel={`Delivery status for ${saved.orderNumber}`}
-      onChange={(value) => set("status", value)}
-      value={draft.status}
-    >
-      {statuses
-        .filter(
-          (status) => status !== "CANCELLED" || saved.status === "CANCELLED",
-        )
-        .map((status) => (
-          <option key={status} value={status}>
-            {formatEnumLabel(status)}
-          </option>
-        ))}
-    </InlineSelect>
-  ) : (
-    formatEnumLabel(saved.status)
-  );
-  const readyDate = editing ? (
-    <InlineDateInput
-      ariaLabel={`Expected ready date for ${saved.orderNumber}`}
-      disabled={pending}
-      onChange={(value) => set("expectedReadyDate", value)}
-      value={draft.expectedReadyDate}
-    />
-  ) : (
-    formatDateOnly(europeanInputToDateOnly(saved.expectedReadyDate))
-  );
-  const deliveryDate = editing ? (
-    <InlineDateInput
-      ariaLabel={`Expected delivery date for ${saved.orderNumber}`}
-      disabled={pending}
-      onChange={(value) => set("expectedDeliveryDate", value)}
-      value={draft.expectedDeliveryDate}
-    />
-  ) : (
-    formatDateOnly(europeanInputToDateOnly(saved.expectedDeliveryDate))
-  );
-  const actionsCell = canEdit ? (
-    <td className="px-4 py-3">
-      <InlineEditActions
-        editing={editing}
-        feedback={feedback}
-        onCancel={() => {
-          setDraft(saved);
-          setFeedback("");
-          setEditing(false);
-        }}
-        onEdit={() => {
-          setDraft(saved);
-          setFeedback("");
-          setEditing(true);
-        }}
-        onSave={save}
-        pending={pending}
+  const editable = canEdit && order.status !== "CANCELLED";
+  const recordHref = `/orders/${order.id}`;
+  const editorHref = `${recordHref}?edit=1`;
+  const paymentsHref = `${recordHref}?tab=related#payments`;
+  type Field = Extract<CellEditInput, { kind: "order" }>["field"];
+  function cell(
+    field: Field,
+    label: string,
+    value: string | null | undefined,
+    display: ReactNode,
+    extra: Partial<
+      Pick<
+        React.ComponentProps<typeof EditableCell>,
+        "type" | "options" | "href" | "hint"
+      >
+    > = {},
+  ) {
+    return (
+      <EditableCell
+        label={`${label} for ${order.orderNumber}`}
+        value={value ?? ""}
+        display={display}
+        canEdit={editable}
+        onSave={(next, previous) =>
+          saveTableCellAction({
+            kind: "order",
+            id: order.id,
+            field,
+            value: next,
+            previous,
+          })
+        }
+        {...extra}
       />
-    </td>
-  ) : null;
-  const extraFields = editing ? (
-    <div className="mt-3 grid gap-2 font-sans text-xs font-normal">
-      <label className="grid gap-1">Delivery status{status}</label>
-      <label className="grid gap-1">Ready date{readyDate}</label>
-      <label className="grid gap-1">Delivery date{deliveryDate}</label>
-    </div>
-  ) : null;
-  const selectionCell = canEdit ? (
-    <SelectionCell
-      checked={isSelected}
-      label={`Order ${saved.orderNumber}`}
-      onChange={onSelect}
-    />
-  ) : null;
-  if (view === "financial") {
-    return (
-      <tr className={tableRowClassName}>
-        {selectionCell}
-        <td className="px-4 py-3 font-mono text-xs">
-          {reference}
-          {extraFields}
-        </td>
-        <td className="px-4 py-3">{order.supplier.displayName}</td>
-        <td className="px-4 py-3">{order.project.name}</td>
-        <td className="px-4 py-3">
-          {order.orderPackage?.name ?? "Unassigned"}
-        </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatMoney(cost.purchaseCost, order.orderCurrencyCode)}
-        </td>
-
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatMoney(
-            cost.reportingEconomicLandedCost,
-            order.project.reportingCurrencyCode,
-          )}
-        </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatMoney(
-            cost.reportingSellingRevenue,
-            order.project.reportingCurrencyCode,
-          )}
-        </td>
-
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatRate(cost.markupRate)}
-        </td>
-        {actionsCell}
-      </tr>
     );
   }
-  if (view === "supplier-payment") {
-    return (
-      <tr className={tableRowClassName}>
-        {selectionCell}
-        <td className="px-4 py-3">{order.supplier.displayName}</td>
-        <td className="px-4 py-3 font-mono text-xs">
-          {reference}
-          {extraFields}
-        </td>
-        <td className="px-4 py-3">{order.project.name}</td>
-        <td className="px-4 py-3">
-          {order.orderPackage?.name ?? "Unassigned"}
-        </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatMoney(
-            order.supplierPayment.totalPayable,
-            order.orderCurrencyCode,
-          )}
-        </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatMoney(
-            order.supplierPayment.scheduled,
-            order.orderCurrencyCode,
-          )}
-        </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatMoney(order.supplierPayment.paid, order.orderCurrencyCode)}
-        </td>
-        <td className="financial-figure px-4 py-3 text-right">
-          {formatMoney(
-            order.supplierPayment.outstanding,
-            order.orderCurrencyCode,
-          )}
-        </td>
-        <td className="px-4 py-3">
-          {formatDateOnly(order.supplierPayment.nextDueDate)}
-        </td>
-        <td className="px-4 py-3">
-          <RecordPaymentStatus
-            key={`${order.id}:${order.paymentStatusOverride}:${order.status}`}
-            kind="order"
-            id={order.id}
-            automatic={order.supplierPayment.status}
-            override={order.paymentStatusOverride}
-            cancelled={order.status === "CANCELLED"}
-            canEdit={canEdit && !editing}
-          />
-        </td>
-        {actionsCell}
-      </tr>
-    );
-  }
-  if (view === "delivery") {
-    return (
-      <tr className={tableRowClassName}>
-        {selectionCell}
-        <td className="px-4 py-3 font-mono text-xs">{reference}</td>
-        <td className="px-4 py-3">{status}</td>
-        <td className="px-4 py-3">{readyDate}</td>
-        <td className="px-4 py-3">{deliveryDate}</td>
-        <td className="px-4 py-3">{order.supplier.displayName}</td>
-        <td className="px-4 py-3">{order.project.name}</td>
-        <td className="px-4 py-3">
-          {order.orderPackage?.name ?? "Unassigned"}
-        </td>
-        <td className="min-w-44 px-4 py-3">
-          {editing ? (
-            <div className="grid gap-2">
-              <InlineSelect
-                disabled={pending}
-                ariaLabel={`Carrier for ${saved.orderNumber}`}
-                value={draft.carrierCode}
-                onChange={(value) => set("carrierCode", value)}
+  const source = (field: OrderSort, content: ReactNode, href = editorHref) => (
+    <SourceCell
+      label={`${orderSortLabels[field]} for ${order.orderNumber}`}
+      href={href}
+      canEdit={editable}
+    >
+      {content}
+    </SourceCell>
+  );
+  function content(field: OrderSort) {
+    const money = (value: string | null, currency = order.orderCurrencyCode) =>
+      formatMoney(value, currency);
+    switch (field) {
+      case "reference":
+        return cell(
+          "orderNumber",
+          "Reference",
+          order.orderNumber,
+          order.orderNumber,
+          { href: recordHref },
+        );
+      case "project":
+        return cell(
+          "projectId",
+          "Project",
+          order.project.id,
+          order.project.name,
+          {
+            type: "select",
+            options: options.projects.map((project) => ({
+              value: project.id,
+              label: project.name,
+            })),
+            hint: "Changing Project can change inherited pricing. Existing linked records must be reconciled first.",
+          },
+        );
+      case "supplier":
+        return cell(
+          "supplierId",
+          "Supplier",
+          order.supplier.id,
+          order.supplier.displayName,
+          {
+            type: "select",
+            options: options.suppliers.map((supplier) => ({
+              value: supplier.id,
+              label: supplier.displayName,
+            })),
+          },
+        );
+      case "package":
+        return cell(
+          "packageId",
+          "Package",
+          order.packageId,
+          order.orderPackage?.name ?? "Unassigned",
+          {
+            type: "select",
+            options: [
+              { value: "", label: "Unassigned" },
+              ...(
+                options.projects.find(
+                  (project) => project.id === order.project.id,
+                )?.orderPackages ?? []
+              )
+                .filter((item) => item.isActive || item.id === order.packageId)
+                .map((item) => ({ value: item.id, label: item.name })),
+            ],
+          },
+        );
+      case "status":
+        return cell(
+          "status",
+          "Delivery status",
+          order.status,
+          formatEnumLabel(order.status),
+          {
+            type: "select",
+            options: statuses
+              .filter((status) => status !== "CANCELLED")
+              .map((status) => ({
+                value: status,
+                label: formatEnumLabel(status),
+              })),
+          },
+        );
+      case "invoiceDate":
+        return cell(
+          "invoiceDate",
+          "Invoice date",
+          order.invoiceDate,
+          formatDateOnly(order.invoiceDate),
+          { type: "date" },
+        );
+      case "expectedReady":
+        return cell(
+          "expectedReadyDate",
+          "Expected ready",
+          order.expectedReadyDate,
+          formatDateOnly(order.expectedReadyDate),
+          { type: "date" },
+        );
+      case "expectedDelivery":
+        return cell(
+          "expectedDeliveryDate",
+          "Expected delivery",
+          order.expectedDeliveryDate,
+          formatDateOnly(order.expectedDeliveryDate),
+          { type: "date" },
+        );
+      case "tracking":
+        return cell(
+          "trackingReference",
+          "Tracking reference",
+          order.trackingReference,
+          order.trackingReference || "—",
+        );
+      case "carrier":
+        return (
+          <div className="space-y-1">
+            {cell(
+              "carrierCode",
+              "Carrier",
+              order.carrierCode,
+              carrierName(order.carrierCode, order.carrierOtherName),
+              {
+                type: "select",
+                options: [
+                  { value: "", label: "Not selected" },
+                  ...carriers.map((carrier) => ({
+                    value: carrier.code,
+                    label: carrier.name,
+                  })),
+                  { value: "OTHER", label: "Other" },
+                ],
+              },
+            )}
+            {order.carrierCode === "OTHER" ? (
+              cell(
+                "carrierOtherName",
+                "Other carrier name",
+                order.carrierOtherName,
+                order.carrierOtherName || "Enter name",
+              )
+            ) : (
+              <SourceCell
+                href={editorHref}
+                label="Other carrier details"
+                canEdit={editable}
               >
-                <option value="">Not selected</option>
-                {carriers.map((carrier) => (
-                  <option key={carrier.code} value={carrier.code}>
-                    {carrier.name}
-                  </option>
-                ))}
-                <option value="OTHER">Other</option>
-              </InlineSelect>
-              {draft.carrierCode === "OTHER" && (
-                <InlineTextInput
-                  disabled={pending}
-                  ariaLabel={`Other carrier name for ${saved.orderNumber}`}
-                  value={draft.carrierOtherName}
-                  onChange={(value) => set("carrierOtherName", value)}
-                />
-              )}
-            </div>
-          ) : (
-            carrierName(saved.carrierCode, saved.carrierOtherName)
-          )}
-        </td>
-        <td className="min-w-44 px-4 py-3 break-all">
-          {editing ? (
-            <InlineTextInput
-              disabled={pending}
-              ariaLabel={`Tracking reference for ${saved.orderNumber}`}
-              value={draft.trackingReference}
-              onChange={(value) => set("trackingReference", value)}
-            />
-          ) : (
-            saved.trackingReference || "—"
-          )}
-        </td>
-        {actionsCell}
-      </tr>
-    );
+                <span className="text-muted-foreground text-xs">
+                  Other carrier…
+                </span>
+              </SourceCell>
+            )}
+          </div>
+        );
+      case "purchase":
+        return cell(
+          "purchaseCost",
+          "Purchase HT",
+          order.costs.purchaseCost,
+          money(order.costs.purchaseCost),
+          {
+            type: "money",
+            hint: "Updates costs and calculated pricing. Existing payment terms and input VAT stay unchanged.",
+          },
+        );
+      case "economicCost":
+        return source(
+          field,
+          money(
+            order.costs.reportingEconomicLandedCost,
+            order.project.reportingCurrencyCode,
+          ),
+        );
+      case "sell":
+        return source(
+          field,
+          money(
+            order.costs.reportingSellingRevenue,
+            order.project.reportingCurrencyCode,
+          ),
+        );
+      case "markup":
+        return source(field, formatRate(order.costs.markupRate));
+      case "payable":
+        return source(field, money(order.supplierPayment.totalPayable));
+      case "scheduled":
+        return source(
+          field,
+          money(order.supplierPayment.scheduled),
+          paymentsHref,
+        );
+      case "paid":
+        return source(field, money(order.supplierPayment.paid), paymentsHref);
+      case "outstanding":
+        return source(
+          field,
+          money(order.supplierPayment.outstanding),
+          paymentsHref,
+        );
+      case "dueDate":
+        return source(
+          field,
+          formatDateOnly(order.supplierPayment.nextDueDate),
+          paymentsHref,
+        );
+      case "paymentStatus":
+        return (
+          <EditableCell
+            label={`Payment status for ${order.orderNumber}`}
+            value={order.paymentStatusOverride ?? "AUTO"}
+            display={recordPaymentStatusLabel(
+              order.supplierPayment.status,
+              order.paymentStatusOverride,
+              order.status === "CANCELLED",
+            )}
+            canEdit={editable}
+            type="select"
+            options={[
+              {
+                value: "AUTO",
+                label: `Automatic · ${recordPaymentStatusLabel(order.supplierPayment.status)}`,
+              },
+              ...manualPaymentStatuses.map((status) => ({
+                value: status,
+                label: `${formatEnumLabel(status)} (manual)`,
+              })),
+            ]}
+            hint="Manual status changes the label only, not cash or balances."
+            onSave={async (value) => {
+              const result = await saveRecordStatusAction({
+                kind: "order",
+                id: order.id,
+                value,
+              });
+              return {
+                status: result.status === "success" ? "success" : "error",
+                ...(result.message ? { message: result.message } : {}),
+              };
+            }}
+          />
+        );
+      default:
+        return null;
+    }
   }
   return (
     <tr className={tableRowClassName}>
-      {selectionCell}
-      <td className="px-4 py-3 font-mono text-xs">{reference}</td>
-      <td className="px-4 py-3">{order.project.name}</td>
-      <td className="px-4 py-3">{order.orderPackage?.name ?? "Unassigned"}</td>
-      <td className="px-4 py-3">{order.supplier.displayName}</td>
-      <td className="px-4 py-3">{status}</td>
-      <td className="financial-figure px-4 py-3 text-right">
-        {formatMoney(cost.purchaseCost, order.orderCurrencyCode)}
-      </td>
-      <td className="px-4 py-3">
-        <RecordPaymentStatus
-          key={`${order.id}:${order.paymentStatusOverride}:${order.status}`}
-          kind="order"
-          id={order.id}
-          automatic={order.supplierPayment.status}
-          override={order.paymentStatusOverride}
-          cancelled={order.status === "CANCELLED"}
-          canEdit={canEdit && !editing}
+      {canEdit && (
+        <SelectionCell
+          checked={isSelected}
+          label={`Order ${order.orderNumber}`}
+          onChange={onSelect}
         />
-      </td>
-      <td className="px-4 py-3">{formatDateOnly(order.invoiceDate)}</td>
-      <td className="px-4 py-3">
-        {formatDateOnly(order.supplierPayment.nextDueDate)}
-      </td>
-      <td className="px-4 py-3">
-        {editing ? (
-          <div className="grid gap-2">
-            <label className="grid gap-1 text-xs">
-              Ready date
-              {readyDate}
-            </label>
-            <label className="grid gap-1 text-xs">
-              Delivery date
-              {deliveryDate}
-            </label>
-          </div>
-        ) : (
-          formatDateOnly(europeanInputToDateOnly(saved.expectedDeliveryDate))
-        )}
-      </td>
-      {actionsCell}
+      )}
+      {orderViewColumns[view].map((field) => (
+        <td
+          key={field}
+          className={`px-4 py-3 ${orderNumericColumns.includes(field) ? "financial-figure text-right" : ""} ${field === "reference" ? "font-mono text-xs" : ""}`}
+        >
+          {content(field)}
+        </td>
+      ))}
     </tr>
   );
 }

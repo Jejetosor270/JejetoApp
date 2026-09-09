@@ -177,7 +177,11 @@ export default async function BillingPage({
           Filter
         </button>
       </FilterBar>
-      <BillingTable canEdit={canEdit} documents={result.items} />
+      <BillingTable
+        canEdit={canEdit}
+        documents={result.items}
+        options={options}
+      />
       <Pagination
         page={pageInput.page}
         pageSize={pageInput.pageSize}
