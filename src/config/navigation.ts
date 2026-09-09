@@ -47,12 +47,6 @@ export const navigationGroups: readonly NavigationGroup[] = [
         label: "Billing",
       },
       {
-        href: "/payments",
-        icon: CircleDollarSign,
-        isAvailable: true,
-        label: "Payments",
-      },
-      {
         href: "/reports",
         icon: BarChart3,
         isAvailable: true,
@@ -63,6 +57,24 @@ export const navigationGroups: readonly NavigationGroup[] = [
   {
     label: "More",
     items: [
+      {
+        href: "/payments",
+        icon: CircleDollarSign,
+        isAvailable: true,
+        label: "Payments",
+      },
+      {
+        href: "/installments",
+        icon: CalendarDays,
+        isAvailable: true,
+        label: "Installments",
+      },
+      {
+        href: "/receipts",
+        icon: WalletCards,
+        isAvailable: true,
+        label: "Receipts",
+      },
       {
         href: "/clients",
         icon: Building2,
@@ -105,11 +117,6 @@ export const navigationGroups: readonly NavigationGroup[] = [
 /** Match segments so Home and similarly named routes never light up together. */
 export function isNavigationActive(pathname: string, href: string): boolean {
   if (href === "/settings" && pathname.startsWith("/admin/")) return true;
-  if (
-    href === "/payments" &&
-    (pathname.startsWith("/receipts/") || pathname.startsWith("/installments/"))
-  )
-    return true;
   return pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
 }
 export function navigationForRole(

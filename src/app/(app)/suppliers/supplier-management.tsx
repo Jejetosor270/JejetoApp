@@ -433,7 +433,7 @@ export function SupplierManagement({
             clearSelection={selection.clear}
             entityName="Supplier"
             impactSummary={`${affectedOrderCount} Order${affectedOrderCount === 1 ? "" : "s"} and all downstream records will also be deleted.`}
-            scope="Deleting the selected Suppliers will also permanently delete their Orders, payments, settlements, quote-import history, financial records, and Building links. Projects and Clients are preserved."
+            scope="The selected records and their dependent business records will move to Trash. Their financial effects will be removed until the group is restored from Settings."
             selectedIds={selection.selectedIds}
           />
         ) : null}

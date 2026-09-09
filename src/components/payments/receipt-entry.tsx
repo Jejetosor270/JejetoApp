@@ -34,10 +34,12 @@ interface Props {
 
 export function ReceiptEntry(props: Props) {
   const [open, setOpen] = useState(props.initiallyOpen ?? false);
+  const title =
+    props.initialType === "CLIENT" ? "Record receipt" : "Record Payment";
   return (
     <>
-      <Button onClick={() => setOpen(true)}>Record Payment</Button>
-      <EditorDrawer title="Record Payment" open={open} onOpenChange={setOpen}>
+      <Button onClick={() => setOpen(true)}>{title}</Button>
+      <EditorDrawer title={title} open={open} onOpenChange={setOpen}>
         <ReceiptEntryForm {...props} />
       </EditorDrawer>
     </>
@@ -139,7 +141,7 @@ export function ReceiptEntryForm({
         <p role="status">{state.message}</p>
         <Button asChild>
           <Link
-            href={`/payments?tab=${supplier ? "supplier" : "client"}&projectId=${projectId}&${supplier ? "orderId" : "billingId"}=${documentId}`}
+            href={`/installments?tab=${supplier ? "supplier" : "client"}&projectId=${projectId}&${supplier ? "orderId" : "billingId"}=${documentId}`}
             onClick={() => router.refresh()}
           >
             {supplier ? "View Supplier payments" : "View Client collections"}

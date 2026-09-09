@@ -1,5 +1,9 @@
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
+vi.mock("./cash-record-editor", () => ({
+  cashRecordEditor: async () => createElement("button", null, "Edit"),
+}));
 const mock = vi.hoisted(() => ({ user: vi.fn(), record: vi.fn() }));
 vi.mock("@/lib/auth/current-user", () => ({
   requireUser: mock.user,
@@ -63,13 +67,13 @@ it.each([
     expect(mock.record).toHaveBeenCalledWith(kind, "record");
   },
 );
-it("retains an authorized management link and handles missing records", async () => {
+it("offers an authorized local editor and handles missing records", async () => {
   mock.user.mockResolvedValue({ role: "MANAGER" });
   expect(
     renderToStaticMarkup(
       await CashRecordPage({ kind: "receipt", id: "record" }),
     ),
-  ).toContain("Manage in Billing");
+  ).toContain("<button>Edit</button>");
   mock.record.mockResolvedValue(null);
   await expect(
     CashRecordPage({ kind: "receipt", id: "missing" }),

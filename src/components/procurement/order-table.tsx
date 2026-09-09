@@ -37,7 +37,7 @@ export function OrderTable({
           action={deleteSelectedOrdersAction}
           clearSelection={selection.clear}
           entityName="Order"
-          scope="Deleting the selected Orders will also permanently delete all related Supplier Payment and Client Receipt schedules, settlements, quote-import history, VAT and cost records, Building links, and other Order-owned data. Suppliers, Projects, and Clients are preserved."
+          scope="The selected records and their dependent business records will move to Trash. Their financial effects will be removed until the group is restored from Settings."
           selectedIds={selection.selectedIds}
         />
       ) : null}

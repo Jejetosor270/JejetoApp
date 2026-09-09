@@ -247,6 +247,8 @@ model Currency {
 }
 
 model Client {
+  trashedAt DateTime?
+  @@index([trashedAt])
   id                  String   @id @default(uuid()) @db.Uuid
   legalName           String   @db.VarChar(200)
   displayName         String   @db.VarChar(160)
@@ -283,6 +285,8 @@ model Client {
 }
 
 model Supplier {
+  trashedAt DateTime?
+  @@index([trashedAt])
   id                       String   @id @default(uuid()) @db.Uuid
   legalName                String   @db.VarChar(200)
   displayName              String   @db.VarChar(160)
@@ -324,6 +328,8 @@ model Supplier {
 }
 
 model Project {
+  trashedAt DateTime?
+  @@index([trashedAt])
   orderPackages OrderPackage[]
   id                      String            @id @default(uuid()) @db.Uuid
   name                    String            @db.VarChar(200)
@@ -375,6 +381,8 @@ model Project {
 }
 
 model Building {
+  trashedAt DateTime?
+  @@index([trashedAt])
   id          String   @id @default(uuid()) @db.Uuid
   projectId   String   @db.Uuid
   name        String   @db.VarChar(160)
@@ -399,6 +407,8 @@ model Building {
 }
 
 model ProcurementOrder {
+  trashedAt DateTime?
+  @@index([trashedAt])
   packageId String? @db.Uuid
   orderPackage OrderPackage? @relation(fields: [packageId, projectId], references: [id, projectId], onDelete: Restrict)
   @@index([packageId, projectId])
@@ -474,6 +484,8 @@ model ProcurementOrder {
 }
 
 model ProjectFreightExpense {
+  trashedAt DateTime?
+  @@index([trashedAt])
   id                         String   @id @default(uuid()) @db.Uuid
   projectId                  String   @db.Uuid
   supplierId                 String?  @db.Uuid
@@ -569,6 +581,8 @@ model ProcurementOrderVatEntry {
 }
 
 model PaymentInstallment {
+  trashedAt DateTime?
+  @@index([trashedAt])
   id                        String           @id @default(uuid()) @db.Uuid
   orderId                   String           @db.Uuid
   direction                 PaymentDirection
@@ -602,6 +616,8 @@ model PaymentInstallment {
 }
 
 model PaymentSettlement {
+  trashedAt DateTime?
+  @@index([trashedAt])
   id                String   @id @default(uuid()) @db.Uuid
   installmentId     String   @db.Uuid
   amount            Decimal  @db.Decimal(19, 4)
@@ -692,6 +708,8 @@ model ApplicationSetting {
 }
 
 model ClientBillingDocument {
+  trashedAt DateTime?
+  @@index([trashedAt])
   id                         String                    @id @default(uuid()) @db.Uuid
   clientId                   String                    @db.Uuid
   projectId                  String                    @db.Uuid
@@ -740,6 +758,8 @@ model ClientBillingDocument {
 }
 
 model ClientPaymentInstallment {
+  trashedAt DateTime?
+  @@index([trashedAt])
   id                        String           @id @default(uuid()) @db.Uuid
   billingDocumentId         String           @db.Uuid
   sequence                  Int
@@ -771,6 +791,8 @@ model ClientPaymentInstallment {
 }
 
 model ClientReceipt {
+  trashedAt DateTime?
+  @@index([trashedAt])
   id                String   @id @default(uuid()) @db.Uuid
   billingDocumentId String   @db.Uuid
   installmentId     String?  @db.Uuid
@@ -844,6 +866,8 @@ model ClientDocumentImport {
 }
 
 model Room {
+  trashedAt DateTime?
+  @@index([trashedAt])
   id          String   @id @default(uuid()) @db.Uuid
   buildingId  String   @db.Uuid
   name        String   @db.VarChar(160)
@@ -927,6 +951,8 @@ model ItemImport {
 }
 
 model Item {
+  trashedAt DateTime?
+  @@index([trashedAt])
   id                         String               @id @default(uuid()) @db.Uuid
   projectId                  String               @db.Uuid
   buildingId                 String?              @db.Uuid
@@ -1021,6 +1047,8 @@ model Item {
 
 // Historical procurement_orders.packageName remains untouched; grouping is explicit.
 model OrderPackage {
+  trashedAt DateTime?
+  @@index([trashedAt])
   id String @id @default(uuid()) @db.Uuid
   projectId String @db.Uuid
   name String @db.VarChar(200)
@@ -1037,4 +1065,38 @@ model OrderPackage {
   @@unique([projectId, name])
   @@index([projectId, isActive])
   @@map("order_packages")
+}
+
+model TrashBatch {
+  id String @id @default(uuid()) @db.Uuid
+  label String @db.VarChar(255)
+  createdAt DateTime @default(now())
+  createdById String? @db.Uuid
+  restoredAt DateTime?
+  restoredById String? @db.Uuid
+  records TrashRecord[]
+  dependencies TrashDependency[]
+  @@index([restoredAt, createdAt])
+  @@map("trash_batches")
+}
+model TrashRecord {
+  id String @id @default(uuid()) @db.Uuid
+  batchId String @db.Uuid
+  model String @db.VarChar(80)
+  recordId String @db.Uuid
+  batch TrashBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  @@unique([batchId, model, recordId])
+  @@index([model, recordId])
+  @@map("trash_records")
+}
+
+model TrashDependency {
+  id String @id @default(uuid()) @db.Uuid
+  batchId String @db.Uuid
+  model String @db.VarChar(80)
+  recordId String @db.Uuid
+  signature String @db.VarChar(32)
+  batch TrashBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  @@unique([batchId, model, recordId])
+  @@map("trash_dependencies")
 }

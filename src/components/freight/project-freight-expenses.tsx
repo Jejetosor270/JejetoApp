@@ -126,7 +126,7 @@ function DeleteExpense({ id }: { id: string }) {
       <ConfirmSubmit
         disabled={pending}
         title="Delete this freight expense?"
-        description="This permanently removes the Project freight expense and its VAT. Project freight reconciliation and financial reports will be recalculated from the remaining records."
+        description="This moves the Project freight expense and its VAT to recoverable Trash. Project freight reconciliation and financial reports will be recalculated from the remaining records."
       />
       <ActionFeedback state={state} />
     </form>

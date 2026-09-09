@@ -438,7 +438,7 @@ export function ProjectManagement({
             clearSelection={selection.clear}
             entityName="Project"
             impactSummary={`${affectedBuildingCount} Building${affectedBuildingCount === 1 ? "" : "s"} and ${affectedOrderCount} Order${affectedOrderCount === 1 ? "" : "s"} will also be deleted.`}
-            scope="Deleting the selected Projects will also permanently delete their Buildings, Orders, payments, settlements, quote-import history, and financial records. Clients and Suppliers are preserved."
+            scope="The selected records and their dependent business records will move to Trash. Their financial effects will be removed until the group is restored from Settings."
             selectedIds={selection.selectedIds}
           />
         ) : null}

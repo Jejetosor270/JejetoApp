@@ -54,6 +54,7 @@ function receiptDraft(receipt: Receipt): ReceiptDraft {
 export function BillingReceiptEditor({
   billingDocumentId,
   canEdit,
+  actionOnly = false,
   currencyCode,
   installments,
   receipt,
@@ -61,6 +62,7 @@ export function BillingReceiptEditor({
 }: {
   billingDocumentId: string;
   canEdit: boolean;
+  actionOnly?: boolean;
   currencyCode: string;
   installments: Installment[];
   receipt: Receipt;
@@ -103,7 +105,7 @@ export function BillingReceiptEditor({
   const needsFx = currencyCode !== reportingCurrencyCode;
 
   return (
-    <article className="rounded-md border p-3 text-sm">
+    <article className={actionOnly ? "" : "rounded-md border p-3 text-sm"}>
       {editing ? (
         <EditorDrawer
           open
@@ -214,6 +216,16 @@ export function BillingReceiptEditor({
                   value={draft.fxRate}
                 />
               </Field>
+            ) : actionOnly ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDraft(saved);
+                  setEditing(true);
+                }}
+              >
+                Edit
+              </Button>
             ) : (
               <input name="fxRate" type="hidden" value="" />
             )}

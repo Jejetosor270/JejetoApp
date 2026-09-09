@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const transaction = vi.hoisted(() => ({
   paymentInstallment: {
     create: vi.fn(),
+    count: vi.fn(),
     deleteMany: vi.fn(),
     findFirst: vi.fn(),
     findUnique: vi.fn(),
@@ -25,6 +26,11 @@ const database = vi.hoisted(() => ({
 const getOrder = vi.hoisted(() => vi.fn());
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/trash/service", () => ({ trashInTransaction: vi.fn() }));
+vi.mock("@/lib/payments/sequence", () => ({
+  nextInstallmentSequence: vi.fn().mockResolvedValue(1),
+}));
+import { trashInTransaction } from "@/lib/trash/service";
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
 vi.mock("@/lib/procurement/orders", () => ({ getOrder }));
 vi.mock("@/lib/audit/events", () => ({ writeAuditEvent: vi.fn() }));
@@ -135,7 +141,7 @@ describe("payment persistence", () => {
     expect(transaction.paymentInstallment.update).not.toHaveBeenCalled();
   });
 
-  it("cancels installments and hard-deletes only those without settlements", async () => {
+  it("cancels installments and moves unpaid installments to Trash", async () => {
     await cancelInstallment("actor-1", "a12b6b9b-10e9-4e42-b93f-38796de4f65a");
     expect(transaction.paymentInstallment.update).toHaveBeenCalledWith({
       data: { isCancelled: true, updatedById: "actor-1" },
@@ -147,12 +153,18 @@ describe("payment persistence", () => {
       id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
       label: "Deposit",
     });
-    transaction.paymentInstallment.deleteMany.mockResolvedValue({ count: 1 });
+    transaction.paymentInstallment.count.mockResolvedValue(1);
     await removeUnpaidInstallment(
       "actor-1",
       "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
     );
-    expect(transaction.paymentInstallment.deleteMany).toHaveBeenCalledWith({
+    expect(trashInTransaction).toHaveBeenCalledWith(
+      transaction,
+      "actor-1",
+      "PaymentInstallment",
+      ["a12b6b9b-10e9-4e42-b93f-38796de4f65a"],
+    );
+    expect(transaction.paymentInstallment.count).toHaveBeenCalledWith({
       where: {
         id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
         settlements: { none: {} },

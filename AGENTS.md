@@ -75,7 +75,7 @@ Do not introduce a reusable product/SKU catalog, inventory, warehouse management
 ## Phase 3 master data
 
 - The operational hierarchy is Client → Project → Building; suppliers are separate reusable master data.
-- Archive Clients, Suppliers, and Buildings with `isActive`; archive Projects with `ProjectStatus.ARCHIVED`. ADMIN and MANAGER may also use the explicit, confirmed permanent-deletion workflows introduced later; preserve their transactional hierarchy rules and audit snapshots.
+- Archive Clients, Suppliers, and Buildings with `isActive`; archive Projects with `ProjectStatus.ARCHIVED`. ADMIN and MANAGER may also move business records to recoverable Trash; preserve transactional hierarchy rules and audit snapshots.
 - Master-data writes require the authenticated ADMIN or MANAGER actor and always set `createdById`/`updatedById` server-side.
 - Store optional countries as ISO-style two-letter codes and render labels from `src/config/countries`; currencies remain relational `Currency` records.
 
@@ -144,7 +144,7 @@ Do not introduce a reusable product/SKU catalog, inventory, warehouse management
 
 - UUID primary keys; UTC timestamps; `@db.Date` for business dates without time-of-day meaning.
 - Amounts use `Decimal(19,4)`, rates `Decimal(9,6)`, and FX rates `Decimal(20,10)` unless a documented domain need changes precision.
-- Core business relationships are restrictive unless an explicitly implemented permanent-deletion workflow removes the owned hierarchy transactionally. Employee audit/write-attribution relationships use `SetNull` so business and audit history survives employee deletion.
+- Core business relationships remain restrictive. Business deletion preserves original rows and links in recoverable Trash. Employee audit/write-attribution relationships use `SetNull` so business and audit history survives employee deletion.
 - Important entities have `createdAt`, `updatedAt`, `createdById`, and `updatedById`. Audit user links may become null if a user is removed; business links remain restricted.
 - Index foreign keys and operational status/date filters. Use explicit join models when the relationship needs auditability or future metadata.
 - No core financial data in JSON blobs. Nullability must represent a real workflow state, not implementation convenience.
@@ -195,6 +195,12 @@ npm run build           Production build
 Copy `.env.example` to `.env` and set `DATABASE_URL`; use `DIRECT_URL` for migrations when the runtime URL is pooled. Vercel should use its normal Next.js defaults. Generate Prisma Client during `postinstall`; apply migrations as a separate controlled step, never concurrently in every application build.
 
 SonarCloud should be connected through GitHub with generated Prisma, `.next`, and coverage artifacts excluded. Do not commit Sonar or Vercel tokens.
+
+## Recoverable business Trash
+
+- Normal Prisma reads, nested lists/counts, aggregates and mutation targets exclude trashed business records through the shared visibility policy. Keep its schema relation map synchronized.
+- Deletion groups retain original normalized records and dependent relationships. Restore transactionally through Settings; validate unchanged external parents, payment limits, schedules and allocations before reintroducing financial effects. Never store authoritative financial snapshots in Trash metadata.
+- Employee account deletion remains a separate ADMIN-only permanent operation with its existing attribution protections.
 
 ## Prohibited shortcuts
 

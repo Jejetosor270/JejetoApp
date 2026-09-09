@@ -87,10 +87,12 @@ function installmentRate(
 export function BillingInstallmentEditor({
   billingDocumentId,
   canEdit,
+  actionOnly = false,
   installment,
 }: {
   billingDocumentId: string;
   canEdit: boolean;
+  actionOnly?: boolean;
   installment: Installment;
 }) {
   const router = useRouter();
@@ -143,7 +145,7 @@ export function BillingInstallmentEditor({
   const fieldErrors = state.fieldErrors ?? {};
 
   return (
-    <article className="rounded-md border p-3 text-sm">
+    <article className={actionOnly ? "" : "rounded-md border p-3 text-sm"}>
       {editing ? (
         <EditorDrawer
           open
@@ -288,6 +290,16 @@ export function BillingInstallmentEditor({
             ) : null}
           </form>
         </EditorDrawer>
+      ) : actionOnly ? (
+        <Button
+          variant="outline"
+          onClick={() => {
+            setDraft(saved);
+            setEditing(true);
+          }}
+        >
+          Edit
+        </Button>
       ) : (
         <>
           <div className="flex justify-between gap-3">

@@ -753,9 +753,9 @@ export function ProjectFinancialDashboard({
             </div>
             <Link
               className="border-input rounded-md border px-2.5 py-1.5 text-xs font-medium"
-              href={`/payments?projectId=${projectId}&direction=SUPPLIER_PAYMENT`}
+              href={`/installments?projectId=${projectId}&tab=supplier`}
             >
-              Open Supplier Payments
+              Open Supplier Installments
             </Link>
           </div>
           <div className="mt-4 grid gap-4 xl:grid-cols-2">

@@ -136,7 +136,7 @@ describe("central receipt drawer", () => {
       expect(view.container.textContent).toContain("Recorded.");
       expect(
         view.container.querySelector(
-          `a[href="/payments?tab=${type === "SUPPLIER" ? "supplier" : "client"}&projectId=project&${type === "SUPPLIER" ? "orderId=order" : "billingId=billing"}"]`,
+          `a[href="/installments?tab=${type === "SUPPLIER" ? "supplier" : "client"}&projectId=project&${type === "SUPPLIER" ? "orderId=order" : "billingId=billing"}"]`,
         ),
       ).not.toBeNull();
     },

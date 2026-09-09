@@ -1,4 +1,6 @@
 import "server-only";
+import { nextInstallmentSequence } from "./sequence";
+import { trashInTransaction } from "@/lib/trash/service";
 
 import Decimal from "decimal.js";
 
@@ -35,6 +37,7 @@ import type {
   InlineInstallmentInput,
   SettlementInput,
   UpdateInstallmentInput,
+  UpdateSettlementInput,
 } from "@/domain/payments/validation";
 import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
@@ -336,11 +339,11 @@ export async function createInstallment(
   const database = getDatabase();
   await database.$transaction(
     async (transaction) => {
-      const latest = await transaction.paymentInstallment.findFirst({
-        where: { orderId: input.orderId, direction: input.direction },
-        orderBy: { sequence: "desc" },
-        select: { sequence: true },
-      });
+      const nextSequence = await nextInstallmentSequence(
+        transaction,
+        input.orderId,
+        input.direction,
+      );
       const installment = await transaction.paymentInstallment.create({
         data: {
           basis: input.basis,
@@ -360,7 +363,7 @@ export async function createInstallment(
               ? (input.percentageRate ?? null)
               : null,
           scheduledAmount: amount.toFixed(4),
-          sequence: (latest?.sequence ?? 0) + 1,
+          sequence: nextSequence,
           updatedById: actorId,
         },
       });
@@ -597,6 +600,90 @@ export async function recordSettlement(
   );
 }
 
+export async function updateSettlement(
+  actorId: string,
+  input: UpdateSettlementInput,
+): Promise<void> {
+  await getDatabase().$transaction(
+    async (transaction) => {
+      const record = await transaction.paymentSettlement.findUnique({
+        where: { id: input.id },
+        include: {
+          installment: {
+            include: {
+              settlements: { select: { id: true, amount: true } },
+              order: {
+                select: {
+                  project: { select: { reportingCurrencyCode: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+      if (!record) throw new PaymentNotFoundError();
+      const installment = record.installment;
+      if (installment.id !== input.installmentId)
+        throw new PaymentValidationError(
+          "The payment must remain with its original installment.",
+        );
+      if (installment.isCancelled)
+        throw new PaymentValidationError(
+          "A cancelled installment cannot be settled.",
+        );
+      const otherPaid = installment.settlements.reduce(
+        (sum, row) => (row.id === record.id ? sum : sum.plus(row.amount)),
+        new Decimal(0),
+      );
+      if (otherPaid.plus(input.amount).greaterThan(installment.scheduledAmount))
+        throw new PaymentValidationError(
+          "This entry would exceed the scheduled installment amount.",
+        );
+      const data = {
+        amount: input.amount,
+        settledAt: dateOnlyToDate(input.settledAt),
+        reference: input.reference ?? null,
+        notes: input.notes ?? null,
+        fxRateToReporting:
+          installment.currencyCode ===
+          installment.order.project.reportingCurrencyCode
+            ? null
+            : (input.fxRate ?? null),
+        updatedById: actorId,
+      };
+      await transaction.paymentSettlement.update({
+        where: { id: record.id },
+        data,
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: record.id,
+        entityReference: installment.label,
+        entityType: "SETTLEMENT",
+        summary: "Updated a payment settlement.",
+        metadata: {
+          previous: {
+            amount: record.amount.toString(),
+            settledAt: dateToDateOnly(record.settledAt),
+            reference: record.reference,
+            notes: record.notes,
+            fxRate: record.fxRateToReporting?.toString() ?? null,
+          },
+          next: {
+            amount: input.amount,
+            settledAt: input.settledAt,
+            reference: data.reference,
+            notes: data.notes,
+            fxRate: data.fxRateToReporting,
+          },
+          currency: installment.currencyCode,
+        },
+      });
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
 export async function markInstallmentSettled(
   actorId: string,
   installmentId: string,
@@ -625,13 +712,16 @@ export async function removeSettlement(
 ): Promise<void> {
   try {
     await getDatabase().$transaction(async (transaction) => {
-      const settlement = await transaction.paymentSettlement.delete({
+      const settlement = await transaction.paymentSettlement.findUniqueOrThrow({
         where: { id: settlementId },
         select: {
           id: true,
           installment: { select: { label: true } },
         },
       });
+      await trashInTransaction(transaction, actorId, "PaymentSettlement", [
+        settlement.id,
+      ]);
       await writeAuditEvent(transaction, actorId, {
         action: "DELETED",
         entityId: settlement.id,
@@ -691,14 +781,17 @@ export async function removeUnpaidInstallment(
       where: { id: installmentId },
       select: { id: true, label: true },
     });
-    const result = await transaction.paymentInstallment.deleteMany({
+    const result = await transaction.paymentInstallment.count({
       where: { id: installmentId, settlements: { none: {} } },
     });
-    if (result.count === 0 || !installment) {
+    if (result === 0 || !installment) {
       throw new PaymentValidationError(
         "Only installments without recorded payments or receipts can be removed.",
       );
     }
+    await trashInTransaction(transaction, actorId, "PaymentInstallment", [
+      installment.id,
+    ]);
     await writeAuditEvent(transaction, actorId, {
       action: "DELETED",
       entityId: installment.id,
@@ -728,12 +821,11 @@ export async function applyPaymentPreset(
   const rates = paymentSchedulePresets[input.preset];
   await getDatabase().$transaction(
     async (transaction) => {
-      const latest = await transaction.paymentInstallment.findFirst({
-        where: { direction: input.direction, orderId: input.orderId },
-        orderBy: { sequence: "desc" },
-        select: { sequence: true },
-      });
-      const firstSequence = (latest?.sequence ?? 0) + 1;
+      const firstSequence = await nextInstallmentSequence(
+        transaction,
+        input.orderId,
+        input.direction,
+      );
       await transaction.paymentInstallment.createMany({
         data: rates.map((rate, index) => ({
           basis: InstallmentBasis.PERCENTAGE,

@@ -202,6 +202,7 @@ export async function deleteSelectedOrdersAction(
   }
   try {
     await deleteOrders(actor.id, input.data);
+    revalidatePath("/", "layout");
     revalidatePath("/orders");
     revalidatePath("/calendar");
     revalidateProjectFinancialViews();

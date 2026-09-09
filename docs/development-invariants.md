@@ -216,7 +216,7 @@ Do not introduce an Item dependency without explicit feature design.
 
 ## Lasting UX and compatibility rules
 
-Keep planned versus actual terminology explicit. Payments has Supplier (default) and Client views plus a direct Record Payment header action; Supplier schedules remain supplier-side;
+Keep planned versus actual terminology explicit. More contains separate Payments and Receipts lists for actual cash, and Installments with Supplier/Client tabs for schedules;
 Client cash belongs to Billing/Receipts. Use progressive financial disclosure rather
 than duplicate blocks or renamed copies of the same financial concept. Preserve shared
 filtering, sorting, pagination, tables, and visible-page selection mechanics. Reports
@@ -280,8 +280,8 @@ checks. Report migration/deployment requirements explicitly.
   into Billing currency with the existing manual-FX helper; incomplete FX disables that
   percentage. Revised Supplier intake previews use the same candidate/pricing helpers
   as confirmation and make no AI calls or writes.
-- Payments shows Supplier installment settlements and Client Billing collections in
-  their respective views, with Order/Billing detail links for individual actual records.
+- Payments shows actual Supplier settlements; Receipts shows actual Client Billing collections.
+  Both link to individual Details/Related pages with local Edit drawers.
   Client cash authority remains Client Receipts, not legacy Order client settlements.
   Schedules, including planned Quotes, remain expectations rather than actual cash.
 - Use `DateInput` for editable dates: European display/calendar, canonical ISO date-only
@@ -293,15 +293,15 @@ checks. Report migration/deployment requirements explicitly.
   navigation/draft behavior. Clearing list filters must preserve the selected view/tab
   and page size while resetting pagination. Headers, filter actions and pagination
   wrap at narrow widths; financial table cells remain right-aligned and formatted.
-- The Payments header’s Record Payment action is the central entry drawer for Supplier payments and Client
-  receipts. Reuse `recordSettlement` and `recordClientReceipt`, including their
+- The Payments and Receipts headers open the shared entry drawer for Supplier payments and Client
+  receipts respectively. Reuse `recordSettlement` and `recordClientReceipt`, including their
   transactional audit and overpayment checks. Central entry validates the selected
   Project/document within the write transaction. Supplier payments require an
   installment; the existing installment creator is available within the drawer.
   Client receipts may be Billing-level. Selecting an installment proposes its current
   outstanding amount; manual overrides survive unrelated edits. Contextual Order and
   Billing entry remains available. Overview and Transactions tabs are removed; legacy
-  links redirect to Supplier or Client, and old Receipts links redirect to Record Payment.
+  links redirect to the appropriate cash workspace, preserving their scope.
 - Rollout requires `20260909000000_project_order_packages` before the new application.
   Migration creation/generation does not authorize applying it to the configured database.
 
@@ -341,7 +341,7 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
   preserve the current scope.
 - Reports use one report selector, optional portfolio columns, and one applied-filter summary.
   Supplier directory pages link to the canonical scoped Purchasing and Payments lists.
-- Record Payment is available directly in either Payments view; the current Project and
+- Record Payment and Record receipt are available in their respective cash lists; the current Project and
   cash direction prefill the drawer. Legacy entry URLs still open the drawer. No entry
   action is shown to USER employees; server authorization remains authoritative.
 - Billing and Order allocation changes use BillingAllocationEditor and the existing
@@ -358,8 +358,8 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
 - Project, Order and Billing links from these tables open `?tab=related`. Supplier payments,
   Client receipts and Supplier/Client installments have their own Details/Related pages under
   `/payments/[paymentId]`, `/receipts/[receiptId]`, and `/installments/{supplier,client}/[installmentId]`.
-  Their readers resolve the active user, validate IDs, and expose no new mutations. Manage actions
-  retain the existing authorized Order/Billing editors. Buildings and Rooms remain managed within
+  Their readers resolve the active user and validate IDs. Local Edit drawers
+  reuse the authorized Order/Billing mutation services and preserve failed drafts. Buildings and Rooms remain managed within
   their Project; Packages open scoped Orders, and Items open their existing record pages.
 - An Order has one Project. Order Related includes Supplier payments/installments and linked Billing,
   but deliberately does not project Billing receipts or Client installments onto the Order. Open
@@ -368,3 +368,12 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
   concatenated cash totals. Receipt pages link the owning document, installment source Quote and
   matching Invoices without duplicating those documents.
 - This presentation cleanup introduces no schema changes or new migration.
+
+## Cash workspaces and recoverable Trash
+
+- More contains Payments (actual Supplier settlements), Receipts (actual Client cash), and Installments with Supplier/Client tabs. Lists use scoped database pagination; each record has Details/Related and its own Edit drawer using the existing validated services. Supplier settlement corrections update in place with audit and overpayment protection.
+- Billing and cash tables share visible-page checkbox selection and confirmed deletion. Business deletion now moves records and their dependents to Settings → Trash, retaining original normalized data, links, rates and dates. Employee deletion remains the existing separate permanent ADMIN workflow.
+- The Prisma visibility policy excludes trashed roots, nested lists/counts, supporting records and financial aggregates, and rejects mutations targeting trashed records. Raw SQL is reserved for transactional Trash operations, restoration checks and sequence reservations. Keep model-map.ts aligned with schema.prisma.
+- A deletion group restores together; previously trashed children retain their own group. Restoration verifies external parent fingerprints and rejects overpayments, duplicate collection schedules and excessive allocations. It never rewrites intervening business edits. Reserved installment sequences and identifiers are retained while in Trash.
+- Trashing an Invoice hides its owned receipts while preserving its Quote installment link, allowing the Quote forecast to resume. Restore recovers the original match without duplicate cash.
+- Requires migration 20260913000000_recoverable_business_trash before running this application version. Preparing the migration does not authorize applying it to a configured database.

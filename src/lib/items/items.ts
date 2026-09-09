@@ -1,4 +1,5 @@
 import "server-only";
+import { moveToTrash } from "@/lib/trash/service";
 
 import Decimal from "decimal.js";
 
@@ -890,26 +891,7 @@ export async function bulkUpdateItems(
 }
 
 export async function deleteItems(actorId: string, ids: string[]) {
-  await getDatabase().$transaction(
-    async (transaction) => {
-      const items = await transaction.item.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, itemReference: true, name: true },
-      });
-      if (items.length !== ids.length)
-        throw new ItemValidationError("One or more Items no longer exist.");
-      for (const item of items)
-        await writeAuditEvent(transaction, actorId, {
-          action: "DELETED",
-          entityId: item.id,
-          entityReference: item.itemReference ?? item.name,
-          entityType: "ITEM",
-          summary: "Permanently deleted the Item.",
-        });
-      await transaction.item.deleteMany({ where: { id: { in: ids } } });
-    },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  );
+  await moveToTrash(actorId, "Item", ids);
 }
 
 export async function createRoom(actorId: string, input: CreateRoomInput) {

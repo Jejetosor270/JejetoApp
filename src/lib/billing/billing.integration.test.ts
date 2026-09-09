@@ -58,6 +58,12 @@ const procurementOrders = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/trash/service", () => ({ trashInTransaction: vi.fn() }));
+vi.mock("@/lib/payments/sequence", () => ({
+  nextInstallmentSequence: vi.fn().mockResolvedValue(1),
+}));
+import { nextInstallmentSequence } from "@/lib/payments/sequence";
+import { trashInTransaction } from "@/lib/trash/service";
 vi.mock("@/lib/audit/events", () => audit);
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
 vi.mock("@/lib/procurement/orders", () => procurementOrders);
@@ -800,9 +806,12 @@ describe("Billing persistence", () => {
       id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
     });
 
-    expect(transaction.clientReceipt.delete).toHaveBeenCalledWith({
-      where: { id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a" },
-    });
+    expect(trashInTransaction).toHaveBeenCalledWith(
+      transaction,
+      "actor-1",
+      "ClientReceipt",
+      ["f12b6b9b-10e9-4e42-b93f-38796de4f65a"],
+    );
     expect(audit.writeAuditEvent).toHaveBeenCalledWith(
       transaction,
       "actor-1",
@@ -899,6 +908,7 @@ describe("Billing persistence", () => {
   });
 
   it("adds and safely removes a post-creation Billing installment", async () => {
+    vi.mocked(nextInstallmentSequence).mockResolvedValueOnce(2);
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
       currencyCode: "EUR",
       fxRateToReporting: null,
@@ -942,9 +952,12 @@ describe("Billing persistence", () => {
       billingDocumentId: projectId,
       id: installmentId,
     });
-    expect(transaction.clientPaymentInstallment.delete).toHaveBeenCalledWith({
-      where: { id: installmentId },
-    });
+    expect(trashInTransaction).toHaveBeenCalledWith(
+      transaction,
+      "actor-1",
+      "ClientPaymentInstallment",
+      [installmentId],
+    );
   });
 
   it("supports repeatedly adding three installments up to Billing TTC", async () => {

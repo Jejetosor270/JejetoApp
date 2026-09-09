@@ -65,7 +65,7 @@ export function CompanyFinancialSummary({
       "Supplier outstanding",
       formatMoney(report.payments.supplier.totalRemaining, currency),
       report.payments.supplier.totalRemaining === null,
-      "/payments?direction=SUPPLIER_PAYMENT",
+      "/installments?tab=supplier",
     ],
     [
       "Client outstanding TTC",
@@ -77,7 +77,7 @@ export function CompanyFinancialSummary({
       "Supplier overdue",
       formatMoney(report.payments.supplier.overdue.value, currency),
       !report.payments.supplier.overdue.complete,
-      "/payments?direction=SUPPLIER_PAYMENT&status=OVERDUE",
+      "/installments?tab=supplier&status=OVERDUE",
     ],
     [
       "Client overdue TTC",

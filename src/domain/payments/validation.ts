@@ -126,6 +126,8 @@ export const settlementSchema = z.object({
   reference: optionalText(120),
   settledAt: dateOnly,
 });
+export const updateSettlementSchema = settlementSchema.extend({ id: z.uuid() });
+export type UpdateSettlementInput = z.infer<typeof updateSettlementSchema>;
 export const installmentIdSchema = z.object({
   installmentId: z.uuid("Invalid installment."),
 });

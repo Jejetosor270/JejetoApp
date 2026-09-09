@@ -1,4 +1,11 @@
 "use client";
+import { trashSelectedAction } from "@/app/(app)/settings/trash/actions";
+import {
+  BulkActionBar,
+  SelectionHeader,
+  SelectionCell,
+  useBulkSelection,
+} from "@/components/bulk-actions/bulk-selection";
 import { ListEmptyState } from "@/components/listing/empty-state";
 
 import Link from "next/link";
@@ -17,9 +24,13 @@ import {
 function BillingRow({
   canEdit,
   document,
+  selected,
+  onSelect,
 }: {
   canEdit: boolean;
   document: ClientBillingView;
+  selected: boolean;
+  onSelect: () => void;
   view?: "commercial" | "collection";
 }) {
   const router = useRouter();
@@ -33,6 +44,13 @@ function BillingRow({
         router.push(href);
       }}
     >
+      {canEdit && (
+        <SelectionCell
+          checked={selected}
+          onChange={onSelect}
+          label={document.reference}
+        />
+      )}
       <td className="px-3 py-3 font-mono text-xs">
         <Link className="underline-offset-2 hover:underline" href={href}>
           {document.reference}
@@ -88,8 +106,18 @@ export function BillingTable({
   documents: ClientBillingView[];
   view?: "commercial" | "collection";
 }) {
+  const selection = useBulkSelection(documents.map((row) => row.id));
   return (
     <section className={tableContainerClassName}>
+      {canEdit && (
+        <BulkActionBar
+          action={trashSelectedAction.bind(null, "billing")}
+          clearSelection={selection.clear}
+          entityName="Billing record"
+          scope="Move the selected Billing records, their installments and linked receipts to Trash. Financial reports will be recalculated. Related records are restored together from Settings."
+          selectedIds={selection.selectedIds}
+        />
+      )}
       <div
         className="max-h-[70svh] overflow-auto"
         role="region"
@@ -99,6 +127,14 @@ export function BillingTable({
         <table className="w-full min-w-[48rem] text-left text-sm">
           <thead className={tableHeaderClassName}>
             <tr>
+              {canEdit && (
+                <SelectionHeader
+                  checked={selection.allSelected}
+                  indeterminate={selection.someSelected}
+                  disabled={!documents.length}
+                  onChange={selection.toggleAll}
+                />
+              )}
               <SortHeader
                 className="px-3 py-3"
                 label="Reference"
@@ -133,6 +169,8 @@ export function BillingTable({
               <BillingRow
                 canEdit={canEdit}
                 document={document}
+                selected={selection.isSelected(document.id)}
+                onSelect={() => selection.toggle(document.id)}
                 key={document.id}
               />
             ))}

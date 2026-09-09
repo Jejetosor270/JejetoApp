@@ -1,7 +1,7 @@
 "use client";
 import { DateInput } from "@/components/forms/date-input";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useEffect } from "react";
 
 import {
   applyPaymentPresetAction,
@@ -9,6 +9,7 @@ import {
   createInstallmentAction,
   markInstallmentSettledAction,
   recordSettlementAction,
+  updateSettlementAction,
   removeInstallmentAction,
   removeSettlementAction,
   updateInstallmentAction,
@@ -74,7 +75,9 @@ export function InstallmentForm({
   installment,
   orderId,
   reportingCurrencyCode,
+  onSaved,
 }: {
+  onSaved?: () => void;
   baseAmount: string;
   currencies: readonly { code: string }[];
   defaultCurrencyCode: string;
@@ -90,6 +93,9 @@ export function InstallmentForm({
     serverAction,
     initialPaymentActionState,
   );
+  useEffect(() => {
+    if (state.status === "success") onSaved?.();
+  }, [state, onSaved]);
   const [basis, setBasis] = useState(installment?.basis ?? "PERCENTAGE");
   const [currencyCode, setCurrencyCode] = useState(
     installment?.currencyCode ?? defaultCurrencyCode,
@@ -267,21 +273,30 @@ export function PresetForm({
 export function SettlementForm({
   installment,
   today,
+  settlement,
+  onSaved,
 }: {
   installment: PaymentInstallmentView;
   today: string;
+  settlement?: PaymentSettlementView;
+  onSaved?: () => void;
 }) {
   const { state, onSubmit, pending } = usePersistentActionState(
-    recordSettlementAction,
+    settlement ? updateSettlementAction : recordSettlementAction,
     initialPaymentActionState,
   );
+  useEffect(() => {
+    if (state.status === "success") onSaved?.();
+  }, [state, onSaved]);
   const wording =
     installment.direction === "SUPPLIER_PAYMENT" ? "payment" : "receipt";
-  const [amount, setAmount] = useState(installment.outstandingAmount);
-  const [settledAt, setSettledAt] = useState(today);
-  const [fxRate, setFxRate] = useState("");
-  const [reference, setReference] = useState("");
-  const [notes, setNotes] = useState("");
+  const [amount, setAmount] = useState(
+    settlement?.amount ?? installment.outstandingAmount,
+  );
+  const [settledAt, setSettledAt] = useState(settlement?.settledAt ?? today);
+  const [fxRate, setFxRate] = useState(settlement?.fxRate ?? "");
+  const [reference, setReference] = useState(settlement?.reference ?? "");
+  const [notes, setNotes] = useState(settlement?.notes ?? "");
   const fieldErrors = state.fieldErrors ?? {};
   return (
     <form
@@ -289,6 +304,7 @@ export function SettlementForm({
       onSubmit={onSubmit}
     >
       <input name="installmentId" type="hidden" value={installment.id} />
+      {settlement && <input name="id" type="hidden" value={settlement.id} />}
       <Field
         error={fieldErrors.amount}
         label={`${wording === "payment" ? "Paid" : "Received"} amount`}
@@ -346,7 +362,9 @@ export function SettlementForm({
         />
       </Field>
       <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-2">
-        <SubmitButton pending={pending}>Record {wording}</SubmitButton>
+        <SubmitButton pending={pending}>
+          {settlement ? "Save payment" : `Record ${wording}`}
+        </SubmitButton>
         <Feedback state={state} />
       </div>
     </form>

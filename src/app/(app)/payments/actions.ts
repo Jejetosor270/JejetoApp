@@ -18,6 +18,7 @@ import {
   settlementIdSchema,
   settlementSchema,
   updateInstallmentSchema,
+  updateSettlementSchema,
 } from "@/domain/payments/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import { BulkDeletionError, deleteInstallments } from "@/lib/deletion/bulk";
@@ -33,6 +34,7 @@ import {
   removeUnpaidInstallment,
   updateInstallment,
   updateInstallmentInline,
+  updateSettlement,
 } from "@/lib/payments/payments";
 import { revalidateProjectFinancialViews } from "@/lib/reporting/revalidation";
 
@@ -131,6 +133,31 @@ export async function updateInstallmentInlineAction(formData: FormData) {
   }
 }
 
+export async function updateSettlementAction(
+  _: PaymentActionState,
+  formData: FormData,
+): Promise<PaymentActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = updateSettlementSchema.safeParse({
+    ...settlementFormValues(formData),
+    id: formData.get("id"),
+  });
+  if (!input.success)
+    return {
+      status: "error",
+      message: "Check the payment details.",
+      formError: "Check the payment details.",
+      fieldErrors: fieldErrorMap(input.error.issues),
+    };
+  try {
+    await updateSettlement(actor.id, input.data);
+    refreshPaymentViews();
+    return { status: "success", message: "Payment updated." };
+  } catch (error) {
+    return errorState(error);
+  }
+}
+
 export async function recordSettlementAction(
   _: PaymentActionState,
   formData: FormData,
@@ -203,6 +230,7 @@ export async function removeInstallmentAction(
     return { message: "Invalid installment.", status: "error" };
   try {
     await removeUnpaidInstallment(actor.id, input.data.installmentId);
+    revalidatePath("/", "layout");
     refreshPaymentViews();
     return { message: "Unpaid installment removed.", status: "success" };
   } catch (error) {
@@ -222,6 +250,7 @@ export async function removeSettlementAction(
     return { message: "Invalid settlement.", status: "error" };
   try {
     await removeSettlement(actor.id, input.data.settlementId);
+    revalidatePath("/", "layout");
     refreshPaymentViews();
     return { message: "Settlement correction removed.", status: "success" };
   } catch (error) {
@@ -268,6 +297,7 @@ export async function deleteSelectedInstallmentsAction(
   }
   try {
     await deleteInstallments(actor.id, input.data);
+    revalidatePath("/", "layout");
     refreshPaymentViews();
     return {
       message: `${input.data.length} installment${input.data.length === 1 ? "" : "s"} deleted.`,

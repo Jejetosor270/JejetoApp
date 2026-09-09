@@ -512,6 +512,7 @@ export function UserManagement({
           </p>
         </div>
         <BulkActionBar
+          permanent
           action={deleteSelectedEmployeesAction}
           clearSelection={clearDeletedEmployees}
           entityName="employee"

@@ -39,6 +39,7 @@ function sellingOrder(
   treatment: VatTreatment,
 ): Parameters<typeof summarizeOrder>[0] {
   return {
+    trashedAt: null,
     carrierCode: null,
     carrierOtherName: null,
     trackingReference: null,

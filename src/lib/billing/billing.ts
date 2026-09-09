@@ -1,5 +1,7 @@
 import { freightCoverageBreakdown } from "@/domain/billing/freight-coverage";
 import "server-only";
+import { nextInstallmentSequence } from "@/lib/payments/sequence";
+import { trashInTransaction } from "@/lib/trash/service";
 
 import Decimal from "decimal.js";
 
@@ -552,6 +554,10 @@ export async function confirmClientBillingDocument(
         installmentsToCreate.length > 0 &&
         (input.action === "CREATE" || input.replaceSchedule)
       ) {
+        const nextSequence = await nextInstallmentSequence(
+          transaction,
+          document.id,
+        );
         await transaction.clientPaymentInstallment.createMany({
           data: installmentsToCreate.map((installment, index) => ({
             basis: installment.basis,
@@ -570,7 +576,7 @@ export async function confirmClientBillingDocument(
                 ? (installment.percentageRate ?? null)
                 : null,
             scheduledAmount: installmentAmount(installment, input.totalTtc),
-            sequence: index + 1,
+            sequence: nextSequence + index,
             updatedById: actorId,
           })),
         });
@@ -885,7 +891,9 @@ export async function deleteClientReceipt(
       throw new ClientBillingValidationError(
         "This receipt belongs to another Billing Event.",
       );
-    await transaction.clientReceipt.delete({ where: { id: receipt.id } });
+    await trashInTransaction(transaction, actorId, "ClientReceipt", [
+      receipt.id,
+    ]);
     await writeAuditEvent(transaction, actorId, {
       action: "DELETED",
       entityId: receipt.id,
@@ -1101,11 +1109,7 @@ export async function createClientBillingInstallment(
         throw new ClientBillingValidationError(
           "The Client payment schedule cannot exceed the Billing TTC.",
         );
-      const sequence =
-        document.paymentInstallments.reduce(
-          (maximum, installment) => Math.max(maximum, installment.sequence),
-          0,
-        ) + 1;
+      const sequence = await nextInstallmentSequence(transaction, document.id);
       const installment = await transaction.clientPaymentInstallment.create({
         data: {
           basis: input.basis,
@@ -1165,9 +1169,9 @@ export async function deleteClientBillingInstallment(
       throw new ClientBillingValidationError(
         "An installment matched to an Invoice cannot be removed.",
       );
-    await transaction.clientPaymentInstallment.delete({
-      where: { id: installment.id },
-    });
+    await trashInTransaction(transaction, actorId, "ClientPaymentInstallment", [
+      installment.id,
+    ]);
     await writeAuditEvent(transaction, actorId, {
       action: "DELETED",
       entityId: installment.id,

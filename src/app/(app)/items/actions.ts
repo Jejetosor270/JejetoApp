@@ -130,6 +130,7 @@ export async function deleteSelectedItemsAction(
     };
   try {
     await deleteItems(actor.id, input.data);
+    revalidatePath("/", "layout");
     refresh();
     return {
       message: `${input.data.length} Item${input.data.length === 1 ? "" : "s"} deleted.`,

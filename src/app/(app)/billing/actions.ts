@@ -235,6 +235,7 @@ export async function deleteClientReceiptAction(
     };
   try {
     await deleteClientReceipt(actor.id, input.data);
+    revalidatePath("/", "layout");
     revalidatePath("/billing");
     revalidatePath(`/billing/${input.data.billingDocumentId}`);
     revalidatePath("/payments");
@@ -301,6 +302,7 @@ export async function deleteClientBillingInstallmentAction(
     };
   try {
     await deleteClientBillingInstallment(actor.id, input.data);
+    revalidatePath("/", "layout");
     revalidatePath("/billing");
     revalidatePath(`/billing/${input.data.billingDocumentId}`);
     revalidatePath("/payments");

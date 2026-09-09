@@ -54,6 +54,7 @@ export async function deleteSelectedProjectsAction(
   }
   try {
     await deleteProjects(actor.id, input.data);
+    revalidatePath("/", "layout");
   } catch (error) {
     if (error instanceof BulkDeletionError) {
       return { message: error.message, status: "error" };

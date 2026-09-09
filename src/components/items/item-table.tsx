@@ -1016,7 +1016,7 @@ export function ItemTable({
             action={deleteSelectedItemsAction}
             clearSelection={selection.clear}
             entityName="Item"
-            scope="Only the selected Item records will be permanently deleted. Related master data is preserved."
+            scope="The selected records and their dependent business records will move to Trash. Their financial effects will be removed until the group is restored from Settings."
             selectedIds={selection.selectedIds}
           />
           {selection.selectedIds.length ? (

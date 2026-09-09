@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DetailPageHeader } from "@/components/layout/detail-page-header";
 import {
@@ -7,7 +6,7 @@ import {
 } from "@/components/layout/record-presentation";
 import { RecordWorkspace } from "@/components/layout/record-workspace";
 import { RelatedRecords } from "@/components/layout/related-records";
-import { Button } from "@/components/ui/button";
+import { cashRecordEditor } from "./cash-record-editor";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { getCashRecord } from "@/lib/related-records/cash-records";
 import type { CashRecordKind } from "@/lib/related-records/types";
@@ -22,6 +21,17 @@ export async function CashRecordPage({
   const user = await requireUser();
   const record = await getCashRecord(kind, id);
   if (!record) notFound();
+  const editor = canEditMasterData(user.role)
+    ? await cashRecordEditor(kind, id)
+    : undefined;
+  const backHref =
+    kind === "payment"
+      ? "/payments"
+      : kind === "receipt"
+        ? "/receipts"
+        : kind === "client-installment"
+          ? "/installments?tab=client"
+          : "/installments";
   return (
     <div className="space-y-6">
       <DetailPageHeader
@@ -29,20 +39,15 @@ export async function CashRecordPage({
         eyebrow={record.type}
         status={record.status}
         meta={record.description}
-        backHref="/payments"
-        backLabel="Payments"
-        actions={
-          canEditMasterData(user.role) ? (
-            <Button asChild variant="outline">
-              <Link href={record.manageHref}>
-                Manage in{" "}
-                {kind === "payment" || kind === "supplier-installment"
-                  ? "Order"
-                  : "Billing"}
-              </Link>
-            </Button>
-          ) : undefined
+        backHref={backHref}
+        backLabel={
+          kind === "payment"
+            ? "Payments"
+            : kind === "receipt"
+              ? "Receipts"
+              : "Installments"
         }
+        actions={editor}
       />
       <RecordWorkspace
         label={`${record.type} workspace`}

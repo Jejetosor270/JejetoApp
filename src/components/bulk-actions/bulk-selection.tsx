@@ -53,6 +53,7 @@ export function BulkActionBar({
   clearSelection,
   entityName,
   impactSummary,
+  permanent = false,
   scope,
   selectedIds,
 }: {
@@ -60,6 +61,7 @@ export function BulkActionBar({
   clearSelection: () => void;
   entityName: string;
   impactSummary?: string;
+  permanent?: boolean;
   scope: string;
   selectedIds: string[];
 }) {
@@ -104,7 +106,8 @@ export function BulkActionBar({
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>
-                  Permanently delete {count === 1 ? "this" : count}{" "}
+                  {permanent ? "Permanently delete" : "Move to Trash"}{" "}
+                  {count === 1 ? "this" : count}{" "}
                   {count === 1 ? entityName : `selected ${entityName}s`}?
                 </AlertDialogTitle>
                 <AlertDialogDescription asChild>
@@ -116,7 +119,9 @@ export function BulkActionBar({
                       </p>
                     ) : null}
                     <p className="text-destructive font-medium">
-                      This action cannot be undone.
+                      {permanent
+                        ? "This action cannot be undone."
+                        : "These records will stop contributing to calculations. Restore them together from Settings → Trash."}
                     </p>
                   </div>
                 </AlertDialogDescription>
@@ -133,7 +138,7 @@ export function BulkActionBar({
                     type="button"
                     variant="destructive"
                   >
-                    Permanently delete
+                    {permanent ? "Permanently delete" : "Move to Trash"}
                   </Button>
                 </AlertDialogAction>
               </AlertDialogFooter>

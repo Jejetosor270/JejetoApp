@@ -1,6 +1,7 @@
 import { getBilledFreight } from "@/lib/billing/freight-reporting";
 import { freightDifference } from "@/domain/billing/freight-reporting";
 import "server-only";
+import { trashInTransaction } from "@/lib/trash/service";
 
 import Decimal from "decimal.js";
 
@@ -264,10 +265,15 @@ export async function deleteProjectFreightExpense(
 ): Promise<string> {
   try {
     return await getDatabase().$transaction(async (transaction) => {
-      const expense = await transaction.projectFreightExpense.delete({
-        where: { id },
-        select: { description: true, projectId: true, reference: true },
-      });
+      const expense = await transaction.projectFreightExpense.findUniqueOrThrow(
+        {
+          where: { id },
+          select: { description: true, projectId: true, reference: true },
+        },
+      );
+      await trashInTransaction(transaction, actorId, "ProjectFreightExpense", [
+        id,
+      ]);
       await writeAuditEvent(transaction, actorId, {
         action: "DELETED",
         entityId: id,

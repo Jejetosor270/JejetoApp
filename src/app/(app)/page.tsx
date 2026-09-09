@@ -41,7 +41,7 @@ export default async function DashboardPage() {
         <h2 className="text-base font-semibold">Needs attention</h2>
         <div className="divide-y rounded-lg border">
           <Link
-            href="/payments?tab=supplier&status=OVERDUE"
+            href="/installments?tab=supplier&status=OVERDUE"
             className="hover:bg-muted flex items-center justify-between gap-4 p-4"
           >
             <span className="text-sm">Overdue Supplier Payments</span>

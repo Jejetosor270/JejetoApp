@@ -264,7 +264,7 @@ export function PaymentInstallmentTable({
           clearSelection={selection.clear}
           entityName="installment"
           impactSummary={`${affectedSettlementCount} recorded settlement${affectedSettlementCount === 1 ? "" : "s"} will also be deleted.`}
-          scope="Deleting the selected Supplier Payment installments will also permanently delete all associated settlement and payment-history records."
+          scope="The selected records and their dependent business records will move to Trash. Their financial effects will be removed until the group is restored from Settings."
           selectedIds={selection.selectedIds}
         />
       ) : null}

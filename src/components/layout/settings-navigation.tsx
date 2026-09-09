@@ -9,6 +9,7 @@ export function SettingsNavigation({
   const pathname = usePathname();
   const links = [
     { href: "/settings", label: "Settings" },
+    { href: "/settings/trash", label: "Trash" },
     ...(role === "ADMIN" ? [{ href: "/admin/users", label: "Employees" }] : []),
     { href: "/admin/activity", label: "Activity" },
   ];

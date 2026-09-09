@@ -1,26 +1,24 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({
-  user: vi.fn(),
-  projects: vi.fn().mockResolvedValue([]),
-  currencies: vi.fn().mockResolvedValue([]),
-}));
+const mocks = vi.hoisted(() => ({ user: vi.fn(), list: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth/current-user", () => ({
   requireUser: mocks.user,
   canEditMasterData: (role: string) => role !== "USER",
 }));
 vi.mock("@/lib/db", () => ({
-  getDatabase: () => ({
-    project: { findMany: mocks.projects },
-    currency: { findMany: mocks.currencies },
-    client: { findMany: mocks.projects },
-    clientBillingDocument: { findMany: mocks.projects },
-  }),
+  getDatabase: () =>
+    Object.fromEntries(
+      ["project", "currency", "client", "supplier"].map((name) => [
+        name,
+        { findMany: async () => [] },
+      ]),
+    ),
 }));
-vi.mock("./supplier-page", () => ({
-  default: () => createElement("p", null, "Supplier installments"),
+vi.mock("@/lib/payments/cash-list", () => ({
+  listCashRecords: mocks.list,
+  installmentStatuses: ["OVERDUE", "UPCOMING", "PAID"],
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/payments",
@@ -30,86 +28,78 @@ vi.mock("next/navigation", () => ({
     throw new Error("redirect:" + url);
   },
 }));
-vi.mock("@/lib/billing/reporting", () => ({
-  listClientCashInstallments: vi.fn().mockResolvedValue([]),
-}));
 vi.mock("@/components/payments/receipt-entry", () => ({
-  ReceiptEntry: () => createElement("button", null, "Record Payment"),
+  ReceiptEntry: () => createElement("button", null, "Record cash"),
 }));
 import PaymentsPage from "./page";
-import { CreateOrderActions } from "@/components/procurement/create-order-actions";
+import ReceiptsPage from "../receipts/page";
+import InstallmentsPage from "../installments/page";
 beforeEach(() => {
   mocks.user.mockResolvedValue({ role: "MANAGER" });
-});
-it.each(["supplier", "client", "entry"])(
-  "offers two direction tabs and a direct entry action on %s",
-  async (tab) => {
-    const html = renderToStaticMarkup(
-      await PaymentsPage({ searchParams: Promise.resolve({ tab }) }),
-    );
-    const nav =
-      html.match(/<nav aria-label="Payments sections"[\s\S]*?<\/nav>/)?.[0] ??
-      "";
-    expect(nav.match(/<a /g)).toHaveLength(2);
-    for (const label of ["Supplier", "Client"]) expect(nav).toContain(label);
-    expect(html).not.toMatch(/Overview|Transactions|tab=receipts/);
-    expect(nav).not.toContain("Record Payment");
-    expect(html).toContain("<button>Record Payment");
-    expect(html.match(/<h1 /g)).toHaveLength(1);
-    expect(html.indexOf("<h1 ")).toBeLessThan(
-      html.indexOf('<nav aria-label="Payments sections"'),
-    );
-    expect(html).toContain(
-      tab === "supplier"
-        ? "Supplier installments"
-        : tab === "client"
-          ? "Billing schedules"
-          : "<button>Record Payment",
-    );
-    expect(
-      renderToStaticMarkup(<CreateOrderActions>form</CreateOrderActions>),
-    ).toContain("New Order");
-  },
-);
-it("keeps the entry action unavailable to read-only employees", async () => {
-  mocks.user.mockResolvedValue({ role: "USER" });
-  const html = renderToStaticMarkup(
-    await PaymentsPage({ searchParams: Promise.resolve({ tab: "entry" }) }),
-  );
-  expect(html).not.toContain("<button>Record Payment");
-  expect(html).toContain("Supplier installments");
-});
-it.each([undefined, "unknown"])("defaults to Supplier for %s", async (tab) => {
-  const html = renderToStaticMarkup(
-    await PaymentsPage({ searchParams: Promise.resolve({ tab }) }),
-  );
-  expect(html).toContain("Supplier installments");
+  mocks.list.mockResolvedValue({ items: [], total: 0 });
 });
 it.each([
-  ["overview", undefined, "supplier"],
-  ["transactions", undefined, "supplier"],
-  ["transactions", "OUT", "supplier"],
-  ["transactions", "IN", "client"],
-  ["receipts", undefined, "entry"],
-])("redirects legacy %s / %s safely", async (tab, direction, target) => {
+  [PaymentsPage, "payment", "Payments"],
+  [ReceiptsPage, "receipt", "Receipts"],
+  [InstallmentsPage, "supplier-installment", "Installments"],
+] as const)(
+  "uses the shared operational workspace for %s",
+  async (Page, kind, title) => {
+    const html = renderToStaticMarkup(
+      await Page({ searchParams: Promise.resolve({}) }),
+    );
+    expect(html).toContain(title + " table");
+    expect(html).toContain("Select all visible rows");
+    expect(mocks.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind, page: 1, pageSize: 25 }),
+    );
+    expect(html.match(/<h1 /g)).toHaveLength(1);
+  },
+);
+it("offers separate Client and Supplier installment tabs", async () => {
+  const html = renderToStaticMarkup(
+    await InstallmentsPage({
+      searchParams: Promise.resolve({ tab: "client" }),
+    }),
+  );
+  expect(html).toContain('aria-label="Installment type"');
+  expect(html).toContain("Supplier");
+  expect(html).toContain("Client");
+  expect(mocks.list).toHaveBeenLastCalledWith(
+    expect.objectContaining({ kind: "client-installment" }),
+  );
+});
+it("hides entry and deletion for read-only employees", async () => {
+  mocks.user.mockResolvedValue({ role: "USER" });
+  const html = renderToStaticMarkup(
+    await PaymentsPage({ searchParams: Promise.resolve({}) }),
+  );
+  expect(html).not.toContain("Record cash");
+  expect(html).not.toContain("Select all visible rows");
+});
+it("preserves client schedule links", async () => {
   await expect(
     PaymentsPage({
-      searchParams: Promise.resolve({
-        tab,
-        direction,
-        projectId: "project",
-        page: "4",
-      }),
+      searchParams: Promise.resolve({ tab: "client", projectId: "project" }),
     }),
-  ).rejects.toThrow(`redirect:/payments?tab=${target}&projectId=project`);
+  ).rejects.toThrow("redirect:/installments?tab=client&projectId=project");
 });
-it("redirects a Billing-specific transaction link to Client", async () => {
-  await expect(
-    PaymentsPage({
-      searchParams: Promise.resolve({
-        tab: "transactions",
-        billingId: "billing",
+it.each([
+  ["transactions", "IN", "/receipts?projectId=project"],
+  ["transactions", "OUT", "/payments?projectId=project"],
+  ["receipts", undefined, "/receipts?projectId=project&tab=entry"],
+] as const)(
+  "redirects historical %s links without losing scope",
+  async (tab, direction, target) => {
+    await expect(
+      PaymentsPage({
+        searchParams: Promise.resolve({
+          tab,
+          direction,
+          projectId: "project",
+          page: "4",
+        }),
       }),
-    }),
-  ).rejects.toThrow("redirect:/payments?tab=client&billingId=billing");
-});
+    ).rejects.toThrow("redirect:" + target);
+  },
+);
