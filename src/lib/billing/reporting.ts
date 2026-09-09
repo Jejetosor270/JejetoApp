@@ -92,6 +92,7 @@ export function summarizeClientBillingRecords(
   >();
 
   for (const record of records) {
+    if (!record.projectId) continue;
     const fxRate = record.fxRateToReporting?.toString() ?? null;
     const convertedHt = converted(
       record.totalHt.toString(),
@@ -291,6 +292,7 @@ export async function getProjectsClientBillingSummaries(
   });
   const recordsByProject = new Map<string, BillingReportingRecord[]>();
   for (const record of records) {
+    if (!record.projectId) continue;
     const values = recordsByProject.get(record.projectId) ?? [];
     values.push(record);
     recordsByProject.set(record.projectId, values);
@@ -416,12 +418,12 @@ export async function listClientCashInstallments(
         : installmentOutstanding(installment.scheduledAmount, received);
       const dueDate = dateToDateOnly(installment.dueDate);
       unique.set(installment.id, {
-        clientId: document.client.id,
+        clientId: document.client?.id ?? "",
         receivedAmount: received.toString(),
         documentType: document.documentType,
         billingDocumentId: document.id,
         billingReference: document.reference,
-        clientName: document.client.displayName,
+        clientName: document.client?.displayName ?? "Unassigned",
         currencyCode: installment.currencyCode,
         dueDate,
         expectedFxRate:
@@ -430,8 +432,8 @@ export async function listClientCashInstallments(
         isCancelled: installment.isCancelled,
         label: installment.label,
         outstandingAmount: outstanding.toString(),
-        projectId: document.project.id,
-        projectName: document.project.name,
+        projectId: document.project?.id ?? "",
+        projectName: document.project?.name ?? "Unassigned",
         scheduledAmount: installment.scheduledAmount.toString(),
         status: derivePaymentStatus({
           dueDate,

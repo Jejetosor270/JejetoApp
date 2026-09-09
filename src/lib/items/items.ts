@@ -1,3 +1,4 @@
+import { retainedCurrency } from "@/lib/related-records/context";
 import "server-only";
 import { moveToTrash } from "@/lib/trash/service";
 
@@ -126,8 +127,13 @@ function serializeItem(
     estimatedWarehouseDate: dateOnly(item.estimatedWarehouseDate),
     financial,
     project: {
-      ...project,
-      freightEstimateRate: project.freightEstimateRate?.toString() ?? null,
+      id: project?.id ?? "",
+      name: project?.name ?? "Unassigned",
+      reportingCurrencyCode: retainedCurrency(
+        project?.reportingCurrencyCode,
+        item.detachedReportingCurrencyCode,
+      ),
+      freightEstimateRate: project?.freightEstimateRate?.toString() ?? null,
     },
     procurementOrder: procurementOrder
       ? { id: procurementOrder.id, orderNumber: procurementOrder.orderNumber }

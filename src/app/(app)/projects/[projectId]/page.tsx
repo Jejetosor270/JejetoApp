@@ -191,6 +191,8 @@ export default async function ProjectPage({
       managers={options.managers}
       project={{
         ...project,
+        clientId: project.clientId ?? "",
+        client: project.client ?? { id: "", displayName: "Unassigned" },
         clientBudgetTargetHt: project.clientBudgetTargetHt?.toString() ?? null,
         defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
         defaultOtherCostMarkupRate:

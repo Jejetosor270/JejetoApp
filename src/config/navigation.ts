@@ -82,6 +82,12 @@ export const navigationGroups: readonly NavigationGroup[] = [
         label: "Unassigned cash records",
       },
       {
+        href: "/unassigned",
+        icon: Building2,
+        isAvailable: true,
+        label: "Unassigned records",
+      },
+      {
         href: "/clients",
         icon: Building2,
         isAvailable: true,

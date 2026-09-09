@@ -222,6 +222,12 @@ model User {
 }
 
 model Currency {
+  detachedProcurementOrder ProcurementOrder[] @relation("ProcurementOrderDetachedCurrency")
+  detachedProjectFreightExpense ProjectFreightExpense[] @relation("ProjectFreightExpenseDetachedCurrency")
+  detachedPaymentInstallment PaymentInstallment[] @relation("PaymentInstallmentDetachedCurrency")
+  detachedClientBillingDocument ClientBillingDocument[] @relation("ClientBillingDocumentDetachedCurrency")
+  detachedClientPaymentInstallment ClientPaymentInstallment[] @relation("ClientPaymentInstallmentDetachedCurrency")
+  detachedItem Item[] @relation("ItemDetachedCurrency")
   code       String   @id @db.Char(3)
   name       String   @db.VarChar(80)
   minorUnits Int      @default(2)
@@ -336,7 +342,7 @@ model Project {
   id                      String            @id @default(uuid()) @db.Uuid
   name                    String            @db.VarChar(200)
   code                    String            @unique @db.VarChar(40)
-  clientId                String            @db.Uuid
+  clientId                String?            @db.Uuid
   countryCode             String?           @db.Char(2)
   reportingCurrencyCode   String            @db.Char(3)
   projectManagerId        String?           @db.Uuid
@@ -360,7 +366,7 @@ model Project {
   createdById             String?           @db.Uuid
   updatedById             String?           @db.Uuid
 
-  client            Client                  @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  client            Client?                  @relation(fields: [clientId], references: [id], onDelete: Restrict)
   reportingCurrency Currency                @relation("ProjectReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
   projectManager    User?                   @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
   createdBy         User?                   @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -386,7 +392,7 @@ model Building {
   trashedAt DateTime?
   @@index([trashedAt])
   id          String   @id @default(uuid()) @db.Uuid
-  projectId   String   @db.Uuid
+  projectId   String?   @db.Uuid
   name        String   @db.VarChar(160)
   shortCode   String   @db.VarChar(32)
   description String?  @db.Text
@@ -396,7 +402,7 @@ model Building {
   createdById String?  @db.Uuid
   updatedById String?  @db.Uuid
 
-  project   Project                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  project   Project?                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
   createdBy User?                      @relation("BuildingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy User?                      @relation("BuildingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   orders    ProcurementOrderBuilding[]
@@ -419,8 +425,8 @@ model ProcurementOrder {
   packageName                        String                 @db.VarChar(200)
   description                        String?                @db.Text
   category                           String?                @db.VarChar(80)
-  projectId                          String                 @db.Uuid
-  supplierId                         String                 @db.Uuid
+  projectId                          String?                 @db.Uuid
+  supplierId                         String?                 @db.Uuid
   orderCurrencyCode                  String                 @db.Char(3)
   supplierQuoteReference             String?                @db.VarChar(120)
   carrierCode                       String?                @db.VarChar(40)
@@ -439,7 +445,7 @@ model ProcurementOrder {
   targetMarginRate                   Decimal?               @db.Decimal(9, 6)
   productMarkupOverrideRate          Decimal?               @db.Decimal(9, 6)
   freightMarkupOverrideRate          Decimal?               @db.Decimal(9, 6)
-  freightAllowanceOverrideAmount     Decimal?               @db.Decimal(19, 4)
+  freightAllowanceOverrideAmount     Decimal?               @db.Decimal(38, 20)
   otherCostMarkupOverrideRate        Decimal?               @db.Decimal(9, 6)
   outputVatTaxableBaseOverride       Decimal?               @db.Decimal(19, 4)
   quoteDate                          DateTime?              @db.Date
@@ -458,8 +464,8 @@ model ProcurementOrder {
   createdById                        String?                @db.Uuid
   updatedById                        String?                @db.Uuid
 
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  supplier        Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  project         Project?  @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  supplier        Supplier? @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   orderCurrency   Currency @relation("OrderCurrency", fields: [orderCurrencyCode], references: [code], onDelete: Restrict)
   sellingCurrency Currency @relation("OrderSellingCurrency", fields: [sellingCurrencyCode], references: [code], onDelete: Restrict)
   createdBy       User?    @relation("ProcurementOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -483,13 +489,16 @@ model ProcurementOrder {
   @@index([updatedAt])
   @@index([expectedDeliveryDate], map: "procurement_orders_estimatedDeliveryAt_idx")
   @@map("procurement_orders")
+  detachedReportingCurrencyCode String? @db.Char(3)
+  detachedReportingCurrency Currency? @relation("ProcurementOrderDetachedCurrency", fields: [detachedReportingCurrencyCode], references: [code], onDelete: Restrict)
+
 }
 
 model ProjectFreightExpense {
   trashedAt DateTime?
   @@index([trashedAt])
   id                         String   @id @default(uuid()) @db.Uuid
-  projectId                  String   @db.Uuid
+  projectId                  String?   @db.Uuid
   supplierId                 String?  @db.Uuid
   reference                  String?  @db.VarChar(120)
   description                String   @db.VarChar(200)
@@ -510,7 +519,7 @@ model ProjectFreightExpense {
   createdById                String?  @db.Uuid
   updatedById                String?  @db.Uuid
 
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Restrict)
   supplier  Supplier? @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   currency  Currency @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
   createdBy User?    @relation("ProjectFreightExpenseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -520,6 +529,9 @@ model ProjectFreightExpense {
   @@index([supplierId])
   @@index([currencyCode])
   @@map("project_freight_expenses")
+  detachedReportingCurrencyCode String? @db.Char(3)
+  detachedReportingCurrency Currency? @relation("ProjectFreightExpenseDetachedCurrency", fields: [detachedReportingCurrencyCode], references: [code], onDelete: Restrict)
+
 }
 
 model ProcurementOrderBuilding {
@@ -586,7 +598,7 @@ model PaymentInstallment {
   trashedAt DateTime?
   @@index([trashedAt])
   id                        String           @id @default(uuid()) @db.Uuid
-  orderId                   String           @db.Uuid
+  orderId                   String?           @db.Uuid
   direction                 PaymentDirection
   sequence                  Int
   label                     String           @db.VarChar(200)
@@ -603,7 +615,7 @@ model PaymentInstallment {
   createdById               String?          @db.Uuid
   updatedById               String?          @db.Uuid
 
-  order       ProcurementOrder    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  order       ProcurementOrder?    @relation(fields: [orderId], references: [id], onDelete: Restrict)
   currency    Currency            @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
   createdBy   User?               @relation("PaymentInstallmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy   User?               @relation("PaymentInstallmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
@@ -615,6 +627,9 @@ model PaymentInstallment {
   @@index([currencyCode, dueDate])
   @@index([orderId, dueDate])
   @@map("payment_installments")
+  detachedReportingCurrencyCode String? @db.Char(3)
+  detachedReportingCurrency Currency? @relation("PaymentInstallmentDetachedCurrency", fields: [detachedReportingCurrencyCode], references: [code], onDelete: Restrict)
+
 }
 
 model PaymentSettlement {
@@ -713,8 +728,8 @@ model ClientBillingDocument {
   trashedAt DateTime?
   @@index([trashedAt])
   id                         String                    @id @default(uuid()) @db.Uuid
-  clientId                   String                    @db.Uuid
-  projectId                  String                    @db.Uuid
+  clientId                   String?                    @db.Uuid
+  projectId                  String?                    @db.Uuid
   documentType               ClientBillingDocumentType
   reference                  String                    @db.VarChar(120)
   documentDate               DateTime                  @db.Date
@@ -738,8 +753,8 @@ model ClientBillingDocument {
   createdById                String?                   @db.Uuid
   updatedById                String?                   @db.Uuid
 
-  client              Client                     @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  project             Project                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  client              Client?                     @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  project             Project?                    @relation(fields: [projectId], references: [id], onDelete: Restrict)
   currency            Currency                   @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
   supersedesDocument  ClientBillingDocument?     @relation("ClientBillingRevision", fields: [supersedesDocumentId], references: [id], onDelete: SetNull)
   revisions           ClientBillingDocument[]    @relation("ClientBillingRevision")
@@ -757,13 +772,16 @@ model ClientBillingDocument {
   @@index([dueDate])
   @@index([matchedInstallmentId])
   @@map("client_billing_documents")
+  detachedReportingCurrencyCode String? @db.Char(3)
+  detachedReportingCurrency Currency? @relation("ClientBillingDocumentDetachedCurrency", fields: [detachedReportingCurrencyCode], references: [code], onDelete: Restrict)
+
 }
 
 model ClientPaymentInstallment {
   trashedAt DateTime?
   @@index([trashedAt])
   id                        String           @id @default(uuid()) @db.Uuid
-  billingDocumentId         String           @db.Uuid
+  billingDocumentId         String?           @db.Uuid
   sequence                  Int
   label                     String           @db.VarChar(200)
   basis                     InstallmentBasis
@@ -779,7 +797,7 @@ model ClientPaymentInstallment {
   createdById               String?          @db.Uuid
   updatedById               String?          @db.Uuid
 
-  billingDocument ClientBillingDocument   @relation("ClientDocumentInstallments", fields: [billingDocumentId], references: [id], onDelete: Restrict)
+  billingDocument ClientBillingDocument?   @relation("ClientDocumentInstallments", fields: [billingDocumentId], references: [id], onDelete: Restrict)
   currency        Currency                @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
   createdBy       User?                   @relation("ClientPaymentInstallmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy       User?                   @relation("ClientPaymentInstallmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
@@ -790,6 +808,9 @@ model ClientPaymentInstallment {
   @@index([dueDate])
   @@index([currencyCode, dueDate])
   @@map("client_payment_installments")
+  detachedReportingCurrencyCode String? @db.Char(3)
+  detachedReportingCurrency Currency? @relation("ClientPaymentInstallmentDetachedCurrency", fields: [detachedReportingCurrencyCode], references: [code], onDelete: Restrict)
+
 }
 
 model ClientReceipt {
@@ -871,7 +892,7 @@ model Room {
   trashedAt DateTime?
   @@index([trashedAt])
   id          String   @id @default(uuid()) @db.Uuid
-  buildingId  String   @db.Uuid
+  buildingId  String?   @db.Uuid
   name        String   @db.VarChar(160)
   code        String?  @db.VarChar(40)
   notes       String?  @db.Text
@@ -881,7 +902,7 @@ model Room {
   createdById String?  @db.Uuid
   updatedById String?  @db.Uuid
 
-  building  Building @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  building  Building? @relation(fields: [buildingId], references: [id], onDelete: Restrict)
   createdBy User?    @relation("RoomCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy User?    @relation("RoomUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   items     Item[]
@@ -956,7 +977,7 @@ model Item {
   trashedAt DateTime?
   @@index([trashedAt])
   id                         String               @id @default(uuid()) @db.Uuid
-  projectId                  String               @db.Uuid
+  projectId                  String?               @db.Uuid
   buildingId                 String?              @db.Uuid
   roomId                     String?              @db.Uuid
   supplierId                 String?              @db.Uuid
@@ -1018,7 +1039,7 @@ model Item {
   createdById                String?              @db.Uuid
   updatedById                String?              @db.Uuid
 
-  project             Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  project             Project?            @relation(fields: [projectId], references: [id], onDelete: Restrict)
   building            Building?          @relation(fields: [buildingId], references: [id], onDelete: SetNull)
   room                Room?              @relation(fields: [roomId], references: [id], onDelete: SetNull)
   supplier            Supplier?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)
@@ -1045,6 +1066,9 @@ model Item {
   @@index([projectId, commercialStatus])
   @@index([projectId, updatedAt])
   @@map("items")
+  detachedReportingCurrencyCode String? @db.Char(3)
+  detachedReportingCurrency Currency? @relation("ItemDetachedCurrency", fields: [detachedReportingCurrencyCode], references: [code], onDelete: Restrict)
+
 }
 
 // Historical procurement_orders.packageName remains untouched; grouping is explicit.
@@ -1052,14 +1076,14 @@ model OrderPackage {
   trashedAt DateTime?
   @@index([trashedAt])
   id String @id @default(uuid()) @db.Uuid
-  projectId String @db.Uuid
+  projectId String? @db.Uuid
   name String @db.VarChar(200)
   isActive Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   createdById String? @db.Uuid
   updatedById String? @db.Uuid
-  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Restrict)
   createdBy User? @relation("OrderPackageCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy User? @relation("OrderPackageUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   orders ProcurementOrder[]

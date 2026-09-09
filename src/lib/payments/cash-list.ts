@@ -15,6 +15,7 @@ export interface CashListRow {
   id: string;
   href: string;
   reference: string;
+  editReference?: string;
   project: string;
   counterparty: string;
   document: string;
@@ -87,7 +88,7 @@ export async function listCashRecords(
       settledAt: dates,
       installment: {
         direction: "SUPPLIER_PAYMENT" as const,
-        order: orderScope,
+        ...(Object.keys(orderScope).length ? { order: orderScope } : {}),
       },
       ...(query
         ? {
@@ -114,9 +115,11 @@ export async function listCashRecords(
         id: r.id,
         href: href(r.id),
         reference: r.reference || r.installment.label,
-        project: r.installment.order.project.name,
-        counterparty: r.installment.order.supplier.displayName,
-        document: r.installment.order.orderNumber,
+        editReference: r.reference ?? "",
+        project: r.installment.order?.project?.name ?? "Unassigned",
+        counterparty:
+          r.installment.order?.supplier?.displayName ?? "Unassigned",
+        document: r.installment.order?.orderNumber ?? "Unassigned",
         date: dateToDateOnly(r.settledAt),
         amount: r.amount.toString(),
         currency: r.installment.currencyCode,
@@ -127,7 +130,9 @@ export async function listCashRecords(
   if (kind === "receipt") {
     const where = {
       receivedAt: dates,
-      billingDocument: billingScope,
+      ...(Object.keys(billingScope).length
+        ? { billingDocument: billingScope }
+        : {}),
       ...(query
         ? {
             OR: [
@@ -152,9 +157,10 @@ export async function listCashRecords(
         id: r.id,
         href: href(r.id),
         reference: r.reference || "Receipt",
-        project: r.billingDocument.project.name,
-        counterparty: r.billingDocument.client.displayName,
-        document: r.billingDocument.reference,
+        editReference: r.reference ?? "",
+        project: r.billingDocument?.project?.name ?? "Unassigned",
+        counterparty: r.billingDocument?.client?.displayName ?? "Unassigned",
+        document: r.billingDocument?.reference ?? "Unassigned",
         date: dateToDateOnly(r.receivedAt),
         amount: r.amount.toString(),
         currency: r.billingDocument.currencyCode,
@@ -184,7 +190,7 @@ export async function listCashRecords(
     const where = {
       direction: "SUPPLIER_PAYMENT" as const,
       dueDate: dates,
-      order: orderScope,
+      ...(Object.keys(orderScope).length ? { order: orderScope } : {}),
       ...(query
         ? { OR: [{ label: contains }, { order: { orderNumber: contains } }] }
         : {}),
@@ -226,9 +232,9 @@ export async function listCashRecords(
         id: r.id,
         href: href(r.id),
         reference: r.label,
-        project: r.order.project.name,
-        counterparty: r.order.supplier.displayName,
-        document: r.order.orderNumber,
+        project: r.order?.project?.name ?? "Unassigned",
+        counterparty: r.order?.supplier?.displayName ?? "Unassigned",
+        document: r.order?.orderNumber ?? "Unassigned",
         date: dateToDateOnly(r.dueDate),
         amount: r.scheduledAmount.toString(),
         currency: r.currencyCode,
@@ -238,7 +244,9 @@ export async function listCashRecords(
   }
   const where = {
     dueDate: dates,
-    billingDocument: billingScope,
+    ...(Object.keys(billingScope).length
+      ? { billingDocument: billingScope }
+      : {}),
     ...(query
       ? {
           OR: [
@@ -288,9 +296,9 @@ export async function listCashRecords(
       id: r.id,
       href: href(r.id),
       reference: r.label,
-      project: r.billingDocument.project.name,
-      counterparty: r.billingDocument.client.displayName,
-      document: r.billingDocument.reference,
+      project: r.billingDocument?.project?.name ?? "Unassigned",
+      counterparty: r.billingDocument?.client?.displayName ?? "Unassigned",
+      document: r.billingDocument?.reference ?? "Unassigned",
       date: dateToDateOnly(r.dueDate),
       amount: r.scheduledAmount.toString(),
       currency: r.currencyCode,

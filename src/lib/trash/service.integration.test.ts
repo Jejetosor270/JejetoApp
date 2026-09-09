@@ -6,7 +6,9 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => state.db }));
 vi.mock("@/lib/auth/current-user", () => ({
   requireUser: async () => ({ role: "ADMIN" }),
+  requireMasterDataEditor: async () => ({ id: actorId, role: "ADMIN" }),
 }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { prismaMemoryDatabase } from "@/test/prisma-memory-database";
 import { moveToTrash, restoreTrash } from "./service";
 import {
@@ -17,6 +19,10 @@ import { nextInstallmentSequence } from "@/lib/payments/sequence";
 import { updateSettlement } from "@/lib/payments/payments";
 import { unassignCash } from "@/lib/payments/unassigned-cash";
 import { listCashRecords } from "@/lib/payments/cash-list";
+import { removeAssignments } from "@/lib/related-records/unassign";
+import { getOrder, listProjectOrders } from "@/lib/procurement/orders";
+import { getOrderBillingReconciliation } from "@/lib/billing/billing";
+import { editRelatedFinancialRowAction } from "@/app/(app)/related-records/inline-actions";
 
 let memory: Awaited<ReturnType<typeof prismaMemoryDatabase>>;
 let actorId: string;
@@ -522,4 +528,309 @@ it("rolls back an unassignment selection if any selected cash record is missing"
       where: { id: f.payment.id },
     }),
   ).toBe(0);
+});
+
+it("retains the last effective Order economics after removing its Project and changing the Project defaults", async () => {
+  const f = await fixture();
+  await memory.raw.project.update({
+    where: { id: f.project.id },
+    data: {
+      defaultProductMarkupRate: "0.345678",
+      defaultFreightMarkupRate: "0.123456",
+      defaultOtherCostMarkupRate: "0.234567",
+      freightEstimateRate: "0.125",
+    },
+  });
+  await memory.raw.procurementOrderCostLine.create({
+    data: {
+      orderId: f.order.id,
+      category: "SUPPLIER_PURCHASE",
+      originalAmount: "100.1234",
+    },
+  });
+  await memory.raw.procurementOrder.update({
+    where: { id: f.order.id },
+    data: { pricingMode: "PROJECT_MARKUP" },
+  });
+  const before = await getOrder(f.order.id);
+  await removeAssignments(
+    actorId,
+    { relation: "order-project", parentId: f.project.id },
+    [f.order.id],
+  );
+  const detached = await memory.active.procurementOrder.findUniqueOrThrow({
+    where: { id: f.order.id },
+  });
+  expect(detached.projectId).toBeNull();
+  expect(detached.pricingMode).toBe("ORDER_MARKUP");
+  expect(detached.productMarkupOverrideRate?.toString()).toBe("0.345678");
+  expect(detached.detachedReportingCurrencyCode).toBe("EUR");
+  await memory.raw.project.update({
+    where: { id: f.project.id },
+    data: { defaultProductMarkupRate: "0.9", freightEstimateRate: "0.9" },
+  });
+  const after = await getOrder(f.order.id);
+  expect(after?.componentPricing.productMarkupRate).toBe(
+    before?.componentPricing.productMarkupRate,
+  );
+  expect(after?.componentPricing.freightMarkupRate).toBe(
+    before?.componentPricing.freightMarkupRate,
+  );
+  expect(after?.freightAllowance.amount).toBe(before?.freightAllowance.amount);
+  expect(after?.costs.reportingSellingRevenue).toBe(
+    before?.costs.reportingSellingRevenue,
+  );
+  expect(await getOrderBillingReconciliation(f.order.id)).toEqual([]);
+  expect(await listProjectOrders("")).toEqual([]);
+  expect(
+    await memory.active.procurementOrder.count({
+      where: { projectId: f.project.id },
+    }),
+  ).toBe(0);
+});
+
+it("detaches supplier installments, preserving planned amount and moving recorded cash into Unassigned", async () => {
+  const f = await fixture();
+  await removeAssignments(
+    actorId,
+    { relation: "supplier-installment-order", parentId: f.order.id },
+    [f.installment.id],
+  );
+  const row = await memory.active.paymentInstallment.findUniqueOrThrow({
+    where: { id: f.installment.id },
+  });
+  expect(row.orderId).toBeNull();
+  expect(row.scheduledAmount.toString()).toBe("100");
+  expect(row.dueDate).toEqual(f.installment.dueDate);
+  expect(
+    (
+      await memory.active.unassignedCashRecord.findUniqueOrThrow({
+        where: { id: f.payment.id },
+      })
+    ).amount.toString(),
+  ).toBe("30.1256");
+  const list = await listCashRecords({
+    kind: "supplier-installment",
+    query: f.installment.label,
+    direction: "asc",
+    page: 1,
+    pageSize: 100,
+  });
+  expect(
+    list.items.some(
+      (item) => item.id === row.id && item.document === "Unassigned",
+    ),
+  ).toBe(true);
+});
+
+it("retains a detached Billing document while removing revenue and cash from its former Project", async () => {
+  const f = await fixture();
+  await removeAssignments(
+    actorId,
+    { relation: "billing-project", parentId: f.project.id },
+    [f.invoice.id],
+  );
+  const row = await memory.active.clientBillingDocument.findUniqueOrThrow({
+    where: { id: f.invoice.id },
+  });
+  expect(row.projectId).toBeNull();
+  expect(row.totalHt.toString()).toBe("100.1256");
+  expect(row.detachedReportingCurrencyCode).toBe("EUR");
+  expect(
+    await memory.active.clientReceipt.count({
+      where: { billingDocumentId: row.id },
+    }),
+  ).toBe(1);
+  expect((await getProjectClientBillingSummary(f.project.id))?.paidTtc).toBe(
+    "0.0000",
+  );
+});
+
+it("removes only an Invoice match when its shared Quote installment is unlinked", async () => {
+  const f = await fixture();
+  const quote = await memory.raw.clientBillingDocument.create({
+    data: {
+      clientId: f.client.id,
+      projectId: f.project.id,
+      documentType: "QUOTE",
+      reference: randomUUID(),
+      documentDate: new Date("2026-09-01"),
+      currencyCode: "EUR",
+      totalHt: "100",
+      totalTtc: "100",
+    },
+  });
+  const planned = await memory.raw.clientPaymentInstallment.create({
+    data: {
+      billingDocumentId: quote.id,
+      sequence: 1,
+      label: "Planned",
+      basis: "FIXED_AMOUNT",
+      scheduledAmount: "100",
+      currencyCode: "EUR",
+      dueDate: new Date("2026-10-01"),
+    },
+  });
+  await memory.raw.clientBillingDocument.update({
+    where: { id: f.invoice.id },
+    data: { matchedInstallmentId: planned.id },
+  });
+  await removeAssignments(
+    actorId,
+    { relation: "client-installment-billing", parentId: f.invoice.id },
+    [planned.id],
+  );
+  expect(
+    (
+      await memory.active.clientPaymentInstallment.findUniqueOrThrow({
+        where: { id: planned.id },
+      })
+    ).billingDocumentId,
+  ).toBe(quote.id);
+  expect(
+    (
+      await memory.active.clientBillingDocument.findUniqueOrThrow({
+        where: { id: f.invoice.id },
+      })
+    ).matchedInstallmentId,
+  ).toBeNull();
+});
+
+it("rolls back all relationship removals when a selected row belongs to a different parent", async () => {
+  const a = await fixture();
+  const b = await fixture();
+  await expect(
+    removeAssignments(
+      actorId,
+      { relation: "order-project", parentId: a.project.id },
+      [a.order.id, b.order.id],
+    ),
+  ).rejects.toThrow("relationship changed");
+  expect(
+    (
+      await memory.active.procurementOrder.findUniqueOrThrow({
+        where: { id: a.order.id },
+      })
+    ).projectId,
+  ).toBe(a.project.id);
+});
+
+it("inline cash edits preserve FX and reject amounts above the original schedule", async () => {
+  const f = await fixture();
+  const form = new FormData();
+  form.set("id", f.payment.id);
+  form.set("value", "Reviewed payment");
+  form.set("date", "2026-09-12");
+  form.set("amount", "45.6789");
+  expect(
+    (await editRelatedFinancialRowAction("payment", undefined, form)).status,
+  ).toBe("success");
+  const saved = await memory.raw.paymentSettlement.findUniqueOrThrow({
+    where: { id: f.payment.id },
+  });
+  expect(saved.amount.toString()).toBe("45.6789");
+  expect(saved.reference).toBe("Reviewed payment");
+  expect(saved.fxRateToReporting).toBeNull();
+  form.set("amount", "100.0001");
+  expect(
+    (await editRelatedFinancialRowAction("payment", undefined, form)).status,
+  ).toBe("error");
+  expect(
+    (
+      await memory.raw.paymentSettlement.findUniqueOrThrow({
+        where: { id: f.payment.id },
+      })
+    ).amount.toString(),
+  ).toBe("45.6789");
+});
+
+it("edits unassigned installments without requiring a replacement parent", async () => {
+  const f = await fixture();
+  await removeAssignments(
+    actorId,
+    { relation: "supplier-installment-order", parentId: f.order.id },
+    [f.installment.id],
+  );
+  const form = new FormData();
+  form.set("id", f.installment.id);
+  form.set("value", "Retained plan");
+  form.set("date", "2026-11-15");
+  form.set("amount", "95.4321");
+  expect(
+    (
+      await editRelatedFinancialRowAction(
+        "supplier-installment",
+        undefined,
+        form,
+      )
+    ).status,
+  ).toBe("success");
+  const saved = await memory.raw.paymentInstallment.findUniqueOrThrow({
+    where: { id: f.installment.id },
+  });
+  expect(saved.orderId).toBeNull();
+  expect(saved.scheduledAmount.toString()).toBe("95.4321");
+  expect(saved.currencyCode).toBe("EUR");
+  expect(saved.detachedReportingCurrencyCode).toBe("EUR");
+});
+
+it("keeps detached master records recoverable without reconnecting their former parent", async () => {
+  const f = await fixture();
+  await removeAssignments(
+    actorId,
+    { relation: "project-client", parentId: f.client.id },
+    [f.project.id],
+  );
+  expect(
+    (
+      await memory.active.project.findUniqueOrThrow({
+        where: { id: f.project.id },
+      })
+    ).clientId,
+  ).toBeNull();
+  await removeAssignments(
+    actorId,
+    { relation: "order-supplier", parentId: f.supplier.id },
+    [f.order.id],
+  );
+  const building = await memory.raw.building.create({
+    data: {
+      projectId: f.project.id,
+      name: "Retained Building",
+      shortCode: "TEST",
+    },
+  });
+  const room = await memory.raw.room.create({
+    data: { buildingId: building.id, name: "Retained Room" },
+  });
+  await removeAssignments(
+    actorId,
+    { relation: "room-building", parentId: building.id },
+    [room.id],
+  );
+  await removeAssignments(
+    actorId,
+    { relation: "building-project", parentId: f.project.id },
+    [building.id],
+  );
+  const batch = await moveToTrash(actorId, "Building", [building.id]);
+  await restoreTrash(actorId, batch);
+  expect(
+    (
+      await memory.active.building.findUniqueOrThrow({
+        where: { id: building.id },
+      })
+    ).projectId,
+  ).toBeNull();
+  expect(
+    (await memory.active.room.findUniqueOrThrow({ where: { id: room.id } }))
+      .buildingId,
+  ).toBeNull();
+  expect(
+    (
+      await memory.active.procurementOrder.findUniqueOrThrow({
+        where: { id: f.order.id },
+      })
+    ).supplierId,
+  ).toBeNull();
 });

@@ -4,6 +4,12 @@ import { reportingAmount } from "@/domain/finance/calculations";
 import { formatMoney } from "@/domain/procurement/presentation";
 import type { OrderSummary } from "@/lib/procurement/orders";
 export async function OrderFreightCoverage({ order }: { order: OrderSummary }) {
+  if (!order.project.id)
+    return (
+      <p className="text-muted-foreground text-sm">
+        This Order is unassigned and has no linked Billing freight coverage.
+      </p>
+    );
   const currency = order.project.reportingCurrencyCode;
   const billed = await getBilledFreight(
     { projectId: order.project.id, orderId: order.id },

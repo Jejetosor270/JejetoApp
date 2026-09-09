@@ -1,3 +1,5 @@
+import { RelatedRecordTable } from "@/components/layout/related-records";
+import { projectsTable } from "@/lib/related-records/projections";
 import Decimal from "decimal.js";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -8,7 +10,6 @@ import { ClientDetailEditor } from "@/app/(app)/clients/client-management";
 import { DetailPageHeader } from "@/components/layout/detail-page-header";
 import { formatDateOnly, formatTimestamp } from "@/domain/payments/dates";
 import { formatMoney } from "@/domain/procurement/presentation";
-import { formatEnumLabel } from "@/domain/presentation/labels";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listClientBillingPage } from "@/lib/billing/billing";
 import { getDatabase } from "@/lib/db";
@@ -89,29 +90,21 @@ export default async function ClientDetailPage({
       />
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <article className="bg-card rounded-lg border p-4">
-          <h2 className="text-sm font-semibold">Projects</h2>
-          <div className="mt-3 divide-y">
-            {projects.map((project) => (
-              <Link
-                className="flex justify-between gap-3 py-2 text-sm hover:underline"
-                href={`/projects/${project.id}`}
-                key={project.id}
-              >
-                <span>
-                  {project.name} · {project.code}
-                </span>
-                <span className="text-muted-foreground">
-                  {formatEnumLabel(project.status)} ·{" "}
-                  {project.reportingCurrencyCode}
-                </span>
-              </Link>
-            ))}
-            {projects.length === 0 ? (
-              <p className="text-muted-foreground py-4 text-sm">No Projects.</p>
-            ) : null}
-          </div>
-        </article>
+        <RelatedRecordTable
+          table={{
+            ...projectsTable(projects),
+            ...(canEditMasterData(user.role)
+              ? {
+                  editKind: "project",
+                  removal: {
+                    kind: "assignment",
+                    relation: "project-client",
+                    parentId: clientId,
+                  },
+                }
+              : {}),
+          }}
+        />
         <article className="bg-card rounded-lg border p-4">
           <h2 className="text-sm font-semibold">
             Billing & collection summary
@@ -159,26 +152,35 @@ export default async function ClientDetailPage({
         </article>
       </section>
 
-      <section className="bg-card rounded-lg border p-4">
-        <h2 className="text-sm font-semibold">Recent Billing Events</h2>
-        <div className="mt-3 divide-y text-sm">
-          {billing.items.slice(0, 10).map((document) => (
-            <Link
-              className="grid gap-2 py-2 hover:underline sm:grid-cols-4"
-              href={`/billing/${document.id}`}
-              key={document.id}
-            >
-              <span>{document.reference}</span>
-              <span>{document.documentType}</span>
-              <span>{formatDateOnly(document.documentDate)}</span>
-              <span className="financial-figure text-right">
-                {formatMoney(document.outstanding, document.currencyCode)}{" "}
-                outstanding
-              </span>
-            </Link>
-          ))}
-        </div>
-      </section>
+      <RelatedRecordTable
+        table={{
+          id: "billing",
+          title: "Recent Billing Events",
+          description: "Latest 100 Billing documents for this Client.",
+          columns: ["Reference", "Type", "Date", "Outstanding"],
+          numericColumns: [3],
+          ...(canEditMasterData(user.role)
+            ? {
+                editKind: "billing",
+                removal: {
+                  kind: "assignment",
+                  relation: "billing-client",
+                  parentId: clientId,
+                },
+              }
+            : {}),
+          rows: billing.items.map((document) => ({
+            id: document.id,
+            href: "/billing/" + document.id,
+            cells: [
+              document.reference,
+              document.documentType,
+              formatDateOnly(document.documentDate),
+              formatMoney(document.outstanding, document.currencyCode),
+            ],
+          })),
+        }}
+      />
 
       <details className="border-t pt-4">
         <summary className="text-sm font-semibold">Recent activity</summary>

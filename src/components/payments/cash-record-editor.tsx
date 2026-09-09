@@ -22,7 +22,7 @@ export async function cashRecordEditor(kind: CashRecordKind, id: string) {
             where: { id },
             select: { billingDocumentId: true },
           });
-    if (!source) return null;
+    if (!source?.billingDocumentId) return null;
     const billing = await getClientBillingDocument(source.billingDocumentId);
     if (!billing) return null;
     if (kind === "receipt") {
@@ -63,7 +63,7 @@ export async function cashRecordEditor(kind: CashRecordKind, id: string) {
           where: { id },
           select: { orderId: true },
         });
-  if (!source) return null;
+  if (!source?.orderId) return null;
   const [summary, currencies] = await Promise.all([
     getOrderPaymentSummary(source.orderId),
     db.currency.findMany({ select: { code: true }, orderBy: { code: "asc" } }),

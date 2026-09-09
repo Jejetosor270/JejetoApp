@@ -140,7 +140,7 @@ async function getOrderRelationsInternal(
       ["Building", "Code", "Status"],
       order?.buildings.map(({ building }) => ({
         id: building.id,
-        href: `/projects/${order.project.id}?tab=buildings`,
+        href: `/projects/${order.project?.id ?? ""}?tab=buildings`,
         cells: [
           building.name,
           building.shortCode,
@@ -165,9 +165,25 @@ async function getOrderRelationsInternal(
       rows:
         order?.clientBillingAllocations.map((row) => ({
           id: row.billingDocument.id,
+          editFields: [
+            {
+              column: 3,
+              name: "amount",
+              type: "money",
+              value: row.allocatedAmount.toString(),
+              currency: row.billingDocument.currencyCode,
+            },
+            {
+              column: 4,
+              name: "freight",
+              type: "money",
+              value: row.freightCoverageHt.toString(),
+              currency: row.billingDocument.currencyCode,
+            },
+          ],
           href: relatedHref("billing", row.billingDocument.id),
           cells: [
-            row.billingDocument.reference,
+            row.billingDocument?.reference ?? "Unassigned",
             row.billingDocument.documentType,
             formatDateOnly(dateToDateOnly(row.billingDocument.documentDate)),
             formatMoney(
@@ -261,6 +277,23 @@ export async function getProjectRelations(
   if (!user || !canEditMasterData(user.role)) return result;
   const tables = result;
   editableRelatedTables(tables);
+  for (const table of tables) {
+    const relation = {
+      clients: "project-client",
+      orders: "order-project",
+      billing: "billing-project",
+      "supplier-installments": "supplier-installment-project",
+      "client-installments": "client-installment-project",
+    } as const;
+    const key = table.id as keyof typeof relation;
+    if (relation[key])
+      table.removal = {
+        kind: "assignment",
+        relation: relation[key],
+        parentId: args[0],
+        ...(key === "clients" ? { ownerId: args[0] } : {}),
+      };
+  }
   return result;
 }
 
@@ -273,11 +306,29 @@ export async function getOrderRelations(
   for (const table of result) {
     if (table.id === "buildings")
       table.removal = { kind: "order-buildings", parentId: args[0] };
-    if (table.id === "billing")
+    if (table.id === "billing") {
       table.removal = { kind: "order-billing", parentId: args[0] };
+      table.editKind = "allocation-order";
+      table.editParentId = args[0];
+    }
+    if (table.id === "projects" || table.id === "suppliers")
+      table.removal = {
+        kind: "assignment",
+        relation: table.id === "projects" ? "order-project" : "order-supplier",
+        parentId: args[0],
+        ownerId: args[0],
+      };
+    if (table.id === "supplier-installments")
+      table.removal = {
+        kind: "assignment",
+        relation: "supplier-installment-order",
+        parentId: args[0],
+      };
   }
   const tables = result;
   editableRelatedTables(tables);
+  const allocations = tables.find((table) => table.id === "billing");
+  if (allocations) allocations.editKind = "allocation-order";
   return result;
 }
 
@@ -289,5 +340,27 @@ export async function getBillingRelations(
   if (!user || !canEditMasterData(user.role)) return result;
   const tables = result;
   editableRelatedTables(tables);
+  for (const table of tables) {
+    if (table.id === "projects" || table.id === "clients")
+      table.removal = {
+        kind: "assignment",
+        relation:
+          table.id === "projects" ? "billing-project" : "billing-client",
+        parentId: args[0],
+        ownerId: args[0],
+      };
+    if (table.id === "client-installments")
+      table.removal = {
+        kind: "assignment",
+        relation: "client-installment-billing",
+        parentId: args[0],
+      };
+    if (table.id === "revisions")
+      table.removal = {
+        kind: "assignment",
+        relation: "billing-revision",
+        parentId: args[0],
+      };
+  }
   return result;
 }

@@ -1,3 +1,4 @@
+import { present } from "./context";
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { dateToDateOnly, formatDateOnly } from "@/domain/payments/dates";
@@ -108,12 +109,12 @@ export function table(
 ): RelatedTableData {
   return { id, title, columns, rows, description, numericColumns };
 }
-export function projectsTable(rows: Project[]) {
+export function projectsTable(rows: (Project | null | undefined)[]) {
   return table(
     "projects",
     "Projects",
     ["Project", "Code", "Status", "Reporting currency"],
-    rows.map((r) => ({
+    rows.filter(present).map((r) => ({
       id: r.id,
       href: relatedHref("project", r.id),
       cells: [
@@ -127,20 +128,22 @@ export function projectsTable(rows: Project[]) {
 }
 export function partiesTable(
   kind: "clients" | "suppliers",
-  rows: { id: string; displayName: string; isActive: boolean }[],
+  rows: (
+    { id: string; displayName: string; isActive: boolean } | null | undefined
+  )[],
 ) {
   return table(
     kind,
     kind === "clients" ? "Clients" : "Suppliers",
     ["Name", "Status"],
-    rows.map((r) => ({
+    rows.filter(present).map((r) => ({
       id: r.id,
       href: `/${kind}/${r.id}`,
       cells: [r.displayName, r.isActive ? "Active" : "Archived"],
     })),
   );
 }
-export function ordersTable(rows: Order[]) {
+export function ordersTable(rows: (Order | null | undefined)[]) {
   return table(
     "orders",
     "Orders",
@@ -152,13 +155,13 @@ export function ordersTable(rows: Order[]) {
       "Purchase currency",
       "Order date",
     ],
-    rows.map((r) => ({
+    rows.filter(present).map((r) => ({
       id: r.id,
       href: relatedHref("order", r.id),
       cells: [
         r.orderNumber,
         r.packageName,
-        r.supplier.displayName,
+        r.supplier?.displayName ?? "Unassigned",
         formatEnumLabel(r.status),
         r.orderCurrencyCode,
         date(r.orderDate),
@@ -166,12 +169,12 @@ export function ordersTable(rows: Order[]) {
     })),
   );
 }
-export function billingsTable(rows: Billing[]) {
+export function billingsTable(rows: (Billing | null | undefined)[]) {
   return table(
     "billing",
     "Billing",
     ["Reference", "Type", "Date", "HT", "TTC", "Record status"],
-    rows.map((r) => ({
+    rows.filter(present).map((r) => ({
       id: r.id,
       href: relatedHref("billing", r.id),
       cells: [
@@ -192,12 +195,19 @@ export function supplierInstallmentsTable(rows: SupplierInstallment[]) {
     "supplier-installments",
     "Supplier installments",
     ["Installment", "Order", "Due", "Scheduled TTC", "Record status"],
-    rows.map((r) => ({
+    rows.filter(present).map((r) => ({
       id: r.id,
       href: relatedHref("supplier-installment", r.id),
+      editFields: cashEditFields(
+        2,
+        3,
+        r.dueDate,
+        r.scheduledAmount.toString(),
+        r.currencyCode,
+      ),
       cells: [
         r.label,
-        r.order.orderNumber,
+        r.order?.orderNumber ?? "Unassigned",
         date(r.dueDate),
         formatMoney(r.scheduledAmount.toString(), r.currencyCode),
         active(!r.isCancelled),
@@ -212,12 +222,19 @@ export function clientInstallmentsTable(rows: ClientInstallment[]) {
     "client-installments",
     "Client installments",
     ["Installment", "Billing", "Due", "Scheduled TTC", "Record status"],
-    rows.map((r) => ({
+    rows.filter(present).map((r) => ({
       id: r.id,
       href: relatedHref("client-installment", r.id),
+      editFields: cashEditFields(
+        2,
+        3,
+        r.dueDate,
+        r.scheduledAmount.toString(),
+        r.currencyCode,
+      ),
       cells: [
         r.label,
-        r.billingDocument.reference,
+        r.billingDocument?.reference ?? "Unassigned",
         date(r.dueDate),
         formatMoney(r.scheduledAmount.toString(), r.currencyCode),
         active(!r.isCancelled),
@@ -232,12 +249,20 @@ export function paymentsTable(rows: Payment[]) {
     "payments",
     "Supplier payments",
     ["Reference", "Order", "Installment", "Paid date", "Amount"],
-    rows.map((r) => ({
+    rows.filter(present).map((r) => ({
       id: r.id,
       href: relatedHref("payment", r.id),
+      editValue: r.reference ?? "",
+      editFields: cashEditFields(
+        3,
+        4,
+        r.settledAt,
+        r.amount.toString(),
+        r.installment.currencyCode,
+      ),
       cells: [
         r.reference || `Payment · ${date(r.settledAt)}`,
-        r.installment.order.orderNumber,
+        r.installment.order?.orderNumber ?? "Unassigned",
         r.installment.label,
         date(r.settledAt),
         formatMoney(r.amount.toString(), r.installment.currencyCode),
@@ -252,12 +277,20 @@ export function receiptsTable(rows: Receipt[]) {
     "receipts",
     "Client receipts",
     ["Reference", "Billing", "Received date", "Amount", "Allocation"],
-    rows.map((r) => ({
+    rows.filter(present).map((r) => ({
       id: r.id,
       href: relatedHref("receipt", r.id),
+      editValue: r.reference ?? "",
+      editFields: cashEditFields(
+        2,
+        3,
+        r.receivedAt,
+        r.amount.toString(),
+        r.billingDocument.currencyCode,
+      ),
       cells: [
         r.reference || `Receipt · ${date(r.receivedAt)}`,
-        r.billingDocument.reference,
+        r.billingDocument?.reference ?? "Unassigned",
         date(r.receivedAt),
         formatMoney(r.amount.toString(), r.billingDocument.currencyCode),
         r.installmentId ? "Installment" : "Billing-level",
@@ -266,4 +299,28 @@ export function receiptsTable(rows: Receipt[]) {
     "Actual Client cash in. Each recorded receipt appears once; it is not an Order allocation.",
     [3],
   );
+}
+
+function cashEditFields(
+  dateColumn: number,
+  amountColumn: number,
+  date: Date,
+  amount: string,
+  currency: string,
+): NonNullable<RelatedRow["editFields"]> {
+  return [
+    {
+      column: dateColumn,
+      name: "date",
+      type: "date",
+      value: dateToDateOnly(date),
+    },
+    {
+      column: amountColumn,
+      name: "amount",
+      type: "money",
+      value: amount,
+      currency,
+    },
+  ];
 }

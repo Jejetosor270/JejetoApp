@@ -155,3 +155,10 @@ it("removes only checked visible cash links after confirmation", async () => {
     (actions.unassign.mock.calls[0]?.[1] as FormData).getAll("selectedIds"),
   ).toEqual(["0"]);
 });
+
+vi.mock("@/app/(app)/related-records/inline-actions", () => ({
+  editRelatedFinancialRowAction: vi.fn(),
+}));
+vi.mock("@/app/(app)/settings/trash/actions", () => ({
+  trashSelectedAction: vi.fn(),
+}));

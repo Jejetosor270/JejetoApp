@@ -139,3 +139,15 @@ it("edits a payment in its own drawer, preserving a rejected draft and closing a
   expect(document.querySelector("form")).toBeNull();
   expect(mocks.refresh).toHaveBeenCalled();
 });
+
+vi.mock("@/app/(app)/related-records/inline-actions", () => ({
+  editRelatedFinancialRowAction: vi.fn(),
+}));
+
+vi.mock("@/app/(app)/related-records/actions", () => ({
+  editRelatedNameAction: vi.fn(),
+  removeOptionalLinksAction: vi.fn(),
+}));
+vi.mock("@/app/(app)/unassigned-cash/actions", () => ({
+  unassignCashAction: vi.fn(),
+}));

@@ -21,7 +21,10 @@ import {
 import {
   InlineEditActions,
   InlineTextInput,
+  InlineMoneyInput,
 } from "@/components/inline-editing/inline-edit";
+import { editRelatedFinancialRowAction } from "@/app/(app)/related-records/inline-actions";
+import { trashSelectedAction } from "@/app/(app)/settings/trash/actions";
 
 const PAGE_SIZE = 10;
 
@@ -30,16 +33,23 @@ export function RelatedRecordTable({
   actions,
   rowActions,
   firstCells,
+  onRemoved,
+  onEdited,
+  pageSize = PAGE_SIZE,
 }: {
   table: RelatedTableData;
   actions?: ReactNode;
   rowActions?: Record<string, ReactNode>;
   firstCells?: Record<string, ReactNode>;
+  onRemoved?: (ids: string[]) => void;
+  onEdited?: (id: string, fields: Record<string, string>) => void;
+  pageSize?: number;
 }) {
   const router = useRouter();
   const [page, setPage] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [fieldDraft, setFieldDraft] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
   const save = () => {
@@ -48,11 +58,17 @@ export function RelatedRecordTable({
     const data = new FormData();
     data.set("id", editingId);
     data.set("value", draft);
+    for (const [name, value] of Object.entries(fieldDraft))
+      data.set(name, value);
     startTransition(async () => {
       try {
-        const result = await editRelatedNameAction(kind, data);
+        const result = table.rows.find((row) => row.id === editingId)
+          ?.editFields
+          ? await editRelatedFinancialRowAction(kind, table.editParentId, data)
+          : await editRelatedNameAction(kind, data);
         setFeedback(result.message ?? "");
         if (result.status === "success") {
+          onEdited?.(editingId, fieldDraft);
           setEditingId(null);
           router.refresh();
         }
@@ -61,11 +77,11 @@ export function RelatedRecordTable({
       }
     });
   };
-  const lastPage = Math.max(0, Math.ceil(table.rows.length / PAGE_SIZE) - 1);
+  const lastPage = Math.max(0, Math.ceil(table.rows.length / pageSize) - 1);
   const currentPage = Math.min(page, lastPage);
   const visible = table.rows.slice(
-    currentPage * PAGE_SIZE,
-    (currentPage + 1) * PAGE_SIZE,
+    currentPage * pageSize,
+    (currentPage + 1) * pageSize,
   );
   const selection = useBulkSelection(visible.map((row) => row.id));
   return (
@@ -76,23 +92,35 @@ export function RelatedRecordTable({
         actions={actions}
       />
       <div className="mt-4 overflow-x-auto rounded-md border">
-        {table.removal && (
+        {(table.removal || table.trashKind) && (
           <BulkActionBar
-            unlink
+            unlink={!table.trashKind}
             action={
-              table.removal.kind === "payment" ||
-              table.removal.kind === "receipt"
-                ? unassignCashAction.bind(null, table.removal.kind)
-                : removeOptionalLinksAction.bind(null, table.removal)
+              table.trashKind
+                ? trashSelectedAction.bind(null, table.trashKind)
+                : (table.removal &&
+                    (table.removal.kind === "payment" ||
+                    table.removal.kind === "receipt"
+                      ? unassignCashAction.bind(null, table.removal.kind)
+                      : removeOptionalLinksAction.bind(null, table.removal))) ||
+                  (async () => ({
+                    status: "error" as const,
+                    message: "No action is available.",
+                  }))
             }
-            clearSelection={selection.clear}
+            clearSelection={() => {
+              onRemoved?.(selection.selectedIds);
+              selection.clear();
+            }}
             entityName="record"
             selectedIds={selection.selectedIds}
             scope={
-              table.removal.kind === "payment" ||
-              table.removal.kind === "receipt"
-                ? "Clear the cash assignment. The former document and Project balances will update; the original cash remains in Unassigned cash records."
-                : "Remove only these connections. The records remain available, with these relationships unassigned."
+              table.trashKind
+                ? "Move the selected records and their dependents to recoverable Trash. Reporting will update."
+                : table.removal?.kind === "payment" ||
+                    table.removal?.kind === "receipt"
+                  ? "Clear the cash assignment. The former document and Project balances will update; the original cash remains in Unassigned cash records."
+                  : "Remove only these connections. The records remain available, with these relationships unassigned."
             }
           />
         )}
@@ -100,7 +128,7 @@ export function RelatedRecordTable({
           <caption className="sr-only">{table.title}</caption>
           <thead className="bg-muted/40 text-muted-foreground text-xs">
             <tr>
-              {table.removal && (
+              {(table.removal || table.trashKind) && (
                 <SelectionHeader
                   checked={selection.allSelected}
                   indeterminate={selection.someSelected}
@@ -145,7 +173,7 @@ export function RelatedRecordTable({
                   if (row.href) router.push(row.href);
                 }}
               >
-                {table.removal && (
+                {(table.removal || table.trashKind) && (
                   <SelectionCell
                     checked={selection.isSelected(row.id)}
                     onChange={() => selection.toggle(row.id)}
@@ -157,7 +185,53 @@ export function RelatedRecordTable({
                     key={table.columns[index]}
                     className={`px-3 py-2 ${table.numericColumns?.includes(index) ? "financial-figure text-right" : ""}`}
                   >
-                    {index === 0 && editingId === row.id ? (
+                    {editingId === row.id &&
+                    row.editFields?.some((field) => field.column === index) ? (
+                      row.editFields
+                        .filter((field) => field.column === index)
+                        .map((field) =>
+                          field.type === "money" ? (
+                            <span
+                              key={field.name}
+                              className="inline-flex items-center gap-1"
+                            >
+                              <InlineMoneyInput
+                                ariaLabel={table.columns[index] ?? field.name}
+                                value={fieldDraft[field.name] ?? ""}
+                                disabled={pending}
+                                onChange={(value) =>
+                                  setFieldDraft((current) => ({
+                                    ...current,
+                                    [field.name]: value,
+                                  }))
+                                }
+                              />
+                              {field.currency ? (
+                                <span className="text-muted-foreground text-xs">
+                                  {field.currency}
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : (
+                            <input
+                              key={field.name}
+                              type="date"
+                              aria-label={table.columns[index]}
+                              className="border-input bg-background rounded border px-2 py-1"
+                              value={fieldDraft[field.name] ?? ""}
+                              disabled={pending}
+                              onChange={(event) =>
+                                setFieldDraft((current) => ({
+                                  ...current,
+                                  [field.name]: event.target.value,
+                                }))
+                              }
+                            />
+                          ),
+                        )
+                    ) : index === 0 &&
+                      editingId === row.id &&
+                      !table.editKind?.startsWith("allocation") ? (
                       <InlineTextInput
                         ariaLabel={table.columns[0] ?? "Name"}
                         value={draft}
@@ -190,7 +264,15 @@ export function RelatedRecordTable({
                         feedback={editingId === row.id ? feedback : ""}
                         onEdit={() => {
                           if (editingId) return;
-                          setDraft(row.cells[0] ?? "");
+                          setDraft(row.editValue ?? row.cells[0] ?? "");
+                          setFieldDraft(
+                            Object.fromEntries(
+                              (row.editFields ?? []).map((field) => [
+                                field.name,
+                                field.value,
+                              ]),
+                            ),
+                          );
                           setFeedback("");
                           setEditingId(row.id);
                         }}
@@ -212,7 +294,7 @@ export function RelatedRecordTable({
                   colSpan={
                     table.columns.length +
                     (rowActions || table.editKind ? 1 : 0) +
-                    (table.removal ? 1 : 0)
+                    (table.removal || table.trashKind ? 1 : 0)
                   }
                   className="text-muted-foreground px-3 py-6 text-center"
                 >

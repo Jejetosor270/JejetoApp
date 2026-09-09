@@ -624,7 +624,7 @@ function projectSnapshot(input: {
       purchaseCost: contribution?.purchaseCost?.toString() ?? null,
       salesRevenue: contribution?.salesRevenue?.toString() ?? null,
       status: order.status,
-      supplierName: order.supplier.displayName,
+      supplierName: order.supplier?.displayName ?? "Unassigned",
       supplierOutstanding: supplierPayment.totalRemaining?.toString() ?? null,
     };
   });
@@ -835,8 +835,9 @@ export async function getPortfolioReportingSnapshot(
     clientInstallments: clientInstallments.filter((item) =>
       companyProjectIds.has(item.projectId),
     ),
-    clientReceipts: scopedReceipts.filter((receipt) =>
-      companyProjectIds.has(receipt.projectId),
+    clientReceipts: scopedReceipts.filter(
+      (receipt) =>
+        receipt.projectId !== null && companyProjectIds.has(receipt.projectId),
     ),
     installments: scopedInstallments.filter((item) =>
       companyProjectIds.has(item.projectId),
@@ -930,7 +931,7 @@ export async function getPortfolioReportingSnapshot(
       return {
         cashPosition: cashPosition?.toString() ?? null,
         clientBillingComplete: clientBilling.complete,
-        clientName: project.client.displayName,
+        clientName: project.client?.displayName ?? "Unassigned",
         clientOutstanding: clientBilling.complete
           ? clientBilling.outstandingTtc
           : null,

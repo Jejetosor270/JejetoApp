@@ -210,6 +210,8 @@ export default async function ProjectsPage({
         managers={options.managers}
         projects={result.items.map((project) => ({
           ...project,
+          clientId: project.clientId ?? "",
+          client: project.client ?? { id: "", displayName: "Unassigned" },
           clientBudgetTargetHt:
             project.clientBudgetTargetHt?.toString() ?? null,
           defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),

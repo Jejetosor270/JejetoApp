@@ -89,8 +89,8 @@ async function ordersCsv(params: Params): Promise<string> {
       item.orderNumber,
       item.orderPackage?.name ?? "",
       item.packageName,
-      item.project.name,
-      item.supplier.displayName,
+      item.project?.name ?? "Unassigned",
+      item.supplier?.displayName ?? "Unassigned",
       trustedCsvValue(item.status),
       trustedCsvValue(item.orderCurrencyCode),
       money(item.costs.economicLandedCost),
@@ -298,7 +298,7 @@ async function projectsCsv(params: Params): Promise<string> {
     items.map((item) => [
       item.name,
       item.code,
-      item.client.displayName,
+      item.client?.displayName ?? "Unassigned",
       item.countryCode ?? "",
       trustedCsvValue(item.reportingCurrencyCode),
       trustedCsvValue(item.status),
@@ -427,7 +427,7 @@ async function itemsCsv(params: Params): Promise<string> {
     items.map((item) => [
       item.itemReference ?? "",
       item.name,
-      item.project.name,
+      item.project?.name ?? "Unassigned",
       item.building?.name ?? "",
       item.room?.name ?? "",
       item.supplier?.displayName ?? "",
@@ -490,6 +490,7 @@ async function billingCsv(params: Params): Promise<string> {
       documentType: true,
       dueDate: true,
       fxRateToReporting: true,
+      detachedReportingCurrencyCode: true,
       project: { select: { name: true, reportingCurrencyCode: true } },
       reference: true,
       totalHt: true,
@@ -513,8 +514,8 @@ async function billingCsv(params: Params): Promise<string> {
       "Project currency",
     ],
     items.map((item) => [
-      item.client.displayName,
-      item.project.name,
+      item.client?.displayName ?? "Unassigned",
+      item.project?.name ?? "Unassigned",
       trustedCsvValue(item.documentType),
       item.reference,
       trustedCsvValue(item.documentDate.toISOString().slice(0, 10)),
@@ -528,7 +529,11 @@ async function billingCsv(params: Params): Promise<string> {
       item.fxRateToReporting
         ? trustedCsvValue(item.fxRateToReporting.toString())
         : "",
-      trustedCsvValue(item.project.reportingCurrencyCode),
+      trustedCsvValue(
+        item.project?.reportingCurrencyCode ??
+          item.detachedReportingCurrencyCode ??
+          "Unassigned",
+      ),
     ]),
   );
 }
@@ -578,9 +583,9 @@ async function clientReceiptsCsv(): Promise<string> {
       "Project currency",
     ],
     items.map((item) => [
-      item.billingDocument.client.displayName,
-      item.billingDocument.project.name,
-      item.billingDocument.reference,
+      item.billingDocument?.client?.displayName ?? "Unassigned",
+      item.billingDocument?.project?.name ?? "Unassigned",
+      item.billingDocument?.reference ?? "Unassigned",
       item.installment?.label ?? "Billing level",
       item.reference ?? "",
       trustedCsvValue(item.receivedAt.toISOString().slice(0, 10)),
@@ -589,7 +594,9 @@ async function clientReceiptsCsv(): Promise<string> {
       item.fxRateToReporting
         ? trustedCsvValue(item.fxRateToReporting.toString())
         : "",
-      trustedCsvValue(item.billingDocument.project.reportingCurrencyCode),
+      trustedCsvValue(
+        item.billingDocument.project?.reportingCurrencyCode ?? "Unassigned",
+      ),
     ]),
   );
 }

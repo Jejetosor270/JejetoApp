@@ -129,54 +129,61 @@ export async function getActualCashReport(filters: ActualCashFilters) {
       : [],
   ]);
   const rows: ActualCashRow[] = [
-    ...receipts.map((receipt) => {
+    ...receipts.flatMap((receipt) => {
       const document = receipt.billingDocument;
-      return {
-        amount: receipt.amount.toString(),
-        billingOrOrderId: document.id,
-        billingOrOrderReference: document.reference,
-        currencyCode: document.currencyCode,
-        date: dateToDateOnly(receipt.receivedAt),
-        direction: PaymentDirection.CLIENT_RECEIPT,
-        id: receipt.id,
-        partyName: document.client.displayName,
-        projectId: document.project.id,
-        projectName: document.project.name,
-        projectReportingAmount:
-          reportingAmount({
-            fxRateToReporting: receipt.fxRateToReporting?.toString() ?? null,
-            originalAmount: receipt.amount.toString(),
-            originalCurrencyCode: document.currencyCode,
-            reportingCurrencyCode: document.project.reportingCurrencyCode,
-          })?.toString() ?? null,
-        projectReportingCurrencyCode: document.project.reportingCurrencyCode,
-        reference: receipt.reference,
-      };
+      if (!document.project) return [];
+      return [
+        {
+          amount: receipt.amount.toString(),
+          billingOrOrderId: document.id,
+          billingOrOrderReference: document.reference,
+          currencyCode: document.currencyCode,
+          date: dateToDateOnly(receipt.receivedAt),
+          direction: PaymentDirection.CLIENT_RECEIPT,
+          id: receipt.id,
+          partyName: document.client?.displayName ?? "Unassigned",
+          projectId: document.project.id,
+          projectName: document.project?.name ?? "Unassigned",
+          projectReportingAmount:
+            reportingAmount({
+              fxRateToReporting: receipt.fxRateToReporting?.toString() ?? null,
+              originalAmount: receipt.amount.toString(),
+              originalCurrencyCode: document.currencyCode,
+              reportingCurrencyCode: document.project.reportingCurrencyCode,
+            })?.toString() ?? null,
+          projectReportingCurrencyCode: document.project.reportingCurrencyCode,
+          reference: receipt.reference,
+        },
+      ];
     }),
-    ...settlements.map((settlement) => {
+    ...settlements.flatMap((settlement) => {
       const installment = settlement.installment;
       const order = installment.order;
-      return {
-        amount: settlement.amount.toString(),
-        billingOrOrderId: order.id,
-        billingOrOrderReference: order.orderNumber,
-        currencyCode: installment.currencyCode,
-        date: dateToDateOnly(settlement.settledAt),
-        direction: PaymentDirection.SUPPLIER_PAYMENT,
-        id: settlement.id,
-        partyName: order.supplier.displayName,
-        projectId: order.project.id,
-        projectName: order.project.name,
-        projectReportingAmount:
-          reportingAmount({
-            fxRateToReporting: settlement.fxRateToReporting?.toString() ?? null,
-            originalAmount: settlement.amount.toString(),
-            originalCurrencyCode: installment.currencyCode,
-            reportingCurrencyCode: order.project.reportingCurrencyCode,
-          })?.toString() ?? null,
-        projectReportingCurrencyCode: order.project.reportingCurrencyCode,
-        reference: settlement.reference,
-      };
+      if (!order?.project) return [];
+      return [
+        {
+          amount: settlement.amount.toString(),
+          billingOrOrderId: order.id,
+          billingOrOrderReference: order.orderNumber,
+          currencyCode: installment.currencyCode,
+          date: dateToDateOnly(settlement.settledAt),
+          direction: PaymentDirection.SUPPLIER_PAYMENT,
+          id: settlement.id,
+          partyName: order.supplier?.displayName ?? "Unassigned",
+          projectId: order.project.id,
+          projectName: order.project?.name ?? "Unassigned",
+          projectReportingAmount:
+            reportingAmount({
+              fxRateToReporting:
+                settlement.fxRateToReporting?.toString() ?? null,
+              originalAmount: settlement.amount.toString(),
+              originalCurrencyCode: installment.currencyCode,
+              reportingCurrencyCode: order.project.reportingCurrencyCode,
+            })?.toString() ?? null,
+          projectReportingCurrencyCode: order.project.reportingCurrencyCode,
+          reference: settlement.reference,
+        },
+      ];
     }),
   ].toSorted((first, second) =>
     first.date === second.date

@@ -1113,8 +1113,43 @@ export function BillingDetail({
             label: "Linked Orders",
             content: (
               <RelatedRecordTable
+                onRemoved={(ids) =>
+                  setSaved((current) => ({
+                    ...current,
+                    allocations: current.allocations.filter(
+                      (row) => !ids.includes(row.orderId),
+                    ),
+                  }))
+                }
+                onEdited={(id, fields) =>
+                  setSaved((current) => ({
+                    ...current,
+                    allocations: current.allocations.map((row) =>
+                      row.orderId === id
+                        ? {
+                            ...row,
+                            amount: fields.amount ?? row.amount,
+                            freightCoverageHt:
+                              fields.freight ?? row.freightCoverageHt ?? "0",
+                            basis: "FIXED_AMOUNT",
+                            percentage: "",
+                          }
+                        : row,
+                    ),
+                  }))
+                }
                 table={{
                   id: "orders",
+                  ...(canEdit
+                    ? {
+                        removal: {
+                          kind: "billing-orders" as const,
+                          parentId: document.id,
+                        },
+                        editKind: "allocation" as const,
+                        editParentId: document.id,
+                      }
+                    : {}),
                   title: "Linked Orders",
                   description:
                     "Commercial attribution only. Client receipts remain separate cash records.",
@@ -1133,6 +1168,22 @@ export function BillingDetail({
                     const financial = financialByOrder.get(allocation.orderId);
                     return {
                       id: allocation.orderId,
+                      editFields: [
+                        {
+                          column: 2,
+                          name: "amount",
+                          type: "money",
+                          value: allocation.amount,
+                          currency: saved.currencyCode,
+                        },
+                        {
+                          column: 3,
+                          name: "freight",
+                          type: "money",
+                          value: allocation.freightCoverageHt ?? "0",
+                          currency: saved.currencyCode,
+                        },
+                      ],
                       href: relatedHref("order", allocation.orderId),
                       cells: [
                         order?.orderNumber ?? allocation.orderId,

@@ -1,3 +1,4 @@
+import { retainedCurrency } from "@/lib/related-records/context";
 import { freightCoverageBreakdown } from "@/domain/billing/freight-coverage";
 import "server-only";
 import { nextInstallmentSequence } from "@/lib/payments/sequence";
@@ -134,13 +135,13 @@ function billingView(record: BillingRecord, today = businessToday()) {
       basis: allocation.basis,
       id: allocation.id,
       orderId: allocation.orderId,
-      orderNumber: allocation.order.orderNumber,
-      supplierName: allocation.order.supplier.displayName,
+      orderNumber: allocation.order?.orderNumber ?? "Unassigned",
+      supplierName: allocation.order?.supplier?.displayName ?? "Unassigned",
       percentageRate: allocation.percentageRate?.toString() ?? null,
     })),
     allocationReconciliation: reconciliation,
-    client: record.client,
-    clientId: record.clientId,
+    client: record.client ?? { id: "", displayName: "Unassigned" },
+    clientId: record.clientId ?? "",
     currencyCode: record.currencyCode,
     documentDate: dateToDateOnly(record.documentDate),
     documentType: record.documentType,
@@ -174,9 +175,11 @@ function billingView(record: BillingRecord, today = businessToday()) {
     })),
     paymentInstallments: visibleInstallments.map((installment) => ({
       basis: installment.basis,
-      billingDocumentId: installment.billingDocumentId,
-      billingReference: installment.billingDocument.reference,
-      billingTotalTtc: installment.billingDocument.totalTtc.toString(),
+      billingDocumentId: installment.billingDocumentId ?? "",
+      billingReference: installment.billingDocument?.reference ?? "Unassigned",
+      billingTotalTtc:
+        installment.billingDocument?.totalTtc.toString() ??
+        installment.scheduledAmount.toString(),
       currencyCode: installment.currencyCode,
       dueDate: dateToDateOnly(installment.dueDate),
       id: installment.id,
@@ -197,8 +200,15 @@ function billingView(record: BillingRecord, today = businessToday()) {
       sequence: installment.sequence,
     })),
     paymentTermsRaw: record.paymentTermsRaw,
-    project: record.project,
-    projectId: record.projectId,
+    project: record.project ?? {
+      id: "",
+      name: "Unassigned",
+      reportingCurrencyCode: retainedCurrency(
+        null,
+        record.detachedReportingCurrencyCode,
+      ),
+    },
+    projectId: record.projectId ?? "",
     reference: record.reference,
     status: calculated.status,
     freightCoverageHt: record.freightCoverageHt?.toString() ?? "0",
@@ -337,16 +347,39 @@ export async function listClientBillingOptions() {
   return {
     clients,
     currencies,
-    installments: installments.map((installment) => ({
-      ...installment,
-      dueDate: dateToDateOnly(installment.dueDate),
-      scheduledAmount: installment.scheduledAmount.toString(),
+    installments: installments.flatMap((installment) =>
+      installment.billingDocument?.clientId &&
+      installment.billingDocument.projectId
+        ? [
+            {
+              ...installment,
+              dueDate: dateToDateOnly(installment.dueDate),
+              scheduledAmount: installment.scheduledAmount.toString(),
+              billingDocument: {
+                ...installment.billingDocument,
+                clientId: installment.billingDocument.clientId,
+                projectId: installment.billingDocument.projectId,
+              },
+            },
+          ]
+        : [],
+    ),
+    orders: orders.flatMap((order) =>
+      order.projectId
+        ? [
+            {
+              ...order,
+              sellingReporting: funding.get(order.id) ?? null,
+              projectId: order.projectId,
+              supplier: order.supplier ?? { displayName: "Unassigned" },
+            },
+          ]
+        : [],
+    ),
+    projects: projects.map((project) => ({
+      ...project,
+      clientId: project.clientId ?? "",
     })),
-    orders: orders.map((order) => ({
-      ...order,
-      sellingReporting: funding.get(order.id) ?? null,
-    })),
-    projects,
   };
 }
 
@@ -698,7 +731,11 @@ export async function recordClientReceipt(
           );
       }
       if (
-        document.currencyCode !== document.project.reportingCurrencyCode &&
+        document.currencyCode !==
+          retainedCurrency(
+            document.project?.reportingCurrencyCode,
+            document.detachedReportingCurrencyCode,
+          ) &&
         !input.fxRate
       )
         throw new ClientBillingValidationError(
@@ -710,7 +747,11 @@ export async function recordClientReceipt(
           billingDocumentId: input.billingDocumentId,
           createdById: actorId,
           fxRateToReporting:
-            document.currencyCode === document.project.reportingCurrencyCode
+            document.currencyCode ===
+            retainedCurrency(
+              document.project?.reportingCurrencyCode,
+              document.detachedReportingCurrencyCode,
+            )
               ? null
               : (input.fxRate ?? null),
           installmentId: input.installmentId ?? null,
@@ -814,7 +855,11 @@ export async function updateClientReceipt(
           );
       }
       if (
-        document.currencyCode !== document.project.reportingCurrencyCode &&
+        document.currencyCode !==
+          retainedCurrency(
+            document.project?.reportingCurrencyCode,
+            document.detachedReportingCurrencyCode,
+          ) &&
         !input.fxRate
       )
         throw new ClientBillingValidationError(
@@ -826,7 +871,11 @@ export async function updateClientReceipt(
         data: {
           amount: input.amount,
           fxRateToReporting:
-            document.currencyCode === document.project.reportingCurrencyCode
+            document.currencyCode ===
+            retainedCurrency(
+              document.project?.reportingCurrencyCode,
+              document.detachedReportingCurrencyCode,
+            )
               ? null
               : (input.fxRate ?? null),
           installmentId: input.installmentId ?? null,
@@ -897,7 +946,7 @@ export async function deleteClientReceipt(
     await writeAuditEvent(transaction, actorId, {
       action: "DELETED",
       entityId: receipt.id,
-      entityReference: `${receipt.billingDocument.reference} · receipt`,
+      entityReference: `${receipt.billingDocument?.reference ?? "Unassigned"} · receipt`,
       entityType: "CLIENT_RECEIPT",
       metadata: {
         amount: receipt.amount.toString(),
@@ -981,7 +1030,10 @@ export async function updateClientBillingInstallment(
         receipts: { select: { amount: true } },
       },
     });
-    if (!current) throw new ClientBillingNotFoundError();
+    if (!current?.billingDocument)
+      throw new ClientBillingValidationError(
+        "Use the unassigned installment editor for this record.",
+      );
     const belongsToView =
       current.billingDocumentId === input.billingDocumentId ||
       current.matchedInvoices.some(
@@ -1053,7 +1105,7 @@ export async function updateClientBillingInstallment(
     await writeAuditEvent(transaction, actorId, {
       action: "UPDATED",
       entityId: current.id,
-      entityReference: `${current.billingDocument.reference} · ${installment.label}`,
+      entityReference: `${current.billingDocument?.reference ?? "Unassigned"} · ${installment.label}`,
       entityType: "INSTALLMENT",
       metadata: {
         fields: [
@@ -1175,7 +1227,7 @@ export async function deleteClientBillingInstallment(
     await writeAuditEvent(transaction, actorId, {
       action: "DELETED",
       entityId: installment.id,
-      entityReference: `${installment.billingDocument.reference} · ${installment.label}`,
+      entityReference: `${installment.billingDocument?.reference ?? "Unassigned"} · ${installment.label}`,
       entityType: "INSTALLMENT",
       metadata: { billingDocumentId: input.billingDocumentId },
       summary: "Removed a Billing payment installment.",
@@ -1413,7 +1465,11 @@ export async function updateClientBillingAllocations(
       await reconcileBillingAllocationsInTransaction(
         transaction,
         actorId,
-        { ...document, totalHt: document.totalHt.toString() },
+        {
+          ...document,
+          projectId: document.projectId ?? "",
+          totalHt: document.totalHt.toString(),
+        },
         document.allocations,
         input,
       );
@@ -1520,7 +1576,11 @@ export async function updateOrderBillingLinkInTransaction(
   await reconcileBillingAllocationsInTransaction(
     transaction,
     actorId,
-    { ...document, totalHt: document.totalHt.toString() },
+    {
+      ...document,
+      projectId: document.projectId ?? "",
+      totalHt: document.totalHt.toString(),
+    },
     document.allocations,
     {
       allocations,
@@ -1957,6 +2017,7 @@ export async function getProjectsClientBillingSummaries(
   });
   const recordsByProject = new Map<string, BillingRecord[]>();
   for (const record of records) {
+    if (!record.projectId) continue;
     const projectRecords = recordsByProject.get(record.projectId) ?? [];
     projectRecords.push(record);
     recordsByProject.set(record.projectId, projectRecords);
@@ -2010,6 +2071,7 @@ export async function getOrderBillingAllocations(orderIds: readonly string[]) {
       billingDocument: {
         select: {
           currencyCode: true,
+          detachedReportingCurrencyCode: true,
           documentType: true,
           fxRateToReporting: true,
           project: { select: { reportingCurrencyCode: true } },
@@ -2024,7 +2086,10 @@ export async function getOrderBillingAllocations(orderIds: readonly string[]) {
     const amount = converted(
       allocation.allocatedAmount.toString(),
       document.currencyCode,
-      document.project.reportingCurrencyCode,
+      retainedCurrency(
+        document.project?.reportingCurrencyCode,
+        document.detachedReportingCurrencyCode,
+      ),
       document.fxRateToReporting?.toString() ?? null,
     );
     if (amount === null) continue;
@@ -2049,6 +2114,7 @@ export async function getOrderBillingReconciliation(orderId: string) {
   const database = getDatabase();
   const order = await getOrder(orderId);
   if (!order) return null;
+  if (!order.project.id) return [];
   const records = await database.clientBillingDocument.findMany({
     where: {
       projectId: order.project.id,

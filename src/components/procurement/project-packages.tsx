@@ -96,6 +96,16 @@ export async function ProjectPackages({
     <RelatedRecordTable
       table={{
         id: "packages",
+        ...(canEdit
+          ? {
+              editKind: "package" as const,
+              removal: {
+                kind: "assignment" as const,
+                relation: "package-project" as const,
+                parentId: projectId,
+              },
+            }
+          : {}),
         title: "Order Packages",
         description:
           "Project Order groupings. Open a Package to list its Orders.",

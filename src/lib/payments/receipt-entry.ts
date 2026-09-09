@@ -1,3 +1,4 @@
+import { retainedCurrency } from "@/lib/related-records/context";
 import "server-only";
 
 import Decimal from "decimal.js";
@@ -19,6 +20,7 @@ export async function receiptEntryOptions(projectId: string) {
         id: true,
         reference: true,
         documentType: true,
+        detachedReportingCurrencyCode: true,
         currencyCode: true,
         client: { select: { displayName: true } },
         project: { select: { reportingCurrencyCode: true } },
@@ -41,7 +43,7 @@ export async function receiptEntryOptions(projectId: string) {
       .filter((order) => order.status !== "CANCELLED")
       .map((order) => ({
         id: order.id,
-        label: `${order.orderNumber} · ${order.packageName} · ${order.supplier.displayName}${order.orderPackage ? ` · Package: ${order.orderPackage.name}` : ""}`,
+        label: `${order.orderNumber} · ${order.packageName} · ${order.supplier?.displayName ?? "Unassigned"}${order.orderPackage ? ` · Package: ${order.orderPackage.name}` : ""}`,
         currencyCode: order.orderCurrencyCode,
         reportingCurrencyCode: order.project.reportingCurrencyCode,
         payable: order.supplierPayment.totalPayable,
@@ -59,9 +61,12 @@ export async function receiptEntryOptions(projectId: string) {
       })),
     billing: billing.map((document) => ({
       id: document.id,
-      label: `${document.reference} · ${document.documentType} · ${document.client.displayName}`,
+      label: `${document.reference} · ${document.documentType} · ${document.client?.displayName ?? "Unassigned"}`,
       currencyCode: document.currencyCode,
-      reportingCurrencyCode: document.project.reportingCurrencyCode,
+      reportingCurrencyCode: retainedCurrency(
+        document.project?.reportingCurrencyCode,
+        document.detachedReportingCurrencyCode,
+      ),
       installments: document.paymentInstallments.map((item) => {
         const paid = item.receipts.reduce(
           (sum, receipt) => sum.plus(receipt.amount),

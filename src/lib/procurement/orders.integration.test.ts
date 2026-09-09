@@ -37,9 +37,12 @@ const timestamp = new Date("2026-08-25T12:00:00.000Z");
 function sellingOrder(
   vatAmount: string,
   treatment: VatTreatment,
-): Parameters<typeof summarizeOrder>[0] {
+): Parameters<typeof summarizeOrder>[0] & {
+  project: NonNullable<Parameters<typeof summarizeOrder>[0]["project"]>;
+} {
   return {
     trashedAt: null,
+    detachedReportingCurrencyCode: null,
     carrierCode: null,
     carrierOtherName: null,
     trackingReference: null,

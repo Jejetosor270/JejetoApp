@@ -132,15 +132,17 @@ export async function globalSearch(
     ]);
   return [
     ...projects.map((project) => ({
-      context: `${project.code} · ${project.client.displayName}`,
+      context: `${project.code} · ${project.client?.displayName ?? "Unassigned"}`,
       href: `/projects/${project.id}`,
       id: project.id,
       label: project.name,
       type: "Project" as const,
     })),
     ...buildings.map((building) => ({
-      context: `${building.shortCode} · ${building.project.name}`,
-      href: `/projects/${building.project.id}#buildings`,
+      context: `${building.shortCode} · ${building.project?.name ?? "Unassigned"}`,
+      href: building.project
+        ? `/projects/${building.project.id}#buildings`
+        : "/unassigned",
       id: building.id,
       label: building.name,
       type: "Building" as const,
@@ -160,14 +162,14 @@ export async function globalSearch(
       type: "Supplier" as const,
     })),
     ...orders.map((order) => ({
-      context: `${order.project.name} · ${order.supplier.displayName} · ${order.packageName}`,
+      context: `${order.project?.name ?? "Unassigned"} · ${order.supplier?.displayName ?? "Unassigned"} · ${order.packageName}`,
       href: `/orders/${order.id}`,
       id: order.id,
       label: order.orderNumber,
       type: "Order" as const,
     })),
     ...billing.map((document) => ({
-      context: `${document.client.displayName} · ${document.project.name} · ${document.documentType}`,
+      context: `${document.client?.displayName ?? "Unassigned"} · ${document.project?.name ?? "Unassigned"} · ${document.documentType}`,
       href: `/billing/${document.id}`,
       id: document.id,
       label: document.reference,
@@ -175,7 +177,7 @@ export async function globalSearch(
     })),
     ...items.map((item) => ({
       context: [
-        item.project.name,
+        item.project?.name ?? "Unassigned",
         item.building?.name,
         item.room?.name,
         item.supplier?.displayName,

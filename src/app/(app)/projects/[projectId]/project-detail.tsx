@@ -854,6 +854,16 @@ export function ProjectDetail({
                 <RelatedRecordTable
                   table={{
                     id: "buildings",
+                    ...(canEdit
+                      ? {
+                          editKind: "building" as const,
+                          removal: {
+                            kind: "assignment" as const,
+                            relation: "building-project" as const,
+                            parentId: project.id,
+                          },
+                        }
+                      : {}),
                     title: "Buildings",
                     description:
                       "Buildings within this Project. Manage their details and Rooms here.",
@@ -922,12 +932,23 @@ export function ProjectDetail({
                 <RelatedRecordTable
                   table={{
                     id: "rooms",
+                    ...(canEdit
+                      ? {
+                          editKind: "room" as const,
+                          removal: {
+                            kind: "assignment" as const,
+                            relation: "room-project" as const,
+                            parentId: project.id,
+                          },
+                        }
+                      : {}),
                     title: "Rooms",
                     description: "Rooms grouped by their parent Building.",
                     columns: ["Room / code / status", "Building", "Notes"],
                     rows: buildings.flatMap((building) =>
                       building.rooms.map((room) => ({
                         id: room.id,
+                        editValue: room.name,
                         cells: [
                           [
                             room.code,

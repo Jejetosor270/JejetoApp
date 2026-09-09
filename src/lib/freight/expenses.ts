@@ -281,7 +281,7 @@ export async function deleteProjectFreightExpense(
         entityType: "FREIGHT_EXPENSE",
         summary: "Deleted a Project-level freight expense.",
       });
-      return expense.projectId;
+      return expense.projectId ?? "";
     });
   } catch (error) {
     if (

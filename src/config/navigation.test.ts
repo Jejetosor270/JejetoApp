@@ -32,6 +32,7 @@ describe("Workspace navigation", () => {
       "/installments",
       "/receipts",
       "/unassigned-cash",
+      "/unassigned",
       "/clients",
       "/suppliers",
       "/calendar",

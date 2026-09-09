@@ -48,7 +48,7 @@ it.each([
     const html = renderToStaticMarkup(
       await Page({ searchParams: Promise.resolve({}) }),
     );
-    expect(html).toContain(title + " table");
+    expect(html).toContain(`aria-label="${title}"`);
     expect(html).toContain("Select all visible rows");
     expect(mocks.list).toHaveBeenLastCalledWith(
       expect.objectContaining({ kind, page: 1, pageSize: 25 }),

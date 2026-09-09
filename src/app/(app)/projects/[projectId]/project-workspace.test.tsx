@@ -150,3 +150,10 @@ vi.mock("@/app/(app)/related-records/actions", () => ({
 vi.mock("@/app/(app)/unassigned-cash/actions", () => ({
   unassignCashAction: vi.fn(),
 }));
+
+vi.mock("@/app/(app)/related-records/inline-actions", () => ({
+  editRelatedFinancialRowAction: vi.fn(),
+}));
+vi.mock("@/app/(app)/settings/trash/actions", () => ({
+  trashSelectedAction: vi.fn(),
+}));

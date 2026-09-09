@@ -1,3 +1,4 @@
+import { retainedCurrency } from "@/lib/related-records/context";
 import "server-only";
 import { nextInstallmentSequence } from "./sequence";
 import { trashInTransaction } from "@/lib/trash/service";
@@ -50,6 +51,7 @@ import { PaymentNotFoundError, PaymentValidationError } from "./errors";
 const installmentInclude = {
   order: {
     select: {
+      detachedReportingCurrencyCode: true,
       id: true,
       orderCurrencyCode: true,
       orderNumber: true,
@@ -178,7 +180,7 @@ function installmentView(
       ? dateToDateOnly(lastSettlement.settledAt)
       : null,
     basis: record.basis,
-    clientName: record.order.project.client.displayName,
+    clientName: record.order?.project?.client?.displayName ?? "Unassigned",
     currencyCode: record.currencyCode,
     direction: record.direction,
     dueDate: dateToDateOnly(record.dueDate),
@@ -190,15 +192,19 @@ function installmentView(
     isCancelled: record.isCancelled,
     label: record.label,
     notes: record.notes,
-    orderId: record.orderId,
-    orderNumber: record.order.orderNumber,
+    orderId: record.orderId ?? "",
+    orderNumber: record.order?.orderNumber ?? "Unassigned",
     outstandingAmount: outstanding.toString(),
-    packageName: record.order.packageName,
+    packageName: record.order?.packageName ?? "Unassigned",
     paidAmount: paid.toString(),
     percentageRate: record.percentageRate?.toString() ?? null,
-    projectId: record.order.project.id,
-    projectName: record.order.project.name,
-    reportingCurrencyCode: record.order.project.reportingCurrencyCode,
+    projectId: record.order?.project?.id ?? "",
+    projectName: record.order?.project?.name ?? "Unassigned",
+    reportingCurrencyCode: retainedCurrency(
+      record.order?.project?.reportingCurrencyCode,
+      record.order?.detachedReportingCurrencyCode ??
+        record.detachedReportingCurrencyCode,
+    ),
     scheduledAmount: scheduled.toString(),
     sequence: record.sequence,
     settlements: record.settlements.map((settlement) => ({
@@ -216,7 +222,7 @@ function installmentView(
       scheduledAmount: scheduled,
       today,
     }),
-    supplierName: record.order.supplier.displayName,
+    supplierName: record.order?.supplier?.displayName ?? "Unassigned",
   };
 }
 
@@ -496,7 +502,7 @@ export async function updateInstallmentInline(
     await writeAuditEvent(transaction, actorId, {
       action: "UPDATED",
       entityId: installment.id,
-      entityReference: `${current.order.orderNumber} · ${installment.label}`,
+      entityReference: `${current.order?.orderNumber ?? "Unassigned"} · ${installment.label}`,
       entityType: "INSTALLMENT",
       metadata: { fields: ["dueDate", "label", "notes", "scheduledAmount"] },
       summary:
@@ -535,6 +541,7 @@ export async function recordSettlement(
           order: {
             select: {
               projectId: true,
+              detachedReportingCurrencyCode: true,
               project: { select: { reportingCurrencyCode: true } },
             },
           },
@@ -546,7 +553,7 @@ export async function recordSettlement(
         context &&
         (installment.direction !== "SUPPLIER_PAYMENT" ||
           installment.orderId !== context.orderId ||
-          installment.order.projectId !== context.projectId)
+          installment.order?.projectId !== context.projectId)
       ) {
         throw new PaymentValidationError(
           "Choose a Supplier installment belonging to the selected Order and Project.",
@@ -573,7 +580,11 @@ export async function recordSettlement(
           createdById: actorId,
           fxRateToReporting:
             installment.currencyCode ===
-            installment.order.project.reportingCurrencyCode
+            retainedCurrency(
+              installment.order?.project?.reportingCurrencyCode,
+              installment.order?.detachedReportingCurrencyCode ??
+                installment.detachedReportingCurrencyCode,
+            )
               ? null
               : (input.fxRate ?? null),
           installmentId: installment.id,
@@ -614,6 +625,7 @@ export async function updateSettlement(
               settlements: { select: { id: true, amount: true } },
               order: {
                 select: {
+                  detachedReportingCurrencyCode: true,
                   project: { select: { reportingCurrencyCode: true } },
                 },
               },
@@ -646,7 +658,11 @@ export async function updateSettlement(
         notes: input.notes ?? null,
         fxRateToReporting:
           installment.currencyCode ===
-          installment.order.project.reportingCurrencyCode
+          retainedCurrency(
+            installment.order?.project?.reportingCurrencyCode,
+            installment.order?.detachedReportingCurrencyCode ??
+              installment.detachedReportingCurrencyCode,
+          )
             ? null
             : (input.fxRate ?? null),
         updatedById: actorId,
@@ -1278,7 +1294,7 @@ export async function getProcurementCalendarEvents(
         : null,
       id: order.id,
       orderNumber: order.orderNumber,
-      projectName: order.project.name,
+      projectName: order.project?.name ?? "Unassigned",
     })),
     items: items.map((item) => ({
       estimatedFabricatorDate: item.estimatedFabricatorDate
@@ -1296,7 +1312,7 @@ export async function getProcurementCalendarEvents(
         : null,
       itemReference: item.itemReference,
       name: item.name,
-      projectName: item.project.name,
+      projectName: item.project?.name ?? "Unassigned",
     })),
     today: businessToday(),
   });

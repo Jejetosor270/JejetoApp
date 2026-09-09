@@ -10,12 +10,135 @@ import type { RelatedEditKind } from "@/lib/related-records/types";
 import type { RelatedTableData } from "@/lib/related-records/types";
 import { selectedIds, selectedIdsSchema } from "@/domain/deletion/validation";
 import { Prisma } from "@/generated/prisma/client";
+import { removeAssignments } from "@/lib/related-records/unassign";
+import { unassignCashInTransaction } from "@/lib/payments/unassigned-cash";
 
 export async function removeOptionalLinksAction(
   context: NonNullable<RelatedTableData["removal"]>,
   formData: FormData,
 ): Promise<BulkActionState> {
   const actor = await requireMasterDataEditor();
+  if (context.kind === "cash-relationship") {
+    const input = z
+      .object({
+        cashKind: z.enum(["payment", "receipt"]),
+        recordId: z.uuid(),
+        tableId: z.enum([
+          "projects",
+          "orders",
+          "suppliers",
+          "clients",
+          "billing",
+          "supplier-installments",
+          "client-installments",
+        ]),
+      })
+      .safeParse(context);
+    const selection = selectedIdsSchema.safeParse(selectedIds(formData));
+    if (!input.success || !selection.success)
+      return { status: "error", message: "Select valid links." };
+    try {
+      await getDatabase().$transaction(
+        async (tx) => {
+          const { cashKind, recordId, tableId } = input.data;
+          const payment =
+            cashKind === "payment"
+              ? await tx.paymentSettlement.findUnique({
+                  where: { id: recordId },
+                  include: { installment: { include: { order: true } } },
+                })
+              : null;
+          const receipt =
+            cashKind === "receipt"
+              ? await tx.clientReceipt.findUnique({
+                  where: { id: recordId },
+                  include: { billingDocument: true },
+                })
+              : null;
+          const parents: Record<string, string | null | undefined> = payment
+            ? {
+                projects: payment.installment.order?.projectId,
+                orders: payment.installment.orderId,
+                suppliers: payment.installment.order?.supplierId,
+                "supplier-installments": payment.installmentId,
+              }
+            : {
+                projects: receipt?.billingDocument.projectId,
+                clients: receipt?.billingDocument.clientId,
+                billing: receipt?.billingDocumentId,
+                "client-installments": receipt?.installmentId,
+              };
+          if (
+            selection.data.length !== 1 ||
+            parents[tableId] !== selection.data[0]
+          )
+            throw new Error("Relationship changed.");
+          await unassignCashInTransaction(tx, actor.id, cashKind, [recordId]);
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+      revalidatePath("/", "layout");
+      return {
+        status: "success",
+        message: "Original cash retained in Unassigned cash records.",
+      };
+    } catch {
+      return {
+        status: "error",
+        message:
+          "The relationship changed. Nothing was removed. Refresh and try again.",
+      };
+    }
+  }
+  if (context.kind === "assignment") {
+    const assignment = z
+      .object({
+        kind: z.literal("assignment"),
+        parentId: z.uuid(),
+        ownerId: z.uuid().optional(),
+        relation: z.enum([
+          "supplier-installment-supplier",
+          "client-installment-client",
+          "item-building",
+          "item-room",
+          "item-order",
+          "item-supplier",
+          "project-client",
+          "order-project",
+          "order-supplier",
+          "billing-project",
+          "billing-client",
+          "building-project",
+          "room-building",
+          "room-project",
+          "item-project",
+          "package-project",
+          "supplier-installment-order",
+          "supplier-installment-project",
+          "client-installment-billing",
+          "client-installment-project",
+          "billing-revision",
+        ]),
+      })
+      .safeParse(context);
+    const selection = selectedIdsSchema.safeParse(selectedIds(formData));
+    if (!assignment.success || !selection.success)
+      return { status: "error", message: "Select valid relationships." };
+    try {
+      await removeAssignments(actor.id, assignment.data, selection.data);
+      revalidatePath("/", "layout");
+      return {
+        status: "success",
+        message: "Relationships removed. Original records retained.",
+      };
+    } catch {
+      return {
+        status: "error",
+        message:
+          "The relationships changed or could not be removed. Nothing was changed. Refresh and try again.",
+      };
+    }
+  }
   const input = z
     .object({
       kind: z.enum([
@@ -115,6 +238,8 @@ const kindSchema = z.enum([
   "package",
 ]);
 const limits: Record<RelatedEditKind, number> = {
+  allocation: 200,
+  "allocation-order": 200,
   project: 200,
   client: 160,
   supplier: 160,

@@ -56,7 +56,7 @@ import {
 
 import { ProcurementNotFoundError, ProcurementRelationError } from "./errors";
 
-const orderInclude = {
+export const orderInclude = {
   orderPackage: { select: { id: true, name: true, isActive: true } },
   buildings: {
     include: {
@@ -102,9 +102,53 @@ const orderInclude = {
     },
   },
 } satisfies Prisma.ProcurementOrderInclude;
-type OrderRecord = Prisma.ProcurementOrderGetPayload<{
+type RawOrderRecord = Prisma.ProcurementOrderGetPayload<{
   include: typeof orderInclude;
 }>;
+type OrderRecord = RawOrderRecord & {
+  project: NonNullable<RawOrderRecord["project"]>;
+  supplier: NonNullable<RawOrderRecord["supplier"]>;
+};
+function orderContext(record: RawOrderRecord): OrderRecord {
+  const {
+    detachedReportingCurrencyCode,
+    productMarkupOverrideRate,
+    freightMarkupOverrideRate,
+    otherCostMarkupOverrideRate,
+  } = record;
+  let project = record.project;
+  if (!project) {
+    if (
+      !detachedReportingCurrencyCode ||
+      productMarkupOverrideRate === null ||
+      freightMarkupOverrideRate === null ||
+      otherCostMarkupOverrideRate === null
+    )
+      throw new ProcurementRelationError(
+        "This unassigned Order has incomplete retained pricing context.",
+      );
+    project = {
+      id: "",
+      name: "Unassigned",
+      reportingCurrencyCode: detachedReportingCurrencyCode,
+      defaultProductMarkupRate: productMarkupOverrideRate,
+      defaultFreightMarkupRate: freightMarkupOverrideRate,
+      defaultOtherCostMarkupRate: otherCostMarkupOverrideRate,
+      freightEstimateRate: null,
+    };
+  }
+  return {
+    ...record,
+    project,
+    supplier: record.supplier ?? {
+      id: "",
+      displayName: "Unassigned",
+      defaultCurrencyCode: record.orderCurrencyCode,
+      defaultLeadTimeWeeks: null,
+    },
+  };
+}
+
 type OrderRelationClient = Pick<
   Prisma.TransactionClient,
   "building" | "currency" | "project" | "supplier" | "orderPackage"
@@ -299,6 +343,7 @@ function fundingCost(
 }
 
 function fundingSellingHt(order: FundingOrderRecord): Decimal | null {
+  if (!order.project) return null;
   const reportingCurrency = order.project.reportingCurrencyCode;
   const sellingFx = fxRate(
     order.sellingCurrencyCode,
@@ -424,7 +469,7 @@ export async function listOrderFundingRows(
   });
   return records.map((order) => ({
     id: order.id,
-    projectId: order.project.id,
+    projectId: order.project?.id ?? "",
     sellingHt: fundingSellingHt(order)?.toString() ?? null,
     status: order.status,
   }));
@@ -605,7 +650,8 @@ function componentPricing(order: OrderRecord) {
   };
 }
 
-export function summarizeOrder(order: OrderRecord): OrderSummary {
+export function summarizeOrder(record: RawOrderRecord): OrderSummary {
+  const order = orderContext(record);
   const landed = currentLandedCost(order);
   const input = vatEntry(order, VatDirection.INPUT);
   const output = vatEntry(order, VatDirection.OUTPUT);
@@ -1382,7 +1428,7 @@ export async function listOrderOptions() {
       fxRateToReporting: document.fxRateToReporting?.toString() ?? null,
       id: document.id,
       isProjectRemainderApproved: document.isProjectRemainderApproved,
-      projectId: document.projectId,
+      projectId: document.projectId ?? "",
       reference: document.reference,
       totalHt: document.totalHt.toString(),
     })),
@@ -1391,6 +1437,9 @@ export async function listOrderOptions() {
     pricingModes: [...orderPricingMethods],
     projects: projects.map((project) => ({
       ...project,
+      client: project.client ?? {
+        defaultCurrencyCode: project.reportingCurrencyCode,
+      },
       defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
       defaultOtherCostMarkupRate: project.defaultOtherCostMarkupRate.toString(),
       defaultProductMarkupRate: project.defaultProductMarkupRate.toString(),
@@ -1517,6 +1566,7 @@ export async function getOrder(orderId: string): Promise<OrderSummary | null> {
 export async function listProjectOrders(
   projectId: string,
 ): Promise<OrderSummary[]> {
+  if (!projectId) return [];
   return listOrders({ projectId, query: "" });
 }
 export async function createOrder(

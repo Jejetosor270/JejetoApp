@@ -1,3 +1,5 @@
+import { RelatedRecordTable } from "@/components/layout/related-records";
+import { ordersTable, orderSelect } from "@/lib/related-records/projections";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -20,7 +22,7 @@ export default async function SupplierDetailPage({
 }) {
   const { supplierId } = await params;
   if (!z.uuid().safeParse(supplierId).success) notFound();
-  const [user, supplier, currencies, activity] = await Promise.all([
+  const [user, supplier, currencies, activity, orders] = await Promise.all([
     requireUser(),
     getSupplier(supplierId),
     listActiveCurrencies(),
@@ -28,6 +30,12 @@ export default async function SupplierDetailPage({
       where: { entityId: supplierId, entityType: "SUPPLIER" },
       orderBy: { occurredAt: "desc" },
       take: 20,
+    }),
+    getDatabase().procurementOrder.findMany({
+      where: { supplierId },
+      select: orderSelect,
+      orderBy: { id: "asc" },
+      take: 100,
     }),
   ]);
   if (!supplier) notFound();
@@ -57,6 +65,22 @@ export default async function SupplierDetailPage({
           Payments
         </Link>
       </nav>
+      <RelatedRecordTable
+        table={{
+          ...ordersTable(orders),
+          description: "Latest 100 Supplier Orders.",
+          ...(canEditMasterData(user.role)
+            ? {
+                editKind: "order",
+                removal: {
+                  kind: "assignment",
+                  relation: "order-supplier",
+                  parentId: supplierId,
+                },
+              }
+            : {}),
+        }}
+      />
       <div className="space-y-6">
         <SupplierDetailEditor
           canEdit={canEditMasterData(user.role)}

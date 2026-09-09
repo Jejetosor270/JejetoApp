@@ -306,6 +306,42 @@ export const modelMap: Record<string, ModelMetadata> = {
     table: "currencies",
     trash: false,
     relations: {
+      detachedProcurementOrder: {
+        model: "ProcurementOrder",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      detachedProjectFreightExpense: {
+        model: "ProjectFreightExpense",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      detachedPaymentInstallment: {
+        model: "PaymentInstallment",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      detachedClientBillingDocument: {
+        model: "ClientBillingDocument",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      detachedClientPaymentInstallment: {
+        model: "ClientPaymentInstallment",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      detachedItem: {
+        model: "Item",
+        many: true,
+        optional: false,
+        fields: [],
+      },
       unassignedCashOriginal: {
         model: "UnassignedCashRecord",
         many: true,
@@ -495,7 +531,7 @@ export const modelMap: Record<string, ModelMetadata> = {
       client: {
         model: "Client",
         many: false,
-        optional: false,
+        optional: true,
         fields: ["clientId"],
       },
       reportingCurrency: {
@@ -579,7 +615,7 @@ export const modelMap: Record<string, ModelMetadata> = {
       project: {
         model: "Project",
         many: false,
-        optional: false,
+        optional: true,
         fields: ["projectId"],
       },
       createdBy: {
@@ -627,13 +663,13 @@ export const modelMap: Record<string, ModelMetadata> = {
       project: {
         model: "Project",
         many: false,
-        optional: false,
+        optional: true,
         fields: ["projectId"],
       },
       supplier: {
         model: "Supplier",
         many: false,
-        optional: false,
+        optional: true,
         fields: ["supplierId"],
       },
       orderCurrency: {
@@ -708,6 +744,12 @@ export const modelMap: Record<string, ModelMetadata> = {
         optional: false,
         fields: [],
       },
+      detachedReportingCurrency: {
+        model: "Currency",
+        many: false,
+        optional: true,
+        fields: ["detachedReportingCurrencyCode"],
+      },
     },
   },
   ProjectFreightExpense: {
@@ -717,7 +759,7 @@ export const modelMap: Record<string, ModelMetadata> = {
       project: {
         model: "Project",
         many: false,
-        optional: false,
+        optional: true,
         fields: ["projectId"],
       },
       supplier: {
@@ -743,6 +785,12 @@ export const modelMap: Record<string, ModelMetadata> = {
         many: false,
         optional: true,
         fields: ["updatedById"],
+      },
+      detachedReportingCurrency: {
+        model: "Currency",
+        many: false,
+        optional: true,
+        fields: ["detachedReportingCurrencyCode"],
       },
     },
   },
@@ -825,7 +873,7 @@ export const modelMap: Record<string, ModelMetadata> = {
       order: {
         model: "ProcurementOrder",
         many: false,
-        optional: false,
+        optional: true,
         fields: ["orderId"],
       },
       currency: {
@@ -851,6 +899,12 @@ export const modelMap: Record<string, ModelMetadata> = {
         many: true,
         optional: false,
         fields: [],
+      },
+      detachedReportingCurrency: {
+        model: "Currency",
+        many: false,
+        optional: true,
+        fields: ["detachedReportingCurrencyCode"],
       },
     },
   },
@@ -951,13 +1005,13 @@ export const modelMap: Record<string, ModelMetadata> = {
       client: {
         model: "Client",
         many: false,
-        optional: false,
+        optional: true,
         fields: ["clientId"],
       },
       project: {
         model: "Project",
         many: false,
-        optional: false,
+        optional: true,
         fields: ["projectId"],
       },
       currency: {
@@ -1020,6 +1074,12 @@ export const modelMap: Record<string, ModelMetadata> = {
         optional: false,
         fields: [],
       },
+      detachedReportingCurrency: {
+        model: "Currency",
+        many: false,
+        optional: true,
+        fields: ["detachedReportingCurrencyCode"],
+      },
     },
   },
   ClientPaymentInstallment: {
@@ -1029,7 +1089,7 @@ export const modelMap: Record<string, ModelMetadata> = {
       billingDocument: {
         model: "ClientBillingDocument",
         many: false,
-        optional: false,
+        optional: true,
         fields: ["billingDocumentId"],
       },
       currency: {
@@ -1061,6 +1121,12 @@ export const modelMap: Record<string, ModelMetadata> = {
         many: true,
         optional: false,
         fields: [],
+      },
+      detachedReportingCurrency: {
+        model: "Currency",
+        many: false,
+        optional: true,
+        fields: ["detachedReportingCurrencyCode"],
       },
     },
   },
@@ -1161,7 +1227,7 @@ export const modelMap: Record<string, ModelMetadata> = {
       building: {
         model: "Building",
         many: false,
-        optional: false,
+        optional: true,
         fields: ["buildingId"],
       },
       createdBy: {
@@ -1269,7 +1335,7 @@ export const modelMap: Record<string, ModelMetadata> = {
       project: {
         model: "Project",
         many: false,
-        optional: false,
+        optional: true,
         fields: ["projectId"],
       },
       building: {
@@ -1344,6 +1410,12 @@ export const modelMap: Record<string, ModelMetadata> = {
         optional: true,
         fields: ["updatedById"],
       },
+      detachedReportingCurrency: {
+        model: "Currency",
+        many: false,
+        optional: true,
+        fields: ["detachedReportingCurrencyCode"],
+      },
     },
   },
   OrderPackage: {
@@ -1353,7 +1425,7 @@ export const modelMap: Record<string, ModelMetadata> = {
       project: {
         model: "Project",
         many: false,
-        optional: false,
+        optional: true,
         fields: ["projectId"],
       },
       createdBy: {

@@ -14,8 +14,12 @@ export async function RelatedItems({
   const user = await requireUser();
   const settings = await getApplicationSettings();
   if (!settings.itemManagementEnabled) return null;
+  if (!projectId && !orderId) return null;
   const items = await getDatabase().item.findMany({
-    where: { projectId, ...(orderId ? { procurementOrderId: orderId } : {}) },
+    where: {
+      ...(projectId ? { projectId } : {}),
+      ...(orderId ? { procurementOrderId: orderId } : {}),
+    },
     select: {
       id: true,
       name: true,
@@ -41,7 +45,13 @@ export async function RelatedItems({
                       parentId: orderId,
                     },
                   }
-                : {}),
+                : {
+                    removal: {
+                      kind: "assignment" as const,
+                      relation: "item-project" as const,
+                      parentId: projectId,
+                    },
+                  }),
             }
           : {}),
         title: "Items (Beta)",

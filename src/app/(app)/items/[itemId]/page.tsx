@@ -1,3 +1,4 @@
+import { ItemRelatedRecords } from "@/components/items/item-related-records";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
@@ -84,6 +85,7 @@ export default async function ItemPage({
           </div>
         ) : null}
       </DetailEditShell>
+      <ItemRelatedRecords itemId={item.id} />
       <footer className="text-muted-foreground text-xs">
         Source: {formatEnumLabel(item.sourceType)}
         {item.itemImport ? ` · ${item.itemImport.originalFilename}` : ""} ·

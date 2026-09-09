@@ -7,6 +7,14 @@ import { selectedIds, selectedIdsSchema } from "@/domain/deletion/validation";
 import type { BulkActionState } from "@/domain/deletion/action-state";
 
 const kinds = {
+  project: "Project",
+  client: "Client",
+  supplier: "Supplier",
+  order: "ProcurementOrder",
+  building: "Building",
+  room: "Room",
+  item: "Item",
+  package: "OrderPackage",
   billing: "ClientBillingDocument",
   payment: "PaymentSettlement",
   receipt: "ClientReceipt",
@@ -20,6 +28,14 @@ export async function trashSelectedAction(
   const actor = await requireMasterDataEditor();
   const parsed = z
     .enum([
+      "project",
+      "client",
+      "supplier",
+      "order",
+      "building",
+      "room",
+      "item",
+      "package",
       "billing",
       "payment",
       "receipt",

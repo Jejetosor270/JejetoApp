@@ -1,3 +1,5 @@
+import { retainedCurrency } from "@/lib/related-records/context";
+import { present } from "./context";
 import { editableRelatedTables } from "./editing";
 import "server-only";
 import Decimal from "decimal.js";
@@ -49,11 +51,16 @@ export interface CashRecordView {
 }
 
 const orderContext = {
-  select: { ...orderSelect, project: { select: projectSelect } },
+  select: {
+    ...orderSelect,
+    detachedReportingCurrencyCode: true,
+    project: { select: projectSelect },
+  },
 } as const;
 const billingContext = {
   select: {
     ...billingSelect,
+    detachedReportingCurrencyCode: true,
     project: { select: projectSelect },
     client: { select: partySelect },
   },
@@ -87,7 +94,7 @@ async function paymentRecord(id: string): Promise<CashRecordView | null> {
     description: legacy
       ? "Historical Order planning settlement, not authoritative Client cash."
       : "Actual Supplier cash out, recorded against an installment.",
-    manageHref: `/orders/${order.id}?tab=payments`,
+    manageHref: order ? `/orders/${order.id}?tab=payments` : "/installments",
     fields: [
       {
         label: "Amount",
@@ -100,15 +107,19 @@ async function paymentRecord(id: string): Promise<CashRecordView | null> {
         value: fx(
           record.fxRateToReporting,
           installment.currencyCode,
-          order.project.reportingCurrencyCode,
+          retainedCurrency(
+            order?.project?.reportingCurrencyCode,
+            order?.detachedReportingCurrencyCode ??
+              installment.detachedReportingCurrencyCode,
+          ),
         ),
       },
       { label: "Notes", value: record.notes ?? "—" },
     ],
     tables: [
-      projectsTable([order.project]),
+      projectsTable([order?.project]),
       ordersTable([order]),
-      partiesTable("suppliers", [order.supplier]),
+      partiesTable("suppliers", [order?.supplier]),
       {
         ...supplierInstallmentsTable([installment]),
         ...(legacy
@@ -148,7 +159,9 @@ async function receiptRecord(id: string): Promise<CashRecordView | null> {
               ...record.installment.matchedInvoices,
             ]
           : []),
-      ].map((row) => [row.id, row]),
+      ]
+        .filter(present)
+        .map((row) => [row.id, row]),
     ).values(),
   ];
   return {
@@ -157,7 +170,9 @@ async function receiptRecord(id: string): Promise<CashRecordView | null> {
     status: "RECORDED",
     description:
       "Actual Client cash in. Billing allocations do not split this receipt among Orders.",
-    manageHref: `/billing/${billing.id}?tab=schedule`,
+    manageHref: billing
+      ? `/billing/${billing.id}?tab=schedule`
+      : "/installments",
     fields: [
       {
         label: "Amount",
@@ -170,14 +185,21 @@ async function receiptRecord(id: string): Promise<CashRecordView | null> {
         value: fx(
           record.fxRateToReporting,
           billing.currencyCode,
-          billing.project.reportingCurrencyCode,
+          retainedCurrency(
+            billing?.project?.reportingCurrencyCode,
+            billing?.detachedReportingCurrencyCode ??
+              ("detachedReportingCurrencyCode" in record &&
+              typeof record.detachedReportingCurrencyCode === "string"
+                ? record.detachedReportingCurrencyCode
+                : null),
+          ),
         ),
       },
       { label: "Notes", value: record.notes ?? "—" },
     ],
     tables: [
-      projectsTable([billing.project]),
-      partiesTable("clients", [billing.client]),
+      projectsTable([billing?.project]),
+      partiesTable("clients", [billing?.client]),
       billingsTable(documents),
       clientInstallmentsTable(record.installment ? [record.installment] : []),
     ],
@@ -269,16 +291,22 @@ async function supplierInstallmentRecord(
     description: legacy
       ? "Historical Order planning only, not authoritative Client cash."
       : "Scheduled Supplier cash out. Actual payments are listed in Related.",
-    manageHref: `/orders/${record.order.id}?tab=payments`,
+    manageHref: record.order
+      ? `/orders/${record.order.id}?tab=payments`
+      : "/installments",
     fields: installmentFields(
       record,
       paid,
-      record.order.project.reportingCurrencyCode,
+      retainedCurrency(
+        record.order?.project?.reportingCurrencyCode,
+        record.order?.detachedReportingCurrencyCode ??
+          record.detachedReportingCurrencyCode,
+      ),
     ),
     tables: [
-      projectsTable([record.order.project]),
+      projectsTable([record.order?.project]),
       ordersTable([record.order]),
-      partiesTable("suppliers", [record.order.supplier]),
+      partiesTable("suppliers", [record.order?.supplier]),
       {
         ...paymentsTable(record.settlements),
         ...(legacy
@@ -325,15 +353,23 @@ async function clientInstallmentRecord(
     }),
     description:
       "Scheduled Client cash in. Related lists the owning Billing document, matching Invoices and actual receipts.",
-    manageHref: `/billing/${billing.id}?tab=schedule`,
+    manageHref: billing
+      ? `/billing/${billing.id}?tab=schedule`
+      : "/installments",
     fields: installmentFields(
       record,
       paid,
-      billing.project.reportingCurrencyCode,
+      retainedCurrency(
+        billing?.project?.reportingCurrencyCode,
+        billing?.detachedReportingCurrencyCode ??
+          ("detachedReportingCurrencyCode" in record
+            ? record.detachedReportingCurrencyCode
+            : null),
+      ),
     ),
     tables: [
-      projectsTable([billing.project]),
-      partiesTable("clients", [billing.client]),
+      projectsTable([billing?.project]),
+      partiesTable("clients", [billing?.client]),
       billingsTable([billing, ...record.matchedInvoices]),
       receiptsTable(record.receipts),
     ],
@@ -372,6 +408,51 @@ export async function getCashRecord(
   if (!result) return result;
   const tables = result.tables;
   editableRelatedTables(tables);
+  const [kind, id] = args;
+  for (const table of tables) {
+    if (kind === "payment" || kind === "receipt") {
+      table.removal = {
+        kind: "cash-relationship",
+        cashKind: kind,
+        recordId: id,
+        tableId: table.id,
+      };
+    } else if (
+      kind === "supplier-installment" &&
+      (table.id === "orders" ||
+        table.id === "projects" ||
+        table.id === "suppliers")
+    ) {
+      table.removal = {
+        kind: "assignment",
+        relation:
+          table.id === "suppliers"
+            ? "supplier-installment-supplier"
+            : table.id === "orders"
+              ? "supplier-installment-order"
+              : "supplier-installment-project",
+        parentId: id,
+        ownerId: id,
+      };
+    } else if (
+      kind === "client-installment" &&
+      (table.id === "billing" ||
+        table.id === "projects" ||
+        table.id === "clients")
+    ) {
+      table.removal = {
+        kind: "assignment",
+        relation:
+          table.id === "clients"
+            ? "client-installment-client"
+            : table.id === "billing"
+              ? "client-installment-billing"
+              : "client-installment-project",
+        parentId: id,
+        ownerId: id,
+      };
+    }
+  }
   return result;
 }
 
