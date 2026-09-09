@@ -1,9 +1,9 @@
+import { RelatedItems } from "@/components/items/related-items";
 import { RelatedRecords } from "@/components/layout/related-records";
 import { getProjectRelations } from "@/lib/related-records/records";
 import { ProjectPurchaseBudget } from "@/components/procurement/project-purchase-budget";
 import { optionalUuid } from "@/domain/listing/validation";
 import { ProjectPackages } from "@/components/procurement/project-packages";
-import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
@@ -14,7 +14,6 @@ import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listProjectFormOptions } from "@/lib/master-data/lookups";
 import { getProject } from "@/lib/master-data/projects";
 import { getProjectReportingSnapshot } from "@/lib/reporting/reports";
-import { getApplicationSettings } from "@/lib/settings/application-settings";
 import { getProjectClientBillingSummary } from "@/lib/billing/reporting";
 import { ProjectFreightExpenses } from "@/components/freight/project-freight-expenses";
 import {
@@ -63,7 +62,6 @@ export default async function ProjectPage({
   const horizon: CashFlowHorizon = isCashFlowHorizon(requestedHorizon)
     ? requestedHorizon
     : "12m";
-  const settings = await getApplicationSettings();
   const [
     user,
     options,
@@ -188,14 +186,7 @@ export default async function ProjectPage({
             canEdit={canEditMasterData(user.role)}
           />
         ),
-        items: settings.itemManagementEnabled ? (
-          <Link
-            className="border-input hover:bg-muted rounded-md border px-3 py-1.5 text-xs font-medium"
-            href={"/items?projectId=" + projectId}
-          >
-            Open Items
-          </Link>
-        ) : null,
+        items: <RelatedItems projectId={projectId} />,
       }}
       managers={options.managers}
       project={{

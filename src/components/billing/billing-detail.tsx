@@ -1204,35 +1204,41 @@ export function BillingDetail({
             label: "Document history",
             group: "related",
             content: (
-              <article className="bg-card rounded-lg border p-4">
-                <RecordSectionHeading
-                  title="Document history"
-                  description="Reviewed Billing imports."
-                  actions={
-                    canEdit ? (
-                      <Link
-                        className="text-primary text-xs underline"
-                        href="/admin/activity?entityType=BILLING_DOCUMENT"
-                      >
-                        Activity history
-                      </Link>
-                    ) : null
-                  }
-                />
-                <div className="mt-3 space-y-2 text-xs">
-                  {document.imports.map((item) => (
-                    <p key={item.id}>
-                      {formatTimestamp(item.processedAt)} ·{" "}
-                      {item.action.toLowerCase()} · {item.originalFilename} ·{" "}
-                      {item.extractionProvider}/{item.extractionModel} ·{" "}
-                      {item.processedByName ?? "Historical user"}
-                    </p>
-                  ))}
-                  {document.imports.length === 0 ? (
-                    <p className="text-muted-foreground">No import metadata.</p>
-                  ) : null}
-                </div>
-              </article>
+              <RelatedRecordTable
+                table={{
+                  id: "history",
+                  title: "Document history",
+                  description:
+                    "Reviewed Billing imports. Source documents are not retained.",
+                  columns: [
+                    "Processed",
+                    "Action",
+                    "File name",
+                    "Provider / model",
+                    "Employee",
+                  ],
+                  rows: document.imports.map((item) => ({
+                    id: item.id,
+                    cells: [
+                      formatTimestamp(item.processedAt),
+                      formatEnumLabel(item.action),
+                      item.originalFilename,
+                      item.extractionProvider + " / " + item.extractionModel,
+                      item.processedByName ?? "Historical user",
+                    ],
+                  })),
+                }}
+                actions={
+                  canEdit ? (
+                    <Link
+                      className="text-primary text-xs underline"
+                      href="/admin/activity?entityType=BILLING_DOCUMENT"
+                    >
+                      Activity history
+                    </Link>
+                  ) : null
+                }
+              />
             ),
           },
         ]}

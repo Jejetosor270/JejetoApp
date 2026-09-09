@@ -1,6 +1,6 @@
 export interface RelatedRow {
   id: string;
-  href: string;
+  href?: string;
   cells: string[];
 }
 

@@ -315,15 +315,16 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
 
 ## Simplified workspaces
 
-- Projects are hubs, not duplicate operational workspaces. Purchasing, Billing, Payments,
-  and Reports links open the canonical lists with the Project filter applied. Purchase
-  budgets and Order Packages remain Project configuration; they never replace Order totals.
+- Project Related contains scoped record tables for Orders, Billing, Supplier payments,
+  Client receipts and both installment types, plus Packages, Buildings, Rooms and optional
+  Items. Canonical operational lists remain the filtering/export workspaces. Purchase budgets
+  and Order Packages never replace Order financial authority.
 - Project, Order (including those opened from Purchasing), and Billing records have exactly
   two mounted tabs: Details and Related. Details owns fields, financial breakdowns, dates,
   delivery and notes; Related owns linked records, allocations, schedules, payments,
   receipts and document history. Switching tabs must preserve drafts. Project Details includes
-  planning, pricing defaults and financial reporting; Project Related links to scoped operational
-  lists and owns Packages, Buildings/Rooms and freight-expense management. Settings retains its
+  planning, pricing defaults and financial reporting; Project Related lists connected records
+  and owns Packages, Buildings/Rooms and freight-expense management. Settings retains its
   existing section layout.
 - Purchasing is the record presentation reference: shared compact summaries, two-column financial
   label/value cards, and Related category headings with descriptions and adjacent actions. Use
@@ -350,4 +351,20 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
   links for Orders/Billing/Items open scoped workspaces; Cash opens the scoped cash report.
   Historical Order Client schedules are displayed only when installments exist; no historical
   records are deleted.
+- `RelatedRecordTable` is the shared table presentation: record counts, explicit empty states,
+  independent 10-row paging, currency-labelled amounts and accessible record links. It pages
+  scoped data in the browser, not at the database; large-Project server paging remains a known
+  performance follow-up. History metadata has no source-file link because binaries are not retained.
+- Project, Order and Billing links from these tables open `?tab=related`. Supplier payments,
+  Client receipts and Supplier/Client installments have their own Details/Related pages under
+  `/payments/[paymentId]`, `/receipts/[receiptId]`, and `/installments/{supplier,client}/[installmentId]`.
+  Their readers resolve the active user, validate IDs, and expose no new mutations. Manage actions
+  retain the existing authorized Order/Billing editors. Buildings and Rooms remain managed within
+  their Project; Packages open scoped Orders, and Items open their existing record pages.
+- An Order has one Project. Order Related includes Supplier payments/installments and linked Billing,
+  but deliberately does not project Billing receipts or Client installments onto the Order. Open
+  Billing to inspect Client cash. Billing receipts have one owning document and optional installment;
+  a matched Quote installment and its receipts are included once through OR-scoped queries, not
+  concatenated cash totals. Receipt pages link the owning document, installment source Quote and
+  matching Invoices without duplicating those documents.
 - This presentation cleanup introduces no schema changes or new migration.

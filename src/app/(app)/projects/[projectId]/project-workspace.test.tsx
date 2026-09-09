@@ -17,6 +17,7 @@ vi.mock("@/app/(app)/items/actions", () => ({
 vi.mock("next/navigation", async () => {
   const { useSyncExternalStore } = await import("react");
   return {
+    useRouter: () => ({ push: vi.fn() }),
     useSearchParams: () =>
       new URLSearchParams(
         useSyncExternalStore(
@@ -52,6 +53,17 @@ async function mount(canEdit = true, items = false) {
       canEdit={canEdit}
       buildings={[]}
       workspace={{
+        related: (
+          <table aria-label="Related records">
+            <tbody>
+              <tr>
+                <td>
+                  <Link href="/orders/linked?tab=related">Linked Order</Link>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        ),
         overview: <p>Financial summary</p>,
         finance: <p>Targets and VAT</p>,
         budget: <p>Purchase budget</p>,
@@ -90,12 +102,13 @@ it("uses Details/Related and keeps Project fields separate from scoped work and 
   ).toHaveLength(1);
   await clickText("Related");
   const projectId = projectEditorFixture().project.id;
-  for (const path of ["orders", "billing", "payments", "reports"]) {
-    expect(
-      visible()?.querySelector(`a[href="/${path}?projectId=${projectId}"]`),
-    ).not.toBeNull();
-  }
-  expect(visible()?.textContent).toContain("Buildings & Rooms");
+  expect(
+    visible()?.querySelector('a[href="/orders/linked?tab=related"]'),
+  ).not.toBeNull();
+  expect(
+    visible()?.querySelector('a[href="/reports?projectId=' + projectId + '"]'),
+  ).not.toBeNull();
+  expect(visible()?.textContent).toContain("Buildings (0)");
   expect(visible()?.textContent).toContain("Freight expenses");
   expect(visible()?.textContent).not.toContain("Targets and VAT");
   expect(visible()?.textContent).not.toContain("Items (Beta)");

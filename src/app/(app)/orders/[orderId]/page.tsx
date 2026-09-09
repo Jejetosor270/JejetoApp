@@ -1,10 +1,11 @@
-import { RelatedRecords } from "@/components/layout/related-records";
+import { RelatedItems } from "@/components/items/related-items";
+import {
+  RelatedRecords,
+  RelatedRecordTable,
+} from "@/components/layout/related-records";
 import { getOrderRelations } from "@/lib/related-records/records";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
-import {
-  RecordSummary,
-  RecordSectionHeading,
-} from "@/components/layout/record-presentation";
+import { RecordSummary } from "@/components/layout/record-presentation";
 import { OrderFreightCoverage } from "@/components/billing/order-freight-coverage";
 import { carrierName } from "@/config/carriers";
 import { OrderBudgetComparison } from "@/components/procurement/order-budget-comparison";
@@ -81,6 +82,14 @@ export default async function OrderPage({
         <RecordWorkspace
           label="Order workspace"
           sections={[
+            {
+              id: "items",
+              group: "related",
+              label: "Items",
+              content: (
+                <RelatedItems projectId={order.project.id} orderId={order.id} />
+              ),
+            },
             {
               id: "connections",
               group: "related",
@@ -516,68 +525,39 @@ export default async function OrderPage({
               label: "Document history",
               content: (
                 <>
-                  {quoteImports.length > 0 ? (
-                    <section className="bg-card rounded-lg border p-4">
-                      <RecordSectionHeading
-                        title="Document history"
-                        description="Reviewed Supplier quote imports."
-                      />
-                      <div className="mt-3 overflow-x-auto">
-                        <table className="w-full min-w-[720px] text-left text-sm">
-                          <thead className="text-muted-foreground text-xs">
-                            <tr className="border-b">
-                              <th className="px-2 py-2 font-medium">
-                                Processed
-                              </th>
-                              <th className="px-2 py-2 font-medium">Action</th>
-                              <th className="px-2 py-2 font-medium">File</th>
-                              <th className="px-2 py-2 font-medium">Quote</th>
-                              <th className="px-2 py-2 font-medium">
-                                Provider
-                              </th>
-                              <th className="px-2 py-2 font-medium">
-                                Employee
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {quoteImports.map((item) => (
-                              <tr
-                                className="border-b last:border-0"
-                                key={item.id}
-                              >
-                                <td className="px-2 py-2">
-                                  {new Date(item.processedAt).toLocaleString(
-                                    "en-GB",
-                                    {
-                                      timeZone: BUSINESS_TIME_ZONE,
-                                    },
-                                  )}
-                                </td>
-                                <td className="px-2 py-2">
-                                  {formatEnumLabel(item.action)}
-                                </td>
-                                <td className="px-2 py-2">
-                                  {item.originalFilename}
-                                </td>
-                                <td className="px-2 py-2">
-                                  {item.supplierQuoteReference ?? "—"} ·{" "}
-                                  {formatDateOnly(item.quoteDate)}
-                                </td>
-                                <td className="px-2 py-2 text-xs">
-                                  {item.extractionProvider} ·{" "}
-                                  {item.extractionModel}
-                                </td>
-                                <td className="px-2 py-2">
-                                  {item.processedByName ?? "Historical user"}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </section>
-                  ) : null}
+                  <RelatedRecordTable
+                    table={{
+                      id: "history",
+                      title: "Document history",
+                      description:
+                        "Reviewed Supplier imports. Source documents are not retained.",
+                      columns: [
+                        "Processed",
+                        "Action",
+                        "File name",
+                        "Quote",
+                        "Provider / model",
+                        "Employee",
+                      ],
+                      rows: quoteImports.map((item) => ({
+                        id: item.id,
+                        cells: [
+                          new Date(item.processedAt).toLocaleString("en-GB", {
+                            timeZone: BUSINESS_TIME_ZONE,
+                          }),
+                          formatEnumLabel(item.action),
+                          item.originalFilename,
+                          (item.supplierQuoteReference ?? "—") +
+                            " · " +
+                            formatDateOnly(item.quoteDate),
+                          item.extractionProvider +
+                            " / " +
+                            item.extractionModel,
+                          item.processedByName ?? "Historical user",
+                        ],
+                      })),
+                    }}
+                  />
                 </>
               ),
             },

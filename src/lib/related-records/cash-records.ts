@@ -25,7 +25,6 @@ import {
   projectSelect,
   paymentSelect,
   receiptSelect,
-  supplierInstallmentSelect,
   clientInstallmentSelect,
   projectsTable,
   partiesTable,
@@ -109,7 +108,16 @@ async function paymentRecord(id: string): Promise<CashRecordView | null> {
       projectsTable([order.project]),
       ordersTable([order]),
       partiesTable("suppliers", [order.supplier]),
-      supplierInstallmentsTable([installment]),
+      {
+        ...supplierInstallmentsTable([installment]),
+        ...(legacy
+          ? {
+              title: "Historical Client installments",
+              description:
+                "Legacy Order planning only, not authoritative Client cash.",
+            }
+          : {}),
+      },
     ],
   };
 }

@@ -13,10 +13,12 @@ export function RelatedRecordTable({
   table,
   actions,
   rowActions,
+  firstCells,
 }: {
   table: RelatedTableData;
   actions?: ReactNode;
   rowActions?: Record<string, ReactNode>;
+  firstCells?: Record<string, ReactNode>;
 }) {
   const router = useRouter();
   const [page, setPage] = useState(0);
@@ -58,7 +60,7 @@ export function RelatedRecordTable({
             {visible.map((row) => (
               <tr
                 key={row.id}
-                className="hover:bg-muted/25 cursor-pointer"
+                className={`hover:bg-muted/25 ${row.href ? "cursor-pointer" : ""}`}
                 onClick={(event) => {
                   if (
                     event.target instanceof Element &&
@@ -72,7 +74,7 @@ export function RelatedRecordTable({
                     window.getSelection()?.toString()
                   )
                     return;
-                  router.push(row.href);
+                  if (row.href) router.push(row.href);
                 }}
               >
                 {row.cells.map((value, index) => (
@@ -80,7 +82,9 @@ export function RelatedRecordTable({
                     key={table.columns[index]}
                     className={`px-3 py-2 ${table.numericColumns?.includes(index) ? "financial-figure text-right" : ""}`}
                   >
-                    {index === 0 ? (
+                    {index === 0 && firstCells?.[row.id] ? (
+                      firstCells[row.id]
+                    ) : index === 0 && row.href ? (
                       <Link
                         href={row.href}
                         className="font-medium underline underline-offset-2"

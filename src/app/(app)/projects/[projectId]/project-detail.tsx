@@ -3,8 +3,8 @@ import { DateInput } from "@/components/forms/date-input";
 
 import { hasUnsavedDrafts } from "@/components/forms/draft-guard";
 import Link from "next/link";
+import { RelatedRecordTable } from "@/components/layout/related-records";
 import { RecordWorkspace } from "@/components/layout/record-workspace";
-import { RecordSectionHeading } from "@/components/layout/record-presentation";
 import { ProjectRecordDetails } from "@/components/master-data/project-record-details";
 import { FormSection } from "@/components/forms/form-section";
 import type { MasterDataActionState } from "@/components/master-data/action-state";
@@ -30,7 +30,6 @@ import {
   inputClassName,
   MoneyInput,
   PercentageInput,
-  StatusBadge,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
@@ -852,99 +851,114 @@ export function ProjectDetail({
                     />
                   </EditorDrawer>
                 ) : null}
-                <section className="bg-card overflow-hidden rounded-lg border">
-                  <div className="border-b p-4">
-                    <RecordSectionHeading
-                      title="Buildings & Rooms"
-                      description="Project locations and their Rooms."
-                      actions={
-                        canEdit ? (
-                          <Button
-                            onClick={() => setAddingBuilding(true)}
-                            size="sm"
-                            type="button"
-                          >
-                            <Plus data-icon="inline-start" />
-                            Add building
-                          </Button>
-                        ) : null
+                <RelatedRecordTable
+                  table={{
+                    id: "buildings",
+                    title: "Buildings",
+                    description:
+                      "Buildings within this Project. Manage their details and Rooms here.",
+                    columns: [
+                      "Building",
+                      "Code",
+                      "Description",
+                      "Rooms",
+                      "Status",
+                    ],
+                    numericColumns: [3],
+                    rows: buildings.map((building) => ({
+                      id: building.id,
+                      cells: [
+                        building.name,
+                        building.shortCode,
+                        building.description ?? "—",
+                        String(building.rooms.length),
+                        building.isActive ? "Active" : "Archived",
+                      ],
+                    })),
+                  }}
+                  actions={
+                    canEdit ? (
+                      <Button
+                        onClick={() => setAddingBuilding(true)}
+                        size="sm"
+                        type="button"
+                      >
+                        <Plus data-icon="inline-start" />
+                        Add building
+                      </Button>
+                    ) : null
+                  }
+                  {...(canEdit
+                    ? {
+                        rowActions: Object.fromEntries(
+                          buildings.map((building) => [
+                            building.id,
+                            <div
+                              key={building.id}
+                              className="flex justify-end gap-2"
+                            >
+                              <Button
+                                onClick={() => setEditingBuilding(building)}
+                                size="sm"
+                                type="button"
+                                variant="outline"
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                onClick={() => setAddingRoomTo(building.id)}
+                                size="sm"
+                                type="button"
+                                variant="outline"
+                              >
+                                Add Room
+                              </Button>
+                            </div>,
+                          ]),
+                        ),
                       }
-                    />
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[35rem] text-left text-sm">
-                      <thead className="bg-muted/40 text-muted-foreground border-b text-xs">
-                        <tr>
-                          <th className="px-4 py-3">Building</th>
-                          <th className="px-4 py-3">Short code</th>
-                          <th className="px-4 py-3">Description</th>
-                          <th className="px-4 py-3">Rooms</th>
-                          <th className="px-4 py-3">Status</th>
-                          {canEdit ? (
-                            <th className="px-4 py-3 text-right">Action</th>
-                          ) : null}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {buildings.map((building) => (
-                          <tr className="hover:bg-muted/25" key={building.id}>
-                            <td className="px-4 py-3 font-medium">
-                              {building.name}
-                            </td>
-                            <td className="px-4 py-3 font-mono text-xs">
-                              {building.shortCode}
-                            </td>
-                            <td className="text-muted-foreground px-4 py-3">
-                              {building.description ?? "—"}
-                            </td>
-                            <td className="text-muted-foreground px-4 py-3">
-                              {building.rooms.length
-                                ? building.rooms.map((room) => (
-                                    <RoomInlineEditor
-                                      canEdit={canEdit}
-                                      key={room.id}
-                                      room={room}
-                                    />
-                                  ))
-                                : "—"}
-                            </td>
-                            <td className="px-4 py-3">
-                              <StatusBadge active={building.isActive} />
-                            </td>
-                            {canEdit ? (
-                              <td className="px-4 py-3 text-right">
-                                <Button
-                                  onClick={() => setEditingBuilding(building)}
-                                  size="sm"
-                                  type="button"
-                                  variant="outline"
-                                >
-                                  <Pencil data-icon="inline-start" />
-                                  Edit
-                                </Button>
-                                <Button
-                                  className="ml-2"
-                                  onClick={() => setAddingRoomTo(building.id)}
-                                  size="sm"
-                                  type="button"
-                                  variant="outline"
-                                >
-                                  <Plus data-icon="inline-start" />
-                                  Room
-                                </Button>
-                              </td>
-                            ) : null}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {buildings.length === 0 ? (
-                    <p className="text-muted-foreground px-4 py-8 text-sm">
-                      No buildings have been added to this project.
-                    </p>
-                  ) : null}
-                </section>
+                    : {})}
+                />
+                <RelatedRecordTable
+                  table={{
+                    id: "rooms",
+                    title: "Rooms",
+                    description: "Rooms grouped by their parent Building.",
+                    columns: ["Room / code / status", "Building", "Notes"],
+                    rows: buildings.flatMap((building) =>
+                      building.rooms.map((room) => ({
+                        id: room.id,
+                        cells: [
+                          [
+                            room.code,
+                            room.name,
+                            room.isActive ? "Active" : "Archived",
+                          ]
+                            .filter(Boolean)
+                            .join(" · "),
+                          building.name,
+                          room.notes ?? "—",
+                        ],
+                      })),
+                    ),
+                  }}
+                  {...(canEdit
+                    ? {
+                        firstCells: Object.fromEntries(
+                          buildings.flatMap((building) =>
+                            building.rooms.map((room) => [
+                              room.id,
+                              <RoomInlineEditor
+                                key={room.id}
+                                canEdit={canEdit}
+                                room={room}
+                              />,
+                            ]),
+                          ),
+                        ),
+                      }
+                    : {})}
+                />
               </>
             ),
           },
