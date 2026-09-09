@@ -78,6 +78,17 @@ describe("Purchasing inline edits on every tab", () => {
       </tbody>
     </table>
   );
+  it("shows only the linked reference in the standard Reference cell", async () => {
+    mounted = await mountForm(row("general", false));
+    const cell = mounted.container.querySelector("tbody td");
+    expect(cell?.textContent).toBe("PO-001");
+    expect(cell?.querySelector("a")?.getAttribute("href")).toBe(
+      "/orders/order-id",
+    );
+    expect(cell?.textContent).not.toContain("Furniture");
+    expect(cell?.textContent).not.toContain("Buy");
+  });
+
   async function change(label: string, value: string) {
     const element = document.querySelector<
       HTMLInputElement | HTMLSelectElement

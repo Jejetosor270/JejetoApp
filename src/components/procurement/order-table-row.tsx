@@ -339,15 +339,7 @@ export function OrderRow({
   return (
     <tr className={tableRowClassName}>
       {selectionCell}
-      <td className="px-4 py-3 font-mono text-xs">
-        {reference}
-        <span className="mt-1 block font-sans text-sm font-normal">
-          {order.packageName}
-        </span>
-        <span className="text-muted-foreground mt-0.5 block text-xs font-normal">
-          Buy {order.orderCurrencyCode} · sell {order.sellingCurrencyCode}
-        </span>
-      </td>
+      <td className="px-4 py-3 font-mono text-xs">{reference}</td>
       <td className="px-4 py-3">{order.project.name}</td>
       <td className="px-4 py-3">{order.orderPackage?.name ?? "Unassigned"}</td>
       <td className="px-4 py-3">{order.supplier.displayName}</td>
