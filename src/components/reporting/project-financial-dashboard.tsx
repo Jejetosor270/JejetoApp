@@ -213,7 +213,7 @@ function FundingCoverageSummary({
             Funding Coverage
           </p>
           <h2 className="mt-0.5 text-sm font-semibold">
-            Commercial Billing coverage of Order selling prices
+            Billing/Purchasing Invoiced Coverage
           </h2>
           <p className="text-muted-foreground mt-1 text-xs">
             Active Invoice allocations plus approved Project remainder, less
@@ -468,128 +468,6 @@ export function ProjectFinancialDashboard({
           coverage={fundingCoverage}
           currencyCode={currency}
         />
-      )}
-      {section === "finance" && (
-        <div>
-          <section className="mt-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold">
-                  Freight reconciliation
-                </h2>
-                <p className="text-muted-foreground mt-1 text-xs">
-                  Project planning allowance versus recovery required by actual
-                  Order and Project-level freight costs.
-                </p>
-              </div>
-              <Badge variant={freight?.complete ? "outline" : "warning"}>
-                {freight?.complete
-                  ? "Complete"
-                  : "Incomplete · check planning / FX"}
-              </Badge>
-            </div>
-            <h3 className="text-muted-foreground mt-4 text-xs font-semibold tracking-wide uppercase">
-              Planning
-            </h3>
-            <dl className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {(
-                [
-                  [
-                    "Expected Product Purchase Cost HT",
-                    freight?.expectedProductPurchaseCostHt ?? null,
-                    "money",
-                  ],
-                  [
-                    "Freight Estimate %",
-                    freight?.freightEstimateRate ?? null,
-                    "rate",
-                  ],
-                  [
-                    "Expected Freight Allowance HT",
-                    freight?.expectedFreightAllowanceHt ?? null,
-                    "money",
-                  ],
-                ] as const
-              ).map(([label, value, kind]) => (
-                <div className="bg-muted/25 rounded-md border p-3" key={label}>
-                  <dt
-                    className="text-muted-foreground text-xs"
-                    title={
-                      label === "Expected Freight Allowance HT"
-                        ? "Project Expected Product Purchase Cost HT × Freight Estimate %. This is a planning allowance, not live Order freight."
-                        : undefined
-                    }
-                  >
-                    {label}
-                  </dt>
-                  <dd className="financial-figure mt-1 text-sm font-semibold">
-                    {kind === "rate"
-                      ? formatRate(value)
-                      : formatMoney(value, currency)}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            <h3 className="text-muted-foreground mt-4 text-xs font-semibold tracking-wide uppercase">
-              Actual
-            </h3>
-            <dl className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {(
-                [
-                  ["Actual Freight Cost HT", freight?.actualCostHt ?? null],
-                  [
-                    "Invoiced Freight Coverage HT",
-                    freight?.invoicedFreightHt ?? null,
-                  ],
-                  [
-                    "Quoted Freight Coverage HT (planned)",
-                    freight?.quotedFreightHt ?? null,
-                  ],
-                  [
-                    "Actual Freight Profit HT",
-                    freight?.actualFreightProfitHt ?? null,
-                  ],
-                  [
-                    "Freight Recovery Gap HT",
-                    freight?.freightRecoveryGapHt ?? null,
-                  ],
-                  [
-                    "Freight Recovery Target HT",
-                    freight?.recoveryTargetHt ?? null,
-                  ],
-                  [
-                    "Target Freight Profit HT",
-                    freight?.freightGrossProfitHt ?? null,
-                  ],
-                  ["Freight Headroom HT", freight?.headroomHt ?? null],
-                ] as const
-              ).map(([label, value]) => (
-                <div className="bg-muted/25 rounded-md border p-3" key={label}>
-                  <dt
-                    className="text-muted-foreground text-xs"
-                    title={
-                      label === "Actual Freight Cost HT"
-                        ? "Actual Order freight plus Project-level freight expenses."
-                        : undefined
-                    }
-                  >
-                    {label}
-                  </dt>
-                  <dd className="financial-figure mt-1 text-sm font-semibold">
-                    {formatMoney(value, currency)}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            <p className="text-muted-foreground mt-3 text-xs">
-              Positive Freight Headroom means the Project planning allowance
-              exceeds the recovery target. Negative headroom signals a
-              shortfall. Default Freight Markup:{" "}
-              {formatRate(freight?.defaultFreightMarkupRate ?? null)}. Cash
-              timing remains in Supplier Payments.
-            </p>
-          </section>
-        </div>
       )}
       {section === "finance" && (
         <details className="bg-card rounded-lg border p-4">

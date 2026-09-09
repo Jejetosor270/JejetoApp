@@ -42,16 +42,9 @@ describe("financial percentage presentation boundaries", () => {
     ).toContain(marker.replace(/\s+/g, ""));
   });
 
-  it("keeps Freight reconciliation rates on the shared rate formatter", () => {
-    const dashboard = source(
-      "src/components/reporting/project-financial-dashboard.tsx",
-    );
-    expect(dashboard).toContain('"Freight Estimate %"');
-    expect(dashboard).toContain('"Expected Product Purchase Cost HT"');
-    expect(dashboard).toContain('"Expected Freight Allowance HT"');
-    expect(dashboard).toContain("? formatRate(value)");
-    expect(dashboard).toContain(
-      "formatRate(freight?.defaultFreightMarkupRate ?? null)",
-    );
+  it("keeps freight coverage markup on the shared rate formatter", () => {
+    const coverage = source("src/components/reporting/project-coverage.tsx");
+    expect(coverage).toContain("formatRate(freight.projectMarkup)");
+    expect(coverage).toContain("Client Freight paid HT (proportional)");
   });
 });

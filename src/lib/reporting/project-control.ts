@@ -1,5 +1,10 @@
 import "server-only";
 import Decimal from "decimal.js";
+import {
+  financialCategoryTotals,
+  freightReceiptHt,
+  projectFreightCoverage,
+} from "@/domain/finance/project-coverage";
 import { addDays } from "date-fns";
 import { getDatabase } from "@/lib/db";
 import { recognizedReceiptWhere } from "@/lib/billing/receipt-eligibility";
@@ -54,7 +59,29 @@ export async function getProjectControl(projectId: string) {
     getProjectClientBillingSummary(projectId),
     db.clientReceipt.findMany({
       where: { billingDocument: { projectId }, AND: [recognizedReceiptWhere] },
-      include: { billingDocument: { select: { currencyCode: true } } },
+      include: {
+        billingDocument: {
+          select: {
+            currencyCode: true,
+            documentType: true,
+            isCancelled: true,
+            totalTtc: true,
+            freightCoverageHt: true,
+          },
+        },
+        installment: {
+          select: {
+            matchedInvoices: {
+              where: { documentType: "INVOICE", isCancelled: false, projectId },
+              select: {
+                currencyCode: true,
+                totalTtc: true,
+                freightCoverageHt: true,
+              },
+            },
+          },
+        },
+      },
     }),
     db.clientReceipt.count({
       where: { billingDocument: { projectId }, NOT: recognizedReceiptWhere },
@@ -97,6 +124,29 @@ export async function getProjectControl(projectId: string) {
         doc.fxRateToReporting?.toString() ?? null,
       ),
     ),
+  );
+  const clientFreightPaidHt = sumKnown(
+    actualReceipts.map((receipt) => {
+      const owner = receipt.billingDocument;
+      const matches = receipt.installment?.matchedInvoices ?? [];
+      // Prefer the owning active Invoice; a matched Quote receipt is counted once.
+      const invoice =
+        owner.documentType === "INVOICE" && !owner.isCancelled
+          ? owner
+          : matches.length === 1
+            ? matches[0]
+            : undefined;
+      if (!invoice || invoice.currencyCode !== owner.currencyCode) return null;
+      return convert(
+        freightReceiptHt(
+          receipt.amount.toString(),
+          invoice.totalTtc.toString(),
+          invoice.freightCoverageHt.toString(),
+        ),
+        owner.currencyCode,
+        receipt.fxRateToReporting?.toString() ?? null,
+      );
+    }),
   );
   const categoryRevenue = (
     category: RecoveryCategory,
@@ -265,6 +315,28 @@ export async function getProjectControl(projectId: string) {
   return {
     currency,
     categories,
+    totals: financialCategoryTotals(categories),
+    freightCoverage: projectFreightCoverage({
+      supplierHt: sumKnown([
+        ...activeOrders.map((order) =>
+          convert(
+            order.costs.freight ?? "0",
+            order.orderCurrencyCode,
+            order.costs.purchaseFxRate,
+          ),
+        ),
+        ...project.freightExpenses.map((expense) =>
+          convert(
+            expense.costAmountHt.toString(),
+            expense.currencyCode,
+            expense.fxRateToReporting?.toString() ?? null,
+          ),
+        ),
+      ]),
+      projectMarkup: project.defaultFreightMarkupRate.toString(),
+      clientInvoicedHt: categoryRevenue("freight", false),
+      clientPaidHt: clientFreightPaidHt,
+    }),
     supplierPaid,
     freightPaid,
     horizonEnd,

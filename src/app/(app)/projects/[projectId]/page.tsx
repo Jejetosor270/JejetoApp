@@ -1,4 +1,6 @@
 import { ProjectPaymentTerms } from "@/components/payments/project-payment-terms";
+import { ProjectCoverage } from "@/components/reporting/project-coverage";
+import { getProjectControl } from "@/lib/reporting/project-control";
 import { ProjectFinancialControl } from "@/components/reporting/project-control";
 import { ProjectFreightPayments } from "@/components/freight/project-freight-payments";
 import { RelatedCashCreate } from "@/components/payments/related-cash-create";
@@ -75,6 +77,7 @@ export default async function ProjectPage({
     freight,
     freightExpenses,
     relations,
+    control,
   ] = await Promise.all([
     requireUser(),
     listProjectFormOptions(),
@@ -84,6 +87,7 @@ export default async function ProjectPage({
     getProjectFreightReconciliation(projectId),
     listProjectFreightExpenses(projectId),
     getProjectRelations(projectId),
+    getProjectControl(projectId),
   ]);
   if (!result || !reporting) notFound();
   const { buildings, project } = result;
@@ -196,22 +200,25 @@ export default async function ProjectPage({
           </div>
         ),
         overview: (
-          <ProjectFinancialDashboard
-            section="overview"
-            billing={billing}
-            financialPerformance={financialPerformance}
-            freight={freight}
-            fundingCoverage={fundingCoverage}
-            horizon={horizon}
-            phase11CashPosition={phase11CashPosition}
-            projectId={projectId}
-            report={reporting}
-            vatPosition={vatPosition}
-          />
+          <div className="space-y-4">
+            <ProjectFinancialDashboard
+              section="overview"
+              billing={billing}
+              financialPerformance={financialPerformance}
+              freight={freight}
+              fundingCoverage={fundingCoverage}
+              horizon={horizon}
+              phase11CashPosition={phase11CashPosition}
+              projectId={projectId}
+              report={reporting}
+              vatPosition={vatPosition}
+            />
+            <ProjectCoverage data={control} projectId={projectId} />
+          </div>
         ),
         finance: (
           <div className="space-y-5">
-            <ProjectFinancialControl projectId={projectId} />
+            <ProjectFinancialControl data={control} />
             <ProjectFinancialDashboard
               section="finance"
               billing={billing}
