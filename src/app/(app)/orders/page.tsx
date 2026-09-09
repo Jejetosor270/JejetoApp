@@ -1,3 +1,4 @@
+import { orderSortFields, orderSortLabels } from "@/config/order-list";
 import { DateInput } from "@/components/forms/date-input";
 import { CreateOrderActions } from "@/components/procurement/create-order-actions";
 import { ViewSelector } from "@/components/listing/view-selector";
@@ -69,7 +70,7 @@ export default async function OrdersPage({
   );
   const pageInput = parsePageInput(params);
   const sort = parseSort(
-    ["updated", "reference", "orderDate", "status"] as const,
+    orderSortFields,
     firstQueryValue(params, "sort"),
     "updated",
   );
@@ -244,10 +245,11 @@ export default async function OrdersPage({
             defaultValue={sort}
             name="sort"
           >
-            <option value="updated">Updated date</option>
-            <option value="reference">Reference</option>
-            <option value="orderDate">Order date</option>
-            <option value="status">Status</option>
+            {orderSortFields.map((field) => (
+              <option key={field} value={field}>
+                {orderSortLabels[field]}
+              </option>
+            ))}
           </select>
         </FilterField>
         <FilterField label="Sort direction">
@@ -261,7 +263,7 @@ export default async function OrdersPage({
           </select>
         </FilterField>
         <PageSizeField value={pageInput.pageSize} />
-        <FilterField label="Status">
+        <FilterField label="Delivery status">
           <select
             className={filterControlClassName}
             defaultValue={status ?? ""}

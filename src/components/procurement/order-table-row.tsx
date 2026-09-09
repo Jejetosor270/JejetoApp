@@ -117,7 +117,7 @@ export function OrderRow({
   const status = editing ? (
     <InlineSelect
       disabled={pending}
-      ariaLabel={`Status for ${saved.orderNumber}`}
+      ariaLabel={`Delivery status for ${saved.orderNumber}`}
       onChange={(value) => set("status", value)}
       value={draft.status}
     >
@@ -176,7 +176,7 @@ export function OrderRow({
   ) : null;
   const extraFields = editing ? (
     <div className="mt-3 grid gap-2 font-sans text-xs font-normal">
-      <label className="grid gap-1">Order status{status}</label>
+      <label className="grid gap-1">Delivery status{status}</label>
       <label className="grid gap-1">Ready date{readyDate}</label>
       <label className="grid gap-1">Delivery date{deliveryDate}</label>
     </div>
@@ -365,6 +365,10 @@ export function OrderRow({
           cancelled={order.status === "CANCELLED"}
           canEdit={canEdit && !editing}
         />
+      </td>
+      <td className="px-4 py-3">{formatDateOnly(order.invoiceDate)}</td>
+      <td className="px-4 py-3">
+        {formatDateOnly(order.supplierPayment.nextDueDate)}
       </td>
       <td className="px-4 py-3">
         {editing ? (

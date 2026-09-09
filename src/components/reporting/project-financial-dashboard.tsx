@@ -10,7 +10,6 @@ import {
   formatMoney,
   formatRate,
   formatSignedMoney,
-  formatSignedRate,
 } from "@/domain/procurement/presentation";
 import type {
   ProjectReportingSnapshot,
@@ -41,132 +40,6 @@ interface FreightReconciliationView {
   projectExpenseDeductibleInputVat: SerializedAggregateAmount;
   projectExpenseEconomicCost: SerializedAggregateAmount;
   recoveryTargetHt: string | null;
-}
-
-function FinancialPerformanceTable({
-  currencyCode,
-  performance,
-  projectId,
-}: {
-  currencyCode: string;
-  performance: ProjectFinancialPerformance;
-  projectId: string;
-}) {
-  const rows = [
-    [
-      "Cost HT",
-      "money",
-      performance.target.costHt,
-      performance.actual.costHt,
-      performance.variance.costHt,
-    ],
-    [
-      "Client Sell / Billing HT",
-      "money",
-      performance.target.sellHt,
-      performance.actual.sellHt,
-      performance.variance.sellHt,
-    ],
-    [
-      "Gross Profit HT",
-      "money",
-      performance.target.grossProfitHt,
-      performance.actual.grossProfitHt,
-      performance.variance.grossProfitHt,
-    ],
-    [
-      "Markup",
-      "rate",
-      performance.target.markupRate,
-      performance.actual.markupRate,
-      performance.variance.markupRate,
-    ],
-    [
-      "Margin",
-      "rate",
-      performance.target.marginRate,
-      performance.actual.marginRate,
-      performance.variance.marginRate,
-    ],
-  ] as const;
-  const complete =
-    performance.target.costHt !== null &&
-    performance.target.sellHt !== null &&
-    performance.actual.costHt !== null &&
-    performance.actual.sellHt !== null;
-  return (
-    <section className="bg-card overflow-hidden rounded-lg border">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
-        <div>
-          <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
-            Project financial performance
-          </p>
-          <h2 className="mt-0.5 text-sm font-semibold">
-            Full-Project target vs actual to date
-          </h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            HT commercial performance in {currencyCode}; targets are not
-            prorated for Project completion. Invoiced profit and markup are
-            provisional: they compare issued Invoices with current recorded
-            economic costs, not matched cost recognition or cash received.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={complete ? "outline" : "warning"}>
-            {complete ? "Complete" : "Incomplete"}
-          </Badge>
-          <Link
-            className="border-input rounded-md border px-2.5 py-1.5 text-xs font-medium"
-            href={`/billing?projectId=${projectId}`}
-          >
-            Open Billing
-          </Link>
-        </div>
-      </header>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[42rem] text-left text-xs">
-          <thead className="bg-muted/40 text-muted-foreground">
-            <tr>
-              <th className="px-4 py-2">Metric</th>
-              <th className="px-4 py-2 text-right">Project target</th>
-              <th className="px-4 py-2 text-right">
-                Actual invoiced to date (provisional)
-              </th>
-              <th className="px-4 py-2 text-right">Variance</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {rows.map(([label, kind, target, actual, variance]) => (
-              <tr key={label}>
-                <th className="px-4 py-2.5 font-medium">{label}</th>
-                <td className="financial-figure px-4 py-2.5 text-right">
-                  {kind === "rate"
-                    ? formatRate(target)
-                    : formatMoney(target, currencyCode)}
-                </td>
-                <td className="financial-figure px-4 py-2.5 text-right font-semibold">
-                  {kind === "rate"
-                    ? formatRate(actual)
-                    : formatMoney(actual, currencyCode)}
-                </td>
-                <td className="financial-figure px-4 py-2.5 text-right">
-                  {kind === "rate"
-                    ? formatSignedRate(variance)
-                    : formatSignedMoney(variance, currencyCode)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {!complete ? (
-        <p className="text-warning-foreground border-t px-4 py-2 text-xs">
-          A required Project estimate, Invoice FX rate, Order FX rate, or
-          freight-expense FX rate is missing.
-        </p>
-      ) : null}
-    </section>
-  );
 }
 
 function AggregateMoney({
@@ -455,13 +328,6 @@ export function ProjectFinancialDashboard({
             </p>
           )}
         </div>
-      )}
-      {section === "finance" && (
-        <FinancialPerformanceTable
-          currencyCode={currency}
-          performance={financialPerformance}
-          projectId={projectId}
-        />
       )}
       {section === "overview" && (
         <FundingCoverageSummary

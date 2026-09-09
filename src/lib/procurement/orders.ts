@@ -1,5 +1,7 @@
 import { createDefaultSupplierTerm } from "@/lib/payments/default-term";
 import "server-only";
+import type { OrderSort } from "@/config/order-list";
+import { derivedOrderSorts, sortOrderSummaries } from "./order-list-sorting";
 
 import Decimal from "decimal.js";
 
@@ -239,6 +241,7 @@ export interface OrderSummary {
   orderCurrencyCode: string;
   orderNumber: string;
   orderDate: string | null;
+  invoiceDate: string | null;
   packageId?: string | null;
   orderPackage?: { id: string; name: string; isActive: boolean } | null;
   packageName: string;
@@ -950,6 +953,7 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
     orderCurrencyCode: order.orderCurrencyCode,
     orderNumber: order.orderNumber,
     orderDate: order.orderDate ? dateToDateOnly(order.orderDate) : null,
+    invoiceDate: order.invoiceDate ? dateToDateOnly(order.invoiceDate) : null,
     packageId: order.packageId,
     orderPackage: order.orderPackage,
     packageName: order.packageName,
@@ -1216,6 +1220,13 @@ function orderData(input: CreateOrderInput, project: ProjectPricingContext) {
     orderCurrencyCode: input.orderCurrencyCode,
     orderNumber: input.orderNumber,
     orderDate: input.orderDate ? dateOnlyToDate(input.orderDate) : null,
+    ...(input.invoiceDate === undefined
+      ? {}
+      : {
+          invoiceDate: input.invoiceDate
+            ? dateOnlyToDate(input.invoiceDate)
+            : null,
+        }),
     ...(input.packageId === undefined ? {} : { packageId: input.packageId }),
     packageName: input.packageName,
     outputVatTaxableBaseOverride: input.outputVatTaxableBaseOverride ?? null,
@@ -1483,7 +1494,7 @@ export interface OrderFilters {
 
 export interface OrderListFilters extends OrderFilters, PageInput {
   direction: "asc" | "desc";
-  sort: "orderDate" | "reference" | "status" | "updated";
+  sort: OrderSort;
 }
 
 function orderWhere(filters: OrderFilters): Prisma.ProcurementOrderWhereInput {
@@ -1551,15 +1562,44 @@ export async function listOrders(
 
 export async function listOrdersPage(filters: OrderListFilters) {
   const where = orderWhere(filters);
-  const orderBy: Prisma.ProcurementOrderOrderByWithRelationInput[] =
-    filters.sort === "reference"
-      ? [{ orderNumber: filters.direction }, { id: "asc" }]
-      : filters.sort === "orderDate"
-        ? [{ orderDate: filters.direction }, { id: "asc" }]
-        : filters.sort === "status"
-          ? [{ status: filters.direction }, { orderNumber: "asc" }]
-          : [{ updatedAt: filters.direction }, { id: "asc" }];
   const database = getDatabase();
+  if (derivedOrderSorts.includes(filters.sort)) {
+    const records = await database.procurementOrder.findMany({
+      include: orderInclude,
+      where,
+    });
+    const sorted = sortOrderSummaries(
+      records.map(summarizeOrder),
+      filters.sort,
+      filters.direction,
+    );
+    const skip = paginationSkip(filters);
+    return {
+      items: sorted.slice(skip, skip + filters.pageSize),
+      total: sorted.length,
+    };
+  }
+  const direction = filters.direction;
+  const nullable = { sort: direction, nulls: "last" as const };
+  const columns: Partial<
+    Record<OrderSort, Prisma.ProcurementOrderOrderByWithRelationInput>
+  > = {
+    reference: { orderNumber: direction },
+    orderDate: { orderDate: nullable },
+    invoiceDate: { invoiceDate: nullable },
+    status: { status: direction },
+    updated: { updatedAt: direction },
+    project: { project: { name: direction } },
+    package: { orderPackage: { name: direction } },
+    supplier: { supplier: { displayName: direction } },
+    expectedDelivery: { expectedDeliveryDate: nullable },
+    expectedReady: { expectedReadyDate: nullable },
+    tracking: { trackingReference: nullable },
+  };
+  const orderBy = [
+    columns[filters.sort] ?? { updatedAt: direction },
+    { id: "asc" as const },
+  ];
   const [records, total] = await Promise.all([
     database.procurementOrder.findMany({
       include: orderInclude,
@@ -1826,6 +1866,9 @@ async function updateOrderRecord(
       carrierOtherName: input.carrierOtherName ?? null,
       trackingReference: input.trackingReference ?? null,
       budgetPurchaseAmountHt: input.budgetPurchaseAmountHt ?? null,
+      ...(input.invoiceDate === undefined
+        ? {}
+        : { invoiceDate: input.invoiceDate }),
       fields: [
         "packageId",
         "supplierId",

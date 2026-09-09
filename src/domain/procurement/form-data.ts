@@ -53,6 +53,7 @@ export function orderFormValues(formData: FormData) {
     orderCurrencyCode: stringValue(formData, "orderCurrencyCode"),
     orderNumber: stringValue(formData, "orderNumber"),
     orderDate: stringValue(formData, "orderDate"),
+    invoiceDate: stringValue(formData, "invoiceDate"),
     outputVatAmount: stringValue(formData, "outputVatAmount"),
     outputVatCountryCode: stringValue(formData, "outputVatCountryCode"),
     outputVatCustomTreatmentNote: stringValue(

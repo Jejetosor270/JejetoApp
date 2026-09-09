@@ -144,6 +144,7 @@ export interface EditableOrder {
   orderCurrencyCode: string;
   orderNumber: string;
   orderDate: string | null;
+  invoiceDate?: string | null;
   packageId?: string | null;
   packageName: string;
   packageSellingPrice: string | null;
@@ -450,6 +451,7 @@ export function OrderForm({
       initialProject?.reportingCurrencyCode ??
       "EUR",
     orderDate: order?.orderDate ?? "",
+    invoiceDate: order?.invoiceDate ?? "",
     orderNumber: order?.orderNumber ?? "",
     otherCostMarkupOverridePercent: rateToPercentInput(
       order?.otherCostMarkupOverrideRate ?? null,
@@ -809,7 +811,18 @@ export function OrderForm({
               value={draft.quoteDate}
             />
           </Field>
-          <Field error={fieldErrors.status} label="Fulfilment status">
+          <Field error={fieldErrors.invoiceDate} label="Invoice date">
+            <DateInput
+              name="invoiceDate"
+              aria-invalid={Boolean(fieldErrors.invoiceDate) || undefined}
+              className={errorClass("invoiceDate")}
+              value={draft.invoiceDate}
+              onChange={(event) =>
+                changeDraft("invoiceDate", event.target.value)
+              }
+            />
+          </Field>
+          <Field error={fieldErrors.status} label="Delivery status">
             <select
               aria-invalid={Boolean(fieldErrors.status) || undefined}
               className={errorClass("status")}

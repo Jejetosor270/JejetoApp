@@ -105,6 +105,7 @@ function BillingRow({
         </span>
       </td>
 
+      <td className="px-3 py-3">{formatDateOnly(document.documentDate)}</td>
       <td className="px-3 py-3">
         {editing ? (
           <DateInput
@@ -122,9 +123,6 @@ function BillingRow({
 
       <td className="financial-figure px-3 py-3 text-right">
         {formatMoney(document.totalHt, document.currencyCode)}
-      </td>
-      <td className="financial-figure px-3 py-3 text-right">
-        {formatMoney(document.totalTtc, document.currencyCode)}
       </td>
 
       <td className="financial-figure px-3 py-3 text-right">
@@ -217,6 +215,13 @@ export function BillingTable({
 
               <SortHeader
                 className="px-3 py-3"
+                label="Invoice date"
+                field="date"
+                defaultSort="updated"
+                defaultDirection="desc"
+              />
+              <SortHeader
+                className="px-3 py-3"
                 label="Due"
                 field="dueDate"
                 defaultSort="updated"
@@ -224,8 +229,6 @@ export function BillingTable({
               />
 
               <th className="px-3 py-3 text-right">HT</th>
-
-              <th className="px-3 py-3 text-right">TTC</th>
 
               <th className="px-3 py-3 text-right">Received</th>
 

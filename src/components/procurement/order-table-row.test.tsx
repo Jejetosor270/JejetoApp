@@ -107,7 +107,7 @@ describe("Purchasing inline edits on every tab", () => {
     mounted = await mountForm(row(view));
     await clickText("Edit");
     await change("Internal reference", "PO-002");
-    await change("Status", "ORDERED");
+    await change("Delivery status", "ORDERED");
     await change("Expected ready date", "12/09/2026");
     await change("Expected delivery date", "25/09/2026");
     await clickText("Save");

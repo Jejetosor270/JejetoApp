@@ -438,6 +438,14 @@ export default async function OrderPage({
                     </div>
                     <div>
                       <dt className="text-muted-foreground text-xs">
+                        Invoice date
+                      </dt>
+                      <dd className="mt-1">
+                        {formatDateOnly(order.invoiceDate)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground text-xs">
                         Lead time
                       </dt>
                       <dd className="mt-1">

@@ -453,6 +453,7 @@ model ProcurementOrder {
   outputVatTaxableBaseOverride       Decimal?               @db.Decimal(19, 4)
   quoteDate                          DateTime?              @db.Date
   orderDate                          DateTime?              @db.Date
+  invoiceDate                        DateTime?              @db.Date
   acknowledgementDate                DateTime?              @db.Date
   leadTimeWeeks                      Int?
   expectedReadyDate                  DateTime?              @map("estimatedProductionAt") @db.Date

@@ -378,8 +378,8 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
 ## Related removal and unassigned cash
 
 - Related removal clears a relationship; main-list deletion continues to use recoverable Trash. Cash removal transfers the same UUID atomically into normalized UnassignedCashRecord storage, preserving original amount, date, currency, reporting-currency FX and creation attribution. Exactly one cash authority exists after commit. Former schedules and document/Project balances no longer include that cash. Historical Order client planning settlements cannot become actual cash.
-- More → Unassigned cash records is the separate review list, with inline reference/date/amount editing and recoverable Trash. Retain currency and FX context rather than inferring it from a new parent.
-- Related controls include optional parent assignments, direct link removal, and inline cash/installment/allocation edits. Unassigned business records remain accessible under More.
+- Unassigned cash records retains its separate review route with inline reference/date/amount editing and recoverable Trash, but is no longer shown under More. Retain currency and FX context rather than inferring it from a new parent.
+- Related controls include optional parent assignments, direct link removal, and inline cash/installment/allocation edits. Unassigned business records retain their existing routes but are no longer listed under More.
 - Confirmed behavior for Project–Order unassignment: retain the last effective Product, Freight and Other markup rates as explicit Order overrides, switch inherited Project markup to Order markup, and retain the effective freight allowance as a manual Order amount. Preserve direct selling prices, original currencies and FX context; never substitute zero for an incomplete value. Capture these values atomically when removing the assignment so later Project edits cannot change the detached Order's economics.
 - Migration 20260914000000_unassigned_cash is prepared for this change; creation does not authorize applying it.
 
@@ -431,3 +431,24 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 - Financials omits Recovery less recorded-cost selling target. Freight coverage uses the concise
   Invoiced Freight Coverage HT and Paid Freight Coverage HT labels; both still subtract Supplier
   Freight Sell HT from the corresponding Client value.
+
+## Purchasing dates and list simplification
+
+- Purchasing labels the operational/fulfilment column Delivery status; Payment status remains
+  separate. Its standard table includes Invoice date, Payment due date and Expected delivery.
+  Payment due date is the earliest outstanding non-cancelled Supplier installment date.
+- Supplier invoiceDate is a separate optional business date, edited in the Order form. Never infer
+  it from Order or Quote dates or overwrite it when an intake omits it. Historical values stay null.
+  Requires migration `20260919000000_supplier_invoice_date`, prepared but not applied.
+- All Purchasing data columns have URL-driven server sorting before pagination, including the
+  secondary column sets. Derived money/payment sorts use existing Order summaries over the full
+  filtered scope; native fields retain database paging. Money sorts group by currency before
+  Decimal comparison, missing derived values sort last, and ties use immutable IDs.
+  Derived sorting loads the filtered scope on the server; very large scopes may require
+  optimization without introducing duplicate persisted financial totals.
+- Billing includes the document's Invoice date column and omits its TTC total column; Received
+  and Outstanding retain their authoritative TTC cash values. Quote rows use their document date.
+- Project Details no longer renders the redundant Full-Project target vs actual table.
+  Financials, coverage, VAT and underlying reporting calculations remain unchanged.
+- More omits Unassigned cash records and Unassigned records. This is navigation-only removal;
+  original records, unassignment workflows and historical direct URLs are preserved.

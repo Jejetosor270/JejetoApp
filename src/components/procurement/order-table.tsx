@@ -15,8 +15,13 @@ import {
 import type { OrderSummary } from "@/lib/procurement/orders";
 import { OrderRow } from "./order-table-row";
 
-export type OrderViewMode =
-  "general" | "financial" | "supplier-payment" | "delivery";
+import {
+  orderViewColumns,
+  orderSortLabels,
+  orderNumericColumns,
+  type OrderViewMode,
+} from "@/config/order-list";
+export type { OrderViewMode } from "@/config/order-list";
 
 export function OrderTable({
   canEdit,
@@ -60,88 +65,16 @@ export function OrderTable({
                   onChange={selection.toggleAll}
                 />
               ) : null}
-              {view === "general" ? (
-                <>
-                  <SortHeader
-                    className="px-4 py-3"
-                    label="Reference"
-                    field="reference"
-                    defaultSort="updated"
-                    defaultDirection="desc"
-                  />
-                  <th className="px-4 py-3">Project</th>
-                  <th className="px-4 py-3">Package</th>
-                  <th className="px-4 py-3">Supplier</th>
-                  <SortHeader
-                    className="px-4 py-3"
-                    label="Status"
-                    field="status"
-                    defaultSort="updated"
-                    defaultDirection="desc"
-                  />
-                  <th className="px-4 py-3 text-right">Purchase HT</th>
-                  <th className="px-4 py-3">Payment status</th>
-                  <th className="px-4 py-3">Expected delivery</th>
-                </>
-              ) : view === "financial" ? (
-                <>
-                  <SortHeader
-                    className="px-4 py-3"
-                    label="Reference"
-                    field="reference"
-                    defaultSort="updated"
-                    defaultDirection="desc"
-                  />
-                  <th className="px-4 py-3">Supplier</th>
-                  <th className="px-4 py-3">Project</th>
-                  <th className="px-4 py-3">Package</th>
-                  <th className="px-4 py-3 text-right">Purchase Cost HT</th>
-
-                  <th className="px-4 py-3 text-right">
-                    Economic Landed Cost HT
-                  </th>
-                  <th className="px-4 py-3 text-right">Total Order Sell HT</th>
-
-                  <th className="px-4 py-3 text-right">Planned Markup</th>
-                </>
-              ) : view === "supplier-payment" ? (
-                <>
-                  <th className="px-4 py-3">Supplier</th>
-                  <th className="px-4 py-3">Order reference</th>
-                  <th className="px-4 py-3">Project</th>
-                  <th className="px-4 py-3">Package</th>
-                  <th className="px-4 py-3 text-right">Payable</th>
-                  <th className="px-4 py-3 text-right">Scheduled</th>
-                  <th className="px-4 py-3 text-right">Paid</th>
-                  <th className="px-4 py-3 text-right">Outstanding</th>
-                  <th className="px-4 py-3">Next due</th>
-                  <th className="px-4 py-3">Payment status</th>
-                </>
-              ) : (
-                <>
-                  <SortHeader
-                    className="px-4 py-3"
-                    label="Reference"
-                    field="reference"
-                    defaultSort="updated"
-                    defaultDirection="desc"
-                  />
-                  <SortHeader
-                    className="px-4 py-3"
-                    label="Status"
-                    field="status"
-                    defaultSort="updated"
-                    defaultDirection="desc"
-                  />
-                  <th className="px-4 py-3">Expected ready</th>
-                  <th className="px-4 py-3">Expected delivery</th>
-                  <th className="px-4 py-3">Supplier</th>
-                  <th className="px-4 py-3">Project</th>
-                  <th className="px-4 py-3">Package</th>
-                  <th className="px-4 py-3">Carrier</th>
-                  <th className="px-4 py-3">Tracking reference</th>
-                </>
-              )}
+              {orderViewColumns[view].map((field) => (
+                <SortHeader
+                  key={field}
+                  className={`px-4 py-3 ${orderNumericColumns.includes(field) ? "text-right" : ""}`}
+                  label={orderSortLabels[field]}
+                  field={field}
+                  defaultSort="updated"
+                  defaultDirection="desc"
+                />
+              ))}
               {canEdit ? <th className="px-4 py-3 text-right">Edit</th> : null}
             </tr>
           </thead>

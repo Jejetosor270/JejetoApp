@@ -20,6 +20,22 @@ const base = {
   supplierId: "b12b6b9b-10e9-4e42-b93f-38796de4f65a",
 };
 describe("single procurement order cost validation", () => {
+  it("validates invoice dates and distinguishes omission from explicit clearing", () => {
+    expect(
+      createOrderInputSchema.parse({ ...base }).invoiceDate,
+    ).toBeUndefined();
+    expect(
+      createOrderInputSchema.parse({ ...base, invoiceDate: "" }).invoiceDate,
+    ).toBeNull();
+    expect(
+      createOrderInputSchema.parse({ ...base, invoiceDate: "2026-09-08" })
+        .invoiceDate,
+    ).toBe("2026-09-08");
+    expect(
+      createOrderInputSchema.safeParse({ ...base, invoiceDate: "2026-02-30" })
+        .success,
+    ).toBe(false);
+  });
   it("accepts one current cost structure with manual FX", () => {
     const value = createOrderInputSchema.parse({
       ...base,

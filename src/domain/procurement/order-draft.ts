@@ -30,6 +30,7 @@ export interface OrderDraft {
   notes: string;
   orderCurrencyCode: string;
   orderDate: string;
+  invoiceDate: string;
   orderNumber: string;
   otherCostMarkupOverridePercent: string;
   outputVatBaseMode: "AUTO" | "MANUAL";

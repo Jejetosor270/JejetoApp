@@ -117,6 +117,7 @@ function existingOrder(): OrderSummary {
     orderCurrencyCode: "EUR",
     orderNumber: "PO-EXISTING",
     orderDate: null,
+    invoiceDate: null,
     packageName: "Existing package",
     packageSellingPrice: null,
     pricingMode: PricingMode.PROJECT_MARKUP,

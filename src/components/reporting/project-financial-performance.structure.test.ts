@@ -12,13 +12,10 @@ const projectPage = readFileSync(
 );
 
 describe("Project financial performance presentation", () => {
-  it("uses one target, actual-to-date, and variance table", () => {
-    expect(dashboard).toContain("Project financial performance");
-    expect(dashboard).toContain("Actual invoiced to date");
-    expect(dashboard).toContain('"Client Sell / Billing HT"');
-    expect(dashboard).toContain('"Gross Profit HT"');
-    expect(dashboard).toContain("formatSignedMoney");
-    expect(dashboard).toContain("formatSignedRate");
+  it("omits the redundant full-Project target versus actual panel", () => {
+    expect(dashboard).not.toContain("FinancialPerformanceTable");
+    expect(dashboard).not.toContain("Full-Project target vs actual to date");
+    expect(dashboard).not.toContain("Project financial performance");
     expect(dashboard).not.toContain("Budget / Target");
     expect(dashboard).not.toContain("Billing & actual profitability");
   });

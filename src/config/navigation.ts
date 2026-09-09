@@ -3,7 +3,6 @@ import {
   BarChart3,
   Building2,
   CalendarDays,
-  CircleDollarSign,
   FolderKanban,
   House,
   ListTree,
@@ -57,18 +56,6 @@ export const navigationGroups: readonly NavigationGroup[] = [
   {
     label: "More",
     items: [
-      {
-        href: "/unassigned-cash",
-        icon: CircleDollarSign,
-        isAvailable: true,
-        label: "Unassigned cash records",
-      },
-      {
-        href: "/unassigned",
-        icon: Building2,
-        isAvailable: true,
-        label: "Unassigned records",
-      },
       {
         href: "/clients",
         icon: Building2,

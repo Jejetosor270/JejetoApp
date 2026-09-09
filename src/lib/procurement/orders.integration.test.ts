@@ -74,6 +74,7 @@ function sellingOrder(
     outputVatTaxableBaseOverride: new Decimal("90000"),
     orderCurrencyCode: "EUR",
     orderDate: null,
+    invoiceDate: null,
     orderNumber: "PO-001",
     packageId: null,
     orderPackage: null,

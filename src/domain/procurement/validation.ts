@@ -133,6 +133,15 @@ const orderFields = {
     .regex(/^[A-Z]{3}$/),
   orderNumber: z.string().trim().min(2).max(50),
   orderDate: optionalDateOnly,
+  invoiceDate: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? null : value,
+    z
+      .string()
+      .trim()
+      .refine(isDateOnly, "Enter a valid business date.")
+      .nullish(),
+  ),
   outputVatAmount: optionalMoney("Output VAT amount"),
   outputVatCountryCode: optionalCountryCode,
   outputVatCustomTreatmentNote: optionalText(240),
