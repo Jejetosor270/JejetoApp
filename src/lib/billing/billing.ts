@@ -131,6 +131,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
   return {
     allocations: record.allocations.map((allocation) => ({
       freightCoverageHt: allocation.freightCoverageHt?.toString() ?? "0",
+      otherCoverageHt: allocation.otherCoverageHt?.toString() ?? "0",
       allocatedAmount: allocation.allocatedAmount.toString(),
       basis: allocation.basis,
       id: allocation.id,
@@ -212,6 +213,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
     reference: record.reference,
     status: calculated.status,
     freightCoverageHt: record.freightCoverageHt?.toString() ?? "0",
+    otherCoverageHt: record.otherCoverageHt?.toString() ?? "0",
     totalHt: record.totalHt.toString(),
     totalTtc: record.totalTtc.toString(),
     updatedAt: record.updatedAt.toISOString(),
@@ -453,6 +455,7 @@ async function assertRelations(input: ClientBillingConfirmation) {
     input.totalHt,
     input.freightCoverageHt ?? "0",
     input.allocations,
+    input.otherCoverageHt ?? "0",
   );
   const allocation = allocationReconciliation(
     input.totalHt,
@@ -514,6 +517,7 @@ export async function confirmClientBillingDocument(
         projectId: input.projectId,
         reference: input.reference,
         freightCoverageHt: input.freightCoverageHt ?? "0",
+        otherCoverageHt: input.otherCoverageHt ?? "0",
         totalHt: input.totalHt,
         totalTtc: input.totalTtc,
         updatedById: actorId,
@@ -620,6 +624,7 @@ export async function confirmClientBillingDocument(
       await transaction.clientBillingAllocation.createMany({
         data: input.allocations.map((allocation) => ({
           freightCoverageHt: allocation.freightCoverageHt ?? "0",
+          otherCoverageHt: allocation.otherCoverageHt ?? "0",
           allocatedAmount: allocation.allocatedAmount,
           basis: allocation.basis,
           billingDocumentId: document.id,
@@ -657,6 +662,7 @@ export async function confirmClientBillingDocument(
         entityType: "BILLING_DOCUMENT",
         metadata: {
           freightCoverageHt: input.freightCoverageHt ?? "0",
+          otherCoverageHt: input.otherCoverageHt ?? "0",
           allocationCount: input.allocations.length,
           documentType: input.documentType,
           installmentCount: installmentsToCreate.length,
@@ -688,6 +694,10 @@ export async function recordClientReceipt(
         },
       });
       if (!document) throw new ClientBillingNotFoundError();
+      if (document.documentType !== "INVOICE" || document.isCancelled)
+        throw new ClientBillingValidationError(
+          "Record new receipts against an active Invoice. Existing historical receipts remain available for review.",
+        );
       if (context && document.projectId !== context.projectId) {
         throw new ClientBillingValidationError(
           "Choose Billing belonging to the selected Project.",
@@ -1239,16 +1249,20 @@ function validateFreight(
   total: string,
   freight: string,
   allocations: readonly BillingAllocationInput[],
+  other = "0",
 ) {
   if (
     new Decimal(freight).isZero() &&
-    allocations.every((item) =>
-      new Decimal(item.freightCoverageHt ?? "0").isZero(),
+    new Decimal(other).isZero() &&
+    allocations.every(
+      (item) =>
+        new Decimal(item.freightCoverageHt ?? "0").isZero() &&
+        new Decimal(item.otherCoverageHt ?? "0").isZero(),
     )
   )
     return;
   try {
-    return freightCoverageBreakdown(total, freight, allocations);
+    return freightCoverageBreakdown(total, freight, allocations, other);
   } catch (error) {
     throw new ClientBillingValidationError(
       error instanceof Error ? error.message : "Check freight coverage.",
@@ -1258,6 +1272,7 @@ function validateFreight(
 
 interface AllocationDocumentContext {
   freightCoverageHt?: { toString(): string };
+  otherCoverageHt?: { toString(): string };
   id: string;
   isProjectRemainderApproved: boolean;
   projectId: string;
@@ -1267,6 +1282,7 @@ interface AllocationDocumentContext {
 
 interface ExistingAllocationRecord {
   freightCoverageHt?: { toString(): string };
+  otherCoverageHt?: { toString(): string };
   allocatedAmount: { toString(): string };
   basis: ClientBillingAllocationBasis;
   id: string;
@@ -1290,6 +1306,7 @@ async function validateBillingAllocations(
     document.totalHt,
     document.freightCoverageHt?.toString() ?? "0",
     allocations,
+    document.otherCoverageHt?.toString() ?? "0",
   );
   const matchingOrders = await transaction.procurementOrder.count({
     where: {
@@ -1359,9 +1376,12 @@ async function reconcileBillingAllocationsInTransaction(
     const current = currentByOrder.get(item.orderId);
     return (
       current !== undefined &&
-      (!new Decimal(current.freightCoverageHt?.toString() ?? "0").equals(
-        item.freightCoverageHt ?? "0",
+      (!new Decimal(current.otherCoverageHt?.toString() ?? "0").equals(
+        item.otherCoverageHt ?? "0",
       ) ||
+        !new Decimal(current.freightCoverageHt?.toString() ?? "0").equals(
+          item.freightCoverageHt ?? "0",
+        ) ||
         current.basis !== item.basis ||
         !new Decimal(current.allocatedAmount.toString()).equals(
           item.allocatedAmount,
@@ -1381,6 +1401,7 @@ async function reconcileBillingAllocationsInTransaction(
       where: { id: current.id },
       data: {
         freightCoverageHt: allocation.freightCoverageHt ?? "0",
+        otherCoverageHt: allocation.otherCoverageHt ?? "0",
         allocatedAmount: allocation.allocatedAmount,
         basis: allocation.basis,
         percentageRate:
@@ -1395,6 +1416,7 @@ async function reconcileBillingAllocationsInTransaction(
     await transaction.clientBillingAllocation.createMany({
       data: added.map((allocation) => ({
         freightCoverageHt: allocation.freightCoverageHt ?? "0",
+        otherCoverageHt: allocation.otherCoverageHt ?? "0",
         allocatedAmount: allocation.allocatedAmount,
         basis: allocation.basis,
         billingDocumentId: document.id,
@@ -1432,6 +1454,7 @@ async function reconcileBillingAllocationsInTransaction(
         freightAllocations: [...added, ...changed].map((item) => ({
           orderId: item.orderId,
           freightCoverageHt: item.freightCoverageHt ?? "0",
+          otherCoverageHt: item.otherCoverageHt ?? "0",
         })),
         allocationAddedOrderIds: added.map((item) => item.orderId),
         allocationChangedOrderIds: changed.map((item) => item.orderId),
@@ -1458,6 +1481,7 @@ export async function updateClientBillingAllocations(
           projectId: true,
           reference: true,
           freightCoverageHt: true,
+          otherCoverageHt: true,
           totalHt: true,
         },
       });
@@ -1496,6 +1520,7 @@ export async function updateOrderBillingLinkInTransaction(
         projectId: true,
         reference: true,
         freightCoverageHt: true,
+        otherCoverageHt: true,
         totalHt: true,
       },
     }),
@@ -1518,6 +1543,7 @@ export async function updateOrderBillingLinkInTransaction(
     .filter((item) => item.orderId !== input.orderId)
     .map((item) => ({
       freightCoverageHt: item.freightCoverageHt?.toString() ?? "0",
+      otherCoverageHt: item.otherCoverageHt?.toString() ?? "0",
       allocatedAmount: item.allocatedAmount.toString(),
       basis: item.basis,
       orderId: item.orderId,
@@ -1562,6 +1588,12 @@ export async function updateOrderBillingLinkInTransaction(
         "Allocation exceeds the remaining Billing Event amount.",
       );
     allocations.push({
+      otherCoverageHt:
+        input.otherCoverageHt ??
+        document.allocations
+          .find((item) => item.orderId === input.orderId)
+          ?.otherCoverageHt?.toString() ??
+        "0",
       freightCoverageHt:
         input.freightCoverageHt ??
         document.allocations
@@ -1611,19 +1643,20 @@ export async function updateClientBillingDocument(
         where: { id: input.id },
         select: {
           allocations: true,
+          receipts: { select: { id: true, amount: true } },
           clientId: true,
           currencyCode: true,
           id: true,
           isCancelled: true,
           isProjectRemainderApproved: true,
           matchedInstallment: {
-            select: { receipts: { select: { amount: true } } },
+            select: { receipts: { select: { id: true, amount: true } } },
           },
           matchedInstallmentId: true,
           paymentInstallments: {
             select: {
               scheduledAmount: true,
-              receipts: { select: { amount: true } },
+              receipts: { select: { id: true, amount: true } },
             },
           },
           projectId: true,
@@ -1646,10 +1679,15 @@ export async function updateClientBillingDocument(
           "Choose a Client, one of that Client's Projects, and an active currency.",
         );
       const receipts = [
-        ...existing.paymentInstallments.flatMap(
-          (installment) => installment.receipts,
-        ),
-        ...(existing.matchedInstallment?.receipts ?? []),
+        ...new Map(
+          [
+            ...(existing.receipts ?? []),
+            ...existing.paymentInstallments.flatMap(
+              (installment) => installment.receipts,
+            ),
+            ...(existing.matchedInstallment?.receipts ?? []),
+          ].map((receipt) => [receipt.id, receipt]),
+        ).values(),
       ];
       const relationshipChanged =
         existing.clientId !== input.clientId ||
@@ -1667,7 +1705,8 @@ export async function updateClientBillingDocument(
       if (
         existing.currencyCode !== input.currencyCode &&
         (existing.paymentInstallments.length > 0 ||
-          existing.matchedInstallmentId !== null)
+          existing.matchedInstallmentId !== null ||
+          receipts.length > 0)
       )
         throw new ClientBillingValidationError(
           "A Billing currency cannot change while a payment schedule is attached.",
@@ -1707,6 +1746,7 @@ export async function updateClientBillingDocument(
         projectId: input.projectId,
         reference: input.reference,
         freightCoverageHt: input.freightCoverageHt ?? "0",
+        otherCoverageHt: input.otherCoverageHt ?? "0",
         totalHt: input.totalHt,
       };
       await validateBillingAllocations(
@@ -1732,6 +1772,7 @@ export async function updateClientBillingDocument(
           projectId: input.projectId,
           reference: input.reference,
           freightCoverageHt: input.freightCoverageHt ?? "0",
+          otherCoverageHt: input.otherCoverageHt ?? "0",
           totalHt: input.totalHt,
           totalTtc: input.totalTtc,
           updatedById: actorId,
@@ -2138,6 +2179,7 @@ export async function getOrderBillingReconciliation(orderId: string) {
       allocation: allocation
         ? {
             freightCoverageHt: allocation.freightCoverageHt ?? "0",
+            otherCoverageHt: allocation.otherCoverageHt ?? "0",
             allocatedAmount: allocation.allocatedAmount,
             basis: allocation.basis,
             percentageRate: allocation.percentageRate,
@@ -2181,6 +2223,7 @@ export async function updateBillingFreightCoverage(
           reference: true,
           totalHt: true,
           freightCoverageHt: true,
+          otherCoverageHt: true,
           allocations: true,
         },
       });
@@ -2193,7 +2236,9 @@ export async function updateBillingFreightCoverage(
           basis: "FIXED_AMOUNT",
           allocatedAmount: item.allocatedAmount.toString(),
           freightCoverageHt: item.freightCoverageHt.toString(),
+          otherCoverageHt: item.otherCoverageHt?.toString() ?? "0",
         })),
+        document.otherCoverageHt?.toString() ?? "0",
       );
       await transaction.clientBillingDocument.update({
         where: { id: document.id },

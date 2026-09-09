@@ -18,6 +18,7 @@ import type { BillingActionState } from "@/domain/billing/action-state";
 import { formatMoney } from "@/domain/procurement/presentation";
 
 export interface SavedBillingAllocation {
+  otherCoverageHt?: string;
   freightCoverageHt?: string;
   amount: string;
   orderId: string;
@@ -25,7 +26,12 @@ export interface SavedBillingAllocation {
 }
 
 interface AllocationEditorProps {
-  allocation?: { amount: string; orderId: string; freightCoverageHt?: string };
+  allocation?: {
+    amount: string;
+    orderId: string;
+    otherCoverageHt?: string;
+    freightCoverageHt?: string;
+  };
   availableHt: string;
   billing: {
     id: string;
@@ -54,6 +60,9 @@ function AllocationForm({
   const [orderId, setOrderId] = useState(
     allocation?.orderId ?? (orders.length === 1 ? (orders[0]?.id ?? "") : ""),
   );
+  const [otherCoverageHt, setOtherCoverageHt] = useState(
+    allocation?.otherCoverageHt ?? "0",
+  );
   const [freightCoverageHt, setFreightCoverageHt] = useState(
     allocation?.freightCoverageHt ?? "0",
   );
@@ -79,6 +88,7 @@ function AllocationForm({
       onSubmit={(event) => {
         const data = new FormData(event.currentTarget);
         submitted.current = {
+          otherCoverageHt,
           freightCoverageHt: String(
             data.get("allocatedAmount.freightCoverageHt") ?? "0",
           ),
@@ -91,6 +101,7 @@ function AllocationForm({
     >
       <input type="hidden" name="billingDocumentId" value={billing.id} />
       <input type="hidden" name="orderId" value={orderId} />
+      <input type="hidden" name="otherCoverageHt" value={otherCoverageHt} />
       <input type="hidden" name="freightCoverageHt" value={freightCoverageHt} />
       <input type="hidden" name="basis" value="FIXED_AMOUNT" />
       <input type="hidden" name="remove" value="false" />
@@ -121,6 +132,8 @@ function AllocationForm({
           </p>
         </div>
         <AllocationInputs
+          otherCoverageHt={otherCoverageHt}
+          onOtherChange={setOtherCoverageHt}
           freightCoverageHt={freightCoverageHt}
           onFreightChange={setFreightCoverageHt}
           amount={amount}

@@ -192,6 +192,7 @@ describe("dedicated Billing allocation editor", () => {
     expect(data.has("totalHt")).toBe(false);
     expect(data.has("reference")).toBe(false);
     expect(onSaved).toHaveBeenCalledWith({
+      otherCoverageHt: "0",
       freightCoverageHt: "25.12",
       amount: "250.12",
       orderId: "order-id",
@@ -365,6 +366,7 @@ describe("dedicated Billing allocation editor", () => {
       );
       expect(JSON.parse(allocationsInput?.value ?? "[]")).toEqual([
         {
+          otherCoverageHt: "0.0000",
           freightCoverageHt: "0.0000",
           allocatedAmount: "250.0000",
           basis: "FIXED_AMOUNT",

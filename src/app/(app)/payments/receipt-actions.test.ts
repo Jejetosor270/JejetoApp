@@ -75,6 +75,7 @@ beforeEach(() => {
     settlements: [{ amount: "40" }],
   });
   mocks.tx.clientBillingDocument.findUnique.mockResolvedValue({
+    documentType: "INVOICE",
     id: billingDocumentId,
     projectId,
     reference: "INV-1",

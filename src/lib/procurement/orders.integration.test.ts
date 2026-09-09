@@ -405,6 +405,7 @@ describe("single order cost write", () => {
       ...order,
       clientBillingAllocations: [
         {
+          otherCoverageHt: new Decimal(0),
           freightCoverageHt: new Decimal(0),
           allocatedAmount: new Decimal("30000"),
           basis: "FIXED_AMOUNT",
@@ -423,6 +424,7 @@ describe("single order cost write", () => {
           updatedById: null,
         },
         {
+          otherCoverageHt: new Decimal(0),
           freightCoverageHt: new Decimal(0),
           allocatedAmount: new Decimal("70000"),
           basis: "FIXED_AMOUNT",
@@ -471,6 +473,7 @@ describe("single order cost write", () => {
       ...order,
       clientBillingAllocations: [
         {
+          otherCoverageHt: new Decimal(0),
           freightCoverageHt: new Decimal(0),
           allocatedAmount: new Decimal("100000"),
           basis: "FIXED_AMOUNT",

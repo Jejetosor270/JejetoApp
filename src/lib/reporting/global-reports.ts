@@ -1,3 +1,4 @@
+import { recognizedReceiptWhere } from "@/lib/billing/receipt-eligibility";
 import "server-only";
 
 import Decimal from "decimal.js";
@@ -25,6 +26,7 @@ export interface ActualCashFilters extends ReportingFilters {
 }
 
 export interface ActualCashRow {
+  href?: string;
   amount: string;
   billingOrOrderId: string;
   billingOrOrderReference: string;
@@ -71,6 +73,7 @@ export async function getActualCashReport(filters: ActualCashFilters) {
     includeIn
       ? database.clientReceipt.findMany({
           where: {
+            AND: [recognizedReceiptWhere],
             billingDocument: { projectId: { in: projectIds } },
             receivedAt: dateWhere(filters.dateFrom, filters.dateTo),
           },
@@ -128,7 +131,47 @@ export async function getActualCashReport(filters: ActualCashFilters) {
         })
       : [],
   ]);
+  const freightPayments = includeOut
+    ? await database.freightExpensePayment.findMany({
+        where: {
+          expense: {
+            projectId: { in: projectIds },
+            ...(filters.supplierId ? { supplierId: filters.supplierId } : {}),
+          },
+          paidAt: dateWhere(filters.dateFrom, filters.dateTo),
+        },
+        include: { expense: { include: { project: true, supplier: true } } },
+      })
+    : [];
   const rows: ActualCashRow[] = [
+    ...freightPayments.flatMap((payment) => {
+      const expense = payment.expense;
+      if (!expense.project) return [];
+      return [
+        {
+          amount: payment.amount.toString(),
+          billingOrOrderId: expense.id,
+          billingOrOrderReference: expense.reference ?? expense.description,
+          currencyCode: expense.currencyCode,
+          date: dateToDateOnly(payment.paidAt),
+          direction: PaymentDirection.SUPPLIER_PAYMENT,
+          id: payment.id,
+          partyName: expense.supplier?.displayName ?? "Freight",
+          projectId: expense.project.id,
+          projectName: expense.project.name,
+          projectReportingAmount:
+            reportingAmount({
+              originalAmount: payment.amount.toString(),
+              originalCurrencyCode: expense.currencyCode,
+              reportingCurrencyCode: expense.project.reportingCurrencyCode,
+              fxRateToReporting: payment.fxRateToReporting?.toString() ?? null,
+            })?.toString() ?? null,
+          projectReportingCurrencyCode: expense.project.reportingCurrencyCode,
+          reference: payment.reference,
+          href: `/projects/${expense.project.id}?tab=related#freight`,
+        },
+      ];
+    }),
     ...receipts.flatMap((receipt) => {
       const document = receipt.billingDocument;
       if (!document.project) return [];

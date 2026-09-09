@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const database = vi.hoisted(() => ({
+  projectFreightExpense: { findMany: vi.fn().mockResolvedValue([]) },
+  freightExpensePayment: { findMany: vi.fn().mockResolvedValue([]) },
   clientReceipt: { findMany: vi.fn() },
   project: { findMany: vi.fn() },
 }));

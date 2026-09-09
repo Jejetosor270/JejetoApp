@@ -106,7 +106,9 @@ function FinancialPerformanceTable({
           </h2>
           <p className="text-muted-foreground mt-1 text-xs">
             HT commercial performance in {currencyCode}; targets are not
-            prorated for Project completion.
+            prorated for Project completion. Invoiced profit and markup are
+            provisional: they compare issued Invoices with current recorded
+            economic costs, not matched cost recognition or cash received.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -127,7 +129,9 @@ function FinancialPerformanceTable({
             <tr>
               <th className="px-4 py-2">Metric</th>
               <th className="px-4 py-2 text-right">Project target</th>
-              <th className="px-4 py-2 text-right">Actual invoiced to date</th>
+              <th className="px-4 py-2 text-right">
+                Actual invoiced to date (provisional)
+              </th>
               <th className="px-4 py-2 text-right">Variance</th>
             </tr>
           </thead>
@@ -209,7 +213,7 @@ function FundingCoverageSummary({
             Funding Coverage
           </p>
           <h2 className="mt-0.5 text-sm font-semibold">
-            Billing available for Orders
+            Commercial Billing coverage of Order selling prices
           </h2>
           <p className="text-muted-foreground mt-1 text-xs">
             Active Invoice allocations plus approved Project remainder, less

@@ -37,6 +37,7 @@ const record = {
   vatAmount: "200",
   vatRate: "0.2",
   totalTtc: "1200",
+  otherCoverageHt: "0",
   freightCoverageHt: "200",
   isCancelled: false,
   isProjectRemainderApproved: false,
@@ -56,6 +57,7 @@ const record = {
       orderNumber: "ORD-1",
       supplierName: "Supplier",
       allocatedAmount: "100",
+      otherCoverageHt: "0",
       freightCoverageHt: "25",
       basis: "FIXED_AMOUNT",
       percentageRate: null,
@@ -156,6 +158,35 @@ it("keeps zero allocations explicit and all freight at Project level", async () 
   expect(value("Unallocated Billing HT")).toBe("1 000.00 EUR");
   expect(value("Freight allocated to Orders HT")).toBe("0.00 EUR");
   expect(value("Freight remaining at Project level HT")).toBe("200.00 EUR");
+});
+it("preserves Other/services classification and allocation through a rejected full edit", async () => {
+  actions.save.mockResolvedValue({
+    status: "error",
+    message: "Review the amounts.",
+  });
+  await mount({
+    ...record,
+    otherCoverageHt: "100",
+    allocations: record.allocations.map((row) => ({
+      ...row,
+      otherCoverageHt: "20",
+    })),
+  });
+  expect(value("Other/services HT (included)")).toBe("100.00 EUR");
+  expect(value("Merchandise HT")).toBe("700.00 EUR");
+  await clickText("Edit");
+  await enter("otherCoverageHt", "125");
+  await act(async () => {
+    control("otherCoverageHt").form?.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+  });
+  const values = actions.save.mock.calls[0]?.[1] as FormData;
+  expect(values.get("otherCoverageHt")).toBe("125");
+  expect(JSON.parse(String(values.get("allocations")))[0].otherCoverageHt).toBe(
+    "20.0000",
+  );
+  expect(control("otherCoverageHt").value).toBe("125.00");
 });
 
 it("offers only Active/Cancelled and retains rejected status changes and the complete draft", async () => {

@@ -7,7 +7,13 @@ vi.mock("@/lib/billing/freight-reporting", () => ({
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const transaction = vi.hoisted(() => ({
-  projectFreightExpense: { create: vi.fn(), update: vi.fn() },
+  projectFreightExpense: {
+    create: vi.fn(),
+    update: vi.fn(),
+    findUnique: vi.fn((...args: unknown[]) =>
+      database.projectFreightExpense.findUnique(...args),
+    ),
+  },
 }));
 const database = vi.hoisted(() => ({
   $transaction: vi.fn(

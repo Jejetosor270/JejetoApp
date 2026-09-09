@@ -12,6 +12,18 @@ export const modelMap: Record<string, ModelMetadata> = {
     table: "users",
     trash: false,
     relations: {
+      createdFreightPayments: {
+        model: "FreightExpensePayment",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      updatedFreightPayments: {
+        model: "FreightExpensePayment",
+        many: true,
+        optional: false,
+        fields: [],
+      },
       createdOrderPackages: {
         model: "OrderPackage",
         many: true,
@@ -756,6 +768,12 @@ export const modelMap: Record<string, ModelMetadata> = {
     table: "project_freight_expenses",
     trash: true,
     relations: {
+      payments: {
+        model: "FreightExpensePayment",
+        many: true,
+        optional: false,
+        fields: [],
+      },
       project: {
         model: "Project",
         many: false,
@@ -791,6 +809,30 @@ export const modelMap: Record<string, ModelMetadata> = {
         many: false,
         optional: true,
         fields: ["detachedReportingCurrencyCode"],
+      },
+    },
+  },
+  FreightExpensePayment: {
+    table: "freight_expense_payments",
+    trash: true,
+    relations: {
+      expense: {
+        model: "ProjectFreightExpense",
+        many: false,
+        optional: false,
+        fields: ["expenseId"],
+      },
+      createdBy: {
+        model: "User",
+        many: false,
+        optional: true,
+        fields: ["createdById"],
+      },
+      updatedBy: {
+        model: "User",
+        many: false,
+        optional: true,
+        fields: ["updatedById"],
       },
     },
   },

@@ -92,6 +92,7 @@ export async function trashInTransaction(
     UnassignedCashRecord: "reference",
     Item: "name",
     ProjectFreightExpense: "description",
+    FreightExpensePayment: "reference",
   };
   const field = referenceFields[model] ?? "id";
   const references = await tx.$queryRaw<{ reference: string | null }[]>(
@@ -238,6 +239,19 @@ async function validateRestoration(
     throw new TrashError(
       "Restoring would duplicate a collection schedule or exceed Billing TTC. Correct the replacement schedule before restoring.",
     );
+  if (
+    models.has("FreightExpensePayment") ||
+    models.has("ProjectFreightExpense")
+  ) {
+    const freightConflict = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+      SELECT e.id FROM project_freight_expenses e JOIN freight_expense_payments p ON p."expenseId" = e.id
+      WHERE e."trashedAt" IS NULL AND p."trashedAt" IS NULL
+      GROUP BY e.id HAVING SUM(p.amount) > e."costAmountHt" + CASE WHEN e."vatTreatment" IN ('DOMESTIC','CUSTOM') THEN COALESCE(e."vatAmount",0) ELSE 0 END LIMIT 1`);
+    if (freightConflict.length)
+      throw new TrashError(
+        "Restoring would overpay a freight expense. Review replacement payments first.",
+      );
+  }
   const allocationConflict = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
     SELECT b.id FROM client_billing_documents b JOIN client_billing_allocations a ON a."billingDocumentId" = b.id
     JOIN procurement_orders o ON o.id = a."orderId"
@@ -246,7 +260,8 @@ async function validateRestoration(
       OR b.id IN (SELECT "billingDocumentId" FROM client_billing_allocations WHERE "orderId" IN (SELECT "recordId" FROM trash_records WHERE "batchId" = ${batchId}::uuid AND model = 'ProcurementOrder')))
     GROUP BY b.id HAVING SUM(a."allocatedAmount") > b."totalHt"
       OR SUM(a."freightCoverageHt") > b."freightCoverageHt"
-      OR SUM(a."allocatedAmount" - a."freightCoverageHt") > b."totalHt" - b."freightCoverageHt" LIMIT 1`);
+      OR SUM(a."otherCoverageHt") > b."otherCoverageHt"
+      OR SUM(a."allocatedAmount" - a."freightCoverageHt" - a."otherCoverageHt") > b."totalHt" - b."freightCoverageHt" - b."otherCoverageHt" LIMIT 1`);
   if (allocationConflict.length)
     throw new TrashError(
       "Restoring these Orders would exceed a Billing allocation or its freight coverage. Correct the replacement allocations first.",

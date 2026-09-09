@@ -1,3 +1,9 @@
+import {
+  listFreightCash,
+  listFreightCommitments,
+} from "@/lib/freight/cash-reporting";
+import { difference, sumKnown } from "@/domain/finance/project-control";
+import { recognizedReceiptWhere } from "@/lib/billing/receipt-eligibility";
 import "server-only";
 
 import Decimal from "decimal.js";
@@ -9,7 +15,6 @@ import {
 } from "@/domain/billing/funding-coverage";
 import {
   buildMonthlyCashFlow,
-  calculateCashPosition,
   calculateDirectionPaymentSummary,
   calculateProjectFinancialSummary,
   cashFlowChartScale,
@@ -52,6 +57,7 @@ export interface ReportingRangeInput {
 }
 
 interface ReportingReceiptInput {
+  isOutflow?: boolean;
   amount: string;
   currencyCode: string;
   fxRate: string | null;
@@ -169,6 +175,7 @@ export interface OverdueReportingItem {
 }
 
 export interface ProjectReportingSnapshot {
+  freightPaid?: string | null;
   cashFlow: SerializedCashFlow;
   cashPosition: string | null;
   financial: SerializedFinancialSummary;
@@ -421,6 +428,7 @@ function serializedCashFlow(input: {
       reportingCurrencyCode: input.reportingCurrencyCode,
     });
     if (converted === null) month.missingIds.push(receipt.id);
+    else if (receipt.isOutflow) month.cashOut = month.cashOut.plus(converted);
     else month.cashIn = month.cashIn.plus(converted);
   }
   for (const installment of input.installments) {
@@ -554,6 +562,8 @@ function overdueClientItems(
 }
 
 function projectSnapshot(input: {
+  freightPayments?: readonly ReportingReceiptInput[];
+  freightCommitments?: readonly ReportingInstallmentInput[];
   clientInstallments: readonly ClientCashInstallment[];
   clientReceipts: readonly ReportingReceiptInput[];
   installments: readonly PaymentInstallmentView[];
@@ -564,8 +574,22 @@ function projectSnapshot(input: {
   const financial = calculateProjectFinancialSummary(
     input.orders.map(orderInput),
   );
+  const cashSum = (rows: readonly ReportingReceiptInput[]) =>
+    sumKnown(
+      rows.map(
+        (row) =>
+          convertPaymentAmount({
+            amount: row.amount,
+            currencyCode: row.currencyCode,
+            fxRateToReporting: row.fxRate,
+            reportingCurrencyCode: input.reportingCurrencyCode,
+          })?.toFixed(4) ?? null,
+      ),
+    );
+  const freightPaid = cashSum(input.freightPayments ?? []);
   const installments = input.installments.map(installmentInput);
   const cashFlowInstallments = [
+    ...(input.freightCommitments ?? []),
     ...installments,
     ...input.clientInstallments.map(clientInstallmentInput),
   ];
@@ -630,14 +654,25 @@ function projectSnapshot(input: {
   });
   return {
     cashFlow: serializedCashFlow({
-      clientReceipts: input.clientReceipts,
+      clientReceipts: [
+        ...input.clientReceipts,
+        ...(input.freightPayments ?? []),
+      ],
       end: input.range.end,
       installments: cashFlowInstallments,
       reportingCurrencyCode: input.reportingCurrencyCode,
       start: input.range.start,
     }),
-    cashPosition:
-      calculateCashPosition(client.paid, supplier.paid)?.toString() ?? null,
+    freightPaid,
+    cashPosition: difference(
+      cashSum(input.clientReceipts),
+      sumKnown([
+        supplier.paid.missingIds.length === 0
+          ? supplier.paid.value.toString()
+          : null,
+        freightPaid,
+      ]),
+    ),
     financial: serializedFinancial(financial),
     orderRows,
     overdueItems: [
@@ -673,7 +708,10 @@ export async function getProjectReportingSnapshot(
       }),
       listClientCashInstallments([projectId]),
       database.clientReceipt.findMany({
-        where: { billingDocument: { projectId } },
+        where: {
+          AND: [recognizedReceiptWhere],
+          billingDocument: { projectId },
+        },
         select: {
           amount: true,
           billingDocument: { select: { currencyCode: true } },
@@ -685,6 +723,8 @@ export async function getProjectReportingSnapshot(
     ]);
   if (!project) return null;
   return projectSnapshot({
+    freightPayments: await listFreightCash([projectId]),
+    freightCommitments: await listFreightCommitments([projectId]),
     clientInstallments,
     clientReceipts: receipts.map((receipt) => ({
       amount: receipt.amount.toString(),
@@ -748,7 +788,10 @@ export async function getPortfolioReportingSnapshot(
     projectIds.has(item.projectId),
   );
   const receiptRecords = await database.clientReceipt.findMany({
-    where: { billingDocument: { projectId: { in: [...projectIds] } } },
+    where: {
+      AND: [recognizedReceiptWhere],
+      billingDocument: { projectId: { in: [...projectIds] } },
+    },
     select: {
       amount: true,
       billingDocument: { select: { currencyCode: true, projectId: true } },
@@ -757,6 +800,14 @@ export async function getPortfolioReportingSnapshot(
       receivedAt: true,
     },
   });
+  const freightPayments = await listFreightCash(
+    [...projectIds],
+    filters.supplierId,
+  );
+  const freightCommitments = await listFreightCommitments(
+    [...projectIds],
+    filters.supplierId,
+  );
   const scopedReceipts = receiptRecords.map((receipt) => ({
     amount: receipt.amount.toString(),
     currencyCode: receipt.billingDocument.currencyCode,
@@ -770,6 +821,12 @@ export async function getPortfolioReportingSnapshot(
     projects.map((project) => [
       project.id,
       projectSnapshot({
+        freightPayments: freightPayments.filter(
+          (row) => row.projectId === project.id,
+        ),
+        freightCommitments: freightCommitments.filter(
+          (row) => row.projectId === project.id,
+        ),
         clientInstallments: clientInstallments.filter(
           (item) => item.projectId === project.id,
         ),
@@ -832,6 +889,12 @@ export async function getPortfolioReportingSnapshot(
         : "FUNDING_GAP"
     : null;
   const companySnapshot = projectSnapshot({
+    freightPayments: freightPayments.filter(
+      (row) => row.projectId !== null && companyProjectIds.has(row.projectId),
+    ),
+    freightCommitments: freightCommitments.filter(
+      (row) => row.projectId !== null && companyProjectIds.has(row.projectId),
+    ),
     clientInstallments: clientInstallments.filter((item) =>
       companyProjectIds.has(item.projectId),
     ),
@@ -869,9 +932,13 @@ export async function getPortfolioReportingSnapshot(
     },
   );
   const companyCashPosition =
-    companyBilling.complete && companySnapshot.payments.supplier.paid.complete
+    companyBilling.complete &&
+    companySnapshot.payments.supplier.paid.complete &&
+    companySnapshot.freightPaid !== null
       ? companyBilling.paidTtc.minus(
-          companySnapshot.payments.supplier.paid.value,
+          new Decimal(companySnapshot.payments.supplier.paid.value).plus(
+            companySnapshot.freightPaid ?? "0",
+          ),
         )
       : null;
   return {
@@ -923,9 +990,13 @@ export async function getPortfolioReportingSnapshot(
       if (!fundingCoverage)
         throw new Error("Project Funding Coverage is missing.");
       const cashPosition =
-        clientBilling.complete && snapshot.payments.supplier.paid.complete
+        clientBilling.complete &&
+        snapshot.payments.supplier.paid.complete &&
+        snapshot.freightPaid !== null
           ? new Decimal(clientBilling.paidTtc).minus(
-              snapshot.payments.supplier.paid.value,
+              new Decimal(snapshot.payments.supplier.paid.value).plus(
+                snapshot.freightPaid ?? "0",
+              ),
             )
           : null;
       return {

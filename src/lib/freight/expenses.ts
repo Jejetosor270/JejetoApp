@@ -1,3 +1,4 @@
+import { freightPayable } from "@/domain/finance/project-control";
 import { getBilledFreight } from "@/lib/billing/freight-reporting";
 import { freightDifference } from "@/domain/billing/freight-reporting";
 import "server-only";
@@ -223,40 +224,60 @@ export async function updateProjectFreightExpense(
   input: UpdateProjectFreightExpenseInput,
 ): Promise<void> {
   const database = getDatabase();
-  const existing = await database.projectFreightExpense.findUnique({
-    where: { id: input.id },
-    select: {
-      costAmountHt: true,
-      description: true,
-      projectId: true,
-      reference: true,
+  await database.$transaction(
+    async (transaction) => {
+      const existing = await transaction.projectFreightExpense.findUnique({
+        where: { id: input.id },
+        select: {
+          payments: { select: { amount: true } },
+          costAmountHt: true,
+          description: true,
+          projectId: true,
+          reference: true,
+        },
+      });
+      if (!existing || existing.projectId !== input.projectId)
+        throw new ProjectFreightExpenseError("Freight expense not found.");
+      const vat = freightVat({
+        ...input,
+        costAmountHt: existing.costAmountHt.toString(),
+      });
+      const paid = (existing.payments ?? []).reduce(
+        (sum, payment) => sum.plus(payment.amount),
+        new Decimal(0),
+      );
+      if (
+        paid.greaterThan(
+          freightPayable(
+            existing.costAmountHt.toString(),
+            vat.vatAmount,
+            vat.vatTreatment,
+          ),
+        )
+      )
+        throw new ProjectFreightExpenseError(
+          "Freight payable cannot be reduced below payments already recorded.",
+        );
+      await transaction.projectFreightExpense.update({
+        where: { id: input.id },
+        data: {
+          updatedById: actorId,
+          ...vat,
+        },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: input.id,
+        entityReference: existing.reference ?? existing.description,
+        entityType: "FREIGHT_EXPENSE",
+        metadata: {
+          fields: ["vatTreatment", "vatRate", "vatAmount", "recoverableRate"],
+        },
+        summary: "Updated a Project-level freight expense.",
+      });
     },
-  });
-  if (!existing || existing.projectId !== input.projectId)
-    throw new ProjectFreightExpenseError("Freight expense not found.");
-  const vat = freightVat({
-    ...input,
-    costAmountHt: existing.costAmountHt.toString(),
-  });
-  await database.$transaction(async (transaction) => {
-    await transaction.projectFreightExpense.update({
-      where: { id: input.id },
-      data: {
-        updatedById: actorId,
-        ...vat,
-      },
-    });
-    await writeAuditEvent(transaction, actorId, {
-      action: "UPDATED",
-      entityId: input.id,
-      entityReference: existing.reference ?? existing.description,
-      entityType: "FREIGHT_EXPENSE",
-      metadata: {
-        fields: ["vatTreatment", "vatRate", "vatAmount", "recoverableRate"],
-      },
-      summary: "Updated a Project-level freight expense.",
-    });
-  });
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }
 
 export async function deleteProjectFreightExpense(

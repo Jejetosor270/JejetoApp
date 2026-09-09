@@ -12,6 +12,7 @@ import {
 import { MoneyInput } from "@/components/master-data/form-ui";
 
 import { BillingFreightEditor } from "@/components/billing/billing-freight-editor";
+import { revenueParts } from "@/domain/finance/project-control";
 import { freightCoverageBreakdown } from "@/domain/billing/freight-coverage";
 import { AllocationInputs } from "@/components/billing/allocation-inputs";
 import {
@@ -97,6 +98,7 @@ interface OrderFinancialView {
 
 type AllocationDraft = {
   freightCoverageHt?: string;
+  otherCoverageHt?: string;
   amount: string;
   basis: "PERCENTAGE" | "FIXED_AMOUNT";
   orderId: string;
@@ -105,6 +107,7 @@ type AllocationDraft = {
 
 type BillingDraft = {
   freightCoverageHt: string;
+  otherCoverageHt: string;
   allocations: AllocationDraft[];
   clientId: string;
   currencyCode: string;
@@ -151,6 +154,7 @@ function initialDraft(document: ClientBillingView): BillingDraft {
   return {
     allocations: document.allocations.map((item) => ({
       freightCoverageHt: item.freightCoverageHt ?? "0",
+      otherCoverageHt: item.otherCoverageHt ?? "0",
       amount: item.allocatedAmount,
       basis: item.basis,
       orderId: item.orderId,
@@ -169,6 +173,7 @@ function initialDraft(document: ClientBillingView): BillingDraft {
     projectId: document.projectId,
     reference: document.reference,
     freightCoverageHt: document.freightCoverageHt ?? "0",
+    otherCoverageHt: document.otherCoverageHt ?? "0",
     totalHt: document.totalHt,
     totalTtc: document.totalTtc,
     vatAmount: document.vatAmount,
@@ -260,7 +265,9 @@ export function BillingDetail({
     saved.allocations.map((item) => ({
       allocatedAmount: item.amount,
       freightCoverageHt: item.freightCoverageHt ?? "0",
+      otherCoverageHt: item.otherCoverageHt ?? "0",
     })),
+    saved.otherCoverageHt,
   );
   const saveAllocation = (allocation: SavedBillingAllocation) => {
     const update = (current: BillingDraft): BillingDraft => ({
@@ -272,6 +279,7 @@ export function BillingDetail({
         ),
         {
           freightCoverageHt: allocation.freightCoverageHt ?? "0",
+          otherCoverageHt: allocation.otherCoverageHt ?? "0",
           amount: decimal(allocation.amount),
           basis: "FIXED_AMOUNT",
           orderId: allocation.orderId,
@@ -351,6 +359,7 @@ export function BillingDetail({
   };
   const serializedAllocations = draft.allocations.map((item) => ({
     freightCoverageHt: decimal(item.freightCoverageHt ?? "0"),
+    otherCoverageHt: decimal(item.otherCoverageHt ?? "0"),
     allocatedAmount: decimal(item.amount),
     basis: item.basis,
     orderId: item.orderId,
@@ -595,6 +604,25 @@ export function BillingDetail({
                     </p>
                   </Field>
                   <Field
+                    label="Of total: Other/services revenue HT"
+                    error={fieldErrors.otherCoverageHt}
+                  >
+                    <MoneyInput
+                      name="otherCoverageHt"
+                      value={draft.otherCoverageHt}
+                      onValueChange={(value) =>
+                        setDraft((current) => ({
+                          ...current,
+                          otherCoverageHt: value,
+                        }))
+                      }
+                    />
+                    <p className="text-muted-foreground text-xs">
+                      Included in total HT. Other/services not assigned to
+                      Orders stays at Project level.
+                    </p>
+                  </Field>
+                  <Field
                     error={fieldErrors.totalHt}
                     label={`HT (${draft.currencyCode})`}
                   >
@@ -769,6 +797,17 @@ export function BillingDetail({
                             allocations: current.allocations.map((item, i) =>
                               i === index
                                 ? { ...item, freightCoverageHt: value }
+                                : item,
+                            ),
+                          }))
+                        }
+                        otherCoverageHt={allocation.otherCoverageHt ?? "0"}
+                        onOtherChange={(value) =>
+                          setDraft((current) => ({
+                            ...current,
+                            allocations: current.allocations.map((item, i) =>
+                              i === index
+                                ? { ...item, otherCoverageHt: value }
                                 : item,
                             ),
                           }))
@@ -1023,6 +1062,24 @@ export function BillingDetail({
                           label: "Unallocated Billing HT",
                           value: formatMoney(
                             savedReconciliation.remaining,
+                            saved.currencyCode,
+                          ),
+                        },
+                        {
+                          label: "Other/services HT (included)",
+                          value: formatMoney(
+                            saved.otherCoverageHt,
+                            saved.currencyCode,
+                          ),
+                        },
+                        {
+                          label: "Merchandise HT",
+                          value: formatMoney(
+                            revenueParts(
+                              saved.totalHt,
+                              saved.freightCoverageHt,
+                              saved.otherCoverageHt,
+                            ).merchandise,
                             saved.currencyCode,
                           ),
                         },

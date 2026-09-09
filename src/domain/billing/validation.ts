@@ -80,6 +80,7 @@ export const billingAllocationSchema = z
     orderId: requiredUuid("Select a valid Order."),
     basis: z.enum(ClientBillingAllocationBasis),
     freightCoverageHt: money.optional(),
+    otherCoverageHt: money.optional(),
     allocatedAmount: money,
     percentageRate: optionalFraction,
   })
@@ -143,6 +144,7 @@ export const clientBillingConfirmationSchema = z
     reference: z.string().trim().min(1).max(120),
     replaceSchedule: z.boolean(),
     freightCoverageHt: money.optional(),
+    otherCoverageHt: money.optional(),
     totalHt: money,
     totalTtc: money,
     vatAmount: money,
@@ -157,6 +159,7 @@ export const clientBillingConfirmationSchema = z
   .superRefine((value, context) => {
     try {
       if (
+        new Decimal(value.otherCoverageHt ?? "0").greaterThan(0) ||
         new Decimal(value.freightCoverageHt ?? "0").greaterThan(0) ||
         value.allocations.some((item) =>
           new Decimal(item.freightCoverageHt ?? "0").greaterThan(0),
@@ -166,6 +169,7 @@ export const clientBillingConfirmationSchema = z
           value.totalHt,
           value.freightCoverageHt ?? "0",
           value.allocations,
+          value.otherCoverageHt ?? "0",
         );
     } catch (error) {
       context.addIssue({
@@ -304,6 +308,7 @@ export const inlineClientBillingSchema = z.object({
 
 const billingEditFields = z.object({
   freightCoverageHt: money.optional(),
+  otherCoverageHt: money.optional(),
   allocations: z.array(billingAllocationSchema).max(100),
   clientId: requiredUuid("Select a Client."),
   currencyCode: z
@@ -332,6 +337,7 @@ export const billingDocumentEditSchema = billingEditFields.superRefine(
   (value, context) => {
     try {
       if (
+        new Decimal(value.otherCoverageHt ?? "0").greaterThan(0) ||
         new Decimal(value.freightCoverageHt ?? "0").greaterThan(0) ||
         value.allocations.some((item) =>
           new Decimal(item.freightCoverageHt ?? "0").greaterThan(0),
@@ -341,6 +347,7 @@ export const billingDocumentEditSchema = billingEditFields.superRefine(
           value.totalHt,
           value.freightCoverageHt ?? "0",
           value.allocations,
+          value.otherCoverageHt ?? "0",
         );
     } catch (error) {
       context.addIssue({
@@ -371,6 +378,7 @@ export const billingAllocationsEditSchema = z.object({
 export const orderBillingLinkSchema = z
   .object({
     freightCoverageHt: money.optional(),
+    otherCoverageHt: money.optional(),
     allocatedAmount: money.optional(),
     basis: z.enum(ClientBillingAllocationBasis).optional(),
     billingDocumentId: requiredUuid("Select a valid billing document."),

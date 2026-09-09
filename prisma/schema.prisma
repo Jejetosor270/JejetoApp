@@ -151,6 +151,8 @@ enum ClientDocumentImportAction {
 }
 
 model User {
+  createdFreightPayments FreightExpensePayment[] @relation("FreightPaymentCreatedBy")
+  updatedFreightPayments FreightExpensePayment[] @relation("FreightPaymentUpdatedBy")
   createdOrderPackages OrderPackage[] @relation("OrderPackageCreatedBy")
   updatedOrderPackages OrderPackage[] @relation("OrderPackageUpdatedBy")
   id           String   @id @default(uuid()) @db.Uuid
@@ -495,6 +497,8 @@ model ProcurementOrder {
 }
 
 model ProjectFreightExpense {
+  payments FreightExpensePayment[]
+  dueDate DateTime? @db.Date
   trashedAt DateTime?
   @@index([trashedAt])
   id                         String   @id @default(uuid()) @db.Uuid
@@ -532,6 +536,27 @@ model ProjectFreightExpense {
   detachedReportingCurrencyCode String? @db.Char(3)
   detachedReportingCurrency Currency? @relation("ProjectFreightExpenseDetachedCurrency", fields: [detachedReportingCurrencyCode], references: [code], onDelete: Restrict)
 
+}
+
+model FreightExpensePayment {
+  id String @id @default(uuid()) @db.Uuid
+  expenseId String @db.Uuid
+  amount Decimal @db.Decimal(19, 4)
+  paidAt DateTime @db.Date
+  fxRateToReporting Decimal? @db.Decimal(20, 10)
+  reference String? @db.VarChar(120)
+  notes String? @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdById String? @db.Uuid
+  updatedById String? @db.Uuid
+  trashedAt DateTime?
+  expense ProjectFreightExpense @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  createdBy User? @relation("FreightPaymentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("FreightPaymentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  @@index([expenseId, paidAt])
+  @@index([trashedAt])
+  @@map("freight_expense_payments")
 }
 
 model ProcurementOrderBuilding {
@@ -737,6 +762,7 @@ model ClientBillingDocument {
   currencyCode               String                    @db.Char(3)
   fxRateToReporting          Decimal?                  @db.Decimal(20, 10)
   freightCoverageHt          Decimal                   @default(0) @db.Decimal(19, 4)
+  otherCoverageHt Decimal @default(0) @db.Decimal(19, 4)
   totalHt                    Decimal                   @db.Decimal(19, 4)
   vatTreatment               VatTreatment?
   vatRate                    Decimal?                  @db.Decimal(9, 6)
@@ -846,6 +872,7 @@ model ClientBillingAllocation {
   basis             ClientBillingAllocationBasis
   percentageRate    Decimal?                     @db.Decimal(9, 6)
   freightCoverageHt Decimal                      @default(0) @db.Decimal(19, 4)
+  otherCoverageHt Decimal @default(0) @db.Decimal(19, 4)
   allocatedAmount   Decimal                      @db.Decimal(19, 4)
   createdAt         DateTime                     @default(now())
   updatedAt         DateTime                     @updatedAt

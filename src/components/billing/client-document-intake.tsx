@@ -100,6 +100,7 @@ type ScheduleRow = {
 
 type AllocationRow = {
   freightCoverageHt?: string;
+  otherCoverageHt?: string;
   amount: string;
   orderId: string;
 };
@@ -199,6 +200,7 @@ export function ClientDocumentReview({
   const [dueDate, setDueDate] = useState(proposal.dueDate ?? "");
   const [currencyCode, setCurrencyCode] = useState(proposal.currencyCode ?? "");
   const [fxRate, setFxRate] = useState("");
+  const [otherCoverageHt, setOtherCoverageHt] = useState("0");
   const [freightCoverageHt, setFreightCoverageHt] = useState(
     proposal.freightCoverageHt ?? "0",
   );
@@ -260,6 +262,7 @@ export function ClientDocumentReview({
   );
   const serializedAllocations = allocations.map((item) => ({
     freightCoverageHt: fixedDecimal(item.freightCoverageHt ?? "0"),
+    otherCoverageHt: fixedDecimal(item.otherCoverageHt ?? "0"),
     allocatedAmount: fixedDecimal(item.amount),
     basis: item.basis,
     orderId: item.orderId,
@@ -600,6 +603,20 @@ export function ClientDocumentReview({
                   : `AI freight evidence: ${review.extraction.freightCoverageHt?.status ?? "MISSING"}. ${review.extraction.freightCoverageHt?.diagnostic ?? ""} Review the proposal.`}{" "}
                 Included in total HT. Any freight not assigned to an Order stays
                 at Project level.
+              </p>
+            </ReviewField>
+            <ReviewField
+              label="Of total: Other/services HT"
+              error={state.fieldErrors?.otherCoverageHt}
+            >
+              <MoneyInput
+                name="otherCoverageHt"
+                value={otherCoverageHt}
+                onValueChange={setOtherCoverageHt}
+              />
+              <p className="text-muted-foreground text-xs">
+                Included in total HT. Review services and other non-merchandise
+                revenue explicitly.
               </p>
             </ReviewField>
             <ReviewField
@@ -1049,6 +1066,14 @@ export function ClientDocumentReview({
                         i === index
                           ? { ...row, freightCoverageHt: value }
                           : row,
+                      ),
+                    )
+                  }
+                  otherCoverageHt={item.otherCoverageHt ?? "0"}
+                  onOtherChange={(value) =>
+                    setAllocations((current) =>
+                      current.map((row, i) =>
+                        i === index ? { ...row, otherCoverageHt: value } : row,
                       ),
                     )
                   }

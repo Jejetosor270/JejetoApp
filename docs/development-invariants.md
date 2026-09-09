@@ -75,12 +75,7 @@ Billing/Supplier installments, due dates, and expected FX. Cash position is Clie
 cash received minus Supplier cash paid. Cash timing never determines profitability.
 Legacy Order `CLIENT_RECEIPT` schedules must not become actual Client cash truth.
 
-**Current receipt-scope limitation:** `recordClientReceipt` and `updateClientReceipt`
-do not explicitly reject Quote or cancelled documents. Billing summaries exclude
-cancelled documents but collect receipts across the remaining document types; actual
-cash queries in `src/lib/reporting/{reports,global-reports}.ts` do not impose an
-Invoice-only or document-cancellation filter. Do not assume all Client cash is
-Invoice-only, or silently change eligibility while adding an unrelated feature.
+**Receipt eligibility:** New Client receipts require an active Invoice. Historical receipts remain editable and are never silently deleted. Project cash reporting recognizes active Invoice receipts, including receipts on an explicitly matched Quote installment once. Unmatched Quote/cancelled-context receipts are retained for review and flagged in Project financial control. Actual receipt FX remains independent of Invoice FX.
 
 ## Funding Coverage
 
@@ -391,3 +386,11 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
 Removing from Related clears assignments and retains the original business record; main-list deletion still uses recoverable Trash. Detached Orders freeze their last effective component markup rates and freight allowance, retain currencies/FX, and stop contributing to the former Project. The freight allowance override uses Decimal(38,20) to retain the calculated allowance without introducing rounding when freezing it. Detached installments retain their scheduled amount, date and reporting currency; removed cash assignments transfer the same cash identity to Unassigned cash records. No reassignment is required.
 
 Migration `20260915000000_unassigned_relationships` must be applied separately before running these workflows; it is prepared only.
+
+## Project financial control
+
+- Billing HT and each Order allocation contain Freight and Other/services subsets; Merchandise is the remainder. All three portions must reconcile without changing Invoice HT, VAT or cash. Existing non-freight data remains merchandise until reviewed. Funding Coverage retains its existing eligibility and Order-sell formula.
+- Project control shows budget versus recorded-category cost and marked-up recovery targets separately, with Invoice versus Quote recovery, Order attribution and Project-level amounts. Category balances never move revenue or cash automatically. Order non-deductible VAT remains an explicit Project economic-cost adjustment rather than an invented category allocation. Invoiced profit/markup is provisional; current editable Project component defaults remain the agreed comparison.
+- Freight expense payments are normalized actual outflows with independent dates/FX, overpayment protection and audit. Expense due dates drive derived forecasts; missing due dates remain undated commitments. Overdue plus 30 days is the primary cash funding horizon; all remaining scheduled Supplier and freight commitments are also shown. Unscheduled Order balances stay distinct.
+- Freight payments affect Project/portfolio actual cash and cash-flow forecasts once, never freight economic cost. Expense deletion carries dependent payments into recoverable Trash; restoration checks overpayment. Related unlinking transfers the same payment UUID, amount, currency, FX and date to Unassigned cash.
+- Requires migration `20260916000000_project_financial_control`. Preparing/generating this migration does not authorize applying it to the configured database.

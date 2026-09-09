@@ -520,6 +520,7 @@ describe("Billing persistence", () => {
 
   it("changes only Project freight coverage and rejects conflicts with Order allocations", async () => {
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      documentType: "INVOICE",
       id: "bill",
       reference: "INV",
       totalHt: new Decimal("100"),
@@ -682,6 +683,7 @@ describe("Billing persistence", () => {
 
   it("records partial receipts and rejects overpayment", async () => {
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      documentType: "INVOICE",
       currencyCode: "EUR",
       matchedInstallment: null,
       project: { reportingCurrencyCode: "EUR" },
@@ -717,6 +719,7 @@ describe("Billing persistence", () => {
 
   it("records a Billing-level receipt without installment attribution", async () => {
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      documentType: "INVOICE",
       currencyCode: "EUR",
       matchedInstallment: null,
       project: { reportingCurrencyCode: "EUR" },
@@ -747,6 +750,7 @@ describe("Billing persistence", () => {
       installmentId,
     });
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      documentType: "INVOICE",
       currencyCode: "EUR",
       matchedInstallment: null,
       project: { reportingCurrencyCode: "EUR" },
@@ -824,6 +828,7 @@ describe("Billing persistence", () => {
 
   it("rejects installment attribution across Billing Events", async () => {
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      documentType: "INVOICE",
       currencyCode: "EUR",
       matchedInstallment: null,
       project: { reportingCurrencyCode: "EUR" },
@@ -910,6 +915,7 @@ describe("Billing persistence", () => {
   it("adds and safely removes a post-creation Billing installment", async () => {
     vi.mocked(nextInstallmentSequence).mockResolvedValueOnce(2);
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      documentType: "INVOICE",
       currencyCode: "EUR",
       fxRateToReporting: null,
       id: projectId,
@@ -1068,6 +1074,7 @@ describe("Billing persistence", () => {
 
   it("does not cancel a billing document that already has receipts", async () => {
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      documentType: "INVOICE",
       _count: { receipts: 0 },
       isCancelled: false,
       matchedInstallment: null,
@@ -1085,6 +1092,7 @@ describe("Billing persistence", () => {
 
   it("adds, changes, and removes post-creation allocations in one authoritative reconciliation", async () => {
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      documentType: "INVOICE",
       allocations: [
         {
           allocatedAmount: new Decimal("60"),
@@ -1154,6 +1162,7 @@ describe("Billing persistence", () => {
 
   it("uses Order Sell HT for an Order-side percentage and persists one amount truth", async () => {
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      documentType: "INVOICE",
       allocations: [],
       currencyCode: "EUR",
       fxRateToReporting: null,
@@ -1187,6 +1196,7 @@ describe("Billing persistence", () => {
     );
 
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      documentType: "INVOICE",
       allocations: [
         {
           allocatedAmount: new Decimal("40"),
@@ -1218,6 +1228,7 @@ describe("Billing persistence", () => {
 
   it("rejects an Order-side percentage above remaining Billing capacity", async () => {
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      documentType: "INVOICE",
       allocations: [
         {
           allocatedAmount: new Decimal("30000"),
@@ -1255,6 +1266,7 @@ describe("Billing persistence", () => {
 
   it("rejects cross-Project allocations and unsafe Billing Project changes", async () => {
     transaction.clientBillingDocument.findUnique.mockResolvedValueOnce({
+      documentType: "INVOICE",
       allocations: [],
       id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
       isProjectRemainderApproved: false,
@@ -1278,6 +1290,7 @@ describe("Billing persistence", () => {
     ).rejects.toThrow("Billing Event Project");
 
     transaction.clientBillingDocument.findUnique.mockResolvedValueOnce({
+      documentType: "INVOICE",
       allocations: [{ orderId: firstOrderId }],
       clientId,
       currencyCode: "EUR",

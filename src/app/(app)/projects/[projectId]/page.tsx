@@ -1,3 +1,5 @@
+import { ProjectFinancialControl } from "@/components/reporting/project-control";
+import { ProjectFreightPayments } from "@/components/freight/project-freight-payments";
 import { RelatedCashCreate } from "@/components/payments/related-cash-create";
 import { RelatedItems } from "@/components/items/related-items";
 import { RelatedRecords } from "@/components/layout/related-records";
@@ -120,9 +122,12 @@ export default async function ProjectPage({
   });
   const phase11CashPosition = calculateNetCashPosition(
     billing?.complete ? billing.paidTtc : null,
-    reporting.payments.supplier.paid.complete
-      ? reporting.payments.supplier.paid.value
-      : null,
+    sumComparableFinancialAmounts(
+      reporting.payments.supplier.paid.complete
+        ? reporting.payments.supplier.paid.value
+        : null,
+      reporting.freightPaid ?? (reporting.freightPaid === null ? null : "0"),
+    ),
   );
   const fundingCoverage = calculateProjectFundingCoverage({
     clientBillingCoverageComplete: billing?.coverageComplete ?? false,
@@ -190,28 +195,37 @@ export default async function ProjectPage({
           />
         ),
         finance: (
-          <ProjectFinancialDashboard
-            section="finance"
-            billing={billing}
-            financialPerformance={financialPerformance}
-            freight={freight}
-            fundingCoverage={fundingCoverage}
-            horizon={horizon}
-            phase11CashPosition={phase11CashPosition}
-            projectId={projectId}
-            report={reporting}
-            vatPosition={vatPosition}
-          />
+          <div className="space-y-5">
+            <ProjectFinancialControl projectId={projectId} />
+            <ProjectFinancialDashboard
+              section="finance"
+              billing={billing}
+              financialPerformance={financialPerformance}
+              freight={freight}
+              fundingCoverage={fundingCoverage}
+              horizon={horizon}
+              phase11CashPosition={phase11CashPosition}
+              projectId={projectId}
+              report={reporting}
+              vatPosition={vatPosition}
+            />
+          </div>
         ),
         freightExpenses: (
-          <ProjectFreightExpenses
-            canEdit={canEditMasterData(user.role)}
-            currencies={options.currencies}
-            expenses={freightExpenses}
-            projectId={projectId}
-            reportingCurrencyCode={project.reportingCurrencyCode}
-            suppliers={options.suppliers}
-          />
+          <div className="space-y-5">
+            <ProjectFreightExpenses
+              canEdit={canEditMasterData(user.role)}
+              currencies={options.currencies}
+              expenses={freightExpenses}
+              projectId={projectId}
+              reportingCurrencyCode={project.reportingCurrencyCode}
+              suppliers={options.suppliers}
+            />
+            <ProjectFreightPayments
+              projectId={projectId}
+              canEdit={canEditMasterData(user.role)}
+            />
+          </div>
         ),
         budget: <ProjectPurchaseBudget projectId={projectId} />,
         packages: (

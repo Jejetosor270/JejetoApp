@@ -31,6 +31,7 @@ interface BillingLinkDocument {
   allocation: {
     allocatedAmount: string;
     freightCoverageHt?: string;
+    otherCoverageHt?: string;
     basis: "PERCENTAGE" | "FIXED_AMOUNT";
     percentageRate: string | null;
   } | null;
@@ -134,6 +135,7 @@ export function OrderBillingReconciliation({
                 orderId,
                 amount: document.allocation.allocatedAmount,
                 freightCoverageHt: document.allocation.freightCoverageHt ?? "0",
+                otherCoverageHt: document.allocation.otherCoverageHt ?? "0",
               },
             }
           : {})}

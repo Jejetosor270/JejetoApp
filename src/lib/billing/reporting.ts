@@ -156,7 +156,10 @@ export function summarizeClientBillingRecords(
       } else outputVat = outputVat.plus(convertedVat);
     }
 
-    for (const receipt of receiptRecords(record)) {
+    for (const receipt of record.documentType ===
+    ClientBillingDocumentType.INVOICE
+      ? receiptRecords(record)
+      : []) {
       uniqueReceipts.set(receipt.id, {
         ...receipt,
         currencyCode: record.currencyCode,

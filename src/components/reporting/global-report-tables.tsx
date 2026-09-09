@@ -90,9 +90,10 @@ export function ActualCashReport({
                     <Link
                       className="font-mono hover:underline"
                       href={
-                        cashIn
+                        row.href ??
+                        (cashIn
                           ? `/billing/${row.billingOrOrderId}`
-                          : `/orders/${row.billingOrOrderId}#payments`
+                          : `/orders/${row.billingOrOrderId}#payments`)
                       }
                     >
                       {row.billingOrOrderReference}
