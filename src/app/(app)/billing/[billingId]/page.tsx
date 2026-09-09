@@ -1,3 +1,4 @@
+import { getBillingRelations } from "@/lib/related-records/records";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -28,9 +29,13 @@ export default async function BillingDetailPage({
   if (!z.uuid().safeParse(billingId).success) notFound();
   const document = await getClientBillingDocument(billingId);
   if (!document) notFound();
-  const orders = await listProjectOrders(document.projectId);
+  const [orders, relations] = await Promise.all([
+    listProjectOrders(document.projectId),
+    getBillingRelations(billingId),
+  ]);
   return (
     <BillingDetail
+      relatedTables={relations}
       canEdit={canEditMasterData(user.role)}
       document={document}
       options={options}

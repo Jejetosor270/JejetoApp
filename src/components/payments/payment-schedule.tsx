@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { relatedHref } from "@/lib/related-records/types";
 import { RecordSectionHeading } from "@/components/layout/record-presentation";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { Badge } from "@/components/ui/badge";
@@ -137,7 +139,14 @@ export function PaymentSchedule({
           <tbody className="divide-y">
             {summary.installments.map((installment) => (
               <tr key={installment.id}>
-                <td className="px-3 py-2 font-medium">{installment.label}</td>
+                <td className="px-3 py-2 font-medium">
+                  <Link
+                    href={relatedHref("supplier-installment", installment.id)}
+                    className="underline"
+                  >
+                    {installment.label}
+                  </Link>
+                </td>
                 <td className="financial-figure px-3 py-2 text-right">
                   {formatRate(
                     installment.percentageRate ??
@@ -202,7 +211,10 @@ export function PaymentSchedule({
                                 className="flex flex-wrap items-center justify-between gap-2 text-xs"
                                 key={settlement.id}
                               >
-                                <span>
+                                <Link
+                                  href={relatedHref("payment", settlement.id)}
+                                  className="underline"
+                                >
                                   {formatDateOnly(settlement.settledAt)} ·{" "}
                                   {formatMoney(
                                     settlement.amount,
@@ -211,7 +223,7 @@ export function PaymentSchedule({
                                   {settlement.reference
                                     ? ` · ${settlement.reference}`
                                     : ""}
-                                </span>
+                                </Link>
                                 <SettlementCorrection settlement={settlement} />
                               </div>
                             ))}

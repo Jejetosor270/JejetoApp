@@ -190,7 +190,7 @@ export function OrderBillingReconciliation({
               <div>
                 <Link
                   className="font-medium underline"
-                  href={`/billing/${document.id}`}
+                  href={`/billing/${document.id}?tab=related`}
                 >
                   {document.reference}
                 </Link>

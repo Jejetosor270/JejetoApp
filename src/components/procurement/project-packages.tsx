@@ -1,3 +1,5 @@
+import { RelatedRecordTable } from "@/components/layout/related-records";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { RecordSectionHeading } from "@/components/layout/record-presentation";
 import Link from "next/link";
 import { getDatabase } from "@/lib/db";
@@ -25,7 +27,7 @@ export async function ProjectPackages({
     listProjectOrders(projectId),
     listPaymentInstallments({ projectId, direction: "SUPPLIER_PAYMENT" }),
   ]);
-  return (
+  const manager = (
     <section className="bg-card space-y-4 rounded-lg border p-4">
       <RecordSectionHeading
         title="Order Packages"
@@ -89,5 +91,36 @@ export async function ProjectPackages({
         },
       )}
     </section>
+  );
+  return (
+    <RelatedRecordTable
+      table={{
+        id: "packages",
+        title: "Order Packages",
+        description:
+          "Project Order groupings. Open a Package to list its Orders.",
+        columns: ["Package", "Status", "Orders"],
+        numericColumns: [2],
+        rows: packages.map((group) => ({
+          id: group.id,
+          href: "/orders?projectId=" + projectId + "&packageId=" + group.id,
+          cells: [
+            group.name,
+            group.isActive ? "Active" : "Archived",
+            String(
+              orders.filter((order) => order.packageId === group.id).length,
+            ),
+          ],
+        })),
+      }}
+      actions={
+        <EditorDrawer
+          title={canEdit ? "Manage Packages" : "View Package breakdown"}
+          wide
+        >
+          {manager}
+        </EditorDrawer>
+      }
+    />
   );
 }

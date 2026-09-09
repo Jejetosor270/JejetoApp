@@ -662,6 +662,7 @@ export function ProjectDetail({
   clients: { id: string; displayName: string }[];
   currencies: CurrencyOption[];
   workspace: {
+    related?: ReactNode;
     overview: ReactNode;
     finance: ReactNode;
     budget: ReactNode;
@@ -764,55 +765,16 @@ export function ProjectDetail({
             group: "related",
             label: "Project work",
             content: (
-              <nav aria-label="Project work" className="space-y-4">
-                {(
-                  [
-                    [
-                      "/orders",
-                      "Purchasing",
-                      "Supplier Orders for this Project.",
-                    ],
-                    [
-                      "/billing",
-                      "Billing",
-                      "Client Quotes, Invoices and Order allocations.",
-                    ],
-                    [
-                      "/payments",
-                      "Payments",
-                      "Supplier payments and Client receipts.",
-                    ],
-                    [
-                      "/reports",
-                      "Reports",
-                      "Financial and cash-flow reports for this Project.",
-                    ],
-                  ] as const
-                ).map(([path, title, description]) => (
-                  <section key={path} className="bg-card rounded-lg border p-4">
-                    <RecordSectionHeading
-                      title={title}
-                      description={description}
-                      actions={
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={path + "?projectId=" + project.id}>
-                            Open {title}
-                          </Link>
-                        </Button>
-                      }
-                    />
-                  </section>
-                ))}
-                {workspace.items ? (
-                  <section className="bg-card rounded-lg border p-4">
-                    <RecordSectionHeading
-                      title="Items (Beta)"
-                      description="Project-specific supporting detail."
-                      actions={workspace.items}
-                    />
-                  </section>
-                ) : null}
-              </nav>
+              <div className="space-y-4">
+                {workspace.related}
+                <Link
+                  className="text-primary text-sm underline"
+                  href={"/reports?projectId=" + project.id}
+                >
+                  Open Project reports
+                </Link>
+                {workspace.items}
+              </div>
             ),
           },
           {

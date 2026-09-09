@@ -1,4 +1,12 @@
 "use client";
+import {
+  RelatedRecords,
+  RelatedRecordTable,
+} from "@/components/layout/related-records";
+import {
+  relatedHref,
+  type RelatedTableData,
+} from "@/lib/related-records/types";
 import { MoneyInput } from "@/components/master-data/form-ui";
 
 import { BillingFreightEditor } from "@/components/billing/billing-freight-editor";
@@ -179,12 +187,14 @@ function DetailValue({ label, value }: { label: string; value: string }) {
 }
 
 export function BillingDetail({
+  relatedTables = [],
   canEdit,
   document,
   options,
   orderFinancials,
   startEditing,
 }: {
+  relatedTables?: RelatedTableData[];
   canEdit: boolean;
   document: ClientBillingView;
   options: BillingDetailOptions;
@@ -916,6 +926,19 @@ export function BillingDetail({
         label="Billing workspace"
         sections={[
           {
+            id: "connections",
+            group: "related",
+            label: "Project & Client",
+            content: (
+              <RelatedRecords
+                tables={relatedTables.filter(
+                  (table) =>
+                    !["client-installments", "receipts"].includes(table.id),
+                )}
+              />
+            ),
+          },
+          {
             id: "overview",
             group: "details",
             label: "Overview",
@@ -1067,7 +1090,21 @@ export function BillingDetail({
             group: "related",
             label: "Schedule & receipts",
             content: (
-              <BillingScheduleManager canEdit={canEdit} document={document} />
+              <div className="space-y-4">
+                <RelatedRecords
+                  tables={relatedTables.filter((table) =>
+                    ["client-installments", "receipts"].includes(table.id),
+                  )}
+                />
+                {canEdit ? (
+                  <EditorDrawer title="Manage installments & receipts" wide>
+                    <BillingScheduleManager
+                      canEdit={canEdit}
+                      document={document}
+                    />
+                  </EditorDrawer>
+                ) : null}
+              </div>
             ),
           },
           {
@@ -1075,125 +1112,91 @@ export function BillingDetail({
             group: "related",
             label: "Linked Orders",
             content: (
-              <section className="bg-card rounded-lg border p-4">
-                <RecordSectionHeading
-                  title="Linked Orders"
-                  description="Commercial attribution only. Client receipts remain separate cash records."
-                  actions={
-                    canEdit ? (
-                      <div className="flex flex-wrap gap-2">
-                        <BillingFreightEditor
-                          billingId={document.id}
-                          totalHt={saved.totalHt}
-                          currencyCode={saved.currencyCode}
-                          freightCoverageHt={saved.freightCoverageHt}
-                          allocatedFreightHt={
-                            freightBreakdown.allocatedFreightHt
-                          }
-                          onSaved={(amount) => {
-                            setSaved((current) => ({
-                              ...current,
-                              freightCoverageHt: amount,
-                            }));
-                            setDraft((current) => ({
-                              ...current,
-                              freightCoverageHt: amount,
-                            }));
-                          }}
-                        />
-                        {allocationEditor()}
-                      </div>
-                    ) : null
-                  }
-                />
-                <div className="mt-3 overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-left text-sm">
-                    <thead className="text-muted-foreground border-b text-xs">
-                      <tr>
-                        <th className="py-2">Order</th>
-                        <th>Supplier</th>
-                        <th className="text-right">Allocated HT</th>
-                        <th className="text-right">Of which freight HT</th>
-                        <th className="text-right">% of Billing</th>
-                        <th className="text-right">Planned Sell HT</th>
-                        <th className="text-right">Effective markup</th>
-                        {canEdit ? <th className="text-right">Edit</th> : null}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {saved.allocations.map((allocation) => {
-                        const order = orderById.get(allocation.orderId);
-                        const financial = financialByOrder.get(
+              <RelatedRecordTable
+                table={{
+                  id: "orders",
+                  title: "Linked Orders",
+                  description:
+                    "Commercial attribution only. Client receipts remain separate cash records.",
+                  columns: [
+                    "Order",
+                    "Supplier",
+                    "Allocated HT",
+                    "Of which freight HT",
+                    "% of Billing",
+                    "Planned sell HT",
+                    "Effective markup",
+                  ],
+                  numericColumns: [2, 3, 4, 5, 6],
+                  rows: saved.allocations.map((allocation) => {
+                    const order = orderById.get(allocation.orderId);
+                    const financial = financialByOrder.get(allocation.orderId);
+                    return {
+                      id: allocation.orderId,
+                      href: relatedHref("order", allocation.orderId),
+                      cells: [
+                        order?.orderNumber ?? allocation.orderId,
+                        order?.supplier.displayName ?? "—",
+                        formatMoney(allocation.amount, saved.currencyCode),
+                        formatMoney(
+                          allocation.freightCoverageHt ?? "0",
+                          saved.currencyCode,
+                        ),
+                        formatRate(
+                          humanPercentageToFraction(
+                            percentageFromAmount(
+                              saved.totalHt,
+                              allocation.amount,
+                            ) ?? "",
+                            { maximumPercent: "100" },
+                          ),
+                        ),
+                        formatMoney(
+                          financial?.plannedSell ?? null,
+                          financial?.reportingCurrencyCode ??
+                            savedProject?.reportingCurrencyCode ??
+                            document.project.reportingCurrencyCode,
+                        ),
+                        formatRate(financial?.actualMarkupRate ?? null),
+                      ],
+                    };
+                  }),
+                }}
+                actions={
+                  canEdit ? (
+                    <div className="flex flex-wrap gap-2">
+                      <BillingFreightEditor
+                        billingId={document.id}
+                        totalHt={saved.totalHt}
+                        currencyCode={saved.currencyCode}
+                        freightCoverageHt={saved.freightCoverageHt}
+                        allocatedFreightHt={freightBreakdown.allocatedFreightHt}
+                        onSaved={(amount) => {
+                          setSaved((current) => ({
+                            ...current,
+                            freightCoverageHt: amount,
+                          }));
+                          setDraft((current) => ({
+                            ...current,
+                            freightCoverageHt: amount,
+                          }));
+                        }}
+                      />
+                      {allocationEditor()}
+                    </div>
+                  ) : null
+                }
+                {...(canEdit
+                  ? {
+                      rowActions: Object.fromEntries(
+                        saved.allocations.map((allocation) => [
                           allocation.orderId,
-                        );
-                        return (
-                          <tr key={allocation.orderId}>
-                            <td className="py-2">
-                              <Link
-                                className="font-mono text-xs underline"
-                                href={`/orders/${allocation.orderId}`}
-                              >
-                                {order?.orderNumber ?? allocation.orderId}
-                              </Link>
-                            </td>
-                            <td>{order?.supplier.displayName ?? "—"}</td>
-                            <td className="financial-figure text-right">
-                              {formatMoney(
-                                allocation.amount,
-                                saved.currencyCode,
-                              )}
-                            </td>
-                            <td className="financial-figure text-right">
-                              {formatMoney(
-                                allocation.freightCoverageHt ?? "0",
-                                saved.currencyCode,
-                              )}
-                            </td>
-                            <td className="financial-figure text-right">
-                              {formatRate(
-                                humanPercentageToFraction(
-                                  percentageFromAmount(
-                                    saved.totalHt,
-                                    allocation.amount,
-                                  ) ?? "",
-                                  { maximumPercent: "100" },
-                                ),
-                              )}
-                            </td>
-                            <td className="financial-figure text-right">
-                              {formatMoney(
-                                financial?.plannedSell ?? null,
-                                financial?.reportingCurrencyCode ??
-                                  savedProject?.reportingCurrencyCode ??
-                                  document.project.reportingCurrencyCode,
-                              )}
-                            </td>
-                            <td className="financial-figure text-right">
-                              {formatRate(financial?.actualMarkupRate ?? null)}
-                            </td>
-                            {canEdit ? (
-                              <td className="py-2 pl-3 text-right">
-                                {allocationEditor(allocation)}
-                              </td>
-                            ) : null}
-                          </tr>
-                        );
-                      })}
-                      {saved.allocations.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={canEdit ? 8 : 7}
-                            className="text-muted-foreground py-6 text-center"
-                          >
-                            No Order allocations yet. Billing remains at Project
-                            level.
-                          </td>
-                        </tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
+                          allocationEditor(allocation),
+                        ]),
+                      ),
+                    }
+                  : {})}
+              />
             ),
           },
           {

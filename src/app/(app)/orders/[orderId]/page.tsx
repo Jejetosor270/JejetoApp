@@ -1,3 +1,6 @@
+import { RelatedRecords } from "@/components/layout/related-records";
+import { getOrderRelations } from "@/lib/related-records/records";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
 import {
   RecordSummary,
   RecordSectionHeading,
@@ -45,11 +48,13 @@ export default async function OrderPage({
     getOrder(orderId),
   ]);
   if (!order) notFound();
-  const [billingDocuments, paymentSummary, quoteImports] = await Promise.all([
-    getOrderBillingReconciliation(orderId),
-    getOrderPaymentSummary(orderId),
-    listOrderQuoteImports(orderId),
-  ]);
+  const [billingDocuments, paymentSummary, quoteImports, relations] =
+    await Promise.all([
+      getOrderBillingReconciliation(orderId),
+      getOrderPaymentSummary(orderId),
+      listOrderQuoteImports(orderId),
+      getOrderRelations(orderId),
+    ]);
   const cost = order.costs;
   return (
     <div className="space-y-6">
@@ -76,6 +81,18 @@ export default async function OrderPage({
         <RecordWorkspace
           label="Order workspace"
           sections={[
+            {
+              id: "connections",
+              group: "related",
+              label: "Project, Supplier & Buildings",
+              content: (
+                <RelatedRecords
+                  tables={relations.filter((table) =>
+                    ["projects", "suppliers", "buildings"].includes(table.id),
+                  )}
+                />
+              ),
+            },
             {
               id: "overview",
               group: "details",
@@ -319,15 +336,29 @@ export default async function OrderPage({
               label: "Payments",
               content: (
                 <div className="space-y-4">
-                  <PaymentSchedule
-                    canEdit={canEditMasterData(user.role)}
-                    currencies={options.currencies}
-                    direction="SUPPLIER_PAYMENT"
-                    orderId={order.id}
-                    reportingCurrencyCode={order.project.reportingCurrencyCode}
-                    summary={paymentSummary.supplier}
-                    today={businessToday()}
+                  <RelatedRecords
+                    tables={relations.filter((table) =>
+                      ["payments", "supplier-installments"].includes(table.id),
+                    )}
                   />
+                  {canEditMasterData(user.role) ? (
+                    <EditorDrawer
+                      title="Manage Supplier installments & payments"
+                      wide
+                    >
+                      <PaymentSchedule
+                        canEdit={canEditMasterData(user.role)}
+                        currencies={options.currencies}
+                        direction="SUPPLIER_PAYMENT"
+                        orderId={order.id}
+                        reportingCurrencyCode={
+                          order.project.reportingCurrencyCode
+                        }
+                        summary={paymentSummary.supplier}
+                        today={businessToday()}
+                      />
+                    </EditorDrawer>
+                  ) : null}
                   {paymentSummary.client.installments.length > 0 ? (
                     <details className="rounded-lg border p-4">
                       <summary className="text-sm font-medium">
@@ -442,19 +473,30 @@ export default async function OrderPage({
               group: "related",
               label: "Linked Billing",
               content: (
-                <OrderBillingReconciliation
-                  canEdit={canEditMasterData(user.role)}
-                  difference={orderBillingDifference(
-                    order.costs.reportingSellingRevenue,
-                    order.billing.invoicedAllocated,
-                  )}
-                  documents={billingDocuments ?? []}
-                  invoicedAllocated={order.billing.invoicedAllocated}
-                  orderId={order.id}
-                  plannedSell={order.costs.reportingSellingRevenue}
-                  quotedAllocated={order.billing.quotedAllocated}
-                  reportingCurrencyCode={order.project.reportingCurrencyCode}
-                />
+                <div className="space-y-4">
+                  <RelatedRecords
+                    tables={relations.filter((table) => table.id === "billing")}
+                  />
+                  {canEditMasterData(user.role) ? (
+                    <EditorDrawer title="Manage Billing allocations" wide>
+                      <OrderBillingReconciliation
+                        canEdit={canEditMasterData(user.role)}
+                        difference={orderBillingDifference(
+                          order.costs.reportingSellingRevenue,
+                          order.billing.invoicedAllocated,
+                        )}
+                        documents={billingDocuments ?? []}
+                        invoicedAllocated={order.billing.invoicedAllocated}
+                        orderId={order.id}
+                        plannedSell={order.costs.reportingSellingRevenue}
+                        quotedAllocated={order.billing.quotedAllocated}
+                        reportingCurrencyCode={
+                          order.project.reportingCurrencyCode
+                        }
+                      />
+                    </EditorDrawer>
+                  ) : null}
+                </div>
               ),
             },
             {

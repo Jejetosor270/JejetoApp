@@ -105,6 +105,11 @@ export const navigationGroups: readonly NavigationGroup[] = [
 /** Match segments so Home and similarly named routes never light up together. */
 export function isNavigationActive(pathname: string, href: string): boolean {
   if (href === "/settings" && pathname.startsWith("/admin/")) return true;
+  if (
+    href === "/payments" &&
+    (pathname.startsWith("/receipts/") || pathname.startsWith("/installments/"))
+  )
+    return true;
   return pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
 }
 export function navigationForRole(

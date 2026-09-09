@@ -1,3 +1,5 @@
+import { RelatedRecords } from "@/components/layout/related-records";
+import { getProjectRelations } from "@/lib/related-records/records";
 import { ProjectPurchaseBudget } from "@/components/procurement/project-purchase-budget";
 import { optionalUuid } from "@/domain/listing/validation";
 import { ProjectPackages } from "@/components/procurement/project-packages";
@@ -62,16 +64,25 @@ export default async function ProjectPage({
     ? requestedHorizon
     : "12m";
   const settings = await getApplicationSettings();
-  const [user, options, result, reporting, billing, freight, freightExpenses] =
-    await Promise.all([
-      requireUser(),
-      listProjectFormOptions(),
-      getProject(projectId),
-      getProjectReportingSnapshot(projectId, { horizon }),
-      getProjectClientBillingSummary(projectId),
-      getProjectFreightReconciliation(projectId),
-      listProjectFreightExpenses(projectId),
-    ]);
+  const [
+    user,
+    options,
+    result,
+    reporting,
+    billing,
+    freight,
+    freightExpenses,
+    relations,
+  ] = await Promise.all([
+    requireUser(),
+    listProjectFormOptions(),
+    getProject(projectId),
+    getProjectReportingSnapshot(projectId, { horizon }),
+    getProjectClientBillingSummary(projectId),
+    getProjectFreightReconciliation(projectId),
+    listProjectFreightExpenses(projectId),
+    getProjectRelations(projectId),
+  ]);
   if (!result || !reporting) notFound();
   const { buildings, project } = result;
   const targets = calculateProjectTargets({
@@ -130,6 +141,7 @@ export default async function ProjectPage({
       clients={options.clients}
       currencies={options.currencies}
       workspace={{
+        related: <RelatedRecords tables={relations} />,
         overview: (
           <ProjectFinancialDashboard
             section="overview"
