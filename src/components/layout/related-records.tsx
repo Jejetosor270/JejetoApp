@@ -2,10 +2,26 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { RecordSectionHeading } from "./record-presentation";
 import type { RelatedTableData } from "@/lib/related-records/types";
+import { unassignCashAction } from "@/app/(app)/unassigned-cash/actions";
+import {
+  BulkActionBar,
+  SelectionHeader,
+  SelectionCell,
+  useBulkSelection,
+} from "@/components/bulk-actions/bulk-selection";
+
+import {
+  removeOptionalLinksAction,
+  editRelatedNameAction,
+} from "@/app/(app)/related-records/actions";
+import {
+  InlineEditActions,
+  InlineTextInput,
+} from "@/components/inline-editing/inline-edit";
 
 const PAGE_SIZE = 10;
 
@@ -22,12 +38,36 @@ export function RelatedRecordTable({
 }) {
   const router = useRouter();
   const [page, setPage] = useState(0);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [pending, startTransition] = useTransition();
+  const save = () => {
+    if (!table.editKind || !editingId || pending) return;
+    const kind = table.editKind;
+    const data = new FormData();
+    data.set("id", editingId);
+    data.set("value", draft);
+    startTransition(async () => {
+      try {
+        const result = await editRelatedNameAction(kind, data);
+        setFeedback(result.message ?? "");
+        if (result.status === "success") {
+          setEditingId(null);
+          router.refresh();
+        }
+      } catch {
+        setFeedback("The row could not be saved. Your draft is retained.");
+      }
+    });
+  };
   const lastPage = Math.max(0, Math.ceil(table.rows.length / PAGE_SIZE) - 1);
   const currentPage = Math.min(page, lastPage);
   const visible = table.rows.slice(
     currentPage * PAGE_SIZE,
     (currentPage + 1) * PAGE_SIZE,
   );
+  const selection = useBulkSelection(visible.map((row) => row.id));
   return (
     <section className="bg-card rounded-lg border p-4" aria-label={table.title}>
       <RecordSectionHeading
@@ -36,10 +76,38 @@ export function RelatedRecordTable({
         actions={actions}
       />
       <div className="mt-4 overflow-x-auto rounded-md border">
+        {table.removal && (
+          <BulkActionBar
+            unlink
+            action={
+              table.removal.kind === "payment" ||
+              table.removal.kind === "receipt"
+                ? unassignCashAction.bind(null, table.removal.kind)
+                : removeOptionalLinksAction.bind(null, table.removal)
+            }
+            clearSelection={selection.clear}
+            entityName="record"
+            selectedIds={selection.selectedIds}
+            scope={
+              table.removal.kind === "payment" ||
+              table.removal.kind === "receipt"
+                ? "Clear the cash assignment. The former document and Project balances will update; the original cash remains in Unassigned cash records."
+                : "Remove only these connections. The records remain available, with these relationships unassigned."
+            }
+          />
+        )}
         <table className="w-full min-w-[36rem] text-left text-sm">
           <caption className="sr-only">{table.title}</caption>
           <thead className="bg-muted/40 text-muted-foreground text-xs">
             <tr>
+              {table.removal && (
+                <SelectionHeader
+                  checked={selection.allSelected}
+                  indeterminate={selection.someSelected}
+                  disabled={!visible.length}
+                  onChange={selection.toggleAll}
+                />
+              )}
               {table.columns.map((label, index) => (
                 <th
                   key={label}
@@ -49,7 +117,7 @@ export function RelatedRecordTable({
                   {label}
                 </th>
               ))}
-              {rowActions ? (
+              {rowActions || table.editKind ? (
                 <th scope="col" className="px-3 py-2 text-right">
                   Manage
                 </th>
@@ -77,12 +145,26 @@ export function RelatedRecordTable({
                   if (row.href) router.push(row.href);
                 }}
               >
+                {table.removal && (
+                  <SelectionCell
+                    checked={selection.isSelected(row.id)}
+                    onChange={() => selection.toggle(row.id)}
+                    label={row.cells[0] ?? "record"}
+                  />
+                )}
                 {row.cells.map((value, index) => (
                   <td
                     key={table.columns[index]}
                     className={`px-3 py-2 ${table.numericColumns?.includes(index) ? "financial-figure text-right" : ""}`}
                   >
-                    {index === 0 && firstCells?.[row.id] ? (
+                    {index === 0 && editingId === row.id ? (
+                      <InlineTextInput
+                        ariaLabel={table.columns[0] ?? "Name"}
+                        value={draft}
+                        disabled={pending}
+                        onChange={setDraft}
+                      />
+                    ) : index === 0 && firstCells?.[row.id] ? (
                       firstCells[row.id]
                     ) : index === 0 && row.href ? (
                       <Link
@@ -96,15 +178,42 @@ export function RelatedRecordTable({
                     )}
                   </td>
                 ))}
-                {rowActions ? (
-                  <td className="px-3 py-2 text-right">{rowActions[row.id]}</td>
+                {rowActions || table.editKind ? (
+                  <td className="px-3 py-2 text-right">
+                    {table.editKind && (
+                      <InlineEditActions
+                        editing={editingId === row.id}
+                        pending={
+                          pending ||
+                          (editingId !== null && editingId !== row.id)
+                        }
+                        feedback={editingId === row.id ? feedback : ""}
+                        onEdit={() => {
+                          if (editingId) return;
+                          setDraft(row.cells[0] ?? "");
+                          setFeedback("");
+                          setEditingId(row.id);
+                        }}
+                        onSave={save}
+                        onCancel={() => {
+                          setEditingId(null);
+                          setFeedback("");
+                        }}
+                      />
+                    )}
+                    {rowActions?.[row.id]}
+                  </td>
                 ) : null}
               </tr>
             ))}
             {visible.length === 0 ? (
               <tr>
                 <td
-                  colSpan={table.columns.length + (rowActions ? 1 : 0)}
+                  colSpan={
+                    table.columns.length +
+                    (rowActions || table.editKind ? 1 : 0) +
+                    (table.removal ? 1 : 0)
+                  }
                   className="text-muted-foreground px-3 py-6 text-center"
                 >
                   No related {table.title.toLowerCase()}.
@@ -128,7 +237,7 @@ export function RelatedRecordTable({
               type="button"
               variant="outline"
               size="sm"
-              disabled={currentPage === 0}
+              disabled={currentPage === 0 || editingId !== null}
               onClick={() => setPage(currentPage - 1)}
             >
               Previous
@@ -137,7 +246,7 @@ export function RelatedRecordTable({
               type="button"
               variant="outline"
               size="sm"
-              disabled={currentPage === lastPage}
+              disabled={currentPage === lastPage || editingId !== null}
               onClick={() => setPage(currentPage + 1)}
             >
               Next

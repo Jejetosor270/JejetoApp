@@ -54,6 +54,7 @@ export function BulkActionBar({
   entityName,
   impactSummary,
   permanent = false,
+  unlink = false,
   scope,
   selectedIds,
 }: {
@@ -62,6 +63,7 @@ export function BulkActionBar({
   entityName: string;
   impactSummary?: string;
   permanent?: boolean;
+  unlink?: boolean;
   scope: string;
   selectedIds: string[];
 }) {
@@ -100,13 +102,21 @@ export function BulkActionBar({
                 variant="destructive"
               >
                 <Trash2 data-icon="inline-start" />
-                {pending ? "Deleting…" : "Delete selected"}
+                {pending
+                  ? "Working…"
+                  : unlink
+                    ? "Remove selected links"
+                    : "Delete selected"}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>
-                  {permanent ? "Permanently delete" : "Move to Trash"}{" "}
+                  {unlink
+                    ? "Remove links to"
+                    : permanent
+                      ? "Permanently delete"
+                      : "Move to Trash"}{" "}
                   {count === 1 ? "this" : count}{" "}
                   {count === 1 ? entityName : `selected ${entityName}s`}?
                 </AlertDialogTitle>
@@ -119,9 +129,11 @@ export function BulkActionBar({
                       </p>
                     ) : null}
                     <p className="text-destructive font-medium">
-                      {permanent
-                        ? "This action cannot be undone."
-                        : "These records will stop contributing to calculations. Restore them together from Settings → Trash."}
+                      {unlink
+                        ? "The records will remain available as unassigned. No record will be moved to Trash."
+                        : permanent
+                          ? "This action cannot be undone."
+                          : "These records will stop contributing to calculations. Restore them together from Settings → Trash."}
                     </p>
                   </div>
                 </AlertDialogDescription>
@@ -138,7 +150,11 @@ export function BulkActionBar({
                     type="button"
                     variant="destructive"
                   >
-                    {permanent ? "Permanently delete" : "Move to Trash"}
+                    {unlink
+                      ? "Remove links"
+                      : permanent
+                        ? "Permanently delete"
+                        : "Move to Trash"}
                   </Button>
                 </AlertDialogAction>
               </AlertDialogFooter>

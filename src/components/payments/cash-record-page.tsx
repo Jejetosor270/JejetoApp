@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { DetailPageHeader } from "@/components/layout/detail-page-header";
 import {
   RecordFields,
@@ -21,17 +22,24 @@ export async function CashRecordPage({
   const user = await requireUser();
   const record = await getCashRecord(kind, id);
   if (!record) notFound();
-  const editor = canEditMasterData(user.role)
-    ? await cashRecordEditor(kind, id)
-    : undefined;
+  const editor =
+    record.status === "UNASSIGNED" ? (
+      <Link className="text-primary text-sm underline" href="/unassigned-cash">
+        Open Unassigned cash records
+      </Link>
+    ) : canEditMasterData(user.role) ? (
+      await cashRecordEditor(kind, id)
+    ) : undefined;
   const backHref =
-    kind === "payment"
-      ? "/payments"
-      : kind === "receipt"
-        ? "/receipts"
-        : kind === "client-installment"
-          ? "/installments?tab=client"
-          : "/installments";
+    record.status === "UNASSIGNED"
+      ? "/unassigned-cash"
+      : kind === "payment"
+        ? "/payments"
+        : kind === "receipt"
+          ? "/receipts"
+          : kind === "client-installment"
+            ? "/installments?tab=client"
+            : "/installments";
   return (
     <div className="space-y-6">
       <DetailPageHeader

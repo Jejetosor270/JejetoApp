@@ -1,5 +1,5 @@
 import { RelatedRecordTable } from "@/components/layout/related-records";
-import { requireUser } from "@/lib/auth/current-user";
+import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { getDatabase } from "@/lib/db";
 import { getApplicationSettings } from "@/lib/settings/application-settings";
 import { formatEnumLabel } from "@/domain/presentation/labels";
@@ -11,7 +11,7 @@ export async function RelatedItems({
   projectId: string;
   orderId?: string;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const settings = await getApplicationSettings();
   if (!settings.itemManagementEnabled) return null;
   const items = await getDatabase().item.findMany({
@@ -31,6 +31,19 @@ export async function RelatedItems({
     <RelatedRecordTable
       table={{
         id: "items",
+        ...(canEditMasterData(user.role)
+          ? {
+              editKind: "item" as const,
+              ...(orderId
+                ? {
+                    removal: {
+                      kind: "order-items" as const,
+                      parentId: orderId,
+                    },
+                  }
+                : {}),
+            }
+          : {}),
         title: "Items (Beta)",
         description:
           "Project-specific supporting detail; Order financials remain authoritative.",

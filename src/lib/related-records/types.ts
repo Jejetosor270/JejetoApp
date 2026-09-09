@@ -5,6 +5,17 @@ export interface RelatedRow {
 }
 
 export interface RelatedTableData {
+  editKind?: RelatedEditKind;
+  removal?:
+    | { kind: "payment" | "receipt" }
+    | {
+        kind:
+          | "order-buildings"
+          | "order-items"
+          | "billing-orders"
+          | "order-billing";
+        parentId: string;
+      };
   id: string;
   title: string;
   description: string;
@@ -12,6 +23,21 @@ export interface RelatedTableData {
   numericColumns?: number[];
   rows: RelatedRow[];
 }
+
+export type RelatedEditKind =
+  | "project"
+  | "client"
+  | "supplier"
+  | "order"
+  | "billing"
+  | "payment"
+  | "receipt"
+  | "supplier-installment"
+  | "client-installment"
+  | "building"
+  | "room"
+  | "item"
+  | "package";
 
 export type CashRecordKind =
   "payment" | "receipt" | "supplier-installment" | "client-installment";

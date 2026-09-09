@@ -306,6 +306,18 @@ export const modelMap: Record<string, ModelMetadata> = {
     table: "currencies",
     trash: false,
     relations: {
+      unassignedCashOriginal: {
+        model: "UnassignedCashRecord",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      unassignedCashReporting: {
+        model: "UnassignedCashRecord",
+        many: true,
+        optional: false,
+        fields: [],
+      },
       clients: {
         model: "Client",
         many: true,
@@ -1403,6 +1415,24 @@ export const modelMap: Record<string, ModelMetadata> = {
         many: false,
         optional: false,
         fields: ["batchId"],
+      },
+    },
+  },
+  UnassignedCashRecord: {
+    table: "unassigned_cash_records",
+    trash: true,
+    relations: {
+      currency: {
+        model: "Currency",
+        many: false,
+        optional: false,
+        fields: ["currencyCode"],
+      },
+      reportingCurrency: {
+        model: "Currency",
+        many: false,
+        optional: false,
+        fields: ["reportingCurrencyCode"],
       },
     },
   },

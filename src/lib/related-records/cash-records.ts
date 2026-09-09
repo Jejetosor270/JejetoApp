@@ -1,8 +1,9 @@
+import { editableRelatedTables } from "./editing";
 import "server-only";
 import Decimal from "decimal.js";
 import { z } from "zod";
 import { getDatabase } from "@/lib/db";
-import { requireUser } from "@/lib/auth/current-user";
+import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import {
   businessToday,
   dateToDateOnly,
@@ -339,7 +340,7 @@ async function clientInstallmentRecord(
   };
 }
 
-export async function getCashRecord(
+async function getCashRecordInternal(
   kind: CashRecordKind,
   id: string,
 ): Promise<CashRecordView | null> {
@@ -347,12 +348,64 @@ export async function getCashRecord(
   if (!z.uuid().safeParse(id).success) return null;
   switch (kind) {
     case "payment":
-      return paymentRecord(id);
+      return (
+        (await paymentRecord(id)) ??
+        unassignedCashRecord(id, "SUPPLIER_PAYMENT")
+      );
     case "receipt":
-      return receiptRecord(id);
+      return (
+        (await receiptRecord(id)) ?? unassignedCashRecord(id, "CLIENT_RECEIPT")
+      );
     case "supplier-installment":
       return supplierInstallmentRecord(id);
     case "client-installment":
       return clientInstallmentRecord(id);
   }
+}
+
+export async function getCashRecord(
+  ...args: Parameters<typeof getCashRecordInternal>
+) {
+  const user = await requireUser();
+  const result = await getCashRecordInternal(...args);
+  if (!user || !canEditMasterData(user.role)) return result;
+  if (!result) return result;
+  const tables = result.tables;
+  editableRelatedTables(tables);
+  return result;
+}
+
+async function unassignedCashRecord(
+  id: string,
+  direction: "SUPPLIER_PAYMENT" | "CLIENT_RECEIPT",
+): Promise<CashRecordView | null> {
+  const row = await getDatabase().unassignedCashRecord.findFirst({
+    where: { id, direction },
+  });
+  if (!row) return null;
+  return {
+    title: row.reference || "Unassigned cash",
+    type: "Unassigned cash record",
+    status: "UNASSIGNED",
+    description:
+      "This cash record has no document assignment. It is retained in Unassigned cash records.",
+    manageHref: "/unassigned-cash",
+    tables: [],
+    fields: [
+      {
+        label: "Amount",
+        value: formatMoney(row.amount.toString(), row.currencyCode),
+      },
+      { label: "Date", value: date(row.cashDate) },
+      {
+        label: "Original FX",
+        value: fx(
+          row.fxRateToReporting,
+          row.currencyCode,
+          row.reportingCurrencyCode,
+        ),
+      },
+      { label: "Notes", value: row.notes || "—" },
+    ],
+  };
 }

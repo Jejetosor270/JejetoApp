@@ -89,6 +89,7 @@ export async function trashInTransaction(
     ClientPaymentInstallment: "label",
     PaymentSettlement: "reference",
     ClientReceipt: "reference",
+    UnassignedCashRecord: "reference",
     Item: "name",
     ProjectFreightExpense: "description",
   };

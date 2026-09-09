@@ -229,6 +229,8 @@ model Currency {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  unassignedCashOriginal UnassignedCashRecord[] @relation("UnassignedCashCurrency")
+  unassignedCashReporting UnassignedCashRecord[] @relation("UnassignedCashReportingCurrency")
   clients       Client[]           @relation("ClientDefaultCurrency")
   suppliers     Supplier[]         @relation("SupplierDefaultCurrency")
   projects      Project[]          @relation("ProjectReportingCurrency")
@@ -1099,4 +1101,28 @@ model TrashDependency {
   batch TrashBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
   @@unique([batchId, model, recordId])
   @@map("trash_dependencies")
+}
+
+model UnassignedCashRecord {
+  id String @id @db.Uuid
+  direction PaymentDirection
+  amount Decimal @db.Decimal(19, 4)
+  currencyCode String @db.Char(3)
+  reportingCurrencyCode String @db.Char(3)
+  fxRateToReporting Decimal? @db.Decimal(20, 10)
+  cashDate DateTime @db.Date
+  reference String? @db.VarChar(120)
+  notes String? @db.Text
+  createdAt DateTime
+  updatedAt DateTime @updatedAt
+  createdById String? @db.Uuid
+  updatedById String? @db.Uuid
+  unassignedAt DateTime @default(now())
+  trashedAt DateTime?
+  currency Currency @relation("UnassignedCashCurrency", fields: [currencyCode], references: [code], onDelete: Restrict)
+  reportingCurrency Currency @relation("UnassignedCashReportingCurrency", fields: [reportingCurrencyCode], references: [code], onDelete: Restrict)
+  @@index([trashedAt, cashDate])
+  @@index([currencyCode])
+  @@index([reportingCurrencyCode])
+  @@map("unassigned_cash_records")
 }

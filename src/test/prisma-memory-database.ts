@@ -12,7 +12,9 @@ import { visibleQuery } from "@/lib/trash/visibility";
 
 /** Real Prisma queries against disposable PostgreSQL; no connection strings or live data. */
 export async function prismaMemoryDatabase() {
-  const pg = new PGlite();
+  const pg = new PGlite({
+    parsers: { 1114: (value) => new Date(value.replace(" ", "T") + "Z") },
+  });
   for (const name of readdirSync("prisma/migrations")
     .filter((name) => /^\d/.test(name))
     .sort()) {

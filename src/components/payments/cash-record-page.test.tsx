@@ -79,3 +79,11 @@ it("offers an authorized local editor and handles missing records", async () => 
     CashRecordPage({ kind: "receipt", id: "missing" }),
   ).rejects.toThrow("Not found");
 });
+
+vi.mock("@/app/(app)/related-records/actions", () => ({
+  editRelatedNameAction: vi.fn(),
+  removeOptionalLinksAction: vi.fn(),
+}));
+vi.mock("@/app/(app)/unassigned-cash/actions", () => ({
+  unassignCashAction: vi.fn(),
+}));

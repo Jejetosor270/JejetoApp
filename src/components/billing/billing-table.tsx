@@ -9,6 +9,14 @@ import {
 import { ListEmptyState } from "@/components/listing/empty-state";
 
 import Link from "next/link";
+import { useState, useTransition } from "react";
+import { updateClientBillingInlineAction } from "@/app/(app)/billing/actions";
+import {
+  InlineEditActions,
+  InlineTextInput,
+  InlineSelect,
+} from "@/components/inline-editing/inline-edit";
+import { DateInput } from "@/components/forms/date-input";
 import { SortHeader } from "@/components/listing/sort-header";
 import { useRouter } from "next/navigation";
 
@@ -35,6 +43,28 @@ function BillingRow({
 }) {
   const router = useRouter();
   const href = `/billing/${document.id}`;
+  const initial = () => ({
+    reference: document.reference,
+    dueDate: document.dueDate ?? "",
+    isCancelled: String(document.isCancelled),
+    notes: document.notes ?? "",
+  });
+  const [draft, setDraft] = useState(initial);
+  const [editing, setEditing] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [feedback, setFeedback] = useState("");
+  const save = () =>
+    startTransition(async () => {
+      const data = new FormData();
+      data.set("id", document.id);
+      Object.entries(draft).forEach(([key, value]) => data.set(key, value));
+      const result = await updateClientBillingInlineAction(data);
+      setFeedback(result.message ?? "");
+      if (result.status === "success") {
+        setEditing(false);
+        router.refresh();
+      }
+    });
   return (
     <tr
       className="hover:bg-muted/30 cursor-pointer align-top"
@@ -52,9 +82,18 @@ function BillingRow({
         />
       )}
       <td className="px-3 py-3 font-mono text-xs">
-        <Link className="underline-offset-2 hover:underline" href={href}>
-          {document.reference}
-        </Link>
+        {editing ? (
+          <InlineTextInput
+            ariaLabel="Reference"
+            value={draft.reference}
+            disabled={pending}
+            onChange={(reference) => setDraft({ ...draft, reference })}
+          />
+        ) : (
+          <Link className="underline-offset-2 hover:underline" href={href}>
+            {document.reference}
+          </Link>
+        )}
         <span className="text-muted-foreground mt-1 block font-sans">
           {document.documentType === "QUOTE" ? "Quote / Devis" : "Invoice"}
           {document.isCancelled ? " · Cancelled" : ""}
@@ -67,7 +106,20 @@ function BillingRow({
         </span>
       </td>
 
-      <td className="px-3 py-3">{formatDateOnly(document.dueDate)}</td>
+      <td className="px-3 py-3">
+        {editing ? (
+          <DateInput
+            aria-label="Due date"
+            value={draft.dueDate}
+            disabled={pending}
+            onChange={(event) =>
+              setDraft({ ...draft, dueDate: event.target.value })
+            }
+          />
+        ) : (
+          formatDateOnly(document.dueDate)
+        )}
+      </td>
 
       <td className="financial-figure px-3 py-3 text-right">
         {formatMoney(document.totalHt, document.currencyCode)}
@@ -83,15 +135,38 @@ function BillingRow({
       <td className="financial-figure px-3 py-3 text-right">
         {formatMoney(document.outstanding, document.currencyCode)}
       </td>
-      <td className="px-3 py-3">{formatEnumLabel(document.status)}</td>
+      <td className="px-3 py-3">
+        {formatEnumLabel(document.status)}
+        {editing && (
+          <InlineSelect
+            ariaLabel="Record status"
+            value={draft.isCancelled}
+            disabled={pending}
+            onChange={(isCancelled) => setDraft({ ...draft, isCancelled })}
+          >
+            <option value="false">Active</option>
+            <option value="true">Cancelled</option>
+          </InlineSelect>
+        )}
+      </td>
       <td className="px-3 py-3 whitespace-nowrap">
         {canEdit ? (
-          <Link
-            className="text-primary text-xs font-medium underline"
-            href={`${href}?edit=1`}
-          >
-            Edit
-          </Link>
+          <InlineEditActions
+            editing={editing}
+            pending={pending}
+            feedback={feedback}
+            onEdit={() => {
+              setDraft(initial());
+              setFeedback("");
+              setEditing(true);
+            }}
+            onCancel={() => {
+              setDraft(initial());
+              setEditing(false);
+              setFeedback("");
+            }}
+            onSave={save}
+          />
         ) : null}
       </td>
     </tr>

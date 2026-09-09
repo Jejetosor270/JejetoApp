@@ -4,6 +4,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({
   user: vi.fn(),
   db: {
+    unassignedCashRecord: { findFirst: vi.fn().mockResolvedValue(null) },
     paymentSettlement: { findUnique: vi.fn() },
     clientReceipt: { findUnique: vi.fn() },
     paymentInstallment: { findUnique: vi.fn() },
@@ -12,7 +13,10 @@ const mock = vi.hoisted(() => ({
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => mock.db }));
-vi.mock("@/lib/auth/current-user", () => ({ requireUser: mock.user }));
+vi.mock("@/lib/auth/current-user", () => ({
+  canEditMasterData: (role: string) => role === "ADMIN" || role === "MANAGER",
+  requireUser: mock.user,
+}));
 import { getCashRecord } from "./cash-records";
 const id = "11111111-1111-4111-8111-111111111111";
 const otherId = "22222222-2222-4222-8222-222222222222";

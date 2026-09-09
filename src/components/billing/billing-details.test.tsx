@@ -212,3 +212,11 @@ it("does not expose editing to read-only employees", async () => {
   expect(document.querySelector('[name="recordStatus"]')).toBeNull();
   expect(value("Unallocated Billing HT")).toBe("900.00 EUR");
 });
+
+vi.mock("@/app/(app)/related-records/actions", () => ({
+  editRelatedNameAction: vi.fn(),
+  removeOptionalLinksAction: vi.fn(),
+}));
+vi.mock("@/app/(app)/unassigned-cash/actions", () => ({
+  unassignCashAction: vi.fn(),
+}));

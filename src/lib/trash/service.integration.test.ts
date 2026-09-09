@@ -15,6 +15,7 @@ import {
 } from "@/lib/billing/reporting";
 import { nextInstallmentSequence } from "@/lib/payments/sequence";
 import { updateSettlement } from "@/lib/payments/payments";
+import { unassignCash } from "@/lib/payments/unassigned-cash";
 import { listCashRecords } from "@/lib/payments/cash-list";
 
 let memory: Awaited<ReturnType<typeof prismaMemoryDatabase>>;
@@ -458,5 +459,67 @@ it("pages the separate cash workspaces with Project scope and derived installmen
         status: "PAID",
       })
     ).total,
+  ).toBe(0);
+});
+
+it("moves cash to one unassigned authority, clears old balances, and preserves identity through Trash", async () => {
+  const f = await fixture();
+  await unassignCash(actorId, "receipt", [f.receipt.id]);
+  const row = await memory.active.unassignedCashRecord.findUniqueOrThrow({
+    where: { id: f.receipt.id },
+  });
+  expect(row.amount.toString()).toBe("40.1256");
+  expect(row.currencyCode).toBe("EUR");
+  expect(row.reportingCurrencyCode).toBe("EUR");
+  expect(row.cashDate).toEqual(f.receipt.receivedAt);
+  expect(row.createdAt).toEqual(f.receipt.createdAt);
+  expect(
+    await memory.raw.clientReceipt.count({ where: { id: f.receipt.id } }),
+  ).toBe(0);
+  expect((await getProjectClientBillingSummary(f.project.id))?.paidTtc).toBe(
+    "0.0000",
+  );
+  await unassignCash(actorId, "payment", [f.payment.id]);
+  expect(
+    await memory.active.paymentSettlement.count({
+      where: { installmentId: f.installment.id },
+    }),
+  ).toBe(0);
+  expect(
+    (
+      await memory.active.unassignedCashRecord.findUniqueOrThrow({
+        where: { id: f.payment.id },
+      })
+    ).amount.toString(),
+  ).toBe("30.1256");
+  const batch = await moveToTrash(actorId, "UnassignedCashRecord", [
+    f.payment.id,
+  ]);
+  expect(
+    await memory.active.unassignedCashRecord.count({
+      where: { id: f.payment.id },
+    }),
+  ).toBe(0);
+  await restoreTrash(actorId, batch);
+  expect(
+    await memory.active.unassignedCashRecord.count({
+      where: { id: f.payment.id },
+    }),
+  ).toBe(1);
+});
+it("rolls back an unassignment selection if any selected cash record is missing", async () => {
+  const f = await fixture();
+  await expect(
+    unassignCash(actorId, "payment", [f.payment.id, randomUUID()]),
+  ).rejects.toThrow("no longer available");
+  expect(
+    await memory.active.paymentSettlement.count({
+      where: { id: f.payment.id },
+    }),
+  ).toBe(1);
+  expect(
+    await memory.active.unassignedCashRecord.count({
+      where: { id: f.payment.id },
+    }),
   ).toBe(0);
 });

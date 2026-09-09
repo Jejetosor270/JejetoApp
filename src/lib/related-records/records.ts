@@ -1,9 +1,10 @@
+import { editableRelatedTables } from "./editing";
 import "server-only";
 import { dateToDateOnly, formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney } from "@/domain/procurement/presentation";
 import { z } from "zod";
 import { getDatabase } from "@/lib/db";
-import { requireUser } from "@/lib/auth/current-user";
+import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import {
   projectSelect,
   partySelect,
@@ -25,7 +26,7 @@ import {
 } from "./projections";
 import { relatedHref, type RelatedTableData } from "./types";
 
-export async function getProjectRelations(
+async function getProjectRelationsInternal(
   projectId: string,
 ): Promise<RelatedTableData[]> {
   await requireUser();
@@ -88,7 +89,7 @@ export async function getProjectRelations(
   ];
 }
 
-export async function getOrderRelations(
+async function getOrderRelationsInternal(
   orderId: string,
 ): Promise<RelatedTableData[]> {
   await requireUser();
@@ -184,7 +185,7 @@ export async function getOrderRelations(
   ];
 }
 
-export async function getBillingRelations(
+async function getBillingRelationsInternal(
   billingId: string,
 ): Promise<RelatedTableData[]> {
   await requireUser();
@@ -250,4 +251,43 @@ export async function getBillingRelations(
         ]
       : []),
   ];
+}
+
+export async function getProjectRelations(
+  ...args: Parameters<typeof getProjectRelationsInternal>
+) {
+  const user = await requireUser();
+  const result = await getProjectRelationsInternal(...args);
+  if (!user || !canEditMasterData(user.role)) return result;
+  const tables = result;
+  editableRelatedTables(tables);
+  return result;
+}
+
+export async function getOrderRelations(
+  ...args: Parameters<typeof getOrderRelationsInternal>
+) {
+  const user = await requireUser();
+  const result = await getOrderRelationsInternal(...args);
+  if (!user || !canEditMasterData(user.role)) return result;
+  for (const table of result) {
+    if (table.id === "buildings")
+      table.removal = { kind: "order-buildings", parentId: args[0] };
+    if (table.id === "billing")
+      table.removal = { kind: "order-billing", parentId: args[0] };
+  }
+  const tables = result;
+  editableRelatedTables(tables);
+  return result;
+}
+
+export async function getBillingRelations(
+  ...args: Parameters<typeof getBillingRelationsInternal>
+) {
+  const user = await requireUser();
+  const result = await getBillingRelationsInternal(...args);
+  if (!user || !canEditMasterData(user.role)) return result;
+  const tables = result;
+  editableRelatedTables(tables);
+  return result;
 }

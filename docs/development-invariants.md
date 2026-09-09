@@ -377,3 +377,10 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
 - A deletion group restores together; previously trashed children retain their own group. Restoration verifies external parent fingerprints and rejects overpayments, duplicate collection schedules and excessive allocations. It never rewrites intervening business edits. Reserved installment sequences and identifiers are retained while in Trash.
 - Trashing an Invoice hides its owned receipts while preserving its Quote installment link, allowing the Quote forecast to resume. Restore recovers the original match without duplicate cash.
 - Requires migration 20260913000000_recoverable_business_trash before running this application version. Preparing the migration does not authorize applying it to a configured database.
+
+## Related removal and unassigned cash
+
+- Related removal clears a relationship; main-list deletion continues to use recoverable Trash. Cash removal transfers the same UUID atomically into normalized UnassignedCashRecord storage, preserving original amount, date, currency, reporting-currency FX and creation attribution. Exactly one cash authority exists after commit. Former schedules and document/Project balances no longer include that cash. Historical Order client planning settlements cannot become actual cash.
+- More → Unassigned cash records is the separate review list, with inline reference/date/amount editing and recoverable Trash. Retain currency and FX context rather than inferring it from a new parent.
+- Current Related controls support cash unassignment, Order–Building and Order–Billing link removal, and Item–Order unlinking. Broader required-parent unassignment and the full table-editing rollout are still in progress; do not describe them as complete.
+- Migration 20260914000000_unassigned_cash is prepared for this change; creation does not authorize applying it.

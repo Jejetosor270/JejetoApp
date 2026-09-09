@@ -142,3 +142,11 @@ it.each([
     document.querySelector('a[href="/items?projectId=demo"]'),
   ).not.toBeNull();
 });
+
+vi.mock("@/app/(app)/related-records/actions", () => ({
+  editRelatedNameAction: vi.fn(),
+  removeOptionalLinksAction: vi.fn(),
+}));
+vi.mock("@/app/(app)/unassigned-cash/actions", () => ({
+  unassignCashAction: vi.fn(),
+}));

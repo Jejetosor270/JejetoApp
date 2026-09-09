@@ -8,8 +8,18 @@ import {
   type RelatedTableData,
 } from "@/lib/related-records/types";
 
+const actions = vi.hoisted(() => ({ edit: vi.fn(), unassign: vi.fn() }));
+vi.mock("@/app/(app)/related-records/actions", () => ({
+  editRelatedNameAction: actions.edit,
+}));
+vi.mock("@/app/(app)/unassigned-cash/actions", () => ({
+  unassignCashAction: actions.unassign,
+}));
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push, refresh: vi.fn() }),
+}));
 let view: Awaited<ReturnType<typeof mountForm>>;
 beforeEach(() => push.mockClear());
 afterEach(async () => {
@@ -92,4 +102,56 @@ it.each([
   ["client-installment", "/installments/client/"],
 ] as const)("links %s to its Related page", (kind, prefix) => {
   expect(relatedHref(kind, "record")).toBe(prefix + "record?tab=related");
+});
+
+it("edits a related row in place and retains rejected drafts", async () => {
+  actions.edit.mockResolvedValue({
+    status: "error",
+    message: "Reference is already used.",
+  });
+  view = await mountForm(
+    <RelatedRecordTable
+      table={{ ...table, editKind: "order", rows: table.rows.slice(0, 1) }}
+    />,
+  );
+  await clickText("Edit");
+  const input = document.querySelector<HTMLInputElement>(
+    'input[aria-label="Order"]',
+  );
+  if (!input) throw new Error("Missing inline field");
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set?.call(input, "Changed");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await clickText("Save");
+  expect(input.value).toBe("Changed");
+  expect(document.body.textContent).toContain("Reference is already used.");
+  expect(push).not.toHaveBeenCalled();
+});
+it("removes only checked visible cash links after confirmation", async () => {
+  actions.unassign.mockResolvedValue({
+    status: "success",
+    message: "Unassigned",
+  });
+  view = await mountForm(
+    <RelatedRecordTable table={{ ...table, removal: { kind: "payment" } }} />,
+  );
+  await act(async () =>
+    document
+      .querySelector<HTMLInputElement>('input[aria-label="Select Order 0"]')
+      ?.click(),
+  );
+  await clickText("Remove selected links");
+  expect(document.body.textContent).toContain("Unassigned cash records");
+  await clickText("Cancel");
+  expect(actions.unassign).not.toHaveBeenCalled();
+  await clickText("Remove selected links");
+  await clickText("Remove links");
+  expect(actions.unassign.mock.calls[0]?.[0]).toBe("payment");
+  expect(
+    (actions.unassign.mock.calls[0]?.[1] as FormData).getAll("selectedIds"),
+  ).toEqual(["0"]);
 });

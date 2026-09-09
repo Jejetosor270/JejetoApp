@@ -4,7 +4,10 @@ const mock = vi.hoisted(() => ({
   settings: vi.fn(),
   items: vi.fn(),
 }));
-vi.mock("@/lib/auth/current-user", () => ({ requireUser: mock.user }));
+vi.mock("@/lib/auth/current-user", () => ({
+  canEditMasterData: (role: string) => role !== "USER",
+  requireUser: mock.user,
+}));
 vi.mock("@/lib/db", () => ({
   getDatabase: () => ({ item: { findMany: mock.items } }),
 }));
@@ -33,3 +36,11 @@ it("scopes enabled Items to the current Project and Order", async () => {
     }),
   );
 });
+
+vi.mock("@/app/(app)/related-records/actions", () => ({
+  editRelatedNameAction: vi.fn(),
+  removeOptionalLinksAction: vi.fn(),
+}));
+vi.mock("@/app/(app)/unassigned-cash/actions", () => ({
+  unassignCashAction: vi.fn(),
+}));

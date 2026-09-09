@@ -14,7 +14,10 @@ const mock = vi.hoisted(() => ({
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => mock.db }));
-vi.mock("@/lib/auth/current-user", () => ({ requireUser: mock.user }));
+vi.mock("@/lib/auth/current-user", () => ({
+  canEditMasterData: (role: string) => role === "ADMIN" || role === "MANAGER",
+  requireUser: mock.user,
+}));
 import {
   getProjectRelations,
   getOrderRelations,
