@@ -1,3 +1,4 @@
+import { billingIsIssued } from "@/domain/billing/status";
 import { createDefaultSupplierTerm } from "@/lib/payments/default-term";
 import "server-only";
 import type { OrderSort } from "@/config/order-list";
@@ -99,6 +100,8 @@ export const orderInclude = {
         select: {
           currencyCode: true,
           documentType: true,
+          workflowStatus: true,
+          isCancelled: true,
           fxRateToReporting: true,
         },
       },
@@ -792,6 +795,8 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
   let billingConversionComplete = true;
   for (const allocation of order.clientBillingAllocations) {
     const document = allocation.billingDocument;
+    if (document.documentType === "INVOICE" && !billingIsIssued(document))
+      continue;
     const convertedAllocation = reportingAmount({
       fxRateToReporting: document.fxRateToReporting?.toString() ?? undefined,
       originalAmount: allocation.allocatedAmount.toString(),
@@ -1397,6 +1402,8 @@ export async function listOrderOptions() {
           allocations: { select: { allocatedAmount: true } },
           currencyCode: true,
           documentType: true,
+          workflowStatus: true,
+          isCancelled: true,
           fxRateToReporting: true,
           id: true,
           isProjectRemainderApproved: true,

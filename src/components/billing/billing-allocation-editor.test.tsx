@@ -1,3 +1,6 @@
+vi.mock("@/app/(app)/billing/status-actions", () => ({
+  changeBillingStatusAction: vi.fn(),
+}));
 // @vitest-environment happy-dom
 vi.mock("@/app/(app)/payments/record-status-actions", () => ({
   saveRecordStatusAction: vi.fn(),

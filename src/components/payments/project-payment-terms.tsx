@@ -1,3 +1,4 @@
+import { billingIsIssued } from "@/domain/billing/status";
 import { getDatabase } from "@/lib/db";
 import { requireUser } from "@/lib/auth/current-user";
 import { getOrderPaymentSummary } from "@/lib/payments/payments";
@@ -29,6 +30,7 @@ export async function ProjectPaymentTerms({
         reference: true,
         documentType: true,
         isCancelled: true,
+        workflowStatus: true,
         matchedInstallmentId: true,
       },
       orderBy: [{ documentDate: "desc" }, { id: "asc" }],
@@ -41,7 +43,7 @@ export async function ProjectPaymentTerms({
   ]);
   const matched = new Set(
     documents.flatMap((row) =>
-      !row.isCancelled && row.matchedInstallmentId
+      billingIsIssued(row) && row.matchedInstallmentId
         ? [row.matchedInstallmentId]
         : [],
     ),

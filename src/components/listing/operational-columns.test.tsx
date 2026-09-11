@@ -1,3 +1,6 @@
+vi.mock("@/app/(app)/billing/status-actions", () => ({
+  changeBillingStatusAction: vi.fn(),
+}));
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from "vitest";
 import { mountForm } from "@/test/dom-form";
@@ -62,7 +65,8 @@ it("shows Billing invoice dates and HT without a TTC column; keeps cash amounts"
     id: "bill",
     reference: "INV-01",
     documentType: "INVOICE",
-    status: "PARTIALLY_PAID",
+    workflowStatus: "INVOICED",
+    status: "INVOICED",
     documentDate: "2026-09-08",
     dueDate: "2026-09-30",
     client: { displayName: "Client" },

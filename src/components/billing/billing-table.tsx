@@ -4,12 +4,7 @@ import {
   SourceCell,
 } from "@/components/inline-editing/editable-cell";
 import { saveTableCellAction } from "@/app/(app)/cell-actions";
-import { saveRecordStatusAction } from "@/app/(app)/payments/record-status-actions";
-import {
-  manualPaymentStatuses,
-  recordPaymentStatusLabel,
-} from "@/domain/payments/record-status";
-import { formatEnumLabel } from "@/domain/presentation/labels";
+import { BillingStatusControl } from "./billing-status";
 import type { CellEditInput } from "@/domain/listing/cell-edit";
 import type { ComponentProps, ReactNode } from "react";
 import { trashSelectedAction } from "@/app/(app)/settings/trash/actions";
@@ -181,38 +176,13 @@ function BillingRow({
         </SourceCell>
       </td>
       <td className="px-3 py-3">
-        <EditableCell
-          label={`Payment status for ${document.reference}`}
-          value={document.paymentStatusOverride ?? "AUTO"}
-          display={recordPaymentStatusLabel(
-            document.status,
-            document.paymentStatusOverride,
-            document.isCancelled,
-          )}
-          canEdit={editable}
-          type="select"
-          options={[
-            {
-              value: "AUTO",
-              label: `Automatic · ${recordPaymentStatusLabel(document.status)}`,
-            },
-            ...manualPaymentStatuses.map((status) => ({
-              value: status,
-              label: `${formatEnumLabel(status)} (manual)`,
-            })),
-          ]}
-          hint="Manual status changes the label only, not cash or balances."
-          onSave={async (value) => {
-            const result = await saveRecordStatusAction({
-              kind: "billing",
-              id: document.id,
-              value,
-            });
-            return {
-              status: result.status === "success" ? "success" : "error",
-              ...(result.message ? { message: result.message } : {}),
-            };
-          }}
+        <BillingStatusControl
+          id={document.id}
+          status={document.status}
+          documentType={document.documentType}
+          remaining={document.outstanding}
+          currency={document.currencyCode}
+          canEdit={canEdit}
         />
       </td>
     </tr>

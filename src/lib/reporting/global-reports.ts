@@ -285,6 +285,7 @@ export async function getGlobalVatReport(filters: ReportingFilters) {
           where: {
             documentType: ClientBillingDocumentType.INVOICE,
             isCancelled: false,
+            workflowStatus: { notIn: ["DRAFT", "TO_BE_INVOICED", "CANCELLED"] },
             projectId: project.id,
           },
           select: {

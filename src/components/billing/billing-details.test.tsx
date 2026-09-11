@@ -1,3 +1,6 @@
+vi.mock("@/app/(app)/billing/status-actions", () => ({
+  changeBillingStatusAction: actions.status,
+}));
 // @vitest-environment happy-dom
 import { act, type ComponentProps } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -34,6 +37,7 @@ const record = {
   id: "billing-id",
   reference: "INV-001",
   documentType: "INVOICE",
+  workflowStatus: "INVOICED",
   documentDate: "2026-09-01",
   dueDate: "2099-01-01",
   clientId: "client-id",
@@ -50,7 +54,7 @@ const record = {
   isProjectRemainderApproved: false,
   paid: "100",
   outstanding: "1100",
-  status: "PARTIALLY_PAID",
+  status: "INVOICED",
   client: { id: "client-id", displayName: "Fictional Client" },
   project: {
     id: "project-id",
@@ -140,7 +144,7 @@ it("shows allocation and freight figures in Details, separately from Client outs
   expect(value("Freight remaining at Project level HT")).toBe("175.00 EUR");
   expect(value("Outstanding")).toBe("1 100.00 EUR");
   expect(value("Status")).toBeUndefined();
-  expect(value("Payment status")).toBe("Partially Paid");
+  expect(value("Payment status")).toBe("Invoiced");
   const visible = document.querySelector('[role="tabpanel"]:not([hidden])');
   expect(visible?.textContent).not.toContain("Payment manager");
   expect(
@@ -202,13 +206,16 @@ it("uses a confirmed Cancel Billing button and retains cancellation errors", asy
     message: "Billing with receipts cannot be cancelled.",
   });
   await mount();
-  await clickText("Cancel Billing");
+  await clickText("Invoiced");
+  await enter("billingStatus", "CANCELLED");
   expect(actions.status).not.toHaveBeenCalled();
-  await clickText("Confirm cancellation");
+  await clickText("Confirm status");
   expect(actions.status).toHaveBeenCalledWith({
-    kind: "billing",
     id: record.id,
-    value: "CANCEL",
+    value: "CANCELLED",
+    confirmedAmount: record.outstanding,
+    paymentDate: "",
+    paymentFx: "",
   });
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
     "cannot be cancelled",

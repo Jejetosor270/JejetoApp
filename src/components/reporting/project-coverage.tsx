@@ -6,7 +6,7 @@ import {
   formatSignedMoney,
 } from "@/domain/procurement/presentation";
 
-function CoverageFigures({
+export function CoverageFigures({
   values,
   currency,
 }: {

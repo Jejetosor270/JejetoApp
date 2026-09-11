@@ -1,3 +1,5 @@
+import { formatEnumLabel } from "@/domain/presentation/labels";
+import { billingRecordStatus } from "@/lib/billing/status-view";
 import { editableRelatedTables } from "./editing";
 import "server-only";
 import { dateToDateOnly, formatDateOnly } from "@/domain/payments/dates";
@@ -194,7 +196,7 @@ async function getOrderRelationsInternal(
               row.freightCoverageHt.toString(),
               row.billingDocument.currencyCode,
             ),
-            row.billingDocument.isCancelled ? "Cancelled" : "Active",
+            formatEnumLabel(billingRecordStatus(row.billingDocument)),
           ],
         })) ?? [],
     },

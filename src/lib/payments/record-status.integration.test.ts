@@ -79,11 +79,13 @@ it("persists display-only overrides, preserves cash and automatic status, and re
     id: orderId,
     value: "PAID",
   });
-  await saveRecordStatus(actorId, {
-    kind: "billing",
-    id: billingId,
-    value: "PAID",
-  });
+  await expect(
+    saveRecordStatus(actorId, {
+      kind: "billing",
+      id: billingId,
+      value: "PAID",
+    }),
+  ).rejects.toThrow("Billing status selector");
   const order = await getOrder(orderId);
   const billing = await getClientBillingDocument(billingId);
   expect(order?.supplierPayment).toEqual(beforeOrder?.supplierPayment);
@@ -111,11 +113,13 @@ it("persists display-only overrides, preserves cash and automatic status, and re
     id: orderId,
     value: "AUTO",
   });
-  await saveRecordStatus(actorId, {
-    kind: "billing",
-    id: billingId,
-    value: "AUTO",
-  });
+  await expect(
+    saveRecordStatus(actorId, {
+      kind: "billing",
+      id: billingId,
+      value: "AUTO",
+    }),
+  ).rejects.toThrow("Billing status selector");
   expect((await getOrder(orderId))?.paymentStatusOverride).toBeNull();
   expect(
     (
@@ -124,7 +128,7 @@ it("persists display-only overrides, preserves cash and automatic status, and re
       })
     ).paymentStatusOverride,
   ).toBeNull();
-  expect(await memory.raw.auditEvent.count()).toBe(4);
+  expect(await memory.raw.auditEvent.count()).toBe(2);
 });
 
 it("preserves Billing cancellation safeguards and retains actual Order cash on cancellation", async () => {
@@ -141,7 +145,7 @@ it("preserves Billing cancellation safeguards and retains actual Order cash on c
       id: billingId,
       value: "CANCEL",
     }),
-  ).rejects.toThrow("receipts");
+  ).rejects.toThrow("Correct recorded payments");
   expect(
     (
       await memory.raw.clientBillingDocument.findUniqueOrThrow({

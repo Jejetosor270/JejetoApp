@@ -1,3 +1,6 @@
+vi.mock("@/app/(app)/billing/status-actions", () => ({
+  changeBillingStatusAction: vi.fn(),
+}));
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"navigation":{"disableChildFrameNavigation":true}}}
 import { act, useState } from "react";

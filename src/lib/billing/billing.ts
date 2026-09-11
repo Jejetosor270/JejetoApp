@@ -1,3 +1,6 @@
+import { billingRecordStatus } from "./status-view";
+import { changeBillingStatusInTransaction } from "./status";
+import { billingIsIssued } from "@/domain/billing/status";
 import {
   earliestUnpaidTermDate,
   overdueTermAmount,
@@ -230,7 +233,8 @@ function billingView(record: BillingRecord, today = businessToday()) {
     },
     projectId: record.projectId ?? "",
     reference: record.reference,
-    status: calculated.status,
+    status: billingRecordStatus(record, today),
+    workflowStatus: record.workflowStatus,
     freightCoverageHt: record.freightCoverageHt?.toString() ?? "0",
     otherCoverageHt: record.otherCoverageHt?.toString() ?? "0",
     totalHt: record.totalHt.toString(),
@@ -525,6 +529,15 @@ export async function confirmClientBillingDocument(
           input.currencyCode === project.reportingCurrencyCode
             ? null
             : (input.fxRate ?? null),
+        ...(input.action === "CREATE"
+          ? {
+              workflowStatus: input.isCancelled
+                ? "CANCELLED"
+                : input.documentType === "QUOTE"
+                  ? "TO_BE_INVOICED"
+                  : "INVOICED",
+            }
+          : {}),
         isCancelled: input.isCancelled,
         isProjectRemainderApproved: input.isProjectRemainderApproved,
         matchedInstallmentId:
@@ -550,6 +563,8 @@ export async function confirmClientBillingDocument(
             select: {
               clientId: true,
               documentType: true,
+              workflowStatus: true,
+              isCancelled: true,
               id: true,
               projectId: true,
             },
@@ -704,6 +719,17 @@ export async function confirmClientBillingDocument(
         },
         summary: `${input.action === "UPDATE" ? "Updated" : "Created"} the reviewed Client ${input.documentType.toLowerCase()}.`,
       });
+      if (input.workflowStatus)
+        await changeBillingStatusInTransaction(transaction, actorId, {
+          id: document.id,
+          value: input.isCancelled
+            ? "CANCELLED"
+            : (input.workflowStatus ??
+              (input.documentType === "QUOTE" ? "TO_BE_INVOICED" : "INVOICED")),
+          paymentDate: input.paymentDate,
+          paymentFx: input.paymentFx,
+          confirmedAmount: input.totalTtc,
+        });
       return document.id;
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -716,124 +742,132 @@ export async function recordClientReceipt(
   context?: { projectId: string },
 ): Promise<void> {
   await getDatabase().$transaction(
-    async (transaction) => {
-      const document = await transaction.clientBillingDocument.findUnique({
-        where: { id: input.billingDocumentId },
-        include: {
-          matchedInstallment: {
-            include: { receipts: { select: { amount: true, id: true } } },
-          },
-          project: { select: { reportingCurrencyCode: true } },
-          receipts: { select: { amount: true, id: true } },
-        },
-      });
-      if (!document) throw new ClientBillingNotFoundError();
-      if (document.documentType !== "INVOICE" || document.isCancelled)
-        throw new ClientBillingValidationError(
-          "Record new receipts against an active Invoice. Existing historical receipts remain available for review.",
-        );
-      if (context && document.projectId !== context.projectId) {
-        throw new ClientBillingValidationError(
-          "Choose Billing belonging to the selected Project.",
-        );
-      }
-      const installment = input.installmentId
-        ? await transaction.clientPaymentInstallment.findUnique({
-            where: { id: input.installmentId },
-            include: { receipts: { select: { amount: true, id: true } } },
-          })
-        : null;
-      if (input.installmentId && !installment)
-        throw new ClientBillingNotFoundError();
-      if (
-        installment &&
-        installment.billingDocumentId !== input.billingDocumentId &&
-        (!document.matchedInstallmentId ||
-          installment.id !== document.matchedInstallmentId)
-      )
-        throw new ClientBillingValidationError(
-          "The selected installment belongs to another Billing Event.",
-        );
-      const paid = [
-        ...new Map(
-          [
-            ...document.receipts,
-            ...(document.matchedInstallment?.receipts ?? []),
-          ].map((receipt) => [receipt.id, receipt]),
-        ).values(),
-      ].reduce((sum, receipt) => sum.plus(receipt.amount), new Decimal(0));
-      if (paid.plus(input.amount).greaterThan(document.totalTtc))
-        throw new ClientBillingValidationError(
-          "The receipt would exceed the Billing Event outstanding balance.",
-        );
-      if (installment && installment.currencyCode !== document.currencyCode)
-        throw new ClientBillingValidationError(
-          "The term and Invoice must use the same currency.",
-        );
-      if (installment?.isCancelled)
-        throw new ClientBillingValidationError(
-          "Reactivate the payment term before recording payment.",
-        );
-      if (installment) {
-        const installmentPaid = installment.receipts.reduce(
-          (sum, receipt) => sum.plus(receipt.amount),
-          new Decimal(0),
-        );
-        if (
-          installmentPaid
-            .plus(input.amount)
-            .greaterThan(installment.scheduledAmount)
-        )
-          throw new ClientBillingValidationError(
-            "The receipt would exceed the selected installment balance. Record it at Billing level instead.",
-          );
-      }
-      if (
-        document.currencyCode !==
-          retainedCurrency(
-            document.project?.reportingCurrencyCode,
-            document.detachedReportingCurrencyCode,
-          ) &&
-        !input.fxRate
-      )
-        throw new ClientBillingValidationError(
-          "Enter the actual receipt FX rate to Project reporting currency.",
-        );
-      const receipt = await transaction.clientReceipt.create({
-        data: {
-          amount: input.amount,
-          billingDocumentId: input.billingDocumentId,
-          createdById: actorId,
-          fxRateToReporting:
-            document.currencyCode ===
-            retainedCurrency(
-              document.project?.reportingCurrencyCode,
-              document.detachedReportingCurrencyCode,
-            )
-              ? null
-              : (input.fxRate ?? null),
-          installmentId: input.installmentId ?? null,
-          notes: input.notes ?? null,
-          receivedAt: dateOnlyToDate(input.receivedAt),
-          reference: input.reference ?? null,
-          updatedById: actorId,
-        },
-      });
-      await writeAuditEvent(transaction, actorId, {
-        action: "CREATED",
-        entityId: receipt.id,
-        entityReference: `${document.reference} · receipt`,
-        entityType: "CLIENT_RECEIPT",
-        metadata: {
-          amount: input.amount,
-          billingDocumentId: input.billingDocumentId,
-          installmentId: input.installmentId ?? null,
-        },
-        summary: "Recorded an actual Client receipt.",
-      });
-    },
+    (transaction) =>
+      recordClientReceiptInTransaction(transaction, actorId, input, context),
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
+}
+
+export async function recordClientReceiptInTransaction(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  input: ClientReceiptInput,
+  context?: { projectId: string },
+) {
+  const document = await transaction.clientBillingDocument.findUnique({
+    where: { id: input.billingDocumentId },
+    include: {
+      matchedInstallment: {
+        include: { receipts: { select: { amount: true, id: true } } },
+      },
+      project: { select: { reportingCurrencyCode: true } },
+      receipts: { select: { amount: true, id: true } },
+    },
+  });
+  if (!document) throw new ClientBillingNotFoundError();
+  if (document.documentType !== "INVOICE" || !billingIsIssued(document))
+    throw new ClientBillingValidationError(
+      "Record new receipts against an active Invoice. Existing historical receipts remain available for review.",
+    );
+  if (context && document.projectId !== context.projectId) {
+    throw new ClientBillingValidationError(
+      "Choose Billing belonging to the selected Project.",
+    );
+  }
+  const installment = input.installmentId
+    ? await transaction.clientPaymentInstallment.findUnique({
+        where: { id: input.installmentId },
+        include: { receipts: { select: { amount: true, id: true } } },
+      })
+    : null;
+  if (input.installmentId && !installment)
+    throw new ClientBillingNotFoundError();
+  if (
+    installment &&
+    installment.billingDocumentId !== input.billingDocumentId &&
+    (!document.matchedInstallmentId ||
+      installment.id !== document.matchedInstallmentId)
+  )
+    throw new ClientBillingValidationError(
+      "The selected installment belongs to another Billing Event.",
+    );
+  const paid = [
+    ...new Map(
+      [
+        ...document.receipts,
+        ...(document.matchedInstallment?.receipts ?? []),
+      ].map((receipt) => [receipt.id, receipt]),
+    ).values(),
+  ].reduce((sum, receipt) => sum.plus(receipt.amount), new Decimal(0));
+  if (paid.plus(input.amount).greaterThan(document.totalTtc))
+    throw new ClientBillingValidationError(
+      "The receipt would exceed the Billing Event outstanding balance.",
+    );
+  if (installment && installment.currencyCode !== document.currencyCode)
+    throw new ClientBillingValidationError(
+      "The term and Invoice must use the same currency.",
+    );
+  if (installment?.isCancelled)
+    throw new ClientBillingValidationError(
+      "Reactivate the payment term before recording payment.",
+    );
+  if (installment) {
+    const installmentPaid = installment.receipts.reduce(
+      (sum, receipt) => sum.plus(receipt.amount),
+      new Decimal(0),
+    );
+    if (
+      installmentPaid
+        .plus(input.amount)
+        .greaterThan(installment.scheduledAmount)
+    )
+      throw new ClientBillingValidationError(
+        "The receipt would exceed the selected installment balance. Record it at Billing level instead.",
+      );
+  }
+  if (
+    document.currencyCode !==
+      retainedCurrency(
+        document.project?.reportingCurrencyCode,
+        document.detachedReportingCurrencyCode,
+      ) &&
+    !input.fxRate
+  )
+    throw new ClientBillingValidationError(
+      "Enter the actual receipt FX rate to Project reporting currency.",
+    );
+  const receipt = await transaction.clientReceipt.create({
+    data: {
+      amount: input.amount,
+      billingDocumentId: input.billingDocumentId,
+      createdById: actorId,
+      fxRateToReporting:
+        document.currencyCode ===
+        retainedCurrency(
+          document.project?.reportingCurrencyCode,
+          document.detachedReportingCurrencyCode,
+        )
+          ? null
+          : (input.fxRate ?? null),
+      installmentId: input.installmentId ?? null,
+      notes: input.notes ?? null,
+      receivedAt: dateOnlyToDate(input.receivedAt),
+      reference: input.reference ?? null,
+      updatedById: actorId,
+    },
+  });
+  await writeAuditEvent(transaction, actorId, {
+    action: "CREATED",
+    entityId: receipt.id,
+    entityReference: `${document.reference} · receipt`,
+    entityType: "CLIENT_RECEIPT",
+    metadata: {
+      amount: input.amount,
+      billingDocumentId: input.billingDocumentId,
+      installmentId: input.installmentId ?? null,
+    },
+    summary: "Recorded an actual Client receipt.",
+  });
 }
 
 export async function updateClientReceipt(
@@ -1032,6 +1066,7 @@ export async function updateClientBillingInline(
       where: { id: input.id },
       select: {
         isCancelled: true,
+        documentType: true,
         _count: { select: { receipts: true } },
         matchedInstallment: {
           select: { _count: { select: { receipts: true } } },
@@ -1059,6 +1094,15 @@ export async function updateClientBillingInline(
       data: {
         dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
         isCancelled: input.isCancelled,
+        ...(existing.isCancelled !== input.isCancelled
+          ? {
+              workflowStatus: input.isCancelled
+                ? "CANCELLED"
+                : existing.documentType === "QUOTE"
+                  ? "TO_BE_INVOICED"
+                  : "INVOICED",
+            }
+          : {}),
         notes: input.notes ?? null,
         reference: input.reference,
         updatedById: actorId,
@@ -1707,6 +1751,7 @@ export async function updateClientBillingDocumentInTransaction(
     where: { id: input.id },
     select: {
       allocations: true,
+      documentType: true,
       receipts: { select: { id: true, amount: true } },
       clientId: true,
       currencyCode: true,
@@ -1787,6 +1832,14 @@ export async function updateClientBillingDocumentInTransaction(
     (total, receipt) => total.plus(receipt.amount),
     new Decimal(0),
   );
+  if (
+    existing.documentType !== "QUOTE" &&
+    input.documentType === "QUOTE" &&
+    paid.greaterThan(0)
+  )
+    throw new ClientBillingValidationError(
+      "An Invoice with recorded payments cannot become a Quote.",
+    );
   if (paid.greaterThan(input.totalTtc))
     throw new ClientBillingValidationError(
       "Billing TTC cannot be reduced below the Client receipts already recorded.",
@@ -1832,6 +1885,15 @@ export async function updateClientBillingDocumentInTransaction(
           ? null
           : (input.fxRate ?? null),
       isCancelled: input.isCancelled,
+      ...(existing.isCancelled !== input.isCancelled
+        ? {
+            workflowStatus: input.isCancelled
+              ? "CANCELLED"
+              : input.documentType === "QUOTE"
+                ? "TO_BE_INVOICED"
+                : "INVOICED",
+          }
+        : {}),
       notes: input.notes ?? null,
       projectId: input.projectId,
       reference: input.reference,
@@ -1925,6 +1987,12 @@ function summarizeClientBillingRecords(
     BillingRecord["paymentInstallments"][number]
   >();
   for (const record of records) {
+    if (
+      record.isCancelled ||
+      (record.documentType === "INVOICE" &&
+        !isRecognizedClientReceivable(record))
+    )
+      continue;
     const convertedHt = converted(
       record.totalHt.toString(),
       record.currencyCode,
@@ -1998,6 +2066,7 @@ function summarizeClientBillingRecords(
     if (
       isRecognizedClientReceivable({
         documentType: record.documentType,
+        workflowStatus: record.workflowStatus,
         isCancelled: record.isCancelled,
       })
     ) {
@@ -2148,6 +2217,12 @@ export async function getProjectsClientBillingSummaries(
   });
   const recordsByProject = new Map<string, BillingRecord[]>();
   for (const record of records) {
+    if (
+      record.isCancelled ||
+      (record.documentType === "INVOICE" &&
+        !isRecognizedClientReceivable(record))
+    )
+      continue;
     if (!record.projectId) continue;
     const projectRecords = recordsByProject.get(record.projectId) ?? [];
     projectRecords.push(record);
@@ -2204,6 +2279,8 @@ export async function getOrderBillingAllocations(orderIds: readonly string[]) {
           currencyCode: true,
           detachedReportingCurrencyCode: true,
           documentType: true,
+          workflowStatus: true,
+          isCancelled: true,
           fxRateToReporting: true,
           project: { select: { reportingCurrencyCode: true } },
         },
@@ -2214,6 +2291,8 @@ export async function getOrderBillingAllocations(orderIds: readonly string[]) {
   const result = new Map<string, { invoiced: Decimal; quoted: Decimal }>();
   for (const allocation of allocations) {
     const document = allocation.billingDocument;
+    if (document.documentType === "INVOICE" && !billingIsIssued(document))
+      continue;
     const amount = converted(
       allocation.allocatedAmount.toString(),
       document.currencyCode,

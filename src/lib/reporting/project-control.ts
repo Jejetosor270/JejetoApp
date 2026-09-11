@@ -1,3 +1,4 @@
+import { billingIsIssued } from "@/domain/billing/status";
 import "server-only";
 import Decimal from "decimal.js";
 import { projectFreightBudget } from "@/domain/freight/calculations";
@@ -66,6 +67,7 @@ export async function getProjectControl(projectId: string) {
             currencyCode: true,
             documentType: true,
             isCancelled: true,
+            workflowStatus: true,
             totalTtc: true,
             freightCoverageHt: true,
           },
@@ -73,7 +75,14 @@ export async function getProjectControl(projectId: string) {
         installment: {
           select: {
             matchedInvoices: {
-              where: { documentType: "INVOICE", isCancelled: false, projectId },
+              where: {
+                documentType: "INVOICE",
+                isCancelled: false,
+                workflowStatus: {
+                  notIn: ["DRAFT", "TO_BE_INVOICED", "CANCELLED"],
+                },
+                projectId,
+              },
               select: {
                 currencyCode: true,
                 totalTtc: true,
@@ -106,7 +115,7 @@ export async function getProjectControl(projectId: string) {
           })?.toFixed(4) ?? null);
   const activeOrders = orders.filter((order) => order.status !== "CANCELLED");
   const invoices = project.billingDocuments.filter(
-    (doc) => doc.documentType === "INVOICE",
+    (doc) => doc.documentType === "INVOICE" && billingIsIssued(doc),
   );
   const received = sumKnown(
     actualReceipts.map((row) =>
@@ -132,7 +141,7 @@ export async function getProjectControl(projectId: string) {
       const matches = receipt.installment?.matchedInvoices ?? [];
       // Prefer the owning active Invoice; a matched Quote receipt is counted once.
       const invoice =
-        owner.documentType === "INVOICE" && !owner.isCancelled
+        owner.documentType === "INVOICE" && billingIsIssued(owner)
           ? owner
           : matches.length === 1
             ? matches[0]

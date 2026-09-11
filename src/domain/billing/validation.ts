@@ -1,3 +1,4 @@
+import { billingStatuses } from "./status";
 import { freightCoverageBreakdown } from "@/domain/billing/freight-coverage";
 import Decimal from "decimal.js";
 import { z } from "zod";
@@ -122,6 +123,9 @@ const installmentSchema = z
 
 export const clientBillingConfirmationSchema = z
   .object({
+    workflowStatus: z.enum(billingStatuses).optional(),
+    paymentDate: optionalDate,
+    paymentFx: optionalFx,
     action: z.enum(["CREATE", "UPDATE"]),
     allocations: z.array(billingAllocationSchema).max(100),
     clientId: requiredUuid("Select a Client."),

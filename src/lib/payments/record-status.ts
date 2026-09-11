@@ -1,3 +1,4 @@
+import { changeBillingStatus } from "@/lib/billing/status";
 import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { getDatabase } from "@/lib/db";
@@ -6,6 +7,11 @@ import { recordStatusSchema } from "@/domain/payments/record-status";
 
 export async function saveRecordStatus(actorId: string, raw: unknown) {
   const input = recordStatusSchema.parse(raw);
+  if (input.kind === "billing") {
+    if (input.value === "CANCEL")
+      return changeBillingStatus(actorId, { id: input.id, value: "CANCELLED" });
+    throw new Error("Use the Billing status selector.");
+  }
   return getDatabase().$transaction(
     async (tx) => {
       const actor = await tx.user.findUnique({
@@ -46,56 +52,6 @@ export async function saveRecordStatus(actorId: string, raw: unknown) {
               input.value === "CANCEL"
                 ? order.status
                 : order.paymentStatusOverride,
-            value: input.value,
-          },
-        });
-      } else {
-        const doc = await tx.clientBillingDocument.findUniqueOrThrow({
-          where: { id: input.id },
-          include: {
-            receipts: { select: { id: true } },
-            matchedInstallment: {
-              select: { receipts: { select: { id: true } } },
-            },
-            paymentInstallments: {
-              select: { receipts: { select: { id: true } } },
-            },
-          },
-        });
-        if (doc.isCancelled)
-          throw new Error("This Billing event is cancelled.");
-        if (
-          input.value === "CANCEL" &&
-          (doc.receipts.length ||
-            doc.matchedInstallment?.receipts.length ||
-            doc.paymentInstallments.some((term) => term.receipts.length))
-        )
-          throw new Error(
-            "A Billing event with recorded Client receipts cannot be cancelled.",
-          );
-        await tx.clientBillingDocument.update({
-          where: { id: input.id },
-          data: {
-            updatedById: actorId,
-            ...(input.value === "CANCEL"
-              ? { isCancelled: true }
-              : { paymentStatusOverride: override }),
-          },
-        });
-        await writeAuditEvent(tx, actorId, {
-          action: "UPDATED",
-          entityType: "BILLING_DOCUMENT",
-          entityId: input.id,
-          entityReference: doc.reference,
-          summary:
-            input.value === "CANCEL"
-              ? "Cancelled Billing event."
-              : "Updated display-only payment status; cash and balances unchanged.",
-          metadata: {
-            previous:
-              input.value === "CANCEL"
-                ? doc.isCancelled
-                : doc.paymentStatusOverride,
             value: input.value,
           },
         });

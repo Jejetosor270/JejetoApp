@@ -21,6 +21,7 @@ export async function getBilledFreight(
         fxRate: row.billingDocument.fxRateToReporting?.toString() ?? null,
         documentType: row.billingDocument.documentType,
         isCancelled: row.billingDocument.isCancelled,
+        workflowStatus: row.billingDocument.workflowStatus,
       })),
       currency,
     );
@@ -33,6 +34,7 @@ export async function getBilledFreight(
       fxRateToReporting: true,
       documentType: true,
       isCancelled: true,
+      workflowStatus: true,
     },
   });
   return summarizeFreightCoverage(

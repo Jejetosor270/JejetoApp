@@ -40,6 +40,11 @@ const order = {
   project,
 };
 const billing = {
+  workflowStatus: "INVOICED",
+  dueDate: null,
+  receipts: [],
+  paymentInstallments: [],
+  matchedInstallment: null,
   id,
   reference: "INV1",
   projectId: id,

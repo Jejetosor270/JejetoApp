@@ -1,6 +1,5 @@
 "use client";
-import { RecordPaymentStatus } from "@/components/payments/record-payment-status";
-import { recordPaymentStatusLabel } from "@/domain/payments/record-status";
+import { BillingStatusControl } from "./billing-status";
 
 import {
   RelatedRecords,
@@ -393,24 +392,18 @@ export function BillingDetail({
             {savedProject?.name ?? document.project.name}
           </>
         }
-        status={saved.isCancelled ? "CANCELLED" : saved.documentType}
+        status={document.status}
         title={saved.reference}
       />
 
       {!editing && (
-        <RecordPaymentStatus
-          key={`${document.id}:${document.paymentStatusOverride}:${saved.isCancelled}`}
-          kind="billing"
+        <BillingStatusControl
           id={document.id}
-          automatic={collection.status}
-          override={document.paymentStatusOverride}
-          cancelled={saved.isCancelled}
+          status={document.status}
+          documentType={document.documentType}
+          remaining={document.outstanding}
+          currency={document.currencyCode}
           canEdit={canEdit}
-          showCancel
-          onCancelled={() => {
-            setSaved((current) => ({ ...current, isCancelled: true }));
-            setDraft((current) => ({ ...current, isCancelled: true }));
-          }}
         />
       )}
       {editing ? (
@@ -1111,11 +1104,7 @@ export function BillingDetail({
                   <dl className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <DetailValue
                       label="Payment status"
-                      value={recordPaymentStatusLabel(
-                        collection.status,
-                        document.paymentStatusOverride,
-                        saved.isCancelled,
-                      )}
+                      value={formatEnumLabel(document.status)}
                     />
                     <DetailValue
                       label="Document date"

@@ -1,5 +1,22 @@
 # Development invariants
 
+## Unified Billing status and Project coverage
+
+Billing has one workflow status: Draft, To be invoiced, Invoiced, Paid,
+Overdue or Cancelled. Draft/To be invoiced Invoices are excluded from actual
+revenue, VAT, allocation coverage and cash forecasts; Quotes remain planning
+documents. Paid is derived from actual receipts, including matched Quote-term
+receipts once. Confirming Paid records the remaining cash against open terms
+with the employee's actual date and FX, transactionally. Payment corrections
+reopen the balance; unpaid issued Invoices become Overdue from term dates.
+Pre-invoice and cancelled states do not automatically advance. Billing no longer
+uses the legacy display-only payment override; Purchasing retains its controls.
+
+Project Overall Coverage compares full-Project active Client Invoice HT with
+all recorded Purchasing economic costs and Project freight, whether allocated
+or unallocated. It is a billing/cost position, not a gross-profit headline.
+The allocation-based invoiced coverage and actual cash coverage remain separate.
+
 Read alongside [AGENTS.md](../AGENTS.md). Verified against `7058fe0` on `V2.0`.
 Code and tests remain authoritative; recheck affected helpers before changing behavior.
 Observed limitations below describe current code, not requirements to preserve defects.

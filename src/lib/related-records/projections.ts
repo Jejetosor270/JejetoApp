@@ -1,3 +1,7 @@
+import {
+  billingStatusSelect,
+  billingRecordStatus,
+} from "@/lib/billing/status-view";
 import { present } from "./context";
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
@@ -29,6 +33,7 @@ export const orderSelect = {
   supplier: { select: partySelect },
 } satisfies Prisma.ProcurementOrderSelect;
 export const billingSelect = {
+  ...billingStatusSelect,
   id: true,
   reference: true,
   projectId: true,
@@ -183,7 +188,7 @@ export function billingsTable(rows: (Billing | null | undefined)[]) {
         date(r.documentDate),
         formatMoney(r.totalHt.toString(), r.currencyCode),
         formatMoney(r.totalTtc.toString(), r.currencyCode),
-        active(!r.isCancelled),
+        formatEnumLabel(billingRecordStatus(r)),
       ],
     })),
     "Client commercial documents. Open Billing to see its allocations, installments and receipts.",

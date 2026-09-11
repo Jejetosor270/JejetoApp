@@ -1,3 +1,4 @@
+import { billingIsIssued } from "./status";
 import Decimal from "decimal.js";
 import { reportingAmount } from "@/domain/finance/calculations";
 export function summarizeFreightCoverage(
@@ -7,6 +8,7 @@ export function summarizeFreightCoverage(
     fxRate: string | null;
     documentType: string;
     isCancelled: boolean;
+    workflowStatus?: string;
   }[],
   reportingCurrency: string,
 ) {
@@ -15,7 +17,11 @@ export function summarizeFreightCoverage(
   let actualComplete = true,
     plannedComplete = true;
   for (const record of records) {
-    if (record.isCancelled || new Decimal(record.freightCoverageHt).isZero())
+    if (
+      (record.documentType === "INVOICE" && !billingIsIssued(record)) ||
+      record.isCancelled ||
+      new Decimal(record.freightCoverageHt).isZero()
+    )
       continue;
     const amount = reportingAmount({
       originalAmount: record.freightCoverageHt,

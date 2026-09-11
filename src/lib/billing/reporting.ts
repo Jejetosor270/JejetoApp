@@ -96,6 +96,12 @@ export function summarizeClientBillingRecords(
   >();
 
   for (const record of records) {
+    if (
+      record.isCancelled ||
+      (record.documentType === "INVOICE" &&
+        !isRecognizedClientReceivable(record))
+    )
+      continue;
     if (!record.projectId) continue;
     const fxRate = record.fxRateToReporting?.toString() ?? null;
     const convertedHt = converted(
@@ -178,6 +184,7 @@ export function summarizeClientBillingRecords(
     if (
       isRecognizedClientReceivable({
         documentType: record.documentType,
+        workflowStatus: record.workflowStatus,
         isCancelled: record.isCancelled,
       })
     ) {
@@ -328,6 +335,12 @@ export async function getProjectsClientBillingSummaries(
   });
   const recordsByProject = new Map<string, BillingReportingRecord[]>();
   for (const record of records) {
+    if (
+      record.isCancelled ||
+      (record.documentType === "INVOICE" &&
+        !isRecognizedClientReceivable(record))
+    )
+      continue;
     if (!record.projectId) continue;
     const values = recordsByProject.get(record.projectId) ?? [];
     values.push(record);
@@ -397,6 +410,10 @@ export async function listClientCashInstallments(
   const documents = await getDatabase().clientBillingDocument.findMany({
     where: {
       isCancelled: false,
+      OR: [
+        { documentType: "QUOTE" },
+        { workflowStatus: { notIn: ["DRAFT", "TO_BE_INVOICED", "CANCELLED"] } },
+      ],
       ...(projectIds ? { projectId: { in: [...projectIds] } } : {}),
     },
     orderBy: { documentType: "desc" },

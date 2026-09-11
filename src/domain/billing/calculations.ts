@@ -1,3 +1,4 @@
+import { billingIsIssued } from "./status";
 import Decimal from "decimal.js";
 
 import { derivePaymentStatus } from "@/domain/payments/calculations";
@@ -20,8 +21,9 @@ export interface ClientBillingAmounts {
 export function isRecognizedClientReceivable(input: {
   documentType: "QUOTE" | "INVOICE";
   isCancelled: boolean;
+  workflowStatus?: string;
 }): boolean {
-  return input.documentType === "INVOICE" && !input.isCancelled;
+  return input.documentType === "INVOICE" && billingIsIssued(input);
 }
 
 export function calculateClientBillingAmounts(input: {

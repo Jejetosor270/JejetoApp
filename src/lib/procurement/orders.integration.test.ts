@@ -415,6 +415,8 @@ describe("single order cost write", () => {
           billingDocument: {
             currencyCode: "EUR",
             documentType: "INVOICE",
+            workflowStatus: "INVOICED",
+            isCancelled: false,
             fxRateToReporting: null,
           },
           billingDocumentId: "a22b6b9b-10e9-4e42-b93f-38796de4f65a",
@@ -434,6 +436,8 @@ describe("single order cost write", () => {
           billingDocument: {
             currencyCode: "EUR",
             documentType: "INVOICE",
+            workflowStatus: "INVOICED",
+            isCancelled: false,
             fxRateToReporting: null,
           },
           billingDocumentId: "d22b6b9b-10e9-4e42-b93f-38796de4f65a",
@@ -483,6 +487,8 @@ describe("single order cost write", () => {
           billingDocument: {
             currencyCode: "USD",
             documentType: "INVOICE",
+            workflowStatus: "INVOICED",
+            isCancelled: false,
             fxRateToReporting: null,
           },
           billingDocumentId: "a22b6b9b-10e9-4e42-b93f-38796de4f65a",

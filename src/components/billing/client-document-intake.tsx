@@ -1,4 +1,5 @@
 "use client";
+import { BillingCreationStatus } from "./billing-status";
 import { DocumentReviewWorkspace } from "@/components/intake/document-review-workspace";
 import { useDocumentPreview } from "@/components/intake/use-document-preview";
 import { manualBillingReview } from "@/domain/billing/manual-review";
@@ -515,6 +516,10 @@ export function ClientDocumentReview({
                 <option value="INVOICE">Invoice</option>
               </select>
             </ReviewField>
+            <BillingCreationStatus
+              key={documentType}
+              documentType={documentType}
+            />
             <ReviewField
               error={state.fieldErrors?.reference}
               label="Reference / document number"

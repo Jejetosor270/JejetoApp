@@ -752,6 +752,7 @@ model ApplicationSetting {
 }
 
 model ClientBillingDocument {
+  workflowStatus String @default("INVOICED") @db.VarChar(24)
   paymentStatusOverride String? @db.VarChar(24)
   trashedAt DateTime?
   @@index([trashedAt])

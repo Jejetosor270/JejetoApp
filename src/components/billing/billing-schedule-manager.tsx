@@ -136,7 +136,8 @@ export function BillingScheduleManager({
                     state.remaining,
                     document.outstanding,
                   ) !== "0" &&
-                  document.documentType === "INVOICE" && (
+                  document.documentType === "INVOICE" &&
+                  !["DRAFT", "TO_BE_INVOICED"].includes(document.status) && (
                     <TermPaymentActions
                       document={document}
                       termId={term.id}

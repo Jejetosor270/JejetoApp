@@ -3,7 +3,13 @@ import type { Prisma } from "@/generated/prisma/client";
 /** Preserve matched Quote receipts once, while requiring an active Invoice context. */
 export const recognizedReceiptWhere = {
   OR: [
-    { billingDocument: { documentType: "INVOICE", isCancelled: false } },
+    {
+      billingDocument: {
+        documentType: "INVOICE",
+        isCancelled: false,
+        workflowStatus: { notIn: ["DRAFT", "TO_BE_INVOICED", "CANCELLED"] },
+      },
+    },
     {
       installment: {
         matchedInvoices: {

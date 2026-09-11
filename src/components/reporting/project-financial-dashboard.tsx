@@ -1,4 +1,4 @@
-import { RecordSummary } from "@/components/layout/record-presentation";
+import { CoverageFigures } from "./project-coverage";
 import Link from "next/link";
 
 import { CashFlowPanel } from "@/components/reporting/cash-flow-panel";
@@ -287,30 +287,28 @@ export function ProjectFinancialDashboard({
         </article>
       )}
       {section === "overview" && (
-        <div>
-          <RecordSummary
+        <section className="bg-card rounded-lg border p-4">
+          <h2 className="text-sm font-semibold">
+            Billing/Purchasing Overall Coverage
+          </h2>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Client Invoice HT minus all recorded Purchasing economic costs,
+            including Project freight. Covers the whole Project, allocated and
+            unallocated amounts. This is the current billing/cost position.
+          </p>
+          <CoverageFigures
+            currency={currency}
             values={[
-              {
-                label: "Actual invoiced HT",
-                value: formatMoney(
-                  financialPerformance.actual.sellHt,
-                  currency,
-                ),
-              },
-              {
-                label: "Actual economic cost HT",
-                value: formatMoney(
-                  financialPerformance.actual.costHt,
-                  currency,
-                ),
-              },
-              {
-                label: "Actual gross profit HT",
-                value: formatMoney(
-                  financialPerformance.actual.grossProfitHt,
-                  currency,
-                ),
-              },
+              ["Client invoiced HT", financialPerformance.actual.sellHt],
+              [
+                "Recorded Purchasing economic cost",
+                financialPerformance.actual.costHt,
+              ],
+              [
+                "Overall coverage",
+                financialPerformance.actual.grossProfitHt,
+                true,
+              ],
             ]}
           />
           {(!vatPosition.complete ||
@@ -327,7 +325,7 @@ export function ProjectFinancialDashboard({
               </Link>
             </p>
           )}
-        </div>
+        </section>
       )}
       {section === "overview" && (
         <FundingCoverageSummary

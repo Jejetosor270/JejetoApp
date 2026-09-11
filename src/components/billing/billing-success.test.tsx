@@ -1,3 +1,6 @@
+vi.mock("@/app/(app)/billing/status-actions", () => ({
+  changeBillingStatusAction: vi.fn(),
+}));
 // @vitest-environment happy-dom
 import type { ComponentProps } from "react";
 import { expect, it, vi } from "vitest";
