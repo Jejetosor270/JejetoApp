@@ -182,6 +182,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
       processedByName: item.processedBy?.name ?? null,
     })),
     matchedInstallmentId: record.matchedInstallmentId,
+    shortDescription: record.shortDescription,
     notes: record.notes,
     outstanding: calculated.outstanding,
     paid: calculated.paid,

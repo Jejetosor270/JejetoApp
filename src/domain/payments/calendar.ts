@@ -1,6 +1,7 @@
 import { derivePaymentStatus } from "@/domain/payments/calculations";
 
 export type CalendarEventType =
+  | "ISSUE_INVOICE"
   | "SUPPLIER_PAYMENT"
   | "CLIENT_RECEIPT"
   | "EXPECTED_READY"
@@ -26,6 +27,13 @@ export interface ProcurementCalendarEvent {
 }
 
 export function buildCalendarEvents(input: {
+  invoiceReminders?: readonly {
+    id: string;
+    reference: string;
+    date: string;
+    projectName: string;
+    partyName: string;
+  }[];
   installments: readonly {
     currencyCode: string;
     direction: "SUPPLIER_PAYMENT" | "CLIENT_RECEIPT";
@@ -150,7 +158,22 @@ export function buildCalendarEvents(input: {
         : [],
     );
   });
-  return [...paymentEvents, ...orderEvents, ...itemEvents].sort(
+  const reminders: ProcurementCalendarEvent[] = (
+    input.invoiceReminders ?? []
+  ).map((invoice) => ({
+    amount: null,
+    currencyCode: null,
+    date: invoice.date,
+    href: `/billing/${invoice.id}`,
+    id: `issue-invoice-${invoice.id}`,
+    orderNumber: invoice.reference,
+    partyName: invoice.partyName,
+    projectName: invoice.projectName,
+    status: "TO_BE_INVOICED",
+    title: "Issue invoice",
+    type: "ISSUE_INVOICE",
+  }));
+  return [...paymentEvents, ...orderEvents, ...itemEvents, ...reminders].sort(
     (left, right) =>
       left.date.localeCompare(right.date) ||
       left.title.localeCompare(right.title),

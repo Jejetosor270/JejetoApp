@@ -1171,87 +1171,110 @@ export async function getProcurementCalendarEvents(
   from: string,
   to: string,
 ): Promise<ProcurementCalendarEvent[]> {
-  const [installments, clientInstallments, orders, items] = await Promise.all([
-    listPaymentInstallments({
-      direction: PaymentDirection.SUPPLIER_PAYMENT,
-      dueFrom: from,
-      dueTo: to,
-    }),
-    listClientCashInstallments(),
-    getDatabase().procurementOrder.findMany({
-      where: {
-        OR: [
-          {
-            expectedReadyDate: {
-              gte: dateOnlyToDate(from),
-              lte: dateOnlyToDate(to),
+  const [installments, clientInstallments, orders, items, invoiceReminders] =
+    await Promise.all([
+      listPaymentInstallments({
+        direction: PaymentDirection.SUPPLIER_PAYMENT,
+        dueFrom: from,
+        dueTo: to,
+      }),
+      listClientCashInstallments(),
+      getDatabase().procurementOrder.findMany({
+        where: {
+          OR: [
+            {
+              expectedReadyDate: {
+                gte: dateOnlyToDate(from),
+                lte: dateOnlyToDate(to),
+              },
             },
-          },
-          {
-            expectedDeliveryDate: {
-              gte: dateOnlyToDate(from),
-              lte: dateOnlyToDate(to),
+            {
+              expectedDeliveryDate: {
+                gte: dateOnlyToDate(from),
+                lte: dateOnlyToDate(to),
+              },
             },
-          },
-          {
-            actualDeliveryDate: {
-              gte: dateOnlyToDate(from),
-              lte: dateOnlyToDate(to),
+            {
+              actualDeliveryDate: {
+                gte: dateOnlyToDate(from),
+                lte: dateOnlyToDate(to),
+              },
             },
-          },
-        ],
-      },
-      select: {
-        actualDeliveryDate: true,
-        expectedDeliveryDate: true,
-        expectedReadyDate: true,
-        id: true,
-        orderNumber: true,
-        project: { select: { name: true } },
-      },
-    }),
-    getDatabase().item.findMany({
-      where: {
-        OR: [
-          {
-            estimatedWarehouseDate: {
-              gte: dateOnlyToDate(from),
-              lte: dateOnlyToDate(to),
+          ],
+        },
+        select: {
+          actualDeliveryDate: true,
+          expectedDeliveryDate: true,
+          expectedReadyDate: true,
+          id: true,
+          orderNumber: true,
+          project: { select: { name: true } },
+        },
+      }),
+      getDatabase().item.findMany({
+        where: {
+          OR: [
+            {
+              estimatedWarehouseDate: {
+                gte: dateOnlyToDate(from),
+                lte: dateOnlyToDate(to),
+              },
             },
-          },
-          {
-            estimatedFabricatorDate: {
-              gte: dateOnlyToDate(from),
-              lte: dateOnlyToDate(to),
+            {
+              estimatedFabricatorDate: {
+                gte: dateOnlyToDate(from),
+                lte: dateOnlyToDate(to),
+              },
             },
-          },
-          {
-            estimatedResidenceDate: {
-              gte: dateOnlyToDate(from),
-              lte: dateOnlyToDate(to),
+            {
+              estimatedResidenceDate: {
+                gte: dateOnlyToDate(from),
+                lte: dateOnlyToDate(to),
+              },
             },
-          },
-          {
-            installedDate: {
-              gte: dateOnlyToDate(from),
-              lte: dateOnlyToDate(to),
+            {
+              installedDate: {
+                gte: dateOnlyToDate(from),
+                lte: dateOnlyToDate(to),
+              },
             },
-          },
-        ],
-      },
-      select: {
-        estimatedFabricatorDate: true,
-        estimatedResidenceDate: true,
-        estimatedWarehouseDate: true,
-        id: true,
-        installedDate: true,
-        itemReference: true,
-        name: true,
-        project: { select: { name: true } },
-      },
-    }),
-  ]);
+          ],
+        },
+        select: {
+          estimatedFabricatorDate: true,
+          estimatedResidenceDate: true,
+          estimatedWarehouseDate: true,
+          id: true,
+          installedDate: true,
+          itemReference: true,
+          name: true,
+          project: { select: { name: true } },
+        },
+      }),
+      getDatabase().clientBillingDocument.findMany({
+        where: {
+          documentType: "INVOICE",
+          workflowStatus: "TO_BE_INVOICED",
+          isCancelled: false,
+          documentDate: { gte: dateOnlyToDate(from), lte: dateOnlyToDate(to) },
+        },
+        select: {
+          id: true,
+          reference: true,
+          documentDate: true,
+          project: { select: { name: true } },
+          client: { select: { displayName: true } },
+        },
+      }),
+    ]);
   return buildCalendarEvents({
+    invoiceReminders: invoiceReminders.map((invoice) => ({
+      id: invoice.id,
+      reference: invoice.reference,
+      date: dateToDateOnly(invoice.documentDate),
+      projectName: invoice.project?.name ?? "Unassigned",
+      partyName: invoice.client?.displayName ?? "Unassigned",
+    })),
     installments: [
       ...installments.map((item) => ({
         currencyCode: item.currencyCode,

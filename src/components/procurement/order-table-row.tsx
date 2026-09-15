@@ -101,12 +101,24 @@ export function OrderRow({
       formatMoney(value, currency);
     switch (field) {
       case "reference":
-        return cell(
-          "orderNumber",
-          "Reference",
-          order.orderNumber,
-          order.orderNumber,
-          { href: recordHref },
+        return (
+          <div>
+            {cell(
+              "orderNumber",
+              "Reference",
+              order.orderNumber,
+              order.orderNumber,
+              { href: recordHref },
+            )}
+            <div className="text-muted-foreground mt-1 font-sans">
+              {cell(
+                "shortDescription",
+                "Short description",
+                order.shortDescription,
+                order.shortDescription || (editable ? "Add description" : ""),
+              )}
+            </div>
+          </div>
         );
       case "project":
         return cell(

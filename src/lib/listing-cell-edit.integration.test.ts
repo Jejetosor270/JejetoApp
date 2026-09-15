@@ -129,6 +129,41 @@ afterAll(async () => {
 });
 
 it("saves only the chosen field, audits it, rejects stale edits and invalid dates", async () => {
+  for (const [kind, id] of [
+    ["order", orderId],
+    ["billing", billingId],
+  ] as const) {
+    const input = {
+      kind,
+      id,
+      field: "shortDescription",
+      previous: "",
+      value: "Outdoor furniture",
+    };
+    await saveTableCell(actorId, input);
+    const record =
+      kind === "order"
+        ? await memory.raw.procurementOrder.findUniqueOrThrow({ where: { id } })
+        : await memory.raw.clientBillingDocument.findUniqueOrThrow({
+            where: { id },
+          });
+    expect(record.shortDescription).toBe("Outdoor furniture");
+    await expect(
+      saveTableCell(actorId, { ...input, value: "Stale" }),
+    ).rejects.toThrow("changed since");
+    await expect(
+      saveTableCell(actorId, {
+        ...input,
+        previous: "Outdoor furniture",
+        value: "x".repeat(241),
+      }),
+    ).rejects.toThrow();
+    await saveTableCell(actorId, {
+      ...input,
+      previous: "Outdoor furniture",
+      value: "",
+    });
+  }
   await saveTableCell(actorId, {
     kind: "order",
     id: orderId,
@@ -160,7 +195,7 @@ it("saves only the chosen field, audits it, rejects stale edits and invalid date
     await memory.raw.auditEvent.count({
       where: { entityId: orderId, summary: "Edited an Order table cell." },
     }),
-  ).toBe(1);
+  ).toBe(3);
 });
 it("recalculates purchase-based selling and output VAT without rescheduling or changing input VAT", async () => {
   const before = await getOrder(orderId);

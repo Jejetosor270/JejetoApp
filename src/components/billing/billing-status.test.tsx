@@ -29,7 +29,6 @@ it("requires an explicit creation status and exposes payment confirmation only f
     "TO_BE_INVOICED",
     "INVOICED",
     "PAID",
-    "OVERDUE",
     "CANCELLED",
   ]);
   expect(document.querySelector('[name="paymentDate"]')).toBeNull();

@@ -22,6 +22,7 @@ import { getProcurementCalendarEvents } from "@/lib/payments/payments";
 export const metadata: Metadata = { title: "Procurement calendar" };
 
 function eventLabel(event: ProcurementCalendarEvent) {
+  if (event.type === "ISSUE_INVOICE") return "Issue invoice";
   if (event.type === "SUPPLIER_PAYMENT") return "Cash out";
   if (event.type === "CLIENT_RECEIPT") return "Cash in";
   if (event.type === "EXPECTED_READY") return "Ready";

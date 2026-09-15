@@ -25,6 +25,10 @@ export async function changeBillingStatusInTransaction(
   raw: z.infer<typeof billingStatusChangeSchema>,
 ) {
   const input = billingStatusChangeSchema.parse(raw);
+  if (input.value === "OVERDUE")
+    throw new ClientBillingValidationError(
+      "Overdue is automatic. Edit the unpaid payment term due dates instead.",
+    );
   const doc = await tx.clientBillingDocument.findUniqueOrThrow({
     where: { id: input.id },
     include: {

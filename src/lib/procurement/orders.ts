@@ -248,6 +248,7 @@ export interface OrderSummary {
   packageId?: string | null;
   orderPackage?: { id: string; name: string; isActive: boolean } | null;
   packageName: string;
+  shortDescription?: string | null;
   packageSellingPrice: string | null;
   pricingMode: PricingMode;
   productMarkupOverrideRate: string | null;
@@ -962,6 +963,7 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
     packageId: order.packageId,
     orderPackage: order.orderPackage,
     packageName: order.packageName,
+    shortDescription: order.shortDescription,
     packageSellingPrice: packagePrice?.toString() ?? null,
     pricingMode: order.pricingMode,
     productMarkupOverrideRate:

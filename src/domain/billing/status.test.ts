@@ -33,12 +33,22 @@ it("derives paid and overdue precisely, retaining invoiced for partial payment",
   expect(billingStatus({ ...invoice, dueDate: null })).toBe("INVOICED");
   expect(billingStatus({ ...invoice, totalTtc: "0" })).toBe("INVOICED");
 });
-it("keeps Quotes planned and supports explicit overdue", () => {
+it("keeps Quotes planned and recalculates legacy explicit overdue from dates", () => {
   expect(billingStatus({ ...invoice, documentType: "QUOTE" })).toBe(
     "TO_BE_INVOICED",
   );
   expect(billingStatus({ ...invoice, workflowStatus: "OVERDUE" })).toBe(
-    "OVERDUE",
+    "INVOICED",
   );
+  expect(
+    billingStatus({
+      ...invoice,
+      workflowStatus: "OVERDUE",
+      dueDate: "2020-01-01",
+    }),
+  ).toBe("OVERDUE");
+  expect(
+    billingStatus({ ...invoice, workflowStatus: "OVERDUE", dueDate: null }),
+  ).toBe("INVOICED");
   expect(billingStatus({ ...invoice, isCancelled: true })).toBe("CANCELLED");
 });

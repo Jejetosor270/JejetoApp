@@ -64,6 +64,7 @@ it("shows Billing invoice dates and HT without a TTC column; keeps cash amounts"
   const record = {
     id: "bill",
     reference: "INV-01",
+    shortDescription: "Outdoor furniture",
     documentType: "INVOICE",
     workflowStatus: "INVOICED",
     status: "INVOICED",
@@ -88,4 +89,10 @@ it("shows Billing invoice dates and HT without a TTC column; keeps cash amounts"
   expect(labels).toContain("Received");
   expect(labels).toContain("Outstanding");
   expect(document.querySelector("tbody")?.textContent).toContain("08/09/2026");
+  expect(document.querySelector("tbody td")?.textContent).toContain(
+    "Outdoor furniture",
+  );
+  expect(document.querySelector("tbody td")?.textContent).not.toContain(
+    "Invoice",
+  );
 });

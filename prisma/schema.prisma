@@ -417,6 +417,7 @@ model Building {
 }
 
 model ProcurementOrder {
+  shortDescription String? @db.VarChar(240)
   paymentStatusOverride String? @db.VarChar(24)
   trashedAt DateTime?
   @@index([trashedAt])
@@ -752,6 +753,7 @@ model ApplicationSetting {
 }
 
 model ClientBillingDocument {
+  shortDescription String? @db.VarChar(240)
   workflowStatus String @default("INVOICED") @db.VarChar(24)
   paymentStatusOverride String? @db.VarChar(24)
   trashedAt DateTime?

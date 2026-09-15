@@ -3,7 +3,10 @@
 ## Unified Billing status and Project coverage
 
 Billing has one workflow status: Draft, To be invoiced, Invoiced, Paid,
-Overdue or Cancelled. Draft/To be invoiced Invoices are excluded from actual
+Overdue or Cancelled. Overdue is derived solely from unpaid-term dates (with the
+existing document-date fallback), never a persistent manual override. Moving due
+dates forward clears Overdue; legacy stored OVERDUE values follow the same rule.
+Draft/To be invoiced Invoices are excluded from actual
 revenue, VAT, allocation coverage and cash forecasts; Quotes remain planning
 documents. Paid is derived from actual receipts, including matched Quote-term
 receipts once. Confirming Paid records the remaining cash against open terms
@@ -11,6 +14,17 @@ with the employee's actual date and FX, transactionally. Payment corrections
 reopen the balance; unpaid issued Invoices become Overdue from term dates.
 Pre-invoice and cancelled states do not automatically advance. Billing no longer
 uses the legacy display-only payment override; Purchasing retains its controls.
+
+To be invoiced Invoices appear in the calendar as one Issue invoice reminder on
+their document date. This is not a cash event and never creates a receipt or
+forecast balance. Changing the date moves the reminder; issuing, cancelling or
+trashing the Invoice removes it. Draft documents and Quotes have no such reminder.
+
+Purchasing and Billing have an optional 240-character short description, edited
+with the audited cell editor beneath the list reference. It replaces the list's
+Invoice/Quote sublabel, not the authoritative document type. Empty historical
+descriptions remain null. Requires migration `20260921000000_document_short_descriptions`;
+preparing it does not authorize applying it to a database.
 
 Project Overall Coverage compares full-Project active Client Invoice HT with
 all recorded Purchasing economic costs and Project freight, whether allocated
@@ -434,7 +448,8 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 ## Payment-status and Billing-entry refinement
 
 - ADMIN/MANAGER may save an audited display-only Paid, Partially Paid, Unpaid or Overdue status
-  on Orders/Billing. A manual choice persists until reset to Automatic; subsequent cash updates
+  on Purchasing Orders only. Billing uses the unified workflow described above, and confirming
+  Paid records actual cash. A Purchasing manual choice persists until reset to Automatic; subsequent cash updates
   continue to update the underlying derived status. No status choice records money or changes
   financial totals. Cancellation takes precedence. Requires the separately deployed migration
   `20260918000000_manual_payment_status`; preparing it does not authorize running it on a database.
@@ -477,7 +492,8 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
   duplicate submissions are blocked. References remain record links with a separate edit pencil.
 - Single-field changes validate permissions, current stored values and relationships server-side
   inside an audited transaction. Stale cell values are rejected rather than overwriting newer edits.
-  Payment-status labels retain the existing display-only override workflow.
+  Purchasing payment-status labels retain the display-only override workflow; Billing uses
+  its separate unified status selector with actual receipt confirmation for Paid.
 - Calculated financial and cash cells open the authoritative Details or Related editor instead of
   overwriting derived totals. Purchase HT uses the existing Order pricing/VAT service. Billing HT
   preserves entered VAT, recalculates TTC and percentage allocations, and checks payment limits.

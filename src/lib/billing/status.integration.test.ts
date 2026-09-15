@@ -17,6 +17,8 @@ import {
   listClientCashInstallments,
 } from "./reporting";
 import { getBilledFreight } from "./freight-reporting";
+import { recognizedReceiptWhere } from "./receipt-eligibility";
+import { getProcurementCalendarEvents } from "@/lib/payments/payments";
 let memory: Awaited<ReturnType<typeof prismaMemoryDatabase>>;
 beforeAll(async () => {
   memory = await prismaMemoryDatabase();
@@ -30,6 +32,113 @@ beforeAll(async () => {
 }, 30000);
 afterAll(async () => {
   await memory.close();
+});
+
+it("recognizes matched Quote cash only for issued Invoices and keeps invoice reminders separate", async () => {
+  const db = memory.raw;
+  const project = await db.project.create({
+    data: { code: "REM", name: "Reminders", reportingCurrencyCode: "EUR" },
+  });
+  const quote = await db.clientBillingDocument.create({
+    data: {
+      projectId: project.id,
+      reference: "REM-QUOTE",
+      documentType: "QUOTE",
+      workflowStatus: "TO_BE_INVOICED",
+      documentDate: new Date("2026-09-15"),
+      currencyCode: "EUR",
+      totalHt: "100",
+      vatAmount: "0",
+      totalTtc: "100",
+    },
+  });
+  const term = await db.clientPaymentInstallment.create({
+    data: {
+      billingDocumentId: quote.id,
+      sequence: 1,
+      label: "Historical deposit",
+      basis: "FIXED_AMOUNT",
+      scheduledAmount: "100",
+      currencyCode: "EUR",
+    },
+  });
+  const receipt = await db.clientReceipt.create({
+    data: {
+      billingDocumentId: quote.id,
+      installmentId: term.id,
+      amount: "20",
+      receivedAt: new Date("2026-09-14"),
+    },
+  });
+  const invoice = await db.clientBillingDocument.create({
+    data: {
+      projectId: project.id,
+      reference: "REM-INVOICE",
+      documentType: "INVOICE",
+      workflowStatus: "DRAFT",
+      documentDate: new Date("2026-09-15"),
+      currencyCode: "EUR",
+      totalHt: "100",
+      vatAmount: "0",
+      totalTtc: "100",
+      matchedInstallmentId: term.id,
+    },
+  });
+  for (const workflowStatus of [
+    "DRAFT",
+    "TO_BE_INVOICED",
+    "INVOICED",
+    "CANCELLED",
+  ]) {
+    await db.clientBillingDocument.update({
+      where: { id: invoice.id },
+      data: { workflowStatus },
+    });
+    const recognized = await memory.active.clientReceipt.findMany({
+      where: { id: receipt.id, AND: [recognizedReceiptWhere] },
+    });
+    expect(recognized).toHaveLength(workflowStatus === "INVOICED" ? 1 : 0);
+    const reminders = (
+      await getProcurementCalendarEvents("2026-09-01", "2026-09-30")
+    ).filter(
+      (event) =>
+        event.type === "ISSUE_INVOICE" &&
+        event.href === `/billing/${invoice.id}`,
+    );
+    expect(reminders).toHaveLength(workflowStatus === "TO_BE_INVOICED" ? 1 : 0);
+    if (reminders.length)
+      expect(reminders[0]).toMatchObject({
+        date: "2026-09-15",
+        amount: null,
+        currencyCode: null,
+      });
+  }
+  await db.clientBillingDocument.update({
+    where: { id: invoice.id },
+    data: {
+      workflowStatus: "TO_BE_INVOICED",
+      documentDate: new Date("2026-10-01"),
+    },
+  });
+  expect(
+    (await getProcurementCalendarEvents("2026-09-01", "2026-09-30")).some(
+      (event) => event.id === `issue-invoice-${invoice.id}`,
+    ),
+  ).toBe(false);
+  expect(
+    (await getProcurementCalendarEvents("2026-10-01", "2026-10-31")).some(
+      (event) => event.id === `issue-invoice-${invoice.id}`,
+    ),
+  ).toBe(true);
+  await db.clientBillingDocument.update({
+    where: { id: invoice.id },
+    data: { trashedAt: new Date() },
+  });
+  expect(
+    (await getProcurementCalendarEvents("2026-10-01", "2026-10-31")).some(
+      (event) => event.id === `issue-invoice-${invoice.id}`,
+    ),
+  ).toBe(false);
 });
 
 it("creates paid billing and its automatic full term atomically after employee confirmation", async () => {

@@ -40,6 +40,7 @@ export async function editBillingCell(
     );
   const value = input.value.trim();
   if (
+    field === "shortDescription" ||
     field === "reference" ||
     field === "documentDate" ||
     field === "dueDate"
@@ -47,7 +48,9 @@ export async function editBillingCell(
     const data: Prisma.ClientBillingDocumentUncheckedUpdateInput = {
       updatedById: actorId,
     };
-    if (field === "reference")
+    if (field === "shortDescription")
+      data.shortDescription = z.string().max(240).parse(value) || null;
+    else if (field === "reference")
       data.reference = z.string().min(1).max(120).parse(value);
     else {
       if ((!value && field === "documentDate") || (value && !isDateOnly(value)))

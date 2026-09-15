@@ -36,6 +36,7 @@ vi.mock("./billing-schedule-manager", () => ({
 const record = {
   id: "billing-id",
   reference: "INV-001",
+  shortDescription: null,
   documentType: "INVOICE",
   workflowStatus: "INVOICED",
   documentDate: "2026-09-01",

@@ -14,8 +14,9 @@ function StatusOptions({ documentType }: { documentType: string }) {
   return billingStatuses
     .filter(
       (s) =>
-        documentType !== "QUOTE" ||
-        ["DRAFT", "TO_BE_INVOICED", "CANCELLED"].includes(s),
+        s !== "OVERDUE" &&
+        (documentType !== "QUOTE" ||
+          ["DRAFT", "TO_BE_INVOICED", "CANCELLED"].includes(s)),
     )
     .map((status) => (
       <option key={status} value={status}>
@@ -95,7 +96,7 @@ export function BillingStatusControl({
         variant="ghost"
         size="sm"
         onClick={() => {
-          setDraft(status);
+          setDraft(status === "OVERDUE" ? "INVOICED" : status);
           setFeedback("");
           setOpen(true);
         }}

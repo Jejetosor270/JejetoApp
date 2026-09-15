@@ -93,13 +93,12 @@ function BillingRow({
           { href },
         )}
         <span className="text-muted-foreground mt-1 block font-sans">
-          <SourceCell
-            href={`${href}?edit=1`}
-            label={`Document type for ${document.reference}`}
-            canEdit={editable}
-          >
-            {document.documentType === "QUOTE" ? "Quote / Devis" : "Invoice"}
-          </SourceCell>
+          {cell(
+            "shortDescription",
+            "Short description",
+            document.shortDescription,
+            document.shortDescription || (editable ? "Add description" : ""),
+          )}
           {document.isCancelled ? " · Cancelled" : ""}
         </span>
       </td>

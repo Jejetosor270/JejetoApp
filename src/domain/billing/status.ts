@@ -45,10 +45,6 @@ export function billingStatus(input: {
     new Decimal(input.paid).greaterThanOrEqualTo(input.totalTtc)
   )
     return "PAID";
-  if (
-    input.workflowStatus === "OVERDUE" ||
-    (input.dueDate !== null && input.dueDate < input.today)
-  )
-    return "OVERDUE";
+  if (input.dueDate !== null && input.dueDate < input.today) return "OVERDUE";
   return "INVOICED";
 }

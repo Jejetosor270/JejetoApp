@@ -13,7 +13,11 @@ export const recognizedReceiptWhere = {
     {
       installment: {
         matchedInvoices: {
-          some: { documentType: "INVOICE", isCancelled: false },
+          some: {
+            documentType: "INVOICE",
+            isCancelled: false,
+            workflowStatus: { notIn: ["DRAFT", "TO_BE_INVOICED", "CANCELLED"] },
+          },
         },
       },
     },

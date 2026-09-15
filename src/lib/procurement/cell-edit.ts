@@ -59,7 +59,9 @@ export async function editOrderCell(
   const data: Prisma.ProcurementOrderUncheckedUpdateInput = {
     updatedById: actorId,
   };
-  if (field === "orderNumber")
+  if (field === "shortDescription")
+    data.shortDescription = z.string().max(240).parse(value) || null;
+  else if (field === "orderNumber")
     data.orderNumber = z.string().min(2).max(50).parse(value);
   else if (field === "status") {
     const status = z.enum(ProcurementOrderStatus).parse(value);
