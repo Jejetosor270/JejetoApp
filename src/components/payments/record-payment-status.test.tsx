@@ -48,7 +48,11 @@ it("Partially paid opens amount entry without creating cash until submitted", as
       canEdit
     />,
   );
-  document.querySelector("select")?.setAttribute("name", "status");
+  expect(document.querySelector("select")).toBeNull();
+  await clickText("Unpaid");
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    "Purchasing payment status",
+  );
   await enter("status", "PARTIALLY_PAID");
   expect(mocks.save).not.toHaveBeenCalled();
   await enter("amount", "25");

@@ -32,6 +32,7 @@ export function RecordPaymentStatus({
   showCancel?: boolean;
   onCancelled?: () => void;
 }) {
+  const [open, setOpen] = useState(false);
   const [paymentMode, setPaymentMode] = useState<
     "PAID" | "PARTIALLY_PAID" | null
   >(null);
@@ -58,10 +59,14 @@ export function RecordPaymentStatus({
           if (value === "CANCEL") {
             setConfirming(false);
             onCancelled?.();
-          } else setPaymentMode(null);
+          } else {
+            setPaymentMode(null);
+            setOpen(false);
+          }
           router.refresh();
         } else if (value === "PAID") {
           setPaymentMode("PAID");
+          setOpen(true);
         }
       } catch {
         setFeedback("Status could not be saved. Your selection is retained.");
@@ -71,28 +76,19 @@ export function RecordPaymentStatus({
     <div className="space-y-2 text-xs">
       {canEdit && !cancelled ? (
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2">
-            Payment status
-            <select
-              className="border-input bg-background rounded-md border px-2 py-1.5"
-              value="AUTO"
-              disabled={pending}
-              onChange={(event) => {
-                setFeedback("");
-                if (event.target.value === "PAID") save("PAID");
-                else if (event.target.value === "PARTIALLY_PAID")
-                  setPaymentMode("PARTIALLY_PAID");
-              }}
-            >
-              <option value="AUTO">
-                Automatic · {recordPaymentStatusLabel(automatic)}
-              </option>
-              <option value="PAID">Paid · record remaining payment</option>
-              <option value="PARTIALLY_PAID">
-                Partially paid · record amount
-              </option>
-            </select>
-          </label>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-label="Change payment status"
+            disabled={pending}
+            onClick={() => {
+              setFeedback("");
+              setOpen(true);
+            }}
+          >
+            {recordPaymentStatusLabel(automatic)}
+          </Button>
           {automatic !== "PAID" && (
             <Button
               type="button"
@@ -122,19 +118,47 @@ export function RecordPaymentStatus({
       ) : (
         <span>{recordPaymentStatusLabel(automatic, override, cancelled)}</span>
       )}
-      {paymentMode && (
+      {open && (
         <EditorDrawer
           open
-          title={
-            paymentMode === "PAID"
-              ? "Complete payment"
-              : "Record partial payment"
-          }
+          title="Purchasing payment status"
           onOpenChange={(open) => {
-            if (!open && !pending) setPaymentMode(null);
+            if (!pending) setOpen(open);
           }}
         >
           <div className="space-y-4">
+            <Field label="Payment status">
+              <select
+                name="status"
+                aria-label="Payment status"
+                className={inputClassName}
+                value={paymentMode ?? "AUTO"}
+                disabled={pending}
+                onChange={(event) => {
+                  setFeedback("");
+                  const value = event.target.value;
+                  if (value === "PAID") {
+                    setPaymentMode("PAID");
+                    save("PAID");
+                  } else
+                    setPaymentMode(value === "PARTIALLY_PAID" ? value : null);
+                }}
+              >
+                <option value="AUTO">
+                  {recordPaymentStatusLabel(automatic)} · automatic
+                </option>
+                {automatic !== "PAID" && <option value="PAID">Paid</option>}
+                {automatic !== "PAID" && (
+                  <option value="PARTIALLY_PAID">Partially paid</option>
+                )}
+              </select>
+            </Field>
+            {!paymentMode && (
+              <p className="text-muted-foreground text-sm">
+                Payment status follows recorded payments and due dates. Marking
+                as paid records the remaining payment.
+              </p>
+            )}
             {paymentMode === "PARTIALLY_PAID" && (
               <Field label="Actual amount TTC">
                 <MoneyInput
@@ -144,27 +168,33 @@ export function RecordPaymentStatus({
                 />
               </Field>
             )}
-            <Field label="Payment date">
-              <DateInput
-                value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-              />
-            </Field>
-            <Field label="Actual FX (foreign currency)">
-              <input
-                className={inputClassName}
-                value={paymentFx}
-                onChange={(e) => setPaymentFx(e.target.value)}
-              />
-            </Field>
+            {paymentMode && (
+              <>
+                <Field label="Payment date">
+                  <DateInput
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                  />
+                </Field>
+                <Field label="Actual FX (foreign currency)">
+                  <input
+                    className={inputClassName}
+                    value={paymentFx}
+                    onChange={(e) => setPaymentFx(e.target.value)}
+                  />
+                </Field>
+              </>
+            )}
             {feedback && <p role="alert">{feedback}</p>}
-            <Button disabled={pending} onClick={() => save(paymentMode)}>
-              Record payment
-            </Button>
+            {paymentMode && (
+              <Button disabled={pending} onClick={() => save(paymentMode)}>
+                Record payment
+              </Button>
+            )}
           </div>
         </EditorDrawer>
       )}
-      {feedback && !confirming && <p role="status">{feedback}</p>}
+      {feedback && !confirming && !open && <p role="status">{feedback}</p>}
       {confirming && (
         <EditorDrawer
           open

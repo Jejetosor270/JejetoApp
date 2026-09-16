@@ -85,16 +85,18 @@ export default async function OrderPage({
               </>
             }
             title={order.orderNumber}
-          />
-          <RecordPaymentStatus
-            key={`${order.id}:${order.paymentStatusOverride}:${order.status}`}
-            kind="order"
-            id={order.id}
-            automatic={order.supplierPayment.status}
-            override={order.paymentStatusOverride}
-            cancelled={order.status === "CANCELLED"}
-            canEdit={canEditMasterData(user.role)}
-            showCancel
+            statusControl={
+              <RecordPaymentStatus
+                key={`${order.id}:${order.paymentStatusOverride}:${order.status}`}
+                kind="order"
+                id={order.id}
+                automatic={order.supplierPayment.status}
+                override={order.paymentStatusOverride}
+                cancelled={order.status === "CANCELLED"}
+                canEdit={canEditMasterData(user.role)}
+                showCancel
+              />
+            }
           />
           {order.description ? (
             <p className="bg-card text-muted-foreground -mt-px rounded-b-lg border px-5 py-4 text-sm leading-6">
