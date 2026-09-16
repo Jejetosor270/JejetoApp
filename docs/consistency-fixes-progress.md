@@ -38,9 +38,11 @@ No production data changes, migration application, commits or deployment are aut
 - Added regression coverage for Supplier-scoped cash, explicit Other budget and direct Project targets, the HT/economic VAT bridge, full/partial cash settlement and actual FX, effective term dates, stale Order/Billing/allocation edits, Billing filters/sorts, description search, and safe Project diagnostics.
 - Local component tests cover drawers, draft retention, primary identity, allocation categories and payment actions. No new live production visual verification is claimed.
 
-## A01 — production trace still required
+## A01 — runtime timeout identified; deployment recheck pending
 
 The connected Vercel account exposed no accessible project, so the original Project-detail production exception could not be traced to a confirmed cause. Added safe read-stage diagnostics (stage, error type, safe code/digest only) and a user-visible support reference. A nullable Related Client input was guarded, but this is not claimed as the production root cause. The Project visual re-review remains pending after obtaining its runtime trace.
+
+The supplied September 16 runtime export subsequently identified Prisma P2028 during `clientBillingDocument.findUnique`: the read's transaction exceeded 5 seconds. Project payment terms were launching one full Billing read per document and one full Order/payment read per Order concurrently. These now use Project-scoped batch reads and the same authoritative serializers/calculators, with safe diagnostics for both payment-term stages. Regression coverage checks batch query counts and equality with single-record results. No transaction timeout, financial rule, database data or schema was changed. Production re-verification after deployment remains required.
 
 ## Migration and handoff
 

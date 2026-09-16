@@ -356,6 +356,16 @@ export async function getClientBillingDocument(documentId: string) {
   return record ? billingView(record) : null;
 }
 
+/** Load Project terms in one relation batch, not a concurrent detail query per Invoice. */
+export async function listProjectBillingDocuments(projectId: string) {
+  const records = await getDatabase().clientBillingDocument.findMany({
+    where: { projectId },
+    include: billingInclude,
+    orderBy: [{ documentDate: "desc" }, { id: "asc" }],
+  });
+  return records.map((record) => billingView(record));
+}
+
 export async function listClientBillingOptions() {
   const database = getDatabase();
   const [clients, projects, currencies, orders, installments] =

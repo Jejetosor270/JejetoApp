@@ -43,7 +43,11 @@ import type {
 import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
 import { paginationSkip, type PageInput } from "@/domain/listing/validation";
-import { getOrder, type OrderSummary } from "@/lib/procurement/orders";
+import {
+  getOrder,
+  listProjectOrders,
+  type OrderSummary,
+} from "@/lib/procurement/orders";
 import { listClientCashInstallments } from "@/lib/billing/reporting";
 
 import { PaymentNotFoundError, PaymentValidationError } from "./errors";
@@ -270,6 +274,44 @@ async function requiredOrder(orderId: string): Promise<OrderSummary> {
   if (!order)
     throw new PaymentNotFoundError("The procurement order no longer exists.");
   return order;
+}
+
+/** Fixed query count regardless of the number of Orders in a Project. */
+export async function getProjectPaymentSummaries(projectId: string) {
+  const [orders, records] = await Promise.all([
+    listProjectOrders(projectId),
+    getDatabase().paymentInstallment.findMany({
+      where: {
+        order: { projectId },
+        direction: PaymentDirection.SUPPLIER_PAYMENT,
+      },
+      include: installmentInclude,
+      orderBy: [{ sequence: "asc" }, { id: "asc" }],
+    }),
+  ]);
+  const today = businessToday();
+  const grouped = new Map<string, InstallmentRecord[]>();
+  for (const record of records) {
+    if (!record.orderId) continue;
+    const group = grouped.get(record.orderId) ?? [];
+    group.push(record);
+    grouped.set(record.orderId, group);
+  }
+  return orders
+    .toSorted(
+      (left, right) =>
+        left.orderNumber.localeCompare(right.orderNumber) ||
+        left.id.localeCompare(right.id),
+    )
+    .map((order) => ({
+      order,
+      summary: directionSummary(
+        order,
+        grouped.get(order.id) ?? [],
+        PaymentDirection.SUPPLIER_PAYMENT,
+        today,
+      ),
+    }));
 }
 
 export async function getOrderPaymentSummary(

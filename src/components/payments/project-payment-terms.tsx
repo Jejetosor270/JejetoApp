@@ -2,8 +2,9 @@ import { formatEnumLabel } from "@/domain/presentation/labels";
 import { billingIsIssued } from "@/domain/billing/status";
 import { getDatabase } from "@/lib/db";
 import { requireUser } from "@/lib/auth/current-user";
-import { getOrderPaymentSummary } from "@/lib/payments/payments";
-import { getClientBillingDocument } from "@/lib/billing/billing";
+import { getProjectPaymentSummaries } from "@/lib/payments/payments";
+import { listProjectBillingDocuments } from "@/lib/billing/billing";
+import { projectRead } from "@/lib/reporting/project-diagnostics";
 import { businessToday } from "@/domain/payments/dates";
 import { PaymentSchedule } from "./payment-schedule";
 import { BillingScheduleManager } from "@/components/billing/billing-schedule-manager";
@@ -18,24 +19,13 @@ export async function ProjectPaymentTerms({
 }) {
   await requireUser();
   const db = getDatabase();
-  const [orders, documents, currencies, project] = await Promise.all([
-    db.procurementOrder.findMany({
-      where: { projectId },
-      select: { id: true, orderNumber: true, status: true },
-      orderBy: [{ orderNumber: "asc" }, { id: "asc" }],
-    }),
-    db.clientBillingDocument.findMany({
-      where: { projectId },
-      select: {
-        id: true,
-        reference: true,
-        documentType: true,
-        isCancelled: true,
-        workflowStatus: true,
-        matchedInstallmentId: true,
-      },
-      orderBy: [{ documentDate: "desc" }, { id: "asc" }],
-    }),
+  const [supplier, documents, currencies, project] = await Promise.all([
+    projectRead("supplier payment terms", () =>
+      getProjectPaymentSummaries(projectId),
+    ),
+    projectRead("billing payment terms", () =>
+      listProjectBillingDocuments(projectId),
+    ),
     db.currency.findMany({ select: { code: true }, orderBy: { code: "asc" } }),
     db.project.findUniqueOrThrow({
       where: { id: projectId },
@@ -49,15 +39,6 @@ export async function ProjectPaymentTerms({
         : [],
     ),
   );
-  const [supplier, client] = await Promise.all([
-    Promise.all(
-      orders.map(async (order) => ({
-        order,
-        summary: await getOrderPaymentSummary(order.id),
-      })),
-    ),
-    Promise.all(documents.map((row) => getClientBillingDocument(row.id))),
-  ]);
   return (
     <section className="space-y-4" id="payment-terms">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -75,7 +56,7 @@ export async function ProjectPaymentTerms({
           </div>
         )}
       </div>
-      {!orders.length && !documents.length && (
+      {!supplier.length && !documents.length && (
         <p className="text-muted-foreground text-sm">
           Create an Order or Billing document to add payment terms.
         </p>
@@ -83,8 +64,8 @@ export async function ProjectPaymentTerms({
       {supplier.map(({ order, summary }) => (
         <details className="rounded border p-4" key={order.id}>
           <summary className="cursor-pointer font-medium">
-            Purchasing · {order.orderNumber} ·{" "}
-            {summary.supplier.installments.length} terms
+            Purchasing · {order.orderNumber} · {summary.installments.length}{" "}
+            terms
           </summary>
           <div className="mt-4">
             <PaymentSchedule
@@ -93,13 +74,13 @@ export async function ProjectPaymentTerms({
               direction="SUPPLIER_PAYMENT"
               orderId={order.id}
               reportingCurrencyCode={project.reportingCurrencyCode}
-              summary={summary.supplier}
+              summary={summary}
               today={businessToday()}
             />
           </div>
         </details>
       ))}
-      {client.map(
+      {documents.map(
         (document) =>
           document && (
             <details className="rounded border p-4" key={document.id}>

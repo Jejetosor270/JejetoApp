@@ -8,12 +8,17 @@ import { payTermRemaining } from "./payments/term-paid";
 import {
   getClientBillingDocument,
   listClientBillingPage,
+  listProjectBillingDocuments,
   updateClientBillingDocument,
   updateOrderBillingLink,
 } from "./billing/billing";
 import { billingDocumentEditSchema } from "@/domain/billing/validation";
 import { billingDueDateContext, editBillingDueDate } from "./billing/due-date";
 import { listClientCashInstallments } from "./billing/reporting";
+import {
+  getOrderPaymentSummary,
+  getProjectPaymentSummaries,
+} from "./payments/payments";
 import { createOrder, getOrder, updateOrder } from "./procurement/orders";
 import {
   createOrderInputSchema,
@@ -71,6 +76,71 @@ beforeAll(async () => {
 }, 30000);
 afterAll(async () => {
   await memory.close();
+});
+
+it("batches Project Billing and supplier terms without per-record detail reads and preserves their results", async () => {
+  for (const index of [1, 2, 3]) {
+    await createOrder(
+      actorId,
+      createOrderInputSchema.parse({
+        projectId,
+        supplierId,
+        orderNumber: `BATCH-${index}`,
+        packageName: "Batch",
+        orderCurrencyCode: "EUR",
+        sellingCurrencyCode: "EUR",
+        purchaseCost: "100",
+        pricingMode: "PROJECT_MARKUP",
+        freightTreatment: "NOT_APPLICABLE",
+        status: "DRAFT",
+        buildingIds: [],
+      }),
+    );
+  }
+  await memory.raw.clientBillingDocument.createMany({
+    data: Array.from({ length: 25 }, (_, index) => ({
+      projectId,
+      clientId,
+      currencyCode: "EUR",
+      documentType: "INVOICE" as const,
+      workflowStatus: "INVOICED" as const,
+      reference: `BATCH-${index}`,
+      documentDate: new Date("2026-09-01"),
+      totalHt: "100",
+      vatAmount: "20",
+      totalTtc: "120",
+    })),
+  });
+  const billingSingle = vi.spyOn(
+    memory.active.clientBillingDocument,
+    "findUnique",
+  );
+  const billingBatch = vi.spyOn(
+    memory.active.clientBillingDocument,
+    "findMany",
+  );
+  const orderSingle = vi.spyOn(memory.active.procurementOrder, "findUnique");
+  const termBatch = vi.spyOn(memory.active.paymentInstallment, "findMany");
+  try {
+    const documents = await listProjectBillingDocuments(projectId);
+    const supplier = await getProjectPaymentSummaries(projectId);
+    expect(documents.length).toBeGreaterThanOrEqual(25);
+    expect(supplier).toHaveLength(3);
+    expect(billingSingle).not.toHaveBeenCalled();
+    expect(orderSingle).not.toHaveBeenCalled();
+    expect(billingBatch).toHaveBeenCalledTimes(1);
+    expect(termBatch).toHaveBeenCalledTimes(1);
+    for (const document of documents) {
+      expect(document).toEqual(await getClientBillingDocument(document.id));
+    }
+    for (const { order, summary } of supplier) {
+      expect(summary).toEqual(
+        (await getOrderPaymentSummary(order.id)).supplier,
+      );
+    }
+  } finally {
+    vi.restoreAllMocks();
+  }
 });
 
 it("settles only a Client term's remaining cash atomically, preserves history and requires actual FX", async () => {
