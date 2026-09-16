@@ -2,7 +2,7 @@
 
 ## Unified Billing status and Project coverage
 
-Billing has one workflow status: Draft, To be invoiced, Invoiced, Paid,
+Billing has one workflow status: Draft, To be invoiced, Invoiced, Partially paid, Paid,
 Overdue or Cancelled. Overdue is derived solely from unpaid-term dates (with the
 existing document-date fallback), never a persistent manual override. Moving due
 dates forward clears Overdue; legacy stored OVERDUE values follow the same rule.
@@ -13,7 +13,7 @@ receipts once. Confirming Paid records the remaining cash against open terms
 with the employee's actual date and FX, transactionally. Payment corrections
 reopen the balance; unpaid issued Invoices become Overdue from term dates.
 Pre-invoice and cancelled states do not automatically advance. Billing no longer
-uses the legacy display-only payment override; Purchasing retains its controls.
+uses the legacy display-only payment override; Purchasing also derives payment status from actual cash.
 
 To be invoiced Invoices appear in the calendar as one Issue invoice reminder on
 their document date. This is not a cash event and never creates a receipt or
@@ -357,9 +357,8 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
   `record-presentation.tsx` and `RecordWorkspace` to keep Project, Order and Billing views aligned.
 - Billing and Order details use a confirmed Cancel button instead of Active/Cancelled selection.
   Existing cancellation/receipt safeguards remain unchanged. Fulfilment statuses remain a separate
-  Order concern. Payment status defaults to automatic; nullable display-only manual overrides are
-  explicitly marked and can be reset to Automatic. All cash, outstanding, overdue amounts,
-  forecasts and financial reports continue to use actual receipts/settlements, not the override.
+  Order concern. Payment status follows actual cash and due dates; legacy display-only overrides are ignored.
+  Paid records the full remaining balance. Partially paid opens an amount/date/FX entry.
 - Billing Details displays unallocated Billing HT, total included freight HT, freight allocated
   to Orders HT and freight remaining at Project level HT using existing Decimal helpers.
   These are commercial allocation amounts, not uncollected or unallocated cash.
@@ -432,7 +431,7 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 
 - New Billing/Order records create reviewed terms, otherwise one 100% term when the payable is positive. Billing uses its due date; absent dates remain null and display Date needed. Existing records are never backfilled or silently rescheduled. Quote/Invoice matches retain one forecast.
 - Terms support inline label/date/amount edits, detailed edits, full/partial payment recording and cancellation. Status derives from cash and dates; overdue partial payments show both facts. Actual cash dates, currency and independent FX remain authoritative. Cancelling a term removes its remaining forecast while retaining cash history.
-- Project and parent collection status use unpaid term dates. Overdue Client amounts include only overdue term balances, capped by Invoice outstanding; historical unscheduled documents retain their document-date fallback. Undated terms stay in all-remaining commitments but have no calendar event.
+- Project and parent collection status use unpaid term dates. Overdue Client amounts include only overdue term balances, capped by Invoice outstanding; historical unscheduled documents retain their document-date fallback. Undated Client terms use the document due-date fallback for reporting/calendar; truly undated terms remain in all-remaining commitments without a calendar event.
 - Settings Empty Trash is an ADMIN-only explicit permanent deletion, with typed confirmation and audit retention. It deletes only trashed business rows and dependent supporting data transactionally, rejecting active dependencies. Normal deletion remains recoverable Trash. Never invoke Empty Trash as part of development or verification against live data.
 - Requires `20260917000000_optional_payment_term_dates`, prepared only; applying it is a separate controlled step.
 
@@ -442,17 +441,15 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 - Cash Coverage is actual recognized Client Invoice receipts minus Supplier settlements and Project-freight payments (TTC), using each cash record's manual FX once. Unassigned, trashed and ineligible Client cash remain excluded. This replaces the separate Project cash position panel, not the cash reporting model.
 - Freight Coverage uses Order freight HT plus Project freight-expense HT, excluding all input VAT. The Project default freight markup determines the displayed markup amount and Supplier Freight Sell HT. Existing economic-cost and Order-specific pricing calculations remain unchanged.
 - Client Freight paid HT is reporting-only proportional attribution: receipt TTC × active Invoice freight HT ÷ Invoice TTC, converted with the receipt's actual FX. An active owning Invoice takes precedence; a Quote receipt uses its single active matched Invoice once. Ambiguous Invoice attribution or missing required FX remains incomplete. Coverage compares Client freight invoiced/paid HT separately against Supplier Freight Sell HT; no revenue, receipt or allocation records are rewritten.
-- Financials retains Merchandise, Freight and Other/services with a Total money column. Missing category values keep the total incomplete; markup defaults are neither summed nor averaged. Budgeted Sell HT, Target Revenue HT, Allocated Client Invoice Amount HT and Invoiced Coverage HT rename existing measures without changing their financial authority. Invoiced Coverage HT in this table means Invoice HT outside active Order allocations, not the separate funding-coverage formula.
+- Financials retains Merchandise, Freight and Other/services with a Total money column. Missing category values keep the total incomplete; markup defaults are neither summed nor averaged. Budgeted Sell HT, Target Revenue HT, Allocated Client Invoice Amount HT and Unallocated Invoice HT name the measures without changing their financial authority. Unallocated Invoice HT in this table means Invoice HT outside active Order allocations, not the separate funding-coverage formula.
 - This presentation and derived-reporting change requires no new migration.
 
 ## Payment-status and Billing-entry refinement
 
-- ADMIN/MANAGER may save an audited display-only Paid, Partially Paid, Unpaid or Overdue status
-  on Purchasing Orders only. Billing uses the unified workflow described above, and confirming
-  Paid records actual cash. A Purchasing manual choice persists until reset to Automatic; subsequent cash updates
-  continue to update the underlying derived status. No status choice records money or changes
-  financial totals. Cancellation takes precedence. Requires the separately deployed migration
-  `20260918000000_manual_payment_status`; preparing it does not authorize running it on a database.
+- ADMIN/MANAGER Paid actions on Purchasing and Billing record actual remaining cash transactionally.
+  They preserve earlier partial payments and default the new actual date to today. Foreign-currency cash
+  requires employee-entered actual FX. Partially paid opens amount/date/FX entry. Status corrections
+  use the underlying cash records; legacy display-only override columns remain but no longer drive the UI.
 - Billing's New Billing menu exposes Import Client document and Enter manually. Manual creation
   opens the existing reviewed form and authenticated confirmation service without upload or AI calls.
 - Budgeted Project freight HT is now automatically expected Product Purchase Cost HT × Project
@@ -492,8 +489,7 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
   duplicate submissions are blocked. References remain record links with a separate edit pencil.
 - Single-field changes validate permissions, current stored values and relationships server-side
   inside an audited transaction. Stale cell values are rejected rather than overwriting newer edits.
-  Purchasing payment-status labels retain the display-only override workflow; Billing uses
-  its separate unified status selector with actual receipt confirmation for Paid.
+  Purchasing and Billing Paid actions both record actual cash; neither uses a display-only override.
 - Calculated financial and cash cells open the authoritative Details or Related editor instead of
   overwriting derived totals. Purchase HT uses the existing Order pricing/VAT service. Billing HT
   preserves entered VAT, recalculates TTC and percentage allocations, and checks payment limits.
@@ -501,3 +497,17 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 - Billing Client/Project changes select the Project and its Client together. Linked allocations,
   payment activity and currency/FX safeguards remain authoritative. Cancelled records are read-only.
   This change introduces no schema migration.
+
+## Approved consistency review (September 2026)
+
+- Financials category costs and cost-plus targets are strictly HT. The separate economic bridge adds Order and Project-freight non-deductible VAT once. Existing economic profit/VAT calculations remain authoritative.
+- Project budget requires explicit Merchandise, calculated Freight and Other/services amounts. Nullable `estimatedOtherCostHt` is unknown until reviewed; an entered zero is an explicit zero budget. No historical backfill. Migration `20260922000000_project_other_budget` is prepared; deployment is a separate action.
+- Overall Budgeted Sell follows `targetMode`: EXPECTED_SELL uses the approved overall value with category targets marked Not allocated; MARKUP uses complete approved category budgets and component rates.
+- Distinct names identify different bases: Billing less cost, Billing less Order sell, Unallocated Invoice HT, Cash balance and Freight recovery surplus. Project-default freight target, applicable-markup recovery target and allocated billing minus freight cost remain different established formulas.
+- Full Order/Billing financial editors and Billing allocation drawers carry a version of the record and financial dependencies. Stale saves are rejected with changed field/group names while retaining drafts. Transactions are serializable. Closing/reopening refreshes the edit snapshot; a refreshed page must not silently bless a stale draft.
+- Simple text/date cells remain inline; money and relationship choices use contextual drawers. Derived totals link to their authoritative source editor. Billing has one status control in its header; Reference is primary and short description is secondary. Legacy Order title stays secondary to Reference and separate from Project Package grouping.
+- Due-date display uses the earliest unpaid term with the Client document fallback where needed. Date edits affect that term only, never the whole schedule. Cash calendars use remaining TTC, show original scheduled TTC separately, identify Quote planning and Invoice expectations, and list Issue invoice reminders separately.
+- Supplier-scoped actual cash filters outflows at transaction level, includes freight-only Supplier relationships and suppresses Client inflows rather than inventing Supplier attribution.
+- Billing filters include derived status. Monetary/status sorting occurs before pagination and exports share the same validated filter/sort scope. Unlike currencies are grouped, never summed or compared as if equivalent.
+- Allocation presentation distinguishes Merchandise, Freight and Other/services, with total/allocated/Project remainder. Payment term labels remain unchanged, with percentage/fixed basis in a separate column.
+- Missing states are contextual: Not set, Not applicable, Missing FX, Not budgeted or Budget incomplete; zero remains a numeric value. Percentage-point differences use pp and FX keeps higher precision.

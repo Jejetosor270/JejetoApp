@@ -14,10 +14,10 @@ const portfolio = readFileSync(
   "utf8",
 );
 
-describe("Funding Coverage presentation", () => {
+describe("Billing less Order sell presentation", () => {
   it("replaces the Project list freight percentage with markup and coverage", () => {
     expect(projects).toContain(">Target Markup<");
-    expect(projects).toContain(">Funding Coverage<");
+    expect(projects).toMatch(/>\s*Billing less Order sell\s*</);
     expect(projects).not.toContain(">Expected freight allowance %<");
     expect(projects).toContain("defaultProductMarkupRate");
     expect(projects).toContain("formatSignedMoney");
@@ -25,18 +25,20 @@ describe("Funding Coverage presentation", () => {
 
   it("shows one signed Project detail metric with its interpretation", () => {
     expect(dashboard).toContain("FundingCoverageSummary");
-    expect(dashboard).toContain("Excess Billing Coverage");
-    expect(dashboard).toContain("Funding Gap");
-    expect(dashboard).toContain("Fully Covered");
+    expect(dashboard).toContain("Billing surplus over Order sell");
+    expect(dashboard).toContain("Billing shortfall against Order sell");
+    expect(dashboard).toContain("Order sell covered");
     expect(dashboard).toContain("Cash and VAT are separate");
   });
 
   it("adds the global total, gap count, and Project reporting column", () => {
-    expect(portfolio).toContain("Total Funding Coverage");
-    expect(portfolio).toContain("Projects with Funding Gap");
-    expect(portfolio).toContain("Excess Billing Coverage");
-    expect(portfolio).toContain("Funding Gap");
-    expect(portfolio).toContain('"Funding Coverage HT"');
+    expect(portfolio).toContain("Total Billing less Order sell");
+    expect(portfolio).toContain(
+      "Projects with Billing shortfall against Order sell",
+    );
+    expect(portfolio).toContain("Billing surplus over Order sell");
+    expect(portfolio).toContain("Billing shortfall against Order sell");
+    expect(portfolio).toContain('"Billing less Order sell HT"');
     expect(portfolio).toContain('view === "funding"');
     expect(portfolio).toContain("project.fundingCoverage.fundingCoverageHt");
     expect(portfolio).toContain("formatSignedMoney");

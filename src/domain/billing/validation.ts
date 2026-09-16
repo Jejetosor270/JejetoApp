@@ -127,6 +127,7 @@ export const clientBillingConfirmationSchema = z
     paymentDate: optionalDate,
     paymentFx: optionalFx,
     action: z.enum(["CREATE", "UPDATE"]),
+    shortDescription: optionalText(240),
     allocations: z.array(billingAllocationSchema).max(100),
     clientId: requiredUuid("Select a Client."),
     documentDate: dateOnly,
@@ -229,7 +230,7 @@ export function parseClientBillingConfirmation(formData: FormData) {
 
 export const clientReceiptSchema = z.object({
   amount: positiveMoney,
-  billingDocumentId: requiredUuid("Select a valid Billing Event."),
+  billingDocumentId: requiredUuid("Select a valid Billing document."),
   fxRate: optionalFx,
   installmentId: optionalUuid("Select a valid billing installment."),
   notes: optionalText(4000),
@@ -242,14 +243,14 @@ export const clientReceiptUpdateSchema = clientReceiptSchema.extend({
 });
 
 export const clientReceiptDeleteSchema = z.object({
-  billingDocumentId: requiredUuid("Select a valid Billing Event."),
+  billingDocumentId: requiredUuid("Select a valid Billing document."),
   id: requiredUuid("Select a valid Client receipt."),
 });
 
 export const clientBillingInstallmentCreateSchema = z
   .object({
     basis: z.enum(InstallmentBasis),
-    billingDocumentId: requiredUuid("Select a valid Billing Event."),
+    billingDocumentId: requiredUuid("Select a valid Billing document."),
     dueDate: optionalDate,
     label: z.string().trim().min(1, "Enter an installment label.").max(200),
     notes: optionalText(4000),
@@ -272,14 +273,14 @@ export const clientBillingInstallmentCreateSchema = z
   });
 
 export const clientBillingInstallmentDeleteSchema = z.object({
-  billingDocumentId: requiredUuid("Select a valid Billing Event."),
+  billingDocumentId: requiredUuid("Select a valid Billing document."),
   id: requiredUuid("Select a valid installment."),
 });
 
 export const clientBillingInstallmentUpdateSchema = z
   .object({
     basis: z.enum(InstallmentBasis),
-    billingDocumentId: requiredUuid("Select a valid Billing Event."),
+    billingDocumentId: requiredUuid("Select a valid Billing document."),
     dueDate: optionalDate,
     id: requiredUuid("Select a valid installment."),
     label: z.string().trim().min(1, "Enter an installment label.").max(200),
@@ -311,6 +312,12 @@ export const inlineClientBillingSchema = z.object({
 });
 
 const billingEditFields = z.object({
+  expectedVersion: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+  expectedFields: z.string().max(20000).optional(),
+  shortDescription: optionalText(240),
   freightCoverageHt: money.optional(),
   otherCoverageHt: money.optional(),
   allocations: z.array(billingAllocationSchema).max(100),
@@ -381,6 +388,11 @@ export const billingAllocationsEditSchema = z.object({
 
 export const orderBillingLinkSchema = z
   .object({
+    expectedVersion: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
+    expectedFields: z.string().max(20000).optional(),
     freightCoverageHt: money.optional(),
     otherCoverageHt: money.optional(),
     allocatedAmount: money.optional(),
@@ -545,6 +557,11 @@ export type OrderCreationBillingLinkInput = z.infer<
 >;
 
 export const billingFreightEditSchema = z.object({
+  expectedVersion: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+  expectedFields: z.string().max(20000).optional(),
   billingDocumentId: requiredUuid("Select a valid billing document."),
   freightCoverageHt: money,
 });

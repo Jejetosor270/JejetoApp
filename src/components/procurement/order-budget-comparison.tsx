@@ -1,5 +1,9 @@
 import { orderBudgetComparison } from "@/domain/finance/order-budget";
-import { formatMoney, formatRate } from "@/domain/procurement/presentation";
+import {
+  formatMoney,
+  formatRate,
+  formatPercentagePoints,
+} from "@/domain/procurement/presentation";
 import type { OrderSummary } from "@/lib/procurement/orders";
 export function OrderBudgetComparison({ order }: { order: OrderSummary }) {
   const comparison = orderBudgetComparison({
@@ -8,11 +12,15 @@ export function OrderBudgetComparison({ order }: { order: OrderSummary }) {
     purchaseCurrency: order.orderCurrencyCode,
     reportingCurrency: order.project.reportingCurrencyCode,
     purchaseFx: order.costs.purchaseFxRate,
-    agreedMarkup: order.project.defaultProductMarkupRate,
+    agreedMarkup: order.costs.markupRate ?? "0",
     actualMarkup: order.billing.actualMarkupRate,
   });
   const currency = order.project.reportingCurrencyCode;
   const values = [
+    [
+      "Allocated Invoice HT (to date)",
+      formatMoney(order.billing.invoicedAllocated, currency, "Missing FX"),
+    ],
     [
       "Allocated product budget HT",
       formatMoney(order.budgetPurchaseAmountHt ?? null, currency),
@@ -25,21 +33,23 @@ export function OrderBudgetComparison({ order }: { order: OrderSummary }) {
       "Purchase variance (actual − budget)",
       formatMoney(comparison.variance, currency),
     ],
+    ["Planned economic markup", formatRate(order.costs.markupRate)],
     [
-      "Agreed Project product markup",
-      formatRate(order.project.defaultProductMarkupRate),
+      "Allocated-to-date economic markup (provisional)",
+      formatRate(order.billing.actualMarkupRate),
     ],
-    ["Actual invoiced markup", formatRate(order.billing.actualMarkupRate)],
     [
       "Markup difference",
-      comparison.markupDifferencePoints === null
-        ? "—"
-        : comparison.markupDifferencePoints + " percentage points",
+      order.costs.markupRate === null
+        ? "Not applicable"
+        : formatPercentagePoints(comparison.markupDifferencePoints),
     ],
   ];
   return (
-    <section className="bg-card rounded-lg border p-4">
-      <h2 className="text-sm font-semibold">Budget & actual performance</h2>
+    <details className="bg-card rounded-lg border p-4">
+      <summary className="cursor-pointer text-sm font-semibold">
+        Budget & actual performance
+      </summary>
       <dl className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {values.map(([label, value]) => (
           <div key={label}>
@@ -49,11 +59,12 @@ export function OrderBudgetComparison({ order }: { order: OrderSummary }) {
         ))}
       </dl>
       <p className="text-muted-foreground mt-3 text-xs">
-        Positive purchase variance means over budget. Actual markup uses
-        allocated active Invoice HT less economic landed cost, divided by
-        economic landed cost; it includes freight and other costs. Missing
-        amounts or required FX leave comparisons incomplete.
+        Positive purchase variance means over budget. Both markup figures use
+        total economic landed cost. Allocated-to-date markup uses allocated
+        active Invoice HT less economic landed cost, divided by economic landed
+        cost; partial invoicing makes it provisional. Missing amounts or
+        required FX leave comparisons incomplete.
       </p>
-    </section>
+    </details>
   );
 }

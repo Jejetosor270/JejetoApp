@@ -169,7 +169,9 @@ const confirmationSchema = z
     billingDocumentId: z.preprocess(
       (value) =>
         typeof value === "string" && value.trim() === "" ? undefined : value,
-      z.uuid("Choose a valid Billing event or skip the allocation.").optional(),
+      z
+        .uuid("Choose a valid Billing document or skip the allocation.")
+        .optional(),
     ),
     billingPercentageRate: optionalPercent,
     billingRemainderApproved: z.boolean(),

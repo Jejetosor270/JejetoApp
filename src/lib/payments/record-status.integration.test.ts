@@ -9,7 +9,7 @@ import { getOrder } from "@/lib/procurement/orders";
 import { getClientBillingDocument } from "@/lib/billing/billing";
 import { recordPaymentStatusLabel } from "@/domain/payments/record-status";
 let memory: Awaited<ReturnType<typeof prismaMemoryDatabase>>;
-let actorId: string, orderId: string, billingId: string, termId: string;
+let actorId: string, orderId: string, billingId: string;
 beforeAll(async () => {
   memory = await prismaMemoryDatabase();
   state.db = memory.active;
@@ -35,6 +35,9 @@ beforeAll(async () => {
         projectId: project.id,
         orderCurrencyCode: "EUR",
         sellingCurrencyCode: "EUR",
+        costLines: {
+          create: { category: "SUPPLIER_PURCHASE", originalAmount: "100" },
+        },
       },
     })
   ).id;
@@ -52,33 +55,55 @@ beforeAll(async () => {
       },
     })
   ).id;
-  termId = (
-    await db.paymentInstallment.create({
-      data: {
-        orderId,
-        direction: "SUPPLIER_PAYMENT",
-        sequence: 1,
-        label: "Deposit",
-        basis: "FIXED_AMOUNT",
-        scheduledAmount: "100",
-        currencyCode: "EUR",
-        dueDate: new Date("2000-01-01"),
-      },
-    })
-  ).id;
+  await db.paymentInstallment.create({
+    data: {
+      orderId,
+      direction: "SUPPLIER_PAYMENT",
+      sequence: 1,
+      label: "Deposit",
+      basis: "FIXED_AMOUNT",
+      scheduledAmount: "100",
+      currencyCode: "EUR",
+      dueDate: new Date("2000-01-01"),
+    },
+  });
 }, 30000);
 afterAll(async () => {
   await memory.close();
 });
 
-it("persists display-only overrides, preserves cash and automatic status, and resets to Automatic", async () => {
-  const beforeOrder = await getOrder(orderId);
-  const beforeBilling = await getClientBillingDocument(billingId);
+it("records partial cash, then only the full remaining balance, and repeated Paid is idempotent", async () => {
+  await saveRecordStatus(actorId, {
+    kind: "order",
+    id: orderId,
+    value: "PARTIALLY_PAID",
+    amount: "25",
+    paymentDate: "2026-09-01",
+  });
+  expect((await getOrder(orderId))?.supplierPayment.paid).toBe("25");
   await saveRecordStatus(actorId, {
     kind: "order",
     id: orderId,
     value: "PAID",
   });
+  const order = await getOrder(orderId);
+  expect(order?.supplierPayment.paid).toBe("100");
+  expect(order?.supplierPayment.outstanding).toBe("0");
+  expect(order?.paymentStatusOverride).toBeNull();
+  expect(recordPaymentStatusLabel(order?.supplierPayment.status ?? "")).toBe(
+    "Paid",
+  );
+  expect(await memory.raw.paymentSettlement.count()).toBe(2);
+  await saveRecordStatus(actorId, {
+    kind: "order",
+    id: orderId,
+    value: "PAID",
+  });
+  expect(await memory.raw.paymentSettlement.count()).toBe(2);
+  expect((await getClientBillingDocument(billingId))?.paid).toBe("0.0000");
+  await expect(
+    saveRecordStatus(actorId, { kind: "order", id: orderId, value: "UNPAID" }),
+  ).rejects.toThrow("actual payments");
   await expect(
     saveRecordStatus(actorId, {
       kind: "billing",
@@ -86,49 +111,6 @@ it("persists display-only overrides, preserves cash and automatic status, and re
       value: "PAID",
     }),
   ).rejects.toThrow("Billing status selector");
-  const order = await getOrder(orderId);
-  const billing = await getClientBillingDocument(billingId);
-  expect(order?.supplierPayment).toEqual(beforeOrder?.supplierPayment);
-  expect(billing?.paid).toBe(beforeBilling?.paid);
-  expect(billing?.outstanding).toBe("120.0000");
-  expect(billing?.status).toBe(beforeBilling?.status);
-  expect(
-    recordPaymentStatusLabel(
-      order?.supplierPayment.status ?? "",
-      order?.paymentStatusOverride,
-    ),
-  ).toBe("Paid (manual)");
-  expect(await memory.raw.paymentSettlement.count()).toBe(0);
-  expect(await memory.raw.clientReceipt.count()).toBe(0);
-  await memory.raw.paymentSettlement.create({
-    data: {
-      installmentId: termId,
-      amount: "25",
-      settledAt: new Date("2026-09-01"),
-    },
-  });
-  expect((await getOrder(orderId))?.paymentStatusOverride).toBe("PAID");
-  await saveRecordStatus(actorId, {
-    kind: "order",
-    id: orderId,
-    value: "AUTO",
-  });
-  await expect(
-    saveRecordStatus(actorId, {
-      kind: "billing",
-      id: billingId,
-      value: "AUTO",
-    }),
-  ).rejects.toThrow("Billing status selector");
-  expect((await getOrder(orderId))?.paymentStatusOverride).toBeNull();
-  expect(
-    (
-      await memory.raw.clientBillingDocument.findUniqueOrThrow({
-        where: { id: billingId },
-      })
-    ).paymentStatusOverride,
-  ).toBeNull();
-  expect(await memory.raw.auditEvent.count()).toBe(2);
 });
 
 it("preserves Billing cancellation safeguards and retains actual Order cash on cancellation", async () => {
@@ -165,8 +147,8 @@ it("preserves Billing cancellation safeguards and retains actual Order cash on c
       })
     ).status,
   ).toBe("CANCELLED");
-  expect(await memory.raw.paymentSettlement.count()).toBe(1);
-  // Disposable fixture only: a receipt-free Billing event may be cancelled.
+  expect(await memory.raw.paymentSettlement.count()).toBe(2);
+  // Disposable fixture only: a receipt-free Billing document may be cancelled.
   await memory.raw.clientReceipt.delete({ where: { id: receipt.id } });
   await saveRecordStatus(actorId, {
     kind: "billing",

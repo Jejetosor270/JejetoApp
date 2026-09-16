@@ -56,8 +56,9 @@ function errorState(error: unknown): OrderActionState {
   )
     return {
       formError:
-        error.message || "The selected Billing Event no longer exists.",
-      message: error.message || "The selected Billing Event no longer exists.",
+        error.message || "The selected Billing document no longer exists.",
+      message:
+        error.message || "The selected Billing document no longer exists.",
       status: "error",
     };
   console.error("Unable to save procurement order.", error);
@@ -137,6 +138,13 @@ export async function updateOrderAction(
   const actor = await requireMasterDataEditor();
   const values = orderFormValues(formData);
   const id = formData.get("id");
+  if (!formData.get("expectedVersion"))
+    return {
+      status: "error",
+      message:
+        "Reload the Order before editing; the record version is missing.",
+      formError: "Reload the Order before editing; your draft is retained.",
+    };
   const input = updateOrderInputSchema.safeParse({
     ...values,
     id: typeof id === "string" ? id : undefined,

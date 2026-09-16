@@ -62,6 +62,7 @@ export interface ProjectView {
   expectedCompletionDate: string | null;
   estimatedFreightCostHt: { toString(): string } | string | null;
   estimatedPurchaseCostHt: { toString(): string } | string | null;
+  estimatedOtherCostHt?: { toString(): string } | string | null;
   expectedSellHt: { toString(): string } | string | null;
   freightEstimateNotes: string | null;
   freightEstimateRate: { toString(): string } | string | null;
@@ -258,6 +259,19 @@ function ProjectFields({
             name="estimatedPurchaseCostHt"
           />
         </Field>
+        <Field
+          error={fieldErrors?.estimatedOtherCostHt}
+          label="Other/services budget HT"
+        >
+          <MoneyInput
+            className={inputClassName}
+            defaultValue={project.estimatedOtherCostHt?.toString() ?? ""}
+            name="estimatedOtherCostHt"
+          />
+          <p className="text-muted-foreground text-xs">
+            Enter 0 to approve a zero budget; blank means not budgeted.
+          </p>
+        </Field>
         <Field label="Budgeted freight HT (automatic)">
           <p className="text-muted-foreground text-sm">
             Calculated from expected Product Purchase Cost HT × Project freight
@@ -325,7 +339,27 @@ function ProjectFields({
           />
         </Field>
       </FormSection>
-      <input name="targetMode" type="hidden" value="MARKUP" />
+      <FormSection title="Project selling target">
+        <Field label="Target mode">
+          <select
+            className={inputClassName}
+            name="targetMode"
+            defaultValue={project.targetMode}
+          >
+            <option value="MARKUP">Category markup</option>
+            <option value="EXPECTED_SELL">Approved selling target</option>
+          </select>
+        </Field>
+        <Field
+          label="Approved selling target HT (direct mode)"
+          error={fieldErrors?.expectedSellHt}
+        >
+          <MoneyInput
+            name="expectedSellHt"
+            defaultValue={project.expectedSellHt?.toString() ?? ""}
+          />
+        </Field>
+      </FormSection>
       <FormSection title="Freight">
         <div className="@min-[28rem]:col-span-2">
           <Field

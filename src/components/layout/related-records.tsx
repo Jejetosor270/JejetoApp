@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { DateInput } from "@/components/forms/date-input";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
@@ -213,9 +214,8 @@ export function RelatedRecordTable({
                               ) : null}
                             </span>
                           ) : (
-                            <input
+                            <DateInput
                               key={field.name}
-                              type="date"
                               aria-label={table.columns[index]}
                               className="border-input bg-background rounded border px-2 py-1"
                               value={fieldDraft[field.name] ?? ""}

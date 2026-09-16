@@ -130,6 +130,9 @@ export interface EditableOrder {
   category: string | null;
   costs: CostView;
   description: string | null;
+  shortDescription?: string | null;
+  editFields?: string;
+  editVersion?: string;
   expectedDeliveryDate: string | null;
   expectedReadyDate: string | null;
   freightResaleAmount: string | null;
@@ -371,6 +374,11 @@ export function OrderForm({
   order?: EditableOrder;
 }) {
   const router = useRouter();
+  const [expectedVersion] = useState(order?.editVersion ?? "");
+  const [expectedFields] = useState(order?.editFields ?? "");
+  const [shortDescription, setShortDescription] = useState(
+    order?.shortDescription ?? "",
+  );
   const isEditing = Boolean(order);
   const serverAction = order ? updateOrderAction : createOrderAction;
   const resilientAction = useCallback(
@@ -750,7 +758,17 @@ export function OrderForm({
         ) : null}
       </div>
       <form action={action} className="space-y-5" ref={formRef}>
-        {order ? <input name="id" type="hidden" value={order.id} /> : null}
+        {order ? (
+          <>
+            <input name="id" type="hidden" value={order.id} />
+            <input
+              name="expectedVersion"
+              type="hidden"
+              value={expectedVersion}
+            />
+            <input name="expectedFields" type="hidden" value={expectedFields} />
+          </>
+        ) : null}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-2">
           <Field error={fieldErrors.orderNumber} label="Internal reference">
             <input
@@ -762,6 +780,15 @@ export function OrderForm({
               }
               required
               value={draft.orderNumber}
+            />
+          </Field>
+          <Field error={fieldErrors.shortDescription} label="Short description">
+            <input
+              className={inputClassName}
+              name="shortDescription"
+              value={shortDescription}
+              onChange={(event) => setShortDescription(event.target.value)}
+              maxLength={240}
             />
           </Field>
           <Field error={fieldErrors.packageId} label="Package">
@@ -777,7 +804,7 @@ export function OrderForm({
             />
           </Field>
           {isEditing ? (
-            <Field error={fieldErrors.packageName} label="Order title">
+            <Field error={fieldErrors.packageName} label="Legacy Order title">
               <input
                 aria-invalid={Boolean(fieldErrors.packageName) || undefined}
                 className={errorClass("packageName")}
@@ -1841,11 +1868,11 @@ export function OrderForm({
               Optional Billing link
             </summary>
             <p className="text-muted-foreground mt-1 text-xs">
-              Link this new Order to an existing Billing Event from the same
+              Link this new Order to an existing Billing document from the same
               Project. You can also reconcile it later from either detail page.
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-              <Field label="Billing Event">
+              <Field label="Billing document">
                 <select
                   className={inputClassName}
                   name="billingDocumentId"

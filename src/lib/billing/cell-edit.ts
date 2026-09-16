@@ -1,4 +1,5 @@
 import "server-only";
+import { billingDueDateContext, editBillingDueDate } from "./due-date";
 import { Prisma } from "@/generated/prisma/client";
 import { CellEditError, type CellEditInput } from "@/domain/listing/cell-edit";
 import { billingDocumentEditSchema } from "@/domain/billing/validation";
@@ -29,11 +30,13 @@ export async function editBillingCell(
     );
   const { field } = input;
   const previous =
-    field === "documentDate" || field === "dueDate"
-      ? (dateToDateOnly(record[field]) ?? "")
-      : field === "totalHt"
-        ? record.totalHt.toString()
-        : (record[field] ?? "");
+    field === "dueDate"
+      ? ((await billingDueDateContext(tx, input.id)).dueDate ?? "")
+      : field === "documentDate"
+        ? (dateToDateOnly(record[field]) ?? "")
+        : field === "totalHt"
+          ? record.totalHt.toString()
+          : (record[field] ?? "");
   if (previous !== input.previous)
     throw new CellEditError(
       "This value changed since you opened the table. Reload before saving; your draft is retained.",
@@ -56,7 +59,13 @@ export async function editBillingCell(
       if ((!value && field === "documentDate") || (value && !isDateOnly(value)))
         throw new CellEditError("Enter a valid date.");
       if (field === "documentDate") data.documentDate = dateOnlyToDate(value);
-      else data.dueDate = value ? dateOnlyToDate(value) : null;
+      else
+        data.dueDate = await editBillingDueDate(
+          tx,
+          actorId,
+          input.id,
+          value || null,
+        );
     }
     await tx.clientBillingDocument.update({ where: { id: input.id }, data });
     await writeAuditEvent(tx, actorId, {
@@ -88,6 +97,7 @@ export async function editBillingCell(
     throw new CellEditError("Select a Project assigned to a Client.");
   const values = billingDocumentEditSchema.parse({
     ...record,
+    shortDescription: record.shortDescription ?? undefined,
     allocations: record.allocations.map((allocation) => ({
       orderId: allocation.orderId,
       allocatedAmount:
@@ -116,7 +126,7 @@ export async function editBillingCell(
     otherCoverageHt: record.otherCoverageHt.toString(),
     fxRate: record.fxRateToReporting?.toString(),
     documentDate: dateToDateOnly(record.documentDate),
-    dueDate: dateToDateOnly(record.dueDate) ?? undefined,
+    dueDate: (await billingDueDateContext(tx, input.id)).dueDate ?? undefined,
     notes: record.notes ?? undefined,
     ...(field === "clientId" || field === "projectId"
       ? { [field]: value }

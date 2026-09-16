@@ -5,6 +5,7 @@ export const billingStatuses = [
   "TO_BE_INVOICED",
   "INVOICED",
   "PAID",
+  "PARTIALLY_PAID",
   "OVERDUE",
   "CANCELLED",
 ] as const;
@@ -46,5 +47,6 @@ export function billingStatus(input: {
   )
     return "PAID";
   if (input.dueDate !== null && input.dueDate < input.today) return "OVERDUE";
+  if (new Decimal(input.paid).greaterThan(0)) return "PARTIALLY_PAID";
   return "INVOICED";
 }

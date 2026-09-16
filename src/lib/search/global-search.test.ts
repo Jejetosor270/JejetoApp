@@ -47,5 +47,23 @@ describe("global Item search", () => {
     expect(database.item.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ take: 12 }),
     );
+    expect(database.procurementOrder.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: expect.arrayContaining([
+            { shortDescription: { contains: "chair", mode: "insensitive" } },
+          ]),
+        },
+      }),
+    );
+    expect(database.clientBillingDocument.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: expect.arrayContaining([
+            { shortDescription: { contains: "chair", mode: "insensitive" } },
+          ]),
+        },
+      }),
+    );
   });
 });

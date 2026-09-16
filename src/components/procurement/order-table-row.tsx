@@ -1,7 +1,7 @@
 "use client";
 import type { ReactNode } from "react";
 import { saveTableCellAction } from "@/app/(app)/cell-actions";
-import { saveRecordStatusAction } from "@/app/(app)/payments/record-status-actions";
+import { RecordPaymentStatus } from "@/components/payments/record-payment-status";
 import {
   EditableCell,
   SourceCell,
@@ -18,10 +18,6 @@ import {
 import { carriers, carrierName } from "@/config/carriers";
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
-import {
-  recordPaymentStatusLabel,
-  manualPaymentStatuses,
-} from "@/domain/payments/record-status";
 import { formatEnumLabel } from "@/domain/presentation/labels";
 import type { CellEditInput } from "@/domain/listing/cell-edit";
 import type { OrderSummary } from "@/lib/procurement/orders";
@@ -302,47 +298,35 @@ export function OrderRow({
           paymentsHref,
         );
       case "dueDate":
-        return source(
-          field,
-          formatDateOnly(order.supplierPayment.nextDueDate),
-          paymentsHref,
+        return (
+          <EditableCell
+            label={`Payment due date for ${order.orderNumber}`}
+            value={order.supplierPayment.nextDueDate ?? ""}
+            display={formatDateOnly(order.supplierPayment.nextDueDate)}
+            type="date"
+            canEdit={editable}
+            onSave={(value, previous) =>
+              saveTableCellAction({
+                kind: "order",
+                id: order.id,
+                field: "dueDate",
+                value,
+                previous,
+              })
+            }
+          />
         );
       case "paymentStatus":
         return (
-          <EditableCell
-            label={`Payment status for ${order.orderNumber}`}
-            value={order.paymentStatusOverride ?? "AUTO"}
-            display={recordPaymentStatusLabel(
-              order.supplierPayment.status,
-              order.paymentStatusOverride,
-              order.status === "CANCELLED",
-            )}
+          <RecordPaymentStatus
+            kind="order"
+            id={order.id}
+            automatic={order.supplierPayment.status}
+            cancelled={order.status === "CANCELLED"}
             canEdit={editable}
-            type="select"
-            options={[
-              {
-                value: "AUTO",
-                label: `Automatic · ${recordPaymentStatusLabel(order.supplierPayment.status)}`,
-              },
-              ...manualPaymentStatuses.map((status) => ({
-                value: status,
-                label: `${formatEnumLabel(status)} (manual)`,
-              })),
-            ]}
-            hint="Manual status changes the label only, not cash or balances."
-            onSave={async (value) => {
-              const result = await saveRecordStatusAction({
-                kind: "order",
-                id: order.id,
-                value,
-              });
-              return {
-                status: result.status === "success" ? "success" : "error",
-                ...(result.message ? { message: result.message } : {}),
-              };
-            }}
           />
         );
+
       default:
         return null;
     }

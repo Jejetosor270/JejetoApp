@@ -1022,11 +1022,11 @@ export function QuoteReview({
                 Optional Billing reconciliation
               </h2>
               <p className="text-muted-foreground mt-1 text-xs">
-                Link the reviewed Order to an existing Billing Event from this
-                Project, or skip and reconcile later.
+                Link the reviewed Order to an existing Billing document from
+                this Project, or skip and reconcile later.
               </p>
               <div className="mt-4 grid gap-3 @md:grid-cols-2 @4xl:grid-cols-2">
-                <Field label="Billing Event">
+                <Field label="Billing document">
                   <select
                     className={inputClassName}
                     name="billingDocumentId"

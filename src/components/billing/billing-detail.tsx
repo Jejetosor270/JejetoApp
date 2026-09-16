@@ -12,7 +12,6 @@ import {
 import { MoneyInput } from "@/components/master-data/form-ui";
 
 import { BillingFreightEditor } from "@/components/billing/billing-freight-editor";
-import { revenueParts } from "@/domain/finance/project-control";
 import { freightCoverageBreakdown } from "@/domain/billing/freight-coverage";
 import { AllocationInputs } from "@/components/billing/allocation-inputs";
 import {
@@ -106,6 +105,9 @@ type AllocationDraft = {
 };
 
 type BillingDraft = {
+  shortDescription: string;
+  expectedVersion: string;
+  expectedFields: string;
   freightCoverageHt: string;
   otherCoverageHt: string;
   allocations: AllocationDraft[];
@@ -163,6 +165,9 @@ function initialDraft(document: ClientBillingView): BillingDraft {
     })),
     clientId: document.clientId,
     currencyCode: document.currencyCode,
+    shortDescription: document.shortDescription ?? "",
+    expectedVersion: document.editVersion,
+    expectedFields: document.editFields ?? "",
     documentDate: document.documentDate,
     documentType: document.documentType,
     dueDate: document.dueDate ?? "",
@@ -211,6 +216,11 @@ export function BillingDetail({
   const [editing, setEditing] = useState(canEdit && startEditing);
   const [saved, setSaved] = useState(() => initialDraft(document));
   const [draft, setDraft] = useState(() => initialDraft(document));
+  if (!editing && saved.expectedVersion !== document.editVersion) {
+    const current = initialDraft(document);
+    setSaved(current);
+    setDraft(current);
+  }
   const { onSubmit, pending, state } = usePersistentActionState(
     updateClientBillingDocumentAction,
     initialState,
@@ -253,12 +263,6 @@ export function BillingDetail({
     today: businessToday(),
     totalTtc: calculationDecimal(saved.totalTtc),
   });
-  const savedReconciliation = allocationReconciliation(
-    calculationDecimal(saved.totalHt),
-    saved.allocations.map((allocation) =>
-      calculationDecimal(allocation.amount),
-    ),
-  );
   const freightBreakdown = freightCoverageBreakdown(
     saved.totalHt,
     saved.freightCoverageHt,
@@ -378,34 +382,46 @@ export function BillingDetail({
       <DetailPageHeader
         actions={
           canEdit && !editing ? (
-            <Button onClick={() => setEditing(true)} type="button">
+            <Button
+              onClick={() => {
+                setDraft(
+                  document.editVersion === saved.expectedVersion
+                    ? saved
+                    : initialDraft(document),
+                );
+                setEditing(true);
+              }}
+              type="button"
+            >
               Edit
             </Button>
           ) : undefined
         }
         backHref="/billing"
         backLabel="Back to Billing"
-        eyebrow="Billing Event"
+        eyebrow="Billing document"
         meta={
           <>
             {savedClient?.displayName ?? document.client.displayName} ·{" "}
             {savedProject?.name ?? document.project.name}
+            {saved.shortDescription && (
+              <p className="mt-1">{saved.shortDescription}</p>
+            )}
           </>
         }
-        status={document.status}
+        statusControl={
+          <BillingStatusControl
+            id={document.id}
+            status={document.status}
+            documentType={document.documentType}
+            remaining={document.outstanding}
+            currency={document.currencyCode}
+            canEdit={canEdit}
+          />
+        }
         title={saved.reference}
       />
 
-      {!editing && (
-        <BillingStatusControl
-          id={document.id}
-          status={document.status}
-          documentType={document.documentType}
-          remaining={document.outstanding}
-          currency={document.currencyCode}
-          canEdit={canEdit}
-        />
-      )}
       {editing ? (
         <EditorDrawer
           open={editing}
@@ -424,6 +440,33 @@ export function BillingDetail({
             }}
           >
             <input name="id" type="hidden" value={document.id} />
+            <input
+              name="expectedVersion"
+              type="hidden"
+              value={draft.expectedVersion}
+            />
+            <input
+              name="expectedFields"
+              type="hidden"
+              value={draft.expectedFields}
+            />
+            <Field
+              label="Short description"
+              error={fieldErrors.shortDescription}
+            >
+              <input
+                className={inputClassName}
+                name="shortDescription"
+                maxLength={240}
+                value={draft.shortDescription}
+                onChange={(e) =>
+                  setDraft((current) => ({
+                    ...current,
+                    shortDescription: e.target.value,
+                  }))
+                }
+              />
+            </Field>
             <input
               name="allocations"
               type="hidden"
@@ -694,10 +737,14 @@ export function BillingDetail({
                     error={fieldErrors.totalTtc}
                     label={`TTC (${draft.currencyCode})`}
                   >
+                    <p
+                      className={`${inputClassName} bg-muted/40 financial-figure`}
+                    >
+                      {formatMoney(draft.totalTtc, draft.currencyCode)}
+                    </p>
                     <input
-                      className={`${inputClassName} bg-muted/40`}
+                      type="hidden"
                       name="totalTtc"
-                      readOnly
                       value={draft.totalTtc}
                     />
                   </Field>
@@ -941,7 +988,7 @@ export function BillingDetail({
               </section>
               <div className="flex flex-wrap items-center gap-2">
                 <SubmitButton pending={pending}>
-                  Save Billing Event
+                  Save Billing document
                 </SubmitButton>
                 <SheetClose asChild>
                   <Button disabled={pending} type="button" variant="outline">
@@ -1043,69 +1090,49 @@ export function BillingDetail({
                     />
                   </article>
                   <article className="bg-card rounded-lg border p-4">
-                    <RecordSectionHeading
-                      title="Allocation & freight"
-                      description="Commercial Billing HT attribution, separate from cash received."
-                    />
-                    <RecordFields
-                      values={[
-                        {
-                          label: "Unallocated Billing HT",
-                          value: formatMoney(
-                            savedReconciliation.remaining,
-                            saved.currencyCode,
-                          ),
-                        },
-                        {
-                          label: "Other/services HT (included)",
-                          value: formatMoney(
-                            saved.otherCoverageHt,
-                            saved.currencyCode,
-                          ),
-                        },
-                        {
-                          label: "Merchandise HT",
-                          value: formatMoney(
-                            revenueParts(
-                              saved.totalHt,
-                              saved.freightCoverageHt,
-                              saved.otherCoverageHt,
-                            ).merchandise,
-                            saved.currencyCode,
-                          ),
-                        },
-                        {
-                          label: "Total freight HT (included)",
-                          value: formatMoney(
-                            saved.freightCoverageHt,
-                            saved.currencyCode,
-                          ),
-                        },
-                        {
-                          label: "Freight allocated to Orders HT",
-                          value: formatMoney(
-                            freightBreakdown.allocatedFreightHt,
-                            saved.currencyCode,
-                          ),
-                        },
-                        {
-                          label: "Freight remaining at Project level HT",
-                          value: formatMoney(
-                            freightBreakdown.projectFreightHt,
-                            saved.currencyCode,
-                          ),
-                        },
-                      ]}
-                    />
+                    <RecordSectionHeading title="Invoice allocation HT" />
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr>
+                            <th className="p-2 text-left">Measure</th>
+                            {freightBreakdown.categories.map((c) => (
+                              <th key={c.label} className="p-2 text-right">
+                                {c.label}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(
+                            [
+                              ["Total", "total"],
+                              ["Allocated to Orders", "allocated"],
+                              ["Project remainder", "remaining"],
+                            ] as const
+                          ).map(([label, key]) => (
+                            <tr key={key} className="border-t">
+                              <th className="p-2 text-left font-normal">
+                                {label}
+                              </th>
+                              {freightBreakdown.categories.map((c) => (
+                                <td
+                                  key={c.label}
+                                  className="financial-figure p-2 text-right"
+                                >
+                                  {formatMoney(c[key], saved.currencyCode)}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </article>
                 </section>
                 <section className="bg-card rounded-lg border p-4">
-                  <RecordSectionHeading title="Status & dates" />
+                  <RecordSectionHeading title="Dates" />
                   <dl className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <DetailValue
-                      label="Payment status"
-                      value={formatEnumLabel(document.status)}
-                    />
                     <DetailValue
                       label="Document date"
                       value={formatDateOnly(saved.documentDate)}
@@ -1180,8 +1207,6 @@ export function BillingDetail({
                           kind: "billing-orders" as const,
                           parentId: document.id,
                         },
-                        editKind: "allocation" as const,
-                        editParentId: document.id,
                       }
                     : {}),
                   title: "Linked Orders",
@@ -1192,11 +1217,12 @@ export function BillingDetail({
                     "Supplier",
                     "Allocated HT",
                     "Of which freight HT",
+                    "Other/services HT",
                     "% of Billing",
                     "Planned sell HT",
                     "Effective markup",
                   ],
-                  numericColumns: [2, 3, 4, 5, 6],
+                  numericColumns: [2, 3, 4, 5, 6, 7],
                   rows: saved.allocations.map((allocation) => {
                     const order = orderById.get(allocation.orderId);
                     const financial = financialByOrder.get(allocation.orderId);
@@ -1227,6 +1253,10 @@ export function BillingDetail({
                           allocation.freightCoverageHt ?? "0",
                           saved.currencyCode,
                         ),
+                        formatMoney(
+                          allocation.otherCoverageHt ?? "0",
+                          saved.currencyCode,
+                        ),
                         formatRate(
                           humanPercentageToFraction(
                             percentageFromAmount(
@@ -1252,6 +1282,8 @@ export function BillingDetail({
                     <div className="flex flex-wrap gap-2">
                       <BillingFreightEditor
                         billingId={document.id}
+                        expectedVersion={document.editVersion}
+                        expectedFields={document.editFields}
                         totalHt={saved.totalHt}
                         currencyCode={saved.currencyCode}
                         freightCoverageHt={saved.freightCoverageHt}

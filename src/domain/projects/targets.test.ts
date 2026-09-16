@@ -13,6 +13,7 @@ describe("project financial targets", () => {
   it("keeps Product and Freight estimates on their component markups", () => {
     expect(
       calculateProjectTargets({
+        estimatedOtherCostHt: "0",
         defaultFreightMarkupRate: "0.10",
         defaultProductMarkupRate: "0.30",
         estimatedFreightCostHt: null,
@@ -20,17 +21,18 @@ describe("project financial targets", () => {
         targetMode: "MARKUP",
       }),
     ).toMatchObject({
-      effectiveMarkupRate: "0.300000",
-      estimatedCostHt: "591700.0000",
+      effectiveMarkupRate: null,
+      estimatedCostHt: null,
       expectedFreightSellHt: null,
       expectedProductSellHt: "769210.0000",
-      expectedSellHt: "769210.0000",
+      expectedSellHt: null,
     });
   });
 
   it("derives expected sell, profit, markup and margin from cost and markup", () => {
     expect(
       calculateProjectTargets({
+        estimatedOtherCostHt: "0",
         defaultFreightMarkupRate: "0.15",
         defaultProductMarkupRate: "0.30",
         estimatedFreightCostHt: "10000",
@@ -51,7 +53,9 @@ describe("project financial targets", () => {
 
   it("derives markup and margin when expected sell is authoritative", () => {
     const result = calculateProjectTargets({
+      estimatedOtherCostHt: "0",
       estimatedPurchaseCostHt: "70000",
+      estimatedFreightCostHt: "0",
       expectedSellHt: "100000",
       targetMode: "EXPECTED_SELL",
     });
@@ -75,6 +79,7 @@ describe("project financial targets", () => {
 
   it("compares full Project targets with authoritative actual-to-date values", () => {
     const target = calculateProjectTargets({
+      estimatedOtherCostHt: "0",
       defaultFreightMarkupRate: "0.15",
       defaultProductMarkupRate: "0.30",
       estimatedFreightCostHt: "10000",

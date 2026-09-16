@@ -37,7 +37,7 @@ it("shows overdue and partial together, while paid and cancelled take precedence
     "CANCELLED",
   );
 });
-it("uses unpaid term dates before a stale document date without dating an undated term", () => {
+it("uses unpaid term dates before a stale document date falling back for an undated term", () => {
   const term = {
     dueDate: "2026-09-01",
     isCancelled: false,
@@ -55,7 +55,7 @@ it("uses unpaid term dates before a stale document date without dating an undate
       [{ ...term, dueDate: null, payments: [] }],
       "2026-08-01",
     ),
-  ).toBeNull();
+  ).toBe("2026-08-01");
   expect(earliestUnpaidTermDate([], "2026-08-01")).toBe("2026-08-01");
 });
 

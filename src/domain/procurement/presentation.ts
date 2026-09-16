@@ -65,8 +65,12 @@ export function finalizeMoneyInput(value: string): string {
   return normalized === null ? value : normalized;
 }
 
-export function formatMoney(amount: string | null, currency: string): string {
-  if (amount === null) return "—";
+export function formatMoney(
+  amount: string | null,
+  currency: string,
+  missing = "Not set",
+): string {
+  if (amount === null) return missing;
   return `${formatDecimal(amount)} ${currency}`;
 }
 
@@ -74,7 +78,7 @@ export function formatSignedMoney(
   amount: string | null,
   currency: string,
 ): string {
-  if (amount === null) return "—";
+  if (amount === null) return "Incomplete";
   const prefix = new Decimal(amount).greaterThan(0) ? "+" : "";
   return `${prefix}${formatMoney(amount, currency)}`;
 }
@@ -83,9 +87,15 @@ function formatHumanPercentageValue(value: string): string {
   return formatGroupedDecimal(value, 0, 2);
 }
 
+export function formatPercentagePoints(value: string | null): string {
+  return value === null
+    ? "Not applicable"
+    : `${formatHumanPercentageValue(value)} pp`;
+}
+
 /** Formats a stored fractional rate: 0.155 means 15.5%. */
 export function formatPercentage(rate: string | null): string {
-  if (rate === null) return "—";
+  if (rate === null) return "Not applicable";
   return `${formatHumanPercentageValue(new Decimal(rate).times(100).toString())}%`;
 }
 
@@ -122,7 +132,7 @@ export function formatQuantity(value: string): string {
 }
 
 export function formatFxRate(value: string | null): string {
-  return value === null ? "—" : formatGroupedDecimal(value, 0, 10);
+  return value === null ? "Missing FX" : formatGroupedDecimal(value, 0, 10);
 }
 
 export function rateToPercentInput(rate: string | null): string {

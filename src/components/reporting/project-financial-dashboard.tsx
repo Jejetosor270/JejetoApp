@@ -72,21 +72,21 @@ function FundingCoverageSummary({
 }) {
   const statusLabel =
     coverage.status === "EXCESS_BILLING_COVERAGE"
-      ? "Excess Billing Coverage"
+      ? "Billing surplus over Order sell"
       : coverage.status === "FUNDING_GAP"
-        ? "Funding Gap"
+        ? "Billing shortfall against Order sell"
         : coverage.status === "FULLY_COVERED"
-          ? "Fully Covered"
+          ? "Order sell covered"
           : "Incomplete";
   return (
     <section className="bg-card rounded-lg border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
-            Funding Coverage
+            Billing less Order sell
           </p>
           <h2 className="mt-0.5 text-sm font-semibold">
-            Billing/Purchasing Invoiced Coverage
+            Billing less Order sell
           </h2>
           <p className="text-muted-foreground mt-1 text-xs">
             Active Invoice allocations plus approved Project remainder, less
@@ -108,7 +108,7 @@ function FundingCoverageSummary({
           [
             ["Orders Sell HT", coverage.supplierOrderSellHt],
             ["Billing Coverage HT", coverage.clientBillingCoverageHt],
-            ["Funding Coverage", coverage.fundingCoverageHt],
+            ["Billing less Order sell HT", coverage.fundingCoverageHt],
           ] as const
         ).map(([label, value], index) => (
           <div className="bg-muted/25 rounded-md border p-3" key={label}>
@@ -123,8 +123,8 @@ function FundingCoverageSummary({
       </dl>
       {!coverage.complete ? (
         <p className="text-warning-foreground mt-3 text-xs">
-          Funding Coverage is incomplete because a required Invoice or Supplier
-          Order FX rate is missing.
+          Billing less Order sell is incomplete because a required Invoice or
+          Supplier Order FX rate is missing.
         </p>
       ) : null}
     </section>
@@ -288,9 +288,7 @@ export function ProjectFinancialDashboard({
       )}
       {section === "overview" && (
         <section className="bg-card rounded-lg border p-4">
-          <h2 className="text-sm font-semibold">
-            Billing/Purchasing Overall Coverage
-          </h2>
+          <h2 className="text-sm font-semibold">Billing less cost</h2>
           <p className="text-muted-foreground mt-1 text-xs">
             Client Invoice HT minus all recorded Purchasing economic costs,
             including Project freight. Covers the whole Project, allocated and

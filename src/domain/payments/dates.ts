@@ -46,7 +46,7 @@ export function addMonthsToDateOnly(value: string, months: number): string {
 }
 
 export function formatDateOnly(value: string | null): string {
-  if (!value) return "—";
+  if (!value) return "Not set";
   const [year = "", month = "", day = ""] = value.split("-");
   return isDateOnly(value) ? `${day}/${month}/${year}` : value;
 }

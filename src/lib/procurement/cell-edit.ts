@@ -1,4 +1,5 @@
 import "server-only";
+import { nextUnpaidTerm } from "@/domain/payments/terms";
 import { z } from "zod";
 import { Prisma, ProcurementOrderStatus } from "@/generated/prisma/client";
 import { carriers } from "@/config/carriers";
@@ -34,6 +35,49 @@ export async function editOrderCell(
   if (order.status === "CANCELLED")
     throw new CellEditError("This Order is cancelled. Review it in Details.");
   const { field } = input;
+  if (field === "dueDate") {
+    const terms = await tx.paymentInstallment.findMany({
+      where: { orderId: input.id, direction: "SUPPLIER_PAYMENT" },
+      include: { settlements: true },
+    });
+    const term = nextUnpaidTerm(
+      terms.map((t) => ({
+        id: t.id,
+        dueDate: dateToDateOnly(t.dueDate),
+        isCancelled: t.isCancelled,
+        scheduledAmount: t.scheduledAmount.toString(),
+        payments: t.settlements.map((r) => ({ amount: r.amount.toString() })),
+      })),
+    );
+    if (!term)
+      throw new CellEditError("There is no unpaid payment term to reschedule.");
+    if ((term.dueDate ?? "") !== input.previous)
+      throw new CellEditError(
+        "The next unpaid term changed. Reload before saving; your draft is retained.",
+      );
+    if (input.value && !isDateOnly(input.value))
+      throw new CellEditError("Enter a valid date.");
+    await tx.paymentInstallment.update({
+      where: { id: term.id },
+      data: {
+        dueDate: input.value ? dateOnlyToDate(input.value) : null,
+        updatedById: actorId,
+      },
+    });
+    await writeAuditEvent(tx, actorId, {
+      action: "UPDATED",
+      entityType: "ORDER",
+      entityId: input.id,
+      entityReference: order.orderNumber,
+      summary: "Rescheduled the next unpaid Supplier term.",
+      metadata: {
+        installmentId: term.id,
+        previous: input.previous,
+        value: input.value,
+      },
+    });
+    return;
+  }
   const previous =
     field === "purchaseCost"
       ? (order.costLines

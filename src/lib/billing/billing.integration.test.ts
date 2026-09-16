@@ -845,7 +845,7 @@ describe("Billing persistence", () => {
     );
   });
 
-  it("rejects installment attribution across Billing Events", async () => {
+  it("rejects installment attribution across Billing documents", async () => {
     transaction.clientBillingDocument.findUnique.mockResolvedValue({
       documentType: "INVOICE",
       currencyCode: "EUR",
@@ -868,7 +868,7 @@ describe("Billing persistence", () => {
         installmentId,
         receivedAt: "2026-09-03",
       }),
-    ).rejects.toThrow("another Billing Event");
+    ).rejects.toThrow("another Billing document");
     expect(transaction.clientReceipt.create).not.toHaveBeenCalled();
   });
 
@@ -1281,7 +1281,7 @@ describe("Billing persistence", () => {
         percentageRate: "1.000000",
         remove: false,
       }),
-    ).rejects.toThrow("remaining Billing Event amount");
+    ).rejects.toThrow("remaining Billing document amount");
     expect(
       transaction.clientBillingAllocation.createMany,
     ).not.toHaveBeenCalled();
@@ -1311,7 +1311,7 @@ describe("Billing persistence", () => {
         billingDocumentId: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
         isProjectRemainderApproved: false,
       }),
-    ).rejects.toThrow("Billing Event Project");
+    ).rejects.toThrow("Billing document Project");
 
     transaction.clientBillingDocument.findUnique.mockResolvedValueOnce({
       documentType: "INVOICE",

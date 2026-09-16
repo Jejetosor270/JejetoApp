@@ -94,6 +94,7 @@ const optionalLeadTime = z.preprocess(
 );
 
 const orderFields = {
+  shortDescription: optionalText(240),
   buildingIds: z
     .array(z.uuid("Invalid building."))
     .refine(
@@ -379,7 +380,15 @@ function validOrder(
 
 export const createOrderInputSchema = baseOrderSchema.superRefine(validOrder);
 export const updateOrderInputSchema = z
-  .object({ id: z.uuid("Invalid order."), ...orderFields })
+  .object({
+    id: z.uuid("Invalid order."),
+    expectedVersion: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
+    expectedFields: z.string().max(20000).optional(),
+    ...orderFields,
+  })
   .superRefine(validOrder);
 export const inlineOrderInputSchema = z
   .object({

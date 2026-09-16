@@ -11,6 +11,7 @@ export function DetailPageHeader({
   eyebrow,
   meta,
   status,
+  statusControl,
   title,
 }: {
   actions?: ReactNode;
@@ -19,6 +20,7 @@ export function DetailPageHeader({
   eyebrow: string;
   meta?: ReactNode;
   status?: string | null;
+  statusControl?: ReactNode;
   title: ReactNode;
 }) {
   return (
@@ -35,9 +37,10 @@ export function DetailPageHeader({
           <h1 className="min-w-0 text-[26px] leading-8 font-semibold tracking-tight break-words">
             {title}
           </h1>
-          {status ? (
-            <Badge variant="outline">{formatEnumLabel(status)}</Badge>
-          ) : null}
+          {statusControl ??
+            (status ? (
+              <Badge variant="outline">{formatEnumLabel(status)}</Badge>
+            ) : null)}
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
       </div>

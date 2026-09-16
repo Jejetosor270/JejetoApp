@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import type { BillingActionState } from "@/domain/billing/action-state";
 import { formatMoney } from "@/domain/procurement/presentation";
 type Props = {
+  expectedVersion?: string;
+  expectedFields?: string;
   billingId: string;
   totalHt: string;
   currencyCode: string;
@@ -23,6 +25,8 @@ type Props = {
 };
 const initial: BillingActionState = { status: "idle", message: "" };
 function FreightForm(props: Props) {
+  const [expectedVersion] = useState(props.expectedVersion);
+  const [expectedFields] = useState(props.expectedFields);
   const [amount, setAmount] = useState(props.freightCoverageHt);
   const { state, onSubmit, pending } = usePersistentActionState(
     updateBillingFreightCoverageAction,
@@ -35,6 +39,12 @@ function FreightForm(props: Props) {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <input type="hidden" name="billingDocumentId" value={props.billingId} />
+      {expectedVersion && (
+        <input type="hidden" name="expectedVersion" value={expectedVersion} />
+      )}
+      {expectedFields && (
+        <input type="hidden" name="expectedFields" value={expectedFields} />
+      )}
       <p className="text-sm">
         Billing total HT: {formatMoney(props.totalHt, props.currencyCode)}
         <br />
@@ -55,7 +65,7 @@ function FreightForm(props: Props) {
         </Field>
       </fieldset>
       <p className="text-muted-foreground text-sm">
-        Enter the part of this billing event that covers freight. This is
+        Enter the part of this billing document that covers freight. This is
         included in Billing HT. Freight not assigned to Orders stays at Project
         level. Existing Order allocations stay unchanged; edit their freight
         portions separately if needed.
@@ -83,7 +93,7 @@ export function BillingFreightEditor(props: Props) {
           open={open}
           onOpenChange={setOpen}
           title={title}
-          description="Allocate freight within this billing event, including Project-level coverage."
+          description="Allocate freight within this billing document, including Project-level coverage."
         >
           <FreightForm
             {...props}

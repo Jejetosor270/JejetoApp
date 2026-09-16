@@ -28,7 +28,7 @@ describe("procurement money presentation", () => {
   });
 
   it("keeps absent money values distinct", () => {
-    expect(formatMoney(null, "EUR")).toBe("—");
+    expect(formatMoney(null, "EUR")).toBe("Not set");
     expect(formatSignedMoney("1250", "EUR")).toBe("+1 250.00 EUR");
     expect(formatSignedMoney("-1250", "EUR")).toBe("-1 250.00 EUR");
     expect(formatSignedMoney("0", "EUR")).toBe("0.00 EUR");

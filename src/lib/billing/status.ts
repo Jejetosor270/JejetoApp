@@ -1,6 +1,7 @@
 import "server-only";
 import Decimal from "decimal.js";
 import { z } from "zod";
+import { businessToday } from "@/domain/payments/dates";
 import { billingStatuses } from "@/domain/billing/status";
 import { clientReceiptSchema } from "@/domain/billing/validation";
 import { Prisma } from "@/generated/prisma/client";
@@ -17,6 +18,7 @@ export const billingStatusChangeSchema = z.object({
   paymentDate: z.string().optional(),
   paymentFx: z.string().optional(),
   confirmedAmount: z.string().optional(),
+  amount: z.string().optional(),
 });
 
 export async function changeBillingStatusInTransaction(
@@ -32,6 +34,7 @@ export async function changeBillingStatusInTransaction(
   const doc = await tx.clientBillingDocument.findUniqueOrThrow({
     where: { id: input.id },
     include: {
+      project: { select: { reportingCurrencyCode: true } },
       receipts: true,
       paymentInstallments: {
         include: { receipts: true },
@@ -54,7 +57,7 @@ export async function changeBillingStatusInTransaction(
   );
   if (
     doc.documentType === "QUOTE" &&
-    ["INVOICED", "PAID", "OVERDUE"].includes(input.value)
+    ["INVOICED", "PAID", "PARTIALLY_PAID", "OVERDUE"].includes(input.value)
   )
     throw new ClientBillingValidationError(
       "Create or select an Invoice to use this status. Quotes remain planning documents.",
@@ -78,17 +81,41 @@ export async function changeBillingStatusInTransaction(
     throw new ClientBillingValidationError(
       "A zero-value Invoice has no payment to record.",
     );
+  if (
+    ["PAID", "PARTIALLY_PAID"].includes(input.value) &&
+    remaining.greaterThan(0) &&
+    doc.currencyCode !==
+      (doc.project?.reportingCurrencyCode ??
+        doc.detachedReportingCurrencyCode) &&
+    !input.paymentFx
+  )
+    throw new ClientBillingValidationError(
+      "Enter actual payment FX to record this foreign-currency receipt.",
+    );
   await tx.clientBillingDocument.update({
     where: { id: doc.id },
     data: {
-      workflowStatus: input.value === "PAID" ? "INVOICED" : input.value,
+      workflowStatus: ["PAID", "PARTIALLY_PAID"].includes(input.value)
+        ? "INVOICED"
+        : input.value,
       isCancelled: input.value === "CANCELLED",
       paymentStatusOverride: null,
       updatedById: actorId,
     },
   });
-  if (input.value === "PAID" && remaining.greaterThan(0)) {
-    let unrecorded = remaining;
+  if (
+    ["PAID", "PARTIALLY_PAID"].includes(input.value) &&
+    remaining.greaterThan(0)
+  ) {
+    const requested =
+      input.value === "PARTIALLY_PAID"
+        ? new Decimal(clientReceiptSchema.shape.amount.parse(input.amount))
+        : remaining;
+    if (requested.greaterThan(remaining))
+      throw new ClientBillingValidationError(
+        "The payment exceeds the remaining balance.",
+      );
+    let unrecorded = requested;
     const terms = doc.matchedInstallment
       ? [doc.matchedInstallment]
       : doc.paymentInstallments;
@@ -113,7 +140,7 @@ export async function changeBillingStatusInTransaction(
           billingDocumentId: doc.id,
           installmentId: term.id,
           amount: amount.toFixed(4),
-          receivedAt: input.paymentDate,
+          receivedAt: input.paymentDate || businessToday(),
           fxRate: input.paymentFx,
         }),
       );
@@ -126,7 +153,7 @@ export async function changeBillingStatusInTransaction(
         clientReceiptSchema.parse({
           billingDocumentId: doc.id,
           amount: unrecorded.toFixed(4),
-          receivedAt: input.paymentDate,
+          receivedAt: input.paymentDate || businessToday(),
           fxRate: input.paymentFx,
         }),
       );

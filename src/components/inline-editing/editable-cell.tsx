@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { Check, Pencil, X } from "lucide-react";
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -121,7 +122,7 @@ export function EditableCell({
       </div>
     );
   const common = { value: draft, disabled: pending, "aria-label": label };
-  return (
+  const editor = (
     <form
       data-cell-editor
       data-dirty={draft !== original ? "true" : "false"}
@@ -217,6 +218,19 @@ export function EditableCell({
       )}
     </form>
   );
+  return type === "select" || type === "money" ? (
+    <EditorDrawer
+      open
+      title={`Edit ${label}`}
+      onOpenChange={(open) => {
+        if (!open && !pending) close();
+      }}
+    >
+      {editor}
+    </EditorDrawer>
+  ) : (
+    editor
+  );
 }
 
 export function SourceCell({
@@ -230,19 +244,32 @@ export function SourceCell({
   label: string;
   canEdit: boolean;
 }) {
+  const [open, setOpen] = useState(false);
   return canEdit ? (
-    <Link
-      href={href}
-      aria-label={`Edit ${label}`}
-      title="Edit the underlying records"
-      className="hover:bg-muted focus-visible:ring-ring inline-flex min-h-8 items-center gap-2 rounded px-1 focus-visible:ring-2"
-    >
-      {children}
-      <Pencil
-        aria-hidden="true"
-        className="text-muted-foreground size-3 shrink-0"
-      />
-    </Link>
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={`Manage ${label}`}
+        title="Edit the underlying records"
+        className="hover:bg-muted focus-visible:ring-ring inline-flex min-h-8 items-center gap-2 rounded px-1 focus-visible:ring-2"
+      >
+        {children}
+        <Pencil
+          aria-hidden="true"
+          className="text-muted-foreground size-3 shrink-0"
+        />
+      </button>
+      <EditorDrawer open={open} title={label} onOpenChange={setOpen}>
+        <p className="mb-4 text-sm">
+          This value is calculated from related records. Edit the source records
+          to update it without overwriting a financial total.
+        </p>
+        <Link className="text-primary underline" href={href}>
+          Open {label} editor
+        </Link>
+      </EditorDrawer>
+    </>
   ) : (
     children
   );

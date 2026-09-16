@@ -34,6 +34,8 @@ interface AllocationEditorProps {
   };
   availableHt: string;
   billing: {
+    expectedVersion?: string;
+    expectedFields?: string;
     id: string;
     reference: string;
     totalHt: string;
@@ -57,6 +59,8 @@ function AllocationForm({
   orders,
   onSaved,
 }: AllocationEditorProps) {
+  const [expectedVersion] = useState(billing.expectedVersion);
+  const [expectedFields] = useState(billing.expectedFields);
   const [orderId, setOrderId] = useState(
     allocation?.orderId ?? (orders.length === 1 ? (orders[0]?.id ?? "") : ""),
   );
@@ -100,6 +104,12 @@ function AllocationForm({
       }}
     >
       <input type="hidden" name="billingDocumentId" value={billing.id} />
+      {expectedVersion && (
+        <input type="hidden" name="expectedVersion" value={expectedVersion} />
+      )}
+      {expectedFields && (
+        <input type="hidden" name="expectedFields" value={expectedFields} />
+      )}
       <input type="hidden" name="orderId" value={orderId} />
       <input type="hidden" name="otherCoverageHt" value={otherCoverageHt} />
       <input type="hidden" name="freightCoverageHt" value={freightCoverageHt} />

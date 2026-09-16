@@ -23,14 +23,7 @@ it("requires an explicit creation status and exposes payment confirmation only f
     [...control("workflowStatus").querySelectorAll("option")].map(
       (o) => o.value,
     ),
-  ).toEqual([
-    "",
-    "DRAFT",
-    "TO_BE_INVOICED",
-    "INVOICED",
-    "PAID",
-    "CANCELLED",
-  ]);
+  ).toEqual(["", "DRAFT", "TO_BE_INVOICED", "INVOICED", "PAID", "CANCELLED"]);
   expect(document.querySelector('[name="paymentDate"]')).toBeNull();
   await enter("workflowStatus", "PAID");
   expect(document.querySelector('[name="paymentDate"]')).not.toBeNull();
@@ -56,7 +49,7 @@ it("confirms the remaining amount and keeps payment details when saving fails", 
   await enter("billingStatus", "PAID");
   await enter("paymentDate", "2026-09-11");
   await enter("paymentFx", "0.9");
-  expect(actions.save).not.toHaveBeenCalled();
+  expect(actions.save).toHaveBeenCalledTimes(1);
   const form = document.querySelector("form");
   if (!form) throw new Error("Missing confirmation form");
   await act(async () =>
@@ -68,6 +61,7 @@ it("confirms the remaining amount and keeps payment details when saving fails", 
     id: "billing",
     value: "PAID",
     confirmedAmount: "80.0000",
+    amount: "",
     paymentDate: "2026-09-11",
     paymentFx: "0.9",
   });

@@ -67,6 +67,7 @@ describe("Project edit drawer", () => {
       "Schedule",
       "Planning / Budget",
       "Default Pricing",
+      "Project selling target",
       "Freight",
       "Notes",
     ]);

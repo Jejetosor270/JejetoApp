@@ -1,6 +1,11 @@
 import { billingIsIssued } from "@/domain/billing/status";
 import { createDefaultSupplierTerm } from "@/lib/payments/default-term";
 import "server-only";
+import {
+  editVersion,
+  editFieldVersions,
+  assertEditVersion,
+} from "@/lib/edit-version";
 import type { OrderSort } from "@/config/order-list";
 import { derivedOrderSorts, sortOrderSummaries } from "./order-list-sorting";
 
@@ -291,6 +296,8 @@ export interface OrderSummary {
   totalSellingAmountIncludingVat: string | null;
   totalSellingRevenue: string | null;
   updatedAt: string;
+  editVersion?: string;
+  editFields?: string;
 }
 export interface ProjectProcurementSummary {
   convertedOrderCount: number;
@@ -859,7 +866,8 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
   const nextSupplierDue = order.paymentInstallments
     .toSorted(
       (a, b) =>
-        (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity),
+        (a.dueDate?.getTime() ?? Infinity) -
+          (b.dueDate?.getTime() ?? Infinity) || a.id.localeCompare(b.id),
     )
     .find(
       (installment) =>
@@ -1002,6 +1010,8 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
       totalSellingAmountIncludingVat?.toString() ?? null,
     totalSellingRevenue: totalRevenue?.toString() ?? null,
     updatedAt: order.updatedAt.toISOString(),
+    editVersion: editVersion(record),
+    editFields: editFieldVersions(record),
     costs: {
       conversionComplete: missingFx.length === 0,
       customsDuties: costAmount(order, ProcurementCostCategory.CUSTOMS_DUTIES),
@@ -1200,6 +1210,9 @@ function orderData(input: CreateOrderInput, project: ProjectPricingContext) {
       : null,
     category: input.category ?? null,
     description: input.description ?? null,
+    ...(input.shortDescription === undefined
+      ? {}
+      : { shortDescription: input.shortDescription || null }),
     expectedDeliveryDate: input.expectedDeliveryDate
       ? dateOnlyToDate(input.expectedDeliveryDate)
       : null,
@@ -1539,6 +1552,7 @@ function orderWhere(filters: OrderFilters): Prisma.ProcurementOrderWhereInput {
       ? {
           OR: [
             { orderNumber: { contains: query, mode: "insensitive" } },
+            { shortDescription: { contains: query, mode: "insensitive" } },
             { packageName: { contains: query, mode: "insensitive" } },
             {
               supplierQuoteReference: {
@@ -1718,10 +1732,13 @@ export async function updateOrder(
   actorId: string,
   input: UpdateOrderInput,
 ): Promise<void> {
-  const project = await assertRelations(input, getDatabase(), input.id);
   try {
-    await getDatabase().$transaction((transaction) =>
-      updateOrderRecord(transaction, actorId, input, project),
+    await getDatabase().$transaction(
+      async (transaction) => {
+        const project = await assertRelations(input, transaction, input.id);
+        await updateOrderRecord(transaction, actorId, input, project);
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (error) {
     if (
@@ -1826,6 +1843,21 @@ async function updateOrderRecord(
   project: ProjectPricingContext,
 ): Promise<void> {
   const { id, ...fields } = input;
+  if (input.expectedVersion) {
+    const snapshot = await transaction.procurementOrder.findUniqueOrThrow({
+      where: { id },
+      include: orderInclude,
+    });
+    try {
+      assertEditVersion(input.expectedVersion, snapshot, input.expectedFields);
+    } catch (error) {
+      throw new ProcurementRelationError(
+        error instanceof Error
+          ? error.message
+          : "Record changed. Reload before saving.",
+      );
+    }
+  }
   const current = await transaction.procurementOrder.findUnique({
     where: { id },
     select: {

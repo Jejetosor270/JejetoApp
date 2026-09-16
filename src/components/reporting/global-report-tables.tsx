@@ -34,11 +34,21 @@ export function ActualCashReport({
 }) {
   return (
     <section className="bg-card overflow-hidden rounded-lg border">
+      {report.supplierScoped && (
+        <p className="border-b p-4 text-xs">
+          Supplier-scoped cash out only. Client receipts are not attributed to
+          individual Suppliers.
+        </p>
+      )}
       <header className="grid gap-3 border-b p-4 sm:grid-cols-3">
         {[
-          ["Total Cash In", report.totals.cashIn],
+          ...(report.supplierScoped
+            ? []
+            : [["Total Cash In", report.totals.cashIn]]),
           ["Total Cash Out", report.totals.cashOut],
-          ["Net Cash Flow", report.totals.net],
+          ...(report.supplierScoped
+            ? []
+            : [["Net Cash Flow", report.totals.net]]),
         ].map(([label, value]) => (
           <div key={label}>
             <p className="text-muted-foreground text-xs">{label}</p>
@@ -226,7 +236,7 @@ export function GlobalFreightReport({
   const columns = [
     ["Expected allowance", "expectedFreightAllowanceHt"],
     ["Actual freight", "actualCostHt"],
-    ["Recovery target", "recoveryTargetHt"],
+    ["Applicable-markup recovery target HT", "recoveryTargetHt"],
     ["Gross profit", "freightGrossProfitHt"],
     ["Headroom", "headroomHt"],
   ] as const;

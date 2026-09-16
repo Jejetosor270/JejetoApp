@@ -534,86 +534,93 @@ export async function recordSettlement(
   context?: { projectId: string; orderId: string },
 ): Promise<void> {
   await getDatabase().$transaction(
-    async (transaction) => {
-      const installment = await transaction.paymentInstallment.findUnique({
-        where: { id: input.installmentId },
-        include: {
-          order: {
-            select: {
-              projectId: true,
-              status: true,
-              detachedReportingCurrencyCode: true,
-              project: { select: { reportingCurrencyCode: true } },
-            },
-          },
-          settlements: { select: { amount: true } },
-        },
-      });
-      if (!installment) throw new PaymentNotFoundError();
-      if (
-        context &&
-        (installment.direction !== "SUPPLIER_PAYMENT" ||
-          installment.orderId !== context.orderId ||
-          installment.order?.projectId !== context.projectId)
-      ) {
-        throw new PaymentValidationError(
-          "Choose a Supplier installment belonging to the selected Order and Project.",
-        );
-      }
-      if (installment.order?.status === "CANCELLED")
-        throw new PaymentValidationError(
-          "Reactivate the Order before recording a payment.",
-        );
-      if (installment.isCancelled) {
-        throw new PaymentValidationError(
-          "A cancelled installment cannot be settled.",
-        );
-      }
-      const paid = installment.settlements.reduce(
-        (total, settlement) => total.plus(settlement.amount),
-        new Decimal(0),
-      );
-      const nextPaid = paid.plus(input.amount);
-      if (nextPaid.greaterThan(installment.scheduledAmount)) {
-        throw new PaymentValidationError(
-          "This entry would exceed the scheduled installment amount.",
-        );
-      }
-      const settlement = await transaction.paymentSettlement.create({
-        data: {
-          amount: input.amount,
-          createdById: actorId,
-          fxRateToReporting:
-            installment.currencyCode ===
-            retainedCurrency(
-              installment.order?.project?.reportingCurrencyCode,
-              installment.order?.detachedReportingCurrencyCode ??
-                installment.detachedReportingCurrencyCode,
-            )
-              ? null
-              : (input.fxRate ?? null),
-          installmentId: installment.id,
-          notes: input.notes ?? null,
-          reference: input.reference ?? null,
-          settledAt: dateOnlyToDate(input.settledAt),
-          updatedById: actorId,
-        },
-      });
-      await writeAuditEvent(transaction, actorId, {
-        action: "CREATED",
-        entityId: settlement.id,
-        entityReference: installment.label,
-        entityType: "SETTLEMENT",
-        metadata: {
-          amount: input.amount,
-          currency: installment.currencyCode,
-          settledAt: input.settledAt,
-        },
-        summary: "Recorded a payment or receipt settlement.",
-      });
-    },
+    (tx) => recordSettlementInTransaction(tx, actorId, input, context),
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
+}
+
+export async function recordSettlementInTransaction(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  input: SettlementInput,
+  context?: { projectId: string; orderId: string },
+): Promise<void> {
+  const installment = await transaction.paymentInstallment.findUnique({
+    where: { id: input.installmentId },
+    include: {
+      order: {
+        select: {
+          projectId: true,
+          status: true,
+          detachedReportingCurrencyCode: true,
+          project: { select: { reportingCurrencyCode: true } },
+        },
+      },
+      settlements: { select: { amount: true } },
+    },
+  });
+  if (!installment) throw new PaymentNotFoundError();
+  if (
+    context &&
+    (installment.direction !== "SUPPLIER_PAYMENT" ||
+      installment.orderId !== context.orderId ||
+      installment.order?.projectId !== context.projectId)
+  ) {
+    throw new PaymentValidationError(
+      "Choose a Supplier installment belonging to the selected Order and Project.",
+    );
+  }
+  if (installment.order?.status === "CANCELLED")
+    throw new PaymentValidationError(
+      "Reactivate the Order before recording a payment.",
+    );
+  if (installment.isCancelled) {
+    throw new PaymentValidationError(
+      "A cancelled installment cannot be settled.",
+    );
+  }
+  const paid = installment.settlements.reduce(
+    (total, settlement) => total.plus(settlement.amount),
+    new Decimal(0),
+  );
+  const nextPaid = paid.plus(input.amount);
+  if (nextPaid.greaterThan(installment.scheduledAmount)) {
+    throw new PaymentValidationError(
+      "This entry would exceed the scheduled installment amount.",
+    );
+  }
+  const settlement = await transaction.paymentSettlement.create({
+    data: {
+      amount: input.amount,
+      createdById: actorId,
+      fxRateToReporting:
+        installment.currencyCode ===
+        retainedCurrency(
+          installment.order?.project?.reportingCurrencyCode,
+          installment.order?.detachedReportingCurrencyCode ??
+            installment.detachedReportingCurrencyCode,
+        )
+          ? null
+          : (input.fxRate ?? null),
+      installmentId: installment.id,
+      notes: input.notes ?? null,
+      reference: input.reference ?? null,
+      settledAt: dateOnlyToDate(input.settledAt),
+      updatedById: actorId,
+    },
+  });
+  await writeAuditEvent(transaction, actorId, {
+    action: "CREATED",
+    entityId: settlement.id,
+    entityReference: installment.label,
+    entityType: "SETTLEMENT",
+    metadata: {
+      amount: input.amount,
+      currency: installment.currencyCode,
+      settledAt: input.settledAt,
+    },
+    summary: "Recorded a payment or receipt settlement.",
+  });
 }
 
 export async function updateSettlement(
@@ -709,22 +716,8 @@ export async function markInstallmentSettled(
   actorId: string,
   installmentId: string,
 ): Promise<void> {
-  const installment = await getDatabase().paymentInstallment.findUnique({
-    where: { id: installmentId },
-    include: { settlements: { select: { amount: true } } },
-  });
-  if (!installment) throw new PaymentNotFoundError();
-  const paid = installment.settlements.reduce(
-    (total, settlement) => total.plus(settlement.amount),
-    new Decimal(0),
-  );
-  const remaining = new Decimal(installment.scheduledAmount).minus(paid);
-  if (remaining.lessThanOrEqualTo(0)) return;
-  await recordSettlement(actorId, {
-    amount: remaining.toFixed(4),
-    installmentId,
-    settledAt: businessToday(),
-  });
+  const { payTermRemaining } = await import("./term-paid");
+  await payTermRemaining(actorId, { kind: "supplier", id: installmentId });
 }
 
 export async function removeSettlement(
@@ -1298,6 +1291,7 @@ export async function getProcurementCalendarEvents(
         .map((item) => ({
           currencyCode: item.currencyCode,
           direction: PaymentDirection.CLIENT_RECEIPT,
+          documentType: item.documentType as "QUOTE" | "INVOICE",
           dueDate: item.dueDate,
           href: `/billing/${item.billingDocumentId}`,
           id: item.id,

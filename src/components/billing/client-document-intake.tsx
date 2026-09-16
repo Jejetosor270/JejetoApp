@@ -197,6 +197,7 @@ export function ClientDocumentReview({
     proposal.documentType ?? "QUOTE",
   );
   const [reference, setReference] = useState(proposal.reference ?? "");
+  const [shortDescription, setShortDescription] = useState("");
   const [documentDate, setDocumentDate] = useState(proposal.documentDate ?? "");
   const [dueDate, setDueDate] = useState(proposal.dueDate ?? "");
   const [currencyCode, setCurrencyCode] = useState(proposal.currencyCode ?? "");
@@ -534,6 +535,18 @@ export function ClientDocumentReview({
               />
             </ReviewField>
             <ReviewField
+              label="Short description"
+              error={state.fieldErrors?.shortDescription}
+            >
+              <input
+                className={inputClassName}
+                name="shortDescription"
+                value={shortDescription}
+                maxLength={240}
+                onChange={(e) => setShortDescription(e.target.value)}
+              />
+            </ReviewField>
+            <ReviewField
               error={state.fieldErrors?.documentDate}
               label="Document date"
               required
@@ -771,7 +784,7 @@ export function ClientDocumentReview({
             <h2 className="text-sm font-semibold">Invoice reconciliation</h2>
             <p className="text-muted-foreground mt-1 text-xs">
               Choose explicitly whether this Invoice links to a planned Client
-              payment. Leaving it blank creates a new billing event.
+              payment. Leaving it blank creates a new billing document.
             </p>
             <div className="mt-3 max-w-2xl">
               <ReviewField label="Planned Client payment">
@@ -783,7 +796,7 @@ export function ClientDocumentReview({
                   value={matchedInstallmentId}
                 >
                   <option value="">
-                    Create as a new billing event / no match
+                    Create as a new billing document / no match
                   </option>
                   {matchable.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -1153,7 +1166,7 @@ export function ClientDocumentReview({
           ) : null}
         </section>
         <IntakeStageHeader
-          description="No authoritative Billing Event is changed until this confirmation is submitted."
+          description="No authoritative Billing document is changed until this confirmation is submitted."
           stage={3}
           title="Confirm and save"
         />

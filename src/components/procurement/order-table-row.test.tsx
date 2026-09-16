@@ -144,15 +144,12 @@ describe("Purchasing click-to-edit on every column set", () => {
   });
   it("opens pricing and payment sources instead of directly overwriting calculated totals", async () => {
     mounted = await mountForm(row("supplier-payment"));
+    const source = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Manage Supplier paid TTC for PO-001"]',
+    );
+    await act(async () => source?.click());
     expect(
-      document
-        .querySelector('a[aria-label="Edit Paid for PO-001"]')
-        ?.getAttribute("href"),
+      document.querySelector('[role="dialog"] a')?.getAttribute("href"),
     ).toBe("/orders/order-id?tab=related#payments");
-    expect(
-      document
-        .querySelector('a[aria-label="Edit Payable for PO-001"]')
-        ?.getAttribute("href"),
-    ).toBe("/orders/order-id?edit=1");
   });
 });

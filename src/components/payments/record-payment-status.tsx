@@ -2,11 +2,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveRecordStatusAction } from "@/app/(app)/payments/record-status-actions";
+import { recordPaymentStatusLabel } from "@/domain/payments/record-status";
+import { businessToday } from "@/domain/payments/dates";
+import { DateInput } from "@/components/forms/date-input";
 import {
-  manualPaymentStatuses,
-  recordPaymentStatusLabel,
-} from "@/domain/payments/record-status";
-import { formatEnumLabel } from "@/domain/presentation/labels";
+  Field,
+  MoneyInput,
+  inputClassName,
+} from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 
@@ -29,8 +32,12 @@ export function RecordPaymentStatus({
   showCancel?: boolean;
   onCancelled?: () => void;
 }) {
-  const [draft, setDraft] = useState(override ?? "AUTO");
-  const [saved, setSaved] = useState(override ?? "AUTO");
+  const [paymentMode, setPaymentMode] = useState<
+    "PAID" | "PARTIALLY_PAID" | null
+  >(null);
+  const [amount, setAmount] = useState("");
+  const [paymentFx, setPaymentFx] = useState("");
+  const [paymentDate, setPaymentDate] = useState(businessToday());
   const [confirming, setConfirming] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
@@ -38,14 +45,23 @@ export function RecordPaymentStatus({
   const save = (value: string) =>
     startTransition(async () => {
       try {
-        const result = await saveRecordStatusAction({ kind, id, value });
+        const result = await saveRecordStatusAction({
+          kind,
+          id,
+          value,
+          paymentDate,
+          paymentFx,
+          ...(value === "PARTIALLY_PAID" ? { amount } : {}),
+        });
         setFeedback(result.message ?? "");
         if (result.status === "success") {
           if (value === "CANCEL") {
             setConfirming(false);
             onCancelled?.();
-          } else setSaved(value);
+          } else setPaymentMode(null);
           router.refresh();
+        } else if (value === "PAID") {
+          setPaymentMode("PAID");
         }
       } catch {
         setFeedback("Status could not be saved. Your selection is retained.");
@@ -59,29 +75,33 @@ export function RecordPaymentStatus({
             Payment status
             <select
               className="border-input bg-background rounded-md border px-2 py-1.5"
-              value={draft}
+              value="AUTO"
               disabled={pending}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => {
+                setFeedback("");
+                if (event.target.value === "PAID") save("PAID");
+                else if (event.target.value === "PARTIALLY_PAID")
+                  setPaymentMode("PARTIALLY_PAID");
+              }}
             >
               <option value="AUTO">
                 Automatic · {recordPaymentStatusLabel(automatic)}
               </option>
-              {manualPaymentStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {formatEnumLabel(status)} (manual)
-                </option>
-              ))}
+              <option value="PAID">Paid · record remaining payment</option>
+              <option value="PARTIALLY_PAID">
+                Partially paid · record amount
+              </option>
             </select>
           </label>
-          {draft !== saved && (
+          {automatic !== "PAID" && (
             <Button
               type="button"
               size="sm"
               variant="outline"
               disabled={pending}
-              onClick={() => save(draft)}
+              onClick={() => save("PAID")}
             >
-              Save status
+              Mark as paid
             </Button>
           )}
           {showCancel && (
@@ -102,11 +122,47 @@ export function RecordPaymentStatus({
       ) : (
         <span>{recordPaymentStatusLabel(automatic, override, cancelled)}</span>
       )}
-      {saved !== "AUTO" && !cancelled && (
-        <p className="text-muted-foreground">
-          Automatic: {recordPaymentStatusLabel(automatic)}. Manual status does
-          not change cash or balances.
-        </p>
+      {paymentMode && (
+        <EditorDrawer
+          open
+          title={
+            paymentMode === "PAID"
+              ? "Complete payment"
+              : "Record partial payment"
+          }
+          onOpenChange={(open) => {
+            if (!open && !pending) setPaymentMode(null);
+          }}
+        >
+          <div className="space-y-4">
+            {paymentMode === "PARTIALLY_PAID" && (
+              <Field label="Actual amount TTC">
+                <MoneyInput
+                  name="amount"
+                  value={amount}
+                  onValueChange={setAmount}
+                />
+              </Field>
+            )}
+            <Field label="Payment date">
+              <DateInput
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+              />
+            </Field>
+            <Field label="Actual FX (foreign currency)">
+              <input
+                className={inputClassName}
+                value={paymentFx}
+                onChange={(e) => setPaymentFx(e.target.value)}
+              />
+            </Field>
+            {feedback && <p role="alert">{feedback}</p>}
+            <Button disabled={pending} onClick={() => save(paymentMode)}>
+              Record payment
+            </Button>
+          </div>
+        </EditorDrawer>
       )}
       {feedback && !confirming && <p role="status">{feedback}</p>}
       {confirming && (

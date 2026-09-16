@@ -26,6 +26,13 @@ const categories = recoveryCategories.map((category) => ({
   }),
 }));
 const data: ProjectControl = {
+  directTarget: false,
+  economicReconciliation: {
+    recordedHt: "210",
+    orderNonDeductibleVat: "0",
+    freightNonDeductibleVat: "0",
+    economicCost: "210",
+  },
   currency: "EUR",
   categories,
   totals: financialCategoryTotals(categories),
@@ -60,7 +67,7 @@ it("renders the simplified Financials rows and money totals without the removed 
     "Budgeted Sell HT",
     "Target Revenue HT",
     "Allocated Client Invoice Amount HT",
-    "Invoiced Coverage HT",
+    "Unallocated Invoice HT",
     "Total",
     "300.00 EUR",
   ])
@@ -83,11 +90,11 @@ it("separates actual TTC cash from proportional HT freight coverage and exposes 
     <ProjectCoverage data={data} projectId="test" />,
   );
   for (const label of [
-    "Billing/Purchasing Cash Coverage",
+    "Cash balance",
     "Supplier &amp; freight paid TTC",
-    "Billing/Purchasing Freight Coverage",
+    "Freight recovery surplus",
     "Client Freight paid HT (proportional)",
-    "Available freight coverage",
+    "Freight recovery surplus",
     "+60.00 EUR",
     "-40.00 EUR",
   ])

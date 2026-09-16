@@ -86,8 +86,8 @@ it("shows Billing invoice dates and HT without a TTC column; keeps cash amounts"
   );
   expect(labels).toContain("Invoice date");
   expect(labels).not.toContain("TTC");
-  expect(labels).toContain("Received");
-  expect(labels).toContain("Outstanding");
+  expect(labels).toContain("Client received TTC");
+  expect(labels).toContain("Remaining TTC");
   expect(document.querySelector("tbody")?.textContent).toContain("08/09/2026");
   expect(document.querySelector("tbody td")?.textContent).toContain(
     "Outdoor furniture",

@@ -37,6 +37,7 @@ const projectSelect = {
   expectedCompletionDate: true,
   estimatedFreightCostHt: true,
   estimatedPurchaseCostHt: true,
+  estimatedOtherCostHt: true,
   expectedSellHt: true,
   freightEstimateNotes: true,
   freightEstimateRate: true,
@@ -80,8 +81,10 @@ function dateOrNull(value: string | undefined): Date | null {
 }
 
 function projectData(input: CreateProjectInput) {
-  const targetMode = ProjectTargetMode.MARKUP;
+  const targetMode = input.targetMode ?? ProjectTargetMode.MARKUP;
   const targets = calculateProjectTargets({
+    estimatedOtherCostHt: input.estimatedOtherCostHt ?? null,
+    defaultOtherCostMarkupRate: input.defaultOtherCostMarkupRate ?? null,
     defaultFreightMarkupRate: input.defaultFreightMarkupRate ?? null,
     defaultProductMarkupRate: input.defaultProductMarkupRate ?? null,
     estimatedFreightCostHt: projectFreightBudget(
@@ -95,6 +98,7 @@ function projectData(input: CreateProjectInput) {
   });
   return {
     clientBudgetTargetHt: input.clientBudgetTargetHt ?? null,
+    estimatedOtherCostHt: input.estimatedOtherCostHt ?? null,
     clientId: input.clientId,
     defaultFreightMarkupRate: input.defaultFreightMarkupRate ?? "0",
     defaultOtherCostMarkupRate: input.defaultOtherCostMarkupRate ?? "0",

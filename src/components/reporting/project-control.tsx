@@ -5,13 +5,13 @@ export function ProjectFinancialControl({ data }: { data: ProjectControl }) {
   const money = (value: string | null) => formatMoney(value, data.currency);
   const rows = [
     ["Budgeted cost HT", "budget"],
-    ["Recorded cost", "recordedCost"],
+    ["Recorded cost HT", "recordedCost"],
     ["Budgeted Sell HT", "budgetTarget"],
     ["Target Revenue HT", "recordedTarget"],
     ["Quoted revenue (planned)", "quoted"],
     ["Invoiced revenue HT", "billed"],
     ["Allocated Client Invoice Amount HT", "allocated"],
-    ["Invoiced Coverage HT", "projectRemainder"],
+    ["Unallocated Invoice HT", "projectRemainder"],
   ] as const;
   return (
     <section className="space-y-4">
@@ -54,7 +54,7 @@ export function ProjectFinancialControl({ data }: { data: ProjectControl }) {
                 className="text-muted-foreground p-3 text-right"
                 title="Category markup defaults are not added or averaged."
               >
-                —
+                Not applicable
               </td>
             </tr>
             {rows.map(([label, key]) => (
@@ -65,7 +65,13 @@ export function ProjectFinancialControl({ data }: { data: ProjectControl }) {
                     className="financial-figure p-3 text-right"
                     key={row.category}
                   >
-                    {money(row[key])}
+                    {row[key] === null
+                      ? key === "budget" || key === "budgetTarget"
+                        ? key === "budgetTarget" && data.directTarget
+                          ? "Not allocated"
+                          : "Not budgeted"
+                        : "Missing FX"
+                      : money(row[key])}
                   </td>
                 ))}
                 <td
@@ -76,13 +82,46 @@ export function ProjectFinancialControl({ data }: { data: ProjectControl }) {
                       : undefined
                   }
                 >
-                  {money(data.totals[key])}
+                  {data.totals[key] === null
+                    ? key === "budget" || key === "budgetTarget"
+                      ? "Budget incomplete"
+                      : "Missing FX"
+                    : money(data.totals[key])}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <section
+        className="rounded-lg border p-4"
+        aria-label="Economic cost reconciliation"
+      >
+        <h3 className="text-sm font-semibold">Economic cost reconciliation</h3>
+        <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {(
+            [
+              ["Recorded cost HT", data.economicReconciliation.recordedHt],
+              [
+                "Order non-deductible VAT",
+                data.economicReconciliation.orderNonDeductibleVat,
+              ],
+              [
+                "Freight expense non-deductible VAT",
+                data.economicReconciliation.freightNonDeductibleVat,
+              ],
+              ["Total economic cost", data.economicReconciliation.economicCost],
+            ] as const
+          ).map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-muted-foreground text-xs">{label}</dt>
+              <dd className="financial-figure mt-1 text-sm">
+                {value === null ? "Missing FX" : money(value)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
     </section>
   );
 }

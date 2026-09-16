@@ -50,6 +50,30 @@ export function freightCoverageBreakdown(
       "Order non-freight allocations exceed document non-freight HT. Identify the freight portion of the allocations.",
     );
   return {
+    categories: [
+      {
+        label: "Merchandise",
+        total: total.minus(freight).minus(other).toFixed(4),
+        allocated: allocatedProduct.toFixed(4),
+        remaining: total
+          .minus(freight)
+          .minus(other)
+          .minus(allocatedProduct)
+          .toFixed(4),
+      },
+      {
+        label: "Freight",
+        total: freight.toFixed(4),
+        allocated: allocatedFreight.toFixed(4),
+        remaining: freight.minus(allocatedFreight).toFixed(4),
+      },
+      {
+        label: "Other/services",
+        total: other.toFixed(4),
+        allocated: allocatedOther.toFixed(4),
+        remaining: other.minus(allocatedOther).toFixed(4),
+      },
+    ],
     productHt: total.minus(freight).minus(other).toFixed(4),
     allocatedFreightHt: allocatedFreight.toFixed(4),
     projectFreightHt: freight.minus(allocatedFreight).toFixed(4),

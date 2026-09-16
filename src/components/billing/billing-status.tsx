@@ -8,13 +8,25 @@ import { changeBillingStatusAction } from "@/app/(app)/billing/status-actions";
 import { Button } from "@/components/ui/button";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { DateInput } from "@/components/forms/date-input";
-import { Field, inputClassName } from "@/components/master-data/form-ui";
+import {
+  Field,
+  MoneyInput,
+  inputClassName,
+} from "@/components/master-data/form-ui";
+import { businessToday } from "@/domain/payments/dates";
 
-function StatusOptions({ documentType }: { documentType: string }) {
+function StatusOptions({
+  documentType,
+  creation = false,
+}: {
+  documentType: string;
+  creation?: boolean;
+}) {
   return billingStatuses
     .filter(
       (s) =>
         s !== "OVERDUE" &&
+        (!creation || s !== "PARTIALLY_PAID") &&
         (documentType !== "QUOTE" ||
           ["DRAFT", "TO_BE_INVOICED", "CANCELLED"].includes(s)),
     )
@@ -42,7 +54,7 @@ export function BillingCreationStatus({
           onChange={(e) => setStatus(e.target.value)}
         >
           <option value="">Choose status</option>
-          <StatusOptions documentType={documentType} />
+          <StatusOptions documentType={documentType} creation />
         </select>
       </Field>
       {status === "PAID" && (
@@ -53,7 +65,11 @@ export function BillingCreationStatus({
             its exchange rate.
           </p>
           <Field label="Actual payment date">
-            <DateInput name="paymentDate" required />
+            <DateInput
+              name="paymentDate"
+              defaultValue={businessToday()}
+              required
+            />
           </Field>
           <Field label="Actual payment FX (foreign currency)">
             <input
@@ -88,6 +104,29 @@ export function BillingStatusControl({
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const save = (value: string, fields = new FormData()) =>
+    startTransition(async () => {
+      try {
+        const result = await changeBillingStatusAction({
+          id,
+          value,
+          confirmedAmount: remaining,
+          amount: String(fields.get("amount") ?? ""),
+          paymentDate: String(fields.get("paymentDate") || businessToday()),
+          paymentFx: String(fields.get("paymentFx") ?? ""),
+        });
+        setFeedback(result.message);
+        if (result.status === "success") {
+          setOpen(false);
+          router.refresh();
+        } else {
+          setDraft(value);
+          setOpen(true);
+        }
+      } catch {
+        setFeedback("Could not save. Your selection is retained.");
+      }
+    });
   if (!canEdit) return <span>{formatEnumLabel(status)}</span>;
   return (
     <>
@@ -104,6 +143,18 @@ export function BillingStatusControl({
       >
         {formatEnumLabel(status)}
       </Button>
+      {documentType === "INVOICE" &&
+        !["PAID", "CANCELLED"].includes(status) && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={pending}
+            onClick={() => save("PAID")}
+          >
+            Mark as paid
+          </Button>
+        )}
       <EditorDrawer
         open={open}
         title="Billing status"
@@ -124,6 +175,7 @@ export function BillingStatusControl({
                   confirmedAmount: remaining,
                   paymentDate: String(fields.get("paymentDate") ?? ""),
                   paymentFx: String(fields.get("paymentFx") ?? ""),
+                  amount: String(fields.get("amount") ?? ""),
                 });
                 setFeedback(result.message);
                 if (result.status === "success") {
@@ -143,20 +195,31 @@ export function BillingStatusControl({
               className={inputClassName}
               disabled={pending}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                if (e.target.value === "PAID") save("PAID");
+              }}
             >
               <StatusOptions documentType={documentType} />
             </select>
           </Field>
-          {draft === "PAID" && (
+          {draft === "PARTIALLY_PAID" && (
+            <Field label={`Actual received TTC (${currency})`}>
+              <MoneyInput name="amount" required />
+            </Field>
+          )}
+          {(draft === "PAID" || draft === "PARTIALLY_PAID") && (
             <>
               <p className="text-sm">
-                Confirm receipt of the remaining{" "}
-                {formatMoney(remaining, currency)}. This records actual cash and
-                settles the open payment terms.
+                Remaining to receive: {formatMoney(remaining, currency)}. This
+                records actual cash and settles the open payment terms.
               </p>
               <Field label="Actual payment date">
-                <DateInput name="paymentDate" required />
+                <DateInput
+                  name="paymentDate"
+                  defaultValue={businessToday()}
+                  required
+                />
               </Field>
               <Field label="Actual payment FX (foreign currency)">
                 <input

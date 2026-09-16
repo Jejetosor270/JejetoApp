@@ -11,7 +11,7 @@ const migration = readFileSync(
 );
 
 describe("Phase 11.12 ClientReceipt migration", () => {
-  it("backfills Billing Event ownership before enforcing the constraint", () => {
+  it("backfills Billing document ownership before enforcing the constraint", () => {
     const add = migration.indexOf('ADD COLUMN "billingDocumentId" UUID');
     const backfill = migration.indexOf(
       'SET "billingDocumentId" = installment."billingDocumentId"',

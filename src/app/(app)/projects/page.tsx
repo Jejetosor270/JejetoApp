@@ -225,6 +225,8 @@ export default async function ProjectsPage({
           ),
           estimatedPurchaseCostHt:
             project.estimatedPurchaseCostHt?.toString() ?? null,
+          estimatedOtherCostHt:
+            project.estimatedOtherCostHt?.toString() ?? null,
           expectedSellHt: project.expectedSellHt?.toString() ?? null,
           expectedCompletionDate:
             project.expectedCompletionDate?.toISOString().slice(0, 10) ?? null,

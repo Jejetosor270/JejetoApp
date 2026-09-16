@@ -1,4 +1,7 @@
 import { PageHeader } from "@/components/layout/page-header";
+import { billingSorts } from "@/domain/billing/listing";
+import { billingStatuses } from "@/domain/billing/status";
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
 
@@ -43,7 +46,7 @@ export default async function BillingPage({
     firstQueryValue(params, "documentType"),
   );
   const sort = parseSort(
-    ["date", "dueDate", "reference", "updated"] as const,
+    billingSorts,
     firstQueryValue(params, "sort"),
     "updated",
   );
@@ -52,6 +55,7 @@ export default async function BillingPage({
     requireUser(),
     listClientBillingOptions(),
     listClientBillingPage({
+      status: selectedValue(billingStatuses, firstQueryValue(params, "status")),
       clientId,
       currencyCode: firstQueryValue(params, "currencyCode"),
       direction,
@@ -147,6 +151,25 @@ export default async function BillingPage({
             ))}
           </select>
         </FilterField>
+        <FilterField label="Status">
+          <select
+            name="status"
+            className={filterControlClassName}
+            defaultValue={
+              selectedValue(
+                billingStatuses,
+                firstQueryValue(params, "status"),
+              ) ?? ""
+            }
+          >
+            <option value="">All statuses</option>
+            {billingStatuses.map((status) => (
+              <option key={status} value={status}>
+                {formatEnumLabel(status)}
+              </option>
+            ))}
+          </select>
+        </FilterField>
         <FilterField label="Sort by">
           <select
             className={filterControlClassName}
@@ -157,6 +180,11 @@ export default async function BillingPage({
             <option value="date">Document date</option>
             <option value="dueDate">Due date</option>
             <option value="reference">Reference</option>
+            <option value="project">Project</option>
+            <option value="totalHt">HT</option>
+            <option value="paid">Client received TTC</option>
+            <option value="outstanding">Remaining TTC</option>
+            <option value="status">Status</option>
           </select>
         </FilterField>
         <FilterField label="Sort direction">

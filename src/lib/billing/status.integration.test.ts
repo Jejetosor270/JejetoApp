@@ -194,18 +194,17 @@ it("creates paid billing and its automatic full term atomically after employee c
   expect(saved?.paymentInstallments).toHaveLength(1);
   expect(saved?.paymentInstallments[0]?.receipts[0]?.amount).toBe("120");
   expect(saved?.receipts[0]?.receivedAt).toBe("2026-09-10");
-  await expect(
-    confirmClientBillingDocument(actor.id, {
-      ...input,
-      reference: "INVALID-PAID",
-      paymentDate: undefined,
-    }),
-  ).rejects.toThrow();
+  const defaultDateId = await confirmClientBillingDocument(actor.id, {
+    ...input,
+    reference: "DEFAULT-DATE-PAID",
+    paymentDate: undefined,
+  });
+  expect((await getClientBillingDocument(defaultDateId))?.status).toBe("PAID");
   expect(
     await db.clientBillingDocument.count({
-      where: { reference: "INVALID-PAID" },
+      where: { reference: "DEFAULT-DATE-PAID" },
     }),
-  ).toBe(0);
+  ).toBe(1);
 }, 30000);
 
 it("excludes pre-invoice billing, records confirmed Paid across terms, and reopens after a correction", async () => {

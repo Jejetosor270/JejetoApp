@@ -5,6 +5,7 @@ import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function WorkspaceError({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -23,6 +24,11 @@ export default function WorkspaceError({
           Try loading this view again. If this followed a save, review the
           record before repeating the action.
         </p>
+        {error.digest && (
+          <p className="text-muted-foreground mt-2 text-xs">
+            Support reference: {error.digest}
+          </p>
+        )}
         <Button type="button" className="mt-5" onClick={reset}>
           <RotateCcw aria-hidden="true" data-icon="inline-start" />
           Try again

@@ -162,6 +162,7 @@ const projectFields = {
   expectedCompletionDate: optionalDate,
   estimatedFreightCostHt: optionalMoney,
   estimatedPurchaseCostHt: optionalMoney,
+  estimatedOtherCostHt: optionalMoney,
   expectedSellHt: optionalMoney,
   freightEstimateNotes: optionalText(500),
   freightEstimateRate: optionalPercentRate,

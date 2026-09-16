@@ -1,4 +1,5 @@
 "use client";
+import { financialLabels } from "@/domain/presentation/labels";
 import {
   EditableCell,
   SourceCell,
@@ -140,7 +141,7 @@ function BillingRow({
           formatDateOnly(document.dueDate),
           {
             type: "date",
-            hint: "Changes the document due date. Existing payment terms keep their own dates.",
+            hint: "Updates the earliest unpaid term only; uses the document due date when no unpaid term exists.",
           },
         )}
       </td>
@@ -234,7 +235,13 @@ export function BillingTable({
                 defaultSort="updated"
                 defaultDirection="desc"
               />
-              <th className="px-3 py-3">Client / Project</th>
+              <SortHeader
+                className="px-3 py-3"
+                label="Client / Project"
+                field="project"
+                defaultSort="updated"
+                defaultDirection="desc"
+              />
 
               <SortHeader
                 className="px-3 py-3"
@@ -251,13 +258,37 @@ export function BillingTable({
                 defaultDirection="desc"
               />
 
-              <th className="px-3 py-3 text-right">HT</th>
+              <SortHeader
+                className="px-3 py-3 text-right"
+                label="HT"
+                field="totalHt"
+                defaultSort="updated"
+                defaultDirection="desc"
+              />
 
-              <th className="px-3 py-3 text-right">Received</th>
+              <SortHeader
+                className="px-3 py-3 text-right"
+                label={financialLabels.clientReceived}
+                field="paid"
+                defaultSort="updated"
+                defaultDirection="desc"
+              />
 
-              <th className="px-3 py-3 text-right">Outstanding</th>
+              <SortHeader
+                className="px-3 py-3 text-right"
+                label={financialLabels.remaining}
+                field="outstanding"
+                defaultSort="updated"
+                defaultDirection="desc"
+              />
 
-              <th className="px-3 py-3">Status</th>
+              <SortHeader
+                className="px-3 py-3"
+                label="Status"
+                field="status"
+                defaultSort="updated"
+                defaultDirection="desc"
+              />
             </tr>
           </thead>
           <tbody className="divide-y">

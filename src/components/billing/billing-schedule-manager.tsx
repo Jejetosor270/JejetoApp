@@ -1,4 +1,5 @@
 "use client";
+import { financialLabels } from "@/domain/presentation/labels";
 import { TermStatusAction } from "@/components/payments/term-status-action";
 import { RelatedRecordTable } from "@/components/layout/related-records";
 import { RelatedCashCreate } from "@/components/payments/related-cash-create";
@@ -6,7 +7,7 @@ import { TermPaymentActions } from "@/components/payments/term-payment-actions";
 import { BillingReceiptEditor } from "./billing-receipt-editor";
 import { BillingInstallmentEditor } from "./billing-installment-editor";
 import { businessToday, formatDateOnly } from "@/domain/payments/dates";
-import { formatMoney } from "@/domain/procurement/presentation";
+import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import {
   paymentTermState,
   paymentAmountToRecord,
@@ -44,10 +45,11 @@ export function BillingScheduleManager({
     columns: [
       "Payment term",
       "Due date",
-      "Amount",
-      "Paid",
-      "Remaining",
+      "Amount TTC",
+      financialLabels.clientReceived,
+      financialLabels.remaining,
       "Status",
+      "Basis",
     ],
     numericColumns: [2, 3, 4],
     rows: document.paymentInstallments.map((term) => {
@@ -68,6 +70,9 @@ export function BillingScheduleManager({
           formatMoney(state.paid, term.currencyCode),
           formatMoney(state.remaining, term.currencyCode),
           state.label,
+          term.percentageRate
+            ? formatRate(term.percentageRate)
+            : "Fixed amount",
         ],
         editFields: [
           { column: 1, name: "date", type: "date", value: term.dueDate ?? "" },

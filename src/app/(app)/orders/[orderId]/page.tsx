@@ -74,9 +74,17 @@ export default async function OrderPage({
           <DetailPageHeader
             backHref="/orders"
             backLabel="Purchasing"
-            eyebrow={order.orderNumber}
-            meta={`${order.project.name} · ${order.supplier.displayName}`}
-            title={order.packageName}
+            eyebrow="Purchasing Order"
+            meta={
+              <>
+                {order.project.name} · {order.supplier.displayName}
+                {order.shortDescription && <p>{order.shortDescription}</p>}
+                {order.packageName !== order.orderNumber && (
+                  <p className="text-xs">Legacy title: {order.packageName}</p>
+                )}
+              </>
+            }
+            title={order.orderNumber}
           />
           <RecordPaymentStatus
             key={`${order.id}:${order.paymentStatusOverride}:${order.status}`}
@@ -252,10 +260,7 @@ export default async function OrderPage({
                           order.orderCurrencyCode,
                         )}
                       </dd>
-                      <dt>Effective markup</dt>
-                      <dd className="financial-figure text-right">
-                        {formatRate(cost.markupRate)}
-                      </dd>
+
                       <dt className="text-muted-foreground">
                         Analytical margin
                       </dt>
@@ -267,13 +272,6 @@ export default async function OrderPage({
                   <article className="bg-card rounded-lg border p-4">
                     <h2 className="text-sm font-semibold">Selling & VAT</h2>
                     <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-                      <dt>Total Order Sell HT</dt>
-                      <dd className="financial-figure text-right">
-                        {formatMoney(
-                          order.totalSellingRevenue,
-                          order.sellingCurrencyCode,
-                        )}
-                      </dd>
                       <dt>Planned Order Output VAT</dt>
                       <dd className="financial-figure text-right">
                         {formatMoney(
@@ -319,14 +317,6 @@ export default async function OrderPage({
                           order.billing.actualGrossProfit,
                           order.project.reportingCurrencyCode,
                         )}
-                      </dd>
-                      <dt>Actual effective markup</dt>
-                      <dd className="financial-figure text-right">
-                        {formatRate(order.billing.actualMarkupRate)}
-                        <span className="text-muted-foreground block text-[0.6875rem]">
-                          Analytical margin{" "}
-                          {formatRate(order.billing.actualMarginRate)}
-                        </span>
                       </dd>
                     </dl>
                     <p className="text-muted-foreground mt-4 border-t pt-3 text-xs">

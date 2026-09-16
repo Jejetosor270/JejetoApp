@@ -48,7 +48,12 @@ function projectWhere(filters: ReportingFilters): Prisma.ProjectWhereInput {
     ...(filters.projectId ? { id: filters.projectId } : {}),
     ...(filters.projectStatus ? { status: filters.projectStatus } : {}),
     ...(filters.supplierId
-      ? { orders: { some: { supplierId: filters.supplierId } } }
+      ? {
+          OR: [
+            { orders: { some: { supplierId: filters.supplierId } } },
+            { freightExpenses: { some: { supplierId: filters.supplierId } } },
+          ],
+        }
       : {}),
   };
 }
@@ -67,7 +72,10 @@ export async function getActualCashReport(filters: ActualCashFilters) {
     select: { id: true },
   });
   const projectIds = projects.map((project) => project.id);
-  const includeIn = filters.direction !== PaymentDirection.SUPPLIER_PAYMENT;
+  // Client receipts cannot be attributed to a Supplier without inventing cash allocations.
+  const includeIn =
+    !filters.supplierId &&
+    filters.direction !== PaymentDirection.SUPPLIER_PAYMENT;
   const includeOut = filters.direction !== PaymentDirection.CLIENT_RECEIPT;
   const [receipts, settlements] = await Promise.all([
     includeIn
@@ -102,7 +110,12 @@ export async function getActualCashReport(filters: ActualCashFilters) {
           where: {
             installment: {
               direction: PaymentDirection.SUPPLIER_PAYMENT,
-              order: { projectId: { in: projectIds } },
+              order: {
+                projectId: { in: projectIds },
+                ...(filters.supplierId
+                  ? { supplierId: filters.supplierId }
+                  : {}),
+              },
             },
             settledAt: dateWhere(filters.dateFrom, filters.dateTo),
           },
@@ -251,6 +264,7 @@ export async function getActualCashReport(filters: ActualCashFilters) {
     else cashOut = cashOut.plus(row.projectReportingAmount);
   }
   return {
+    supplierScoped: Boolean(filters.supplierId),
     companyCurrencyCode: COMPANY_REPORTING_CURRENCY_CODE,
     complete: incompleteIds.length === 0 && excludedProjectIds.size === 0,
     excludedProjectCount: excludedProjectIds.size,

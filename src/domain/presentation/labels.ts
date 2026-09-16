@@ -29,3 +29,11 @@ export function formatEnumLabel(value: string): string {
 export function formatRoleLabel(role: "ADMIN" | "MANAGER" | "USER"): string {
   return formatEnumLabel(role);
 }
+
+/** Shared financial vocabulary; directions and tax bases remain explicit. */
+export const financialLabels = {
+  billingDocument: "Billing document",
+  supplierPaid: "Supplier paid TTC",
+  clientReceived: "Client received TTC",
+  remaining: "Remaining TTC",
+} as const;

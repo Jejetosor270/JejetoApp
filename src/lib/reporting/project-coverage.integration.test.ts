@@ -20,6 +20,60 @@ afterAll(async () => {
   await memory.close();
 });
 
+it("requires explicit Other budget, honors approved direct sell, and reconciles freight VAT outside HT", async () => {
+  const db = memory.raw;
+  const project = await db.project.create({
+    data: {
+      code: "BUDGET",
+      name: "Budget",
+      reportingCurrencyCode: "EUR",
+      estimatedPurchaseCostHt: "1000",
+      freightEstimateRate: "0.10",
+      defaultProductMarkupRate: "0.20",
+      defaultFreightMarkupRate: "0.10",
+      defaultOtherCostMarkupRate: "0.30",
+    },
+  });
+  await db.projectFreightExpense.create({
+    data: {
+      projectId: project.id,
+      description: "Freight",
+      expenseDate: new Date("2026-09-01"),
+      currencyCode: "EUR",
+      costAmountHt: "100",
+      vatAmount: "20",
+      vatTreatment: "DOMESTIC",
+      recoverability: "NON_RECOVERABLE",
+      recoverableRate: "0",
+    },
+  });
+  const missing = await getProjectControl(project.id);
+  expect(missing.totals.budget).toBeNull();
+  expect(missing.totals.budgetTarget).toBeNull();
+  expect(
+    missing.categories.find((r) => r.category === "freight")?.recordedCost,
+  ).toBe("100.0000");
+  expect(missing.economicReconciliation).toMatchObject({
+    recordedHt: "100.0000",
+    freightNonDeductibleVat: "20.0000",
+    economicCost: "120.0000",
+  });
+  await db.project.update({
+    where: { id: project.id },
+    data: { estimatedOtherCostHt: "0" },
+  });
+  const complete = await getProjectControl(project.id);
+  expect(complete.totals.budget).toBe("1100.0000");
+  expect(complete.totals.budgetTarget).toBe("1310.0000");
+  await db.project.update({
+    where: { id: project.id },
+    data: { targetMode: "EXPECTED_SELL", expectedSellHt: "1777" },
+  });
+  const direct = await getProjectControl(project.id);
+  expect(direct.totals.budgetTarget).toBe("1777.0000");
+  expect(direct.categories.every((r) => r.budgetTarget === null)).toBe(true);
+});
+
 it("counts matched Quote receipts once, using Invoice freight and each receipt's FX; excludes Trash and unmatched Quotes", async () => {
   const db = memory.raw;
   const project = await db.project.create({

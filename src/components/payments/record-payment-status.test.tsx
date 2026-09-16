@@ -14,43 +14,50 @@ afterEach(async () => {
   await view?.unmount();
   vi.clearAllMocks();
 });
-it("retains a rejected override and allows returning to Automatic without recording cash", async () => {
+it("Paid immediately records remaining cash and preserves a rejected FX completion", async () => {
   mocks.save
-    .mockResolvedValueOnce({ status: "error", message: "Retry status" })
+    .mockResolvedValueOnce({ status: "error", message: "Enter actual FX" })
     .mockResolvedValue({ status: "success", message: "Saved" });
   view = await mountForm(
     <RecordPaymentStatus
-      kind="billing"
+      kind="order"
       id="record"
       automatic="OVERDUE"
       cancelled={false}
       canEdit
     />,
   );
-  const select = document.querySelector("select");
-  select?.setAttribute("name", "paymentStatus");
-  await enter("paymentStatus", "PAID");
-  await clickText("Save status");
-  expect(select?.value).toBe("PAID");
-  expect(document.body.textContent).toContain("Retry status");
-  await clickText("Save status");
-  expect(mocks.save).toHaveBeenLastCalledWith({
-    kind: "billing",
-    id: "record",
-    value: "PAID",
-  });
-  expect(document.body.textContent).toContain(
-    "Manual status does not change cash or balances",
+  await clickText("Mark as paid");
+  expect(mocks.save).toHaveBeenCalledWith(
+    expect.objectContaining({ kind: "order", id: "record", value: "PAID" }),
   );
-  await enter("paymentStatus", "AUTO");
-  await clickText("Save status");
-  expect(mocks.save).toHaveBeenLastCalledWith({
-    kind: "billing",
-    id: "record",
-    value: "AUTO",
-  });
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    "Enter actual FX",
+  );
+  await clickText("Record payment");
+  expect(mocks.refresh).toHaveBeenCalledOnce();
 });
-it("shows read-only users the manual label without mutation controls", async () => {
+it("Partially paid opens amount entry without creating cash until submitted", async () => {
+  mocks.save.mockResolvedValue({ status: "success", message: "Saved" });
+  view = await mountForm(
+    <RecordPaymentStatus
+      kind="order"
+      id="record"
+      automatic="UNPAID"
+      cancelled={false}
+      canEdit
+    />,
+  );
+  document.querySelector("select")?.setAttribute("name", "status");
+  await enter("status", "PARTIALLY_PAID");
+  expect(mocks.save).not.toHaveBeenCalled();
+  await enter("amount", "25");
+  await clickText("Record payment");
+  expect(mocks.save).toHaveBeenCalledWith(
+    expect.objectContaining({ value: "PARTIALLY_PAID", amount: "25" }),
+  );
+});
+it("shows read-only users the actual derived label without mutation controls", async () => {
   view = await mountForm(
     <RecordPaymentStatus
       kind="order"
@@ -62,6 +69,6 @@ it("shows read-only users the manual label without mutation controls", async () 
       showCancel
     />,
   );
-  expect(document.body.textContent).toContain("Paid (manual)");
+  expect(document.body.textContent).toContain("Overdue");
   expect(document.querySelector("button,select")).toBeNull();
 });

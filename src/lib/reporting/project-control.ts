@@ -1,6 +1,7 @@
 import { billingIsIssued } from "@/domain/billing/status";
 import "server-only";
 import Decimal from "decimal.js";
+import { calculateProjectTargets } from "@/domain/projects/targets";
 import { projectFreightBudget } from "@/domain/freight/calculations";
 import {
   financialCategoryTotals,
@@ -215,9 +216,25 @@ export async function getProjectControl(projectId: string) {
       ),
     ]),
   );
+  const freightHt = sumKnown([
+    ...activeOrders.map((order) =>
+      convert(
+        order.costs.freight ?? "0",
+        order.orderCurrencyCode,
+        order.costs.purchaseFxRate,
+      ),
+    ),
+    ...project.freightExpenses.map((expense) =>
+      convert(
+        expense.costAmountHt.toString(),
+        expense.currencyCode,
+        expense.fxRateToReporting?.toString() ?? null,
+      ),
+    ),
+  ]);
   const recordedCosts = {
     merchandise: sumKnown(purchases),
-    freight: freight?.actualCostHt ?? null,
+    freight: freightHt,
     other: sumKnown(otherCosts),
   };
   const markups = {
@@ -231,7 +248,7 @@ export async function getProjectControl(projectId: string) {
       project.estimatedPurchaseCostHt?.toString(),
       project.freightEstimateRate?.toString(),
     ),
-    other: null,
+    other: project.estimatedOtherCostHt?.toString() ?? null,
   };
   const targets = {
     merchandise: sumKnown(
@@ -242,7 +259,29 @@ export async function getProjectControl(projectId: string) {
         ),
       ),
     ),
-    freight: freight?.recoveryTargetHt ?? null,
+    freight: sumKnown([
+      ...activeOrders.map((order) =>
+        requiredRecovery(
+          convert(
+            order.costs.freight ?? "0",
+            order.orderCurrencyCode,
+            order.costs.purchaseFxRate,
+          ),
+          order.componentPricing.freightMarkupRate,
+        ),
+      ),
+      ...project.freightExpenses.map((expense) =>
+        requiredRecovery(
+          convert(
+            expense.costAmountHt.toString(),
+            expense.currencyCode,
+            expense.fxRateToReporting?.toString() ?? null,
+          ),
+          expense.freightMarkupOverrideRate?.toString() ??
+            project.defaultFreightMarkupRate.toString(),
+        ),
+      ),
+    ]),
     other: sumKnown(
       activeOrders.map((order, index) =>
         requiredRecovery(
@@ -264,6 +303,20 @@ export async function getProjectControl(projectId: string) {
       recordedTarget: targets[category],
     }),
   }));
+  const approvedTarget = calculateProjectTargets({
+    estimatedPurchaseCostHt: budgets.merchandise,
+    estimatedFreightCostHt: budgets.freight,
+    estimatedOtherCostHt: budgets.other,
+    defaultProductMarkupRate: markups.merchandise,
+    defaultFreightMarkupRate: markups.freight,
+    defaultOtherCostMarkupRate: markups.other,
+    expectedSellHt: project.expectedSellHt?.toString() ?? null,
+    targetMode: project.targetMode,
+  });
+  if (project.targetMode === "EXPECTED_SELL") {
+    // A direct Project target has no employee-approved category allocation.
+    for (const category of categories) category.budgetTarget = null;
+  }
   const supplierPaid = sumKnown(
     installments.flatMap((row) =>
       row.settlements.map((payment) =>
@@ -328,7 +381,25 @@ export async function getProjectControl(projectId: string) {
   return {
     currency,
     categories,
-    totals: financialCategoryTotals(categories),
+    directTarget: project.targetMode === "EXPECTED_SELL",
+    totals: {
+      ...financialCategoryTotals(categories),
+      budgetTarget: approvedTarget.expectedSellHt,
+    },
+    economicReconciliation: {
+      recordedHt: sumKnown(Object.values(recordedCosts)),
+      orderNonDeductibleVat: difference(totalOrderEconomicCost, orderHtCost),
+      freightNonDeductibleVat: freight?.projectExpenseNonDeductibleInputVat
+        .complete
+        ? freight.projectExpenseNonDeductibleInputVat.value
+        : null,
+      economicCost: sumKnown([
+        totalOrderEconomicCost,
+        freight?.projectExpenseEconomicCost.complete
+          ? freight.projectExpenseEconomicCost.value
+          : null,
+      ]),
+    },
     freightCoverage: projectFreightCoverage({
       supplierHt: sumKnown([
         ...activeOrders.map((order) =>

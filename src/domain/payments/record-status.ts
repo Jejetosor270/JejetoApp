@@ -8,17 +8,19 @@ export const manualPaymentStatuses = [
   "OVERDUE",
 ] as const;
 export const recordStatusSchema = z.object({
+  paymentDate: z.string().optional(),
+  paymentFx: z.string().optional(),
+  amount: z.string().optional(),
   id: z.uuid(),
   kind: z.enum(["order", "billing"]),
   value: z.enum(["AUTO", ...manualPaymentStatuses, "CANCEL"]),
 });
 export function recordPaymentStatusLabel(
   automatic: string,
-  override?: string | null,
+  _override?: string | null,
   cancelled = false,
 ) {
   if (cancelled) return "Cancelled";
-  if (override) return `${formatEnumLabel(override)} (manual)`;
   return ["NOT_SCHEDULED", "SCHEDULED", "UPCOMING", "INVOICED"].includes(
     automatic,
   )

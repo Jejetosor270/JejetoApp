@@ -10,7 +10,7 @@ describe("Billing freight coverage", () => {
       freightCoverageBreakdown("10000", "1000", [
         { allocatedAmount: "9500", freightCoverageHt: "700" },
       ]),
-    ).toEqual({
+    ).toMatchObject({
       productHt: "9000.0000",
       allocatedFreightHt: "700.0000",
       projectFreightHt: "300.0000",

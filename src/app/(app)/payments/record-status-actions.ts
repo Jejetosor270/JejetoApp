@@ -4,6 +4,9 @@ import { saveRecordStatus } from "@/lib/payments/record-status";
 import { recordStatusSchema } from "@/domain/payments/record-status";
 import { revalidatePath } from "next/cache";
 import type { BulkActionState } from "@/domain/deletion/action-state";
+import { isExpectedPaymentError } from "@/lib/payments/errors";
+import { ClientBillingValidationError } from "@/lib/billing/billing";
+import { z } from "zod";
 
 export async function saveRecordStatusAction(
   input: unknown,
@@ -20,13 +23,18 @@ export async function saveRecordStatusAction(
       message:
         parsed.data.value === "CANCEL"
           ? "Record cancelled."
-          : "Status saved. Cash and balances unchanged.",
+          : "Payment status updated from actual cash.",
     };
-  } catch {
+  } catch (error) {
     return {
       status: "error",
       message:
-        "Could not change status. Check the record; Billing with receipts cannot be cancelled.",
+        error instanceof z.ZodError
+          ? "Check the payment amount, date and FX rate."
+          : isExpectedPaymentError(error) ||
+              error instanceof ClientBillingValidationError
+            ? error.message
+            : "Could not change payment status. Review the record and try again.",
     };
   }
 }

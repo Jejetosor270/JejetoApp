@@ -52,10 +52,11 @@ export function PaymentSchedule({
     columns: [
       "Payment term",
       "Due date",
-      "Amount",
-      "Paid",
-      "Remaining",
+      "Amount TTC",
+      financialLabels.supplierPaid,
+      financialLabels.remaining,
       "Status",
+      "Basis",
     ],
     numericColumns: [2, 3, 4],
     rows: summary.installments.map((term) => {
@@ -70,14 +71,15 @@ export function PaymentSchedule({
         id: term.id,
         editValue: term.label,
         cells: [
-          term.percentageRate
-            ? term.label + " · " + formatRate(term.percentageRate)
-            : term.label,
+          term.label,
           term.dueDate ? formatDateOnly(term.dueDate) : "Date needed",
           formatMoney(term.scheduledAmount, term.currencyCode),
           formatMoney(state.paid, term.currencyCode),
           formatMoney(state.remaining, term.currencyCode),
           state.label,
+          term.percentageRate
+            ? formatRate(term.percentageRate)
+            : "Fixed amount",
         ],
         editFields: [
           { column: 1, name: "date", type: "date", value: term.dueDate ?? "" },
@@ -205,3 +207,4 @@ export function PaymentSchedule({
     </div>
   );
 }
+import { financialLabels } from "@/domain/presentation/labels";

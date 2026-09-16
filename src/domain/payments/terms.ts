@@ -17,9 +17,10 @@ export function overdueTermAmount(input: {
       ? input.outstanding
       : "0";
   const overdue = input.terms
-    .filter(
-      (term) => !term.isCancelled && term.dueDate && term.dueDate < input.today,
-    )
+    .filter((term) => {
+      const due = term.dueDate ?? input.fallbackDate;
+      return !term.isCancelled && due !== null && due < input.today;
+    })
     .reduce(
       (sum, term) =>
         sum.plus(
@@ -57,9 +58,55 @@ export function earliestUnpaidTermDate(
           ),
         ),
     )
-    .flatMap((term) => (term.dueDate ? [term.dueDate] : []))
+    .flatMap((term) => {
+      const date = term.dueDate ?? fallback;
+      return date ? [date] : [];
+    })
     .sort();
-  return dates[0] ?? null;
+  return (
+    dates[0] ??
+    (terms.some(
+      (term) =>
+        !term.isCancelled &&
+        new Decimal(term.scheduledAmount).greaterThan(
+          term.payments.reduce(
+            (sum, row) => sum.plus(row.amount),
+            new Decimal(0),
+          ),
+        ),
+    )
+      ? fallback
+      : null)
+  );
+}
+
+/** Same deterministic term drives both the date shown and its edit target. */
+export function nextUnpaidTerm<
+  T extends {
+    id: string;
+    dueDate: string | null;
+    isCancelled: boolean;
+    scheduledAmount: string;
+    payments: readonly { amount: string }[];
+  },
+>(terms: readonly T[], fallback: string | null = null): T | undefined {
+  return terms
+    .filter(
+      (term) =>
+        !term.isCancelled &&
+        new Decimal(term.scheduledAmount).greaterThan(
+          term.payments.reduce(
+            (sum, row) => sum.plus(row.amount),
+            new Decimal(0),
+          ),
+        ),
+    )
+    .toSorted(
+      (a, b) =>
+        (a.dueDate ?? fallback ?? "9999-12-31").localeCompare(
+          b.dueDate ?? fallback ?? "9999-12-31",
+        ) || a.id.localeCompare(b.id),
+    )[0];
 }
 
 export function paymentTermState(input: {

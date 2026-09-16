@@ -18,11 +18,11 @@ export function CompanyFinancialSummary({
   const currency = report.companyCurrencyCode;
   const fundingStatusLabel =
     report.fundingCoverage.status === "EXCESS_BILLING_COVERAGE"
-      ? "Excess Billing Coverage"
+      ? "Billing surplus over Order sell"
       : report.fundingCoverage.status === "FUNDING_GAP"
-        ? "Funding Gap"
+        ? "Billing shortfall against Order sell"
         : report.fundingCoverage.status === "FULLY_COVERED"
-          ? "Fully Covered"
+          ? "Order sell covered"
           : "Incomplete";
   const kpis = [
     [
@@ -86,13 +86,13 @@ export function CompanyFinancialSummary({
       "/billing",
     ],
     [
-      "Total Funding Coverage",
+      "Total Billing less Order sell",
       formatSignedMoney(report.fundingCoverage.fundingCoverageHt, currency),
       !report.fundingCoverage.complete,
       "/projects",
     ],
     [
-      "Projects with Funding Gap",
+      "Projects with Billing shortfall against Order sell",
       report.fundingCoverage.gapProjectCount.toString(),
       false,
       "/projects",
@@ -166,7 +166,7 @@ export function CompanyFinancialSummary({
         </dl>
       </details>
       <p className="text-muted-foreground mt-3 text-xs">
-        Funding Coverage status:{" "}
+        Billing less Order sell status:{" "}
         <span className="text-foreground font-medium">
           {fundingStatusLabel}
         </span>
@@ -216,7 +216,7 @@ export function ProjectPortfolioTable({
           "Planned Margin",
         ]
       : view === "funding"
-        ? ["Funding Coverage HT"]
+        ? ["Billing less Order sell HT"]
         : [
             "Supplier Outstanding TTC",
             "Client Outstanding TTC",
@@ -229,8 +229,8 @@ export function ProjectPortfolioTable({
           <h2 className="text-sm font-semibold">Project portfolio</h2>
           <p className="text-muted-foreground mt-1 text-xs">
             Each row remains in its Project reporting currency. Commercial
-            figures describe the Order plan; Funding Coverage is commercial
-            coverage, separate from cash.
+            figures describe the Order plan; Billing less Order sell is
+            commercial coverage, separate from cash.
           </p>
         </div>
         <ViewSelector

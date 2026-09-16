@@ -420,6 +420,7 @@ export async function listClientCashInstallments(
     select: {
       client: { select: { id: true, displayName: true } },
       documentType: true,
+      dueDate: true,
       id: true,
       matchedInstallment: {
         select: {
@@ -469,7 +470,7 @@ export async function listClientCashInstallments(
       const outstanding = installment.isCancelled
         ? new Decimal(0)
         : installmentOutstanding(installment.scheduledAmount, received);
-      const dueDate = dateToDateOnly(installment.dueDate);
+      const dueDate = dateToDateOnly(installment.dueDate ?? document.dueDate);
       unique.set(installment.id, {
         clientId: document.client?.id ?? "",
         receivedAmount: received.toString(),

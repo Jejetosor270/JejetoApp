@@ -3,6 +3,8 @@ import Decimal from "decimal.js";
 import type { ProjectTargetMode } from "@/generated/prisma/client";
 
 export interface ProjectTargetInput {
+  estimatedOtherCostHt?: string | null;
+  defaultOtherCostMarkupRate?: string | null;
   defaultFreightMarkupRate?: string | null;
   defaultProductMarkupRate?: string | null;
   estimatedFreightCostHt?: string | null;
@@ -45,10 +47,13 @@ export function calculateProjectTargets(
 ): ProjectTargetSummary {
   const purchase = value(input.estimatedPurchaseCostHt);
   const freight = value(input.estimatedFreightCostHt);
+  const other = value(input.estimatedOtherCostHt);
+  const completeBudget =
+    purchase !== null && freight !== null && other !== null;
   const cost =
-    purchase === null && freight === null
+    !completeBudget || (purchase === null && freight === null)
       ? null
-      : (purchase ?? new Decimal(0)).plus(freight ?? 0);
+      : (purchase ?? new Decimal(0)).plus(freight ?? 0).plus(other ?? 0);
   const enteredMarkup = value(input.targetMarkupRate);
   const productMarkup = value(input.defaultProductMarkupRate) ?? enteredMarkup;
   const freightMarkup = value(input.defaultFreightMarkupRate) ?? enteredMarkup;
@@ -63,8 +68,14 @@ export function calculateProjectTargets(
       : null;
   const sell =
     input.targetMode === "MARKUP"
-      ? productSell !== null || freightSell !== null
-        ? (productSell ?? new Decimal(0)).plus(freightSell ?? 0)
+      ? completeBudget && (productSell !== null || freightSell !== null)
+        ? (productSell ?? new Decimal(0))
+            .plus(freightSell ?? 0)
+            .plus(
+              (other ?? new Decimal(0)).times(
+                new Decimal(1).plus(input.defaultOtherCostMarkupRate ?? "0"),
+              ),
+            )
         : null
       : enteredSell;
   const profit = cost !== null && sell !== null ? sell.minus(cost) : null;

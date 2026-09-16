@@ -37,6 +37,8 @@ const record = {
   id: "billing-id",
   reference: "INV-001",
   shortDescription: null,
+  editVersion: "a".repeat(64),
+  editFields: "{}",
   documentType: "INVOICE",
   workflowStatus: "INVOICED",
   documentDate: "2026-09-01",
@@ -120,6 +122,11 @@ afterEach(async () => {
   await view?.unmount();
 });
 
+function matrix(row: string, column: number) {
+  return [...document.querySelectorAll("#overview tr")]
+    .find((el) => el.querySelector("th")?.textContent === row)
+    ?.querySelectorAll("td")[column]?.textContent;
+}
 function value(label: string) {
   return [...document.querySelectorAll("#overview dt")].find(
     (element) => element.textContent === label,
@@ -139,13 +146,13 @@ async function mount(documentData: ClientBillingView = record, canEdit = true) {
 
 it("shows allocation and freight figures in Details, separately from Client outstanding", async () => {
   await mount();
-  expect(value("Unallocated Billing HT")).toBe("900.00 EUR");
-  expect(value("Total freight HT (included)")).toBe("200.00 EUR");
-  expect(value("Freight allocated to Orders HT")).toBe("25.00 EUR");
-  expect(value("Freight remaining at Project level HT")).toBe("175.00 EUR");
+  expect(matrix("Project remainder", 0)).toBe("725.00 EUR");
+  expect(matrix("Total", 1)).toBe("200.00 EUR");
+  expect(matrix("Allocated to Orders", 1)).toBe("25.00 EUR");
+  expect(matrix("Project remainder", 1)).toBe("175.00 EUR");
   expect(value("Outstanding")).toBe("1 100.00 EUR");
   expect(value("Status")).toBeUndefined();
-  expect(value("Payment status")).toBe("Invoiced");
+  expect(value("Payment status")).toBeUndefined();
   const visible = document.querySelector('[role="tabpanel"]:not([hidden])');
   expect(visible?.textContent).not.toContain("Payment manager");
   expect(
@@ -167,9 +174,9 @@ it("shows allocation and freight figures in Details, separately from Client outs
 
 it("keeps zero allocations explicit and all freight at Project level", async () => {
   await mount({ ...record, allocations: [] });
-  expect(value("Unallocated Billing HT")).toBe("1 000.00 EUR");
-  expect(value("Freight allocated to Orders HT")).toBe("0.00 EUR");
-  expect(value("Freight remaining at Project level HT")).toBe("200.00 EUR");
+  expect(matrix("Project remainder", 0)).toBe("800.00 EUR");
+  expect(matrix("Allocated to Orders", 1)).toBe("0.00 EUR");
+  expect(matrix("Project remainder", 1)).toBe("200.00 EUR");
 });
 it("preserves Other/services classification and allocation through a rejected full edit", async () => {
   actions.save.mockResolvedValue({
@@ -184,8 +191,8 @@ it("preserves Other/services classification and allocation through a rejected fu
       otherCoverageHt: "20",
     })),
   });
-  expect(value("Other/services HT (included)")).toBe("100.00 EUR");
-  expect(value("Merchandise HT")).toBe("700.00 EUR");
+  expect(matrix("Total", 2)).toBe("100.00 EUR");
+  expect(matrix("Total", 0)).toBe("700.00 EUR");
   await clickText("Edit");
   await enter("otherCoverageHt", "125");
   await act(async () => {
@@ -215,6 +222,7 @@ it("uses a confirmed Cancel Billing button and retains cancellation errors", asy
     id: record.id,
     value: "CANCELLED",
     confirmedAmount: record.outstanding,
+    amount: "",
     paymentDate: "",
     paymentFx: "",
   });
@@ -249,7 +257,7 @@ it("does not expose editing to read-only employees", async () => {
     ),
   ).toBe(false);
   expect(document.querySelector('[name="recordStatus"]')).toBeNull();
-  expect(value("Unallocated Billing HT")).toBe("900.00 EUR");
+  expect(matrix("Project remainder", 0)).toBe("725.00 EUR");
 });
 
 vi.mock("@/app/(app)/related-records/actions", () => ({

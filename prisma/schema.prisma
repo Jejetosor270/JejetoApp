@@ -356,6 +356,7 @@ model Project {
   freightEstimateNotes    String?           @db.VarChar(500)
   clientBudgetTargetHt    Decimal?          @db.Decimal(19, 4)
   estimatedPurchaseCostHt Decimal?          @db.Decimal(19, 4)
+  estimatedOtherCostHt    Decimal?          @db.Decimal(19, 4)
   estimatedFreightCostHt  Decimal?          @db.Decimal(19, 4)
   targetMarkupRate        Decimal?          @db.Decimal(9, 6)
   defaultProductMarkupRate Decimal          @default(0) @db.Decimal(9, 6)

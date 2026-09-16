@@ -1,4 +1,6 @@
 import "server-only";
+import { billingListFilters } from "@/domain/billing/listing";
+import { listClientBillingPage } from "@/lib/billing/billing";
 import { projectFreightBudget } from "@/domain/freight/calculations";
 
 import {
@@ -463,83 +465,46 @@ async function itemsCsv(params: Params): Promise<string> {
 }
 
 async function billingCsv(params: Params): Promise<string> {
-  const query = firstQueryValue(params, "query")?.trim() ?? "";
-  const clientId = optionalUuid(firstQueryValue(params, "clientId"));
-  const projectId = optionalUuid(firstQueryValue(params, "projectId"));
-  const documentType = firstQueryValue(params, "documentType");
-  const items = await getDatabase().clientBillingDocument.findMany({
-    where: {
-      ...(clientId ? { clientId } : {}),
-      ...(projectId ? { projectId } : {}),
-      ...(documentType === "QUOTE" || documentType === "INVOICE"
-        ? { documentType }
-        : {}),
-      ...(query
-        ? {
-            OR: [
-              { reference: { contains: query, mode: "insensitive" } },
-              {
-                client: {
-                  displayName: { contains: query, mode: "insensitive" },
-                },
-              },
-              { project: { name: { contains: query, mode: "insensitive" } } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ documentDate: "desc" }, { id: "asc" }],
-    select: {
-      client: { select: { displayName: true } },
-      currencyCode: true,
-      documentDate: true,
-      documentType: true,
-      dueDate: true,
-      fxRateToReporting: true,
-      detachedReportingCurrencyCode: true,
-      project: { select: { name: true, reportingCurrencyCode: true } },
-      reference: true,
-      totalHt: true,
-      totalTtc: true,
-      vatAmount: true,
-    },
-  });
+  const { items } = await listClientBillingPage(
+    billingListFilters(params),
+    true,
+  );
   return csvDocument(
     [
       "Client",
       "Project",
       "Type",
       "Reference",
+      "Description",
       "Document date",
       "Due date",
       "Currency",
       "HT",
       "VAT",
       "TTC",
+      "Client received TTC",
+      "Remaining TTC",
+      "Status",
       "FX to Project currency",
       "Project currency",
     ],
     items.map((item) => [
-      item.client?.displayName ?? "Unassigned",
-      item.project?.name ?? "Unassigned",
-      trustedCsvValue(item.documentType),
+      item.client.displayName,
+      item.project.name,
+      item.documentType,
       item.reference,
-      trustedCsvValue(item.documentDate.toISOString().slice(0, 10)),
-      item.dueDate
-        ? trustedCsvValue(item.dueDate.toISOString().slice(0, 10))
-        : "",
+      item.shortDescription ?? "",
+      trustedCsvValue(item.documentDate),
+      item.dueDate ? trustedCsvValue(item.dueDate) : "",
       trustedCsvValue(item.currencyCode),
-      money(item.totalHt.toString()),
-      money(item.vatAmount.toString()),
-      money(item.totalTtc.toString()),
-      item.fxRateToReporting
-        ? trustedCsvValue(item.fxRateToReporting.toString())
-        : "",
-      trustedCsvValue(
-        item.project?.reportingCurrencyCode ??
-          item.detachedReportingCurrencyCode ??
-          "Unassigned",
-      ),
+      money(item.totalHt),
+      money(item.vatAmount),
+      money(item.totalTtc),
+      money(item.paid),
+      money(item.outstanding),
+      item.status,
+      item.fxRate ? trustedCsvValue(item.fxRate) : "",
+      trustedCsvValue(item.project.reportingCurrencyCode),
     ]),
   );
 }

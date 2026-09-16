@@ -71,6 +71,7 @@ interface ProjectView {
   defaultProductMarkupRate: string;
   estimatedFreightCostHt: string | null;
   estimatedPurchaseCostHt: string | null;
+  estimatedOtherCostHt?: string | null;
   expectedSellHt: string | null;
   expectedCompletionDate: string | null;
   freightEstimateNotes: string | null;
@@ -258,6 +259,7 @@ function ProjectInlineRow({
       defaultProductMarkupRate: draft.defaultProductMarkupRate,
       estimatedFreightCostHt: project.estimatedFreightCostHt ?? "",
       estimatedPurchaseCostHt: project.estimatedPurchaseCostHt ?? "",
+      estimatedOtherCostHt: project.estimatedOtherCostHt ?? "",
       expectedSellHt: project.expectedSellHt ?? "",
       expectedCompletionDate: project.expectedCompletionDate ?? "",
       freightEstimateNotes: project.freightEstimateNotes ?? "",
@@ -475,7 +477,9 @@ export function ProjectManagement({
                 />
                 <th className="px-4 py-3">Expected completion</th>
                 <th className="px-4 py-3">Target Markup</th>
-                <th className="px-4 py-3 text-right">Funding Coverage</th>
+                <th className="px-4 py-3 text-right">
+                  Billing less Order sell
+                </th>
                 {canEdit ? (
                   <th className="px-4 py-3 text-right">Edit</th>
                 ) : null}

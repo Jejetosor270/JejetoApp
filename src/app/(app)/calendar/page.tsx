@@ -24,7 +24,10 @@ export const metadata: Metadata = { title: "Procurement calendar" };
 function eventLabel(event: ProcurementCalendarEvent) {
   if (event.type === "ISSUE_INVOICE") return "Issue invoice";
   if (event.type === "SUPPLIER_PAYMENT") return "Cash out";
-  if (event.type === "CLIENT_RECEIPT") return "Cash in";
+  if (event.type === "CLIENT_RECEIPT")
+    return event.documentType === "QUOTE"
+      ? "Quote-planned cash in"
+      : "Invoice cash in";
   if (event.type === "EXPECTED_READY") return "Ready";
   if (event.type === "EXPECTED_DELIVERY") return "Delivery";
   if (event.type === "ITEM_WAREHOUSE") return "Item warehouse";
@@ -68,7 +71,9 @@ export default async function CalendarPage({
   }
   const paymentEvents = operationalEvents.filter(
     (event) =>
-      event.type === "SUPPLIER_PAYMENT" || event.type === "CLIENT_RECEIPT",
+      (event.type === "SUPPLIER_PAYMENT" || event.type === "CLIENT_RECEIPT") &&
+      event.status !== "PAID" &&
+      event.status !== "CANCELLED",
   );
   const overdue = paymentEvents.filter(
     (event) =>
@@ -168,7 +173,17 @@ export default async function CalendarPage({
                       ) : null}
                       {event.amount && event.currencyCode ? (
                         <p className="financial-figure mt-1">
+                          Remaining TTC:{" "}
                           {formatMoney(event.amount, event.currencyCode)}
+                          {event.originalAmount && (
+                            <span className="text-muted-foreground block">
+                              Original TTC:{" "}
+                              {formatMoney(
+                                event.originalAmount,
+                                event.currencyCode,
+                              )}
+                            </span>
+                          )}
                         </p>
                       ) : null}
                     </Link>
@@ -186,6 +201,10 @@ export default async function CalendarPage({
       </section>
       <section className="grid gap-4 xl:grid-cols-3">
         {[
+          [
+            "Invoicing reminders · through next 30 days",
+            operationalEvents.filter((event) => event.type === "ISSUE_INVOICE"),
+          ],
           ["Overdue", overdue],
           ["Next 7 days", nextSevenEvents],
           ["Following 30 days", nextThirtyEvents],
@@ -204,7 +223,9 @@ export default async function CalendarPage({
                     key={event.id}
                   >
                     <span>
-                      <span className="font-medium">{event.title}</span>
+                      <span className="font-medium">
+                        {eventLabel(event)} · {event.title}
+                      </span>
                       <span className="text-muted-foreground mt-0.5 block text-xs">
                         {event.projectName} · {event.orderNumber}
                       </span>
@@ -219,7 +240,17 @@ export default async function CalendarPage({
                       <span>{formatDateOnly(event.date)}</span>
                       {event.amount && event.currencyCode ? (
                         <span className="financial-figure mt-0.5 block">
+                          Remaining TTC:{" "}
                           {formatMoney(event.amount, event.currencyCode)}
+                          {event.originalAmount && (
+                            <span className="text-muted-foreground block">
+                              Original TTC:{" "}
+                              {formatMoney(
+                                event.originalAmount,
+                                event.currencyCode,
+                              )}
+                            </span>
+                          )}
                         </span>
                       ) : null}
                     </span>

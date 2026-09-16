@@ -81,7 +81,7 @@ async function getProjectRelationsInternal(
     }),
   ]);
   return [
-    partiesTable("clients", project ? [project.client] : []),
+    partiesTable("clients", project?.client ? [project.client] : []),
     ordersTable(orders),
     billingsTable(billing),
     paymentsTable(payments),
@@ -107,6 +107,7 @@ async function getOrderRelationsInternal(
           select: {
             allocatedAmount: true,
             freightCoverageHt: true,
+            otherCoverageHt: true,
             billingDocument: { select: billingSelect },
           },
           orderBy: { billingDocumentId: "asc" },
@@ -162,6 +163,7 @@ async function getOrderRelationsInternal(
         "Date",
         "Allocated HT",
         "Of which freight HT",
+        "Other/services HT",
         "Record status",
       ],
       rows:
@@ -186,7 +188,7 @@ async function getOrderRelationsInternal(
           href: relatedHref("billing", row.billingDocument.id),
           cells: [
             row.billingDocument?.reference ?? "Unassigned",
-            row.billingDocument.documentType,
+            formatEnumLabel(row.billingDocument.documentType),
             formatDateOnly(dateToDateOnly(row.billingDocument.documentDate)),
             formatMoney(
               row.allocatedAmount.toString(),
@@ -194,6 +196,10 @@ async function getOrderRelationsInternal(
             ),
             formatMoney(
               row.freightCoverageHt.toString(),
+              row.billingDocument.currencyCode,
+            ),
+            formatMoney(
+              row.otherCoverageHt.toString(),
               row.billingDocument.currencyCode,
             ),
             formatEnumLabel(billingRecordStatus(row.billingDocument)),

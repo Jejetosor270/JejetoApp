@@ -1,6 +1,7 @@
 import { billingRecordStatus } from "./status-view";
 import { changeBillingStatusInTransaction } from "./status";
 import { billingIsIssued } from "@/domain/billing/status";
+import { sortBillingRows, type billingSorts } from "@/domain/billing/listing";
 import {
   earliestUnpaidTermDate,
   overdueTermAmount,
@@ -8,6 +9,12 @@ import {
 import { retainedCurrency } from "@/lib/related-records/context";
 import { freightCoverageBreakdown } from "@/domain/billing/freight-coverage";
 import "server-only";
+import { editBillingDueDate } from "./due-date";
+import {
+  editVersion,
+  editFieldVersions,
+  assertEditVersion,
+} from "@/lib/edit-version";
 import { nextInstallmentSequence } from "@/lib/payments/sequence";
 import { trashInTransaction } from "@/lib/trash/service";
 
@@ -158,12 +165,22 @@ function billingView(record: BillingRecord, today = businessToday()) {
       percentageRate: allocation.percentageRate?.toString() ?? null,
     })),
     allocationReconciliation: reconciliation,
+    editVersion: editVersion(record),
+    editFields: editFieldVersions(record),
     client: record.client ?? { id: "", displayName: "Unassigned" },
     clientId: record.clientId ?? "",
     currencyCode: record.currencyCode,
     documentDate: dateToDateOnly(record.documentDate),
     documentType: record.documentType,
-    dueDate: record.dueDate ? dateToDateOnly(record.dueDate) : null,
+    dueDate: earliestUnpaidTermDate(
+      visibleInstallments.map((t) => ({
+        dueDate: dateToDateOnly(t.dueDate),
+        isCancelled: t.isCancelled,
+        scheduledAmount: t.scheduledAmount.toString(),
+        payments: t.receipts.map((r) => ({ amount: r.amount.toString() })),
+      })),
+      dateToDateOnly(record.dueDate),
+    ),
     fxRate: record.fxRateToReporting?.toString() ?? null,
     id: record.id,
     ...(record.paymentStatusOverride
@@ -256,10 +273,14 @@ export interface BillingPageFilters extends PageInput {
   documentType?: ClientBillingDocumentType | undefined;
   projectId?: string | undefined;
   query: string;
-  sort: "date" | "dueDate" | "reference" | "updated";
+  status?: string | undefined;
+  sort: (typeof billingSorts)[number];
 }
 
-export async function listClientBillingPage(filters: BillingPageFilters) {
+export async function listClientBillingPage(
+  filters: BillingPageFilters,
+  all = false,
+) {
   const query = filters.query.trim();
   const where: Prisma.ClientBillingDocumentWhereInput = {
     ...(filters.clientId ? { clientId: filters.clientId } : {}),
@@ -270,6 +291,7 @@ export async function listClientBillingPage(filters: BillingPageFilters) {
       ? {
           OR: [
             { reference: { contains: query, mode: "insensitive" } },
+            { shortDescription: { contains: query, mode: "insensitive" } },
             {
               client: { displayName: { contains: query, mode: "insensitive" } },
             },
@@ -287,6 +309,32 @@ export async function listClientBillingPage(filters: BillingPageFilters) {
           ? "reference"
           : "updatedAt";
   const database = getDatabase();
+  if (
+    all ||
+    filters.status ||
+    !["date", "reference", "updated"].includes(filters.sort)
+  ) {
+    const records = await database.clientBillingDocument.findMany({
+      where,
+      include: billingInclude,
+    });
+    const items = sortBillingRows(
+      records
+        .map((record) => billingView(record))
+        .filter((row) => !filters.status || row.status === filters.status),
+      filters.sort,
+      filters.direction,
+    );
+    return {
+      items: all
+        ? items
+        : items.slice(
+            paginationSkip(filters),
+            paginationSkip(filters) + filters.pageSize,
+          ),
+      total: items.length,
+    };
+  }
   const [records, total] = await Promise.all([
     database.clientBillingDocument.findMany({
       where,
@@ -547,6 +595,9 @@ export async function confirmClientBillingDocument(
             : null,
         notes: input.notes ?? null,
         paymentTermsRaw: input.paymentTermsRaw ?? null,
+        ...(input.shortDescription === undefined
+          ? {}
+          : { shortDescription: input.shortDescription || null }),
         projectId: input.projectId,
         reference: input.reference,
         freightCoverageHt: input.freightCoverageHt ?? "0",
@@ -790,7 +841,7 @@ export async function recordClientReceiptInTransaction(
       installment.id !== document.matchedInstallmentId)
   )
     throw new ClientBillingValidationError(
-      "The selected installment belongs to another Billing Event.",
+      "The selected installment belongs to another Billing document.",
     );
   const paid = [
     ...new Map(
@@ -802,7 +853,7 @@ export async function recordClientReceiptInTransaction(
   ].reduce((sum, receipt) => sum.plus(receipt.amount), new Decimal(0));
   if (paid.plus(input.amount).greaterThan(document.totalTtc))
     throw new ClientBillingValidationError(
-      "The receipt would exceed the Billing Event outstanding balance.",
+      "The receipt would exceed the Billing document outstanding balance.",
     );
   if (installment && installment.currencyCode !== document.currencyCode)
     throw new ClientBillingValidationError(
@@ -886,7 +937,7 @@ export async function updateClientReceipt(
       if (!current) throw new ClientBillingNotFoundError();
       if (current.billingDocumentId !== input.billingDocumentId)
         throw new ClientBillingValidationError(
-          "This receipt belongs to another Billing Event.",
+          "This receipt belongs to another Billing document.",
         );
 
       const document = await transaction.clientBillingDocument.findUnique({
@@ -918,7 +969,7 @@ export async function updateClientReceipt(
           installment.id !== document.matchedInstallmentId)
       )
         throw new ClientBillingValidationError(
-          "The selected installment belongs to another Billing Event.",
+          "The selected installment belongs to another Billing document.",
         );
 
       const paidWithoutCurrent = [
@@ -935,7 +986,7 @@ export async function updateClientReceipt(
       );
       if (paidWithoutCurrent.plus(input.amount).greaterThan(document.totalTtc))
         throw new ClientBillingValidationError(
-          "The receipt would exceed the Billing Event outstanding balance.",
+          "The receipt would exceed the Billing document outstanding balance.",
         );
 
       if (installment) {
@@ -1037,7 +1088,7 @@ export async function deleteClientReceipt(
     if (!receipt) throw new ClientBillingNotFoundError();
     if (receipt.billingDocumentId !== input.billingDocumentId)
       throw new ClientBillingValidationError(
-        "This receipt belongs to another Billing Event.",
+        "This receipt belongs to another Billing document.",
       );
     await trashInTransaction(transaction, actorId, "ClientReceipt", [
       receipt.id,
@@ -1150,7 +1201,7 @@ export async function updateClientBillingInstallment(
       );
     if (!belongsToView)
       throw new ClientBillingValidationError(
-        "This installment does not belong to the selected Billing Event.",
+        "This installment does not belong to the selected Billing document.",
       );
 
     const amount =
@@ -1320,7 +1371,7 @@ export async function deleteClientBillingInstallment(
     if (!installment) throw new ClientBillingNotFoundError();
     if (installment.billingDocumentId !== input.billingDocumentId)
       throw new ClientBillingValidationError(
-        "This installment belongs to another Billing Event.",
+        "This installment belongs to another Billing document.",
       );
     if (installment.receipts.length > 0)
       throw new ClientBillingValidationError(
@@ -1399,7 +1450,7 @@ async function validateBillingAllocations(
     new Set(allocations.map((item) => item.orderId)).size !== allocations.length
   )
     throw new ClientBillingValidationError(
-      "Each Order can appear only once in a Billing Event.",
+      "Each Order can appear only once in a Billing document.",
     );
   validateFreight(
     document.totalHt,
@@ -1415,7 +1466,7 @@ async function validateBillingAllocations(
   });
   if (matchingOrders !== allocations.length)
     throw new ClientBillingValidationError(
-      "Every allocation must reference an Order in the Billing Event Project.",
+      "Every allocation must reference an Order in the Billing document Project.",
     );
   for (const allocation of allocations) {
     if (
@@ -1438,7 +1489,7 @@ async function validateBillingAllocations(
   );
   if (!new Decimal(reconciliation.overallocated).isZero())
     throw new ClientBillingValidationError(
-      "Order allocations cannot exceed the Billing Event total HT.",
+      "Order allocations cannot exceed the Billing document total HT.",
     );
   if (
     !new Decimal(reconciliation.remaining).isZero() &&
@@ -1626,17 +1677,32 @@ export async function updateOrderBillingLinkInTransaction(
     getOrderInTransaction(transaction, input.orderId),
   ]);
   if (!document) throw new ClientBillingNotFoundError();
+  if (input.expectedVersion) {
+    const snapshot = await transaction.clientBillingDocument.findUniqueOrThrow({
+      where: { id: input.billingDocumentId },
+      include: billingInclude,
+    });
+    try {
+      assertEditVersion(input.expectedVersion, snapshot, input.expectedFields);
+    } catch (error) {
+      throw new ClientBillingValidationError(
+        error instanceof Error
+          ? error.message
+          : "Billing changed; reload before saving.",
+      );
+    }
+  }
   if (!order)
     throw new ClientBillingValidationError(
       "The selected Order no longer exists.",
     );
   if (order.project.id !== document.projectId)
     throw new ClientBillingValidationError(
-      "The selected Order must belong to the Billing Event Project.",
+      "The selected Order must belong to the Billing document Project.",
     );
   if (!input.remove && document.isCancelled)
     throw new ClientBillingValidationError(
-      "A cancelled Billing Event cannot receive a new Order allocation.",
+      "A cancelled Billing document cannot receive a new Order allocation.",
     );
   const allocations: BillingAllocationInput[] = document.allocations
     .filter((item) => item.orderId !== input.orderId)
@@ -1684,7 +1750,7 @@ export async function updateOrderBillingLinkInTransaction(
     );
     if (new Decimal(allocatedAmount).greaterThan(available))
       throw new ClientBillingValidationError(
-        "Allocation exceeds the remaining Billing Event amount.",
+        "Allocation exceeds the remaining Billing document amount.",
       );
     allocations.push({
       otherCoverageHt:
@@ -1748,6 +1814,21 @@ export async function updateClientBillingDocumentInTransaction(
   actorId: string,
   input: BillingDocumentEditInput,
 ) {
+  if (input.expectedVersion) {
+    const current = await transaction.clientBillingDocument.findUniqueOrThrow({
+      where: { id: input.id },
+      include: billingInclude,
+    });
+    try {
+      assertEditVersion(input.expectedVersion, current, input.expectedFields);
+    } catch (error) {
+      throw new ClientBillingValidationError(
+        error instanceof Error
+          ? error.message
+          : "Record changed. Reload before saving.",
+      );
+    }
+  }
   const existing = await transaction.clientBillingDocument.findUnique({
     where: { id: input.id },
     select: {
@@ -1827,7 +1908,7 @@ export async function updateClientBillingDocumentInTransaction(
     );
   if (!existing.isCancelled && input.isCancelled && receipts.length > 0)
     throw new ClientBillingValidationError(
-      "A Billing Event with recorded Client receipts cannot be cancelled.",
+      "A Billing document with recorded Client receipts cannot be cancelled.",
     );
   const paid = receipts.reduce(
     (total, receipt) => total.plus(receipt.amount),
@@ -1880,7 +1961,15 @@ export async function updateClientBillingDocumentInTransaction(
       currencyCode: input.currencyCode,
       documentDate: dateOnlyToDate(input.documentDate),
       documentType: input.documentType,
-      dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
+      dueDate: await editBillingDueDate(
+        transaction,
+        actorId,
+        input.id,
+        input.dueDate ?? null,
+      ),
+      ...(input.shortDescription === undefined
+        ? {}
+        : { shortDescription: input.shortDescription || null }),
       fxRateToReporting:
         input.currencyCode === project.reportingCurrencyCode
           ? null
@@ -1930,7 +2019,7 @@ export async function updateClientBillingDocumentInTransaction(
         "isCancelled",
       ],
     },
-    summary: "Updated the Billing Event.",
+    summary: "Updated the Billing document.",
   });
   await reconcileBillingAllocationsInTransaction(
     transaction,
@@ -2355,6 +2444,8 @@ export async function getOrderBillingReconciliation(orderId: string) {
             percentageRate: allocation.percentageRate,
           }
         : null,
+      expectedVersion: view.editVersion,
+      expectedFields: view.editFields,
       currencyCode: view.currencyCode,
       documentDate: view.documentDate,
       documentType: view.documentType,
@@ -2382,10 +2473,35 @@ export async function getOrderBillingReconciliation(orderId: string) {
 
 export async function updateBillingFreightCoverage(
   actorId: string,
-  input: { billingDocumentId: string; freightCoverageHt: string },
+  input: {
+    billingDocumentId: string;
+    freightCoverageHt: string;
+    expectedVersion?: string | undefined;
+    expectedFields?: string | undefined;
+  },
 ) {
   return getDatabase().$transaction(
     async (transaction) => {
+      if (input.expectedVersion) {
+        const snapshot =
+          await transaction.clientBillingDocument.findUniqueOrThrow({
+            where: { id: input.billingDocumentId },
+            include: billingInclude,
+          });
+        try {
+          assertEditVersion(
+            input.expectedVersion,
+            snapshot,
+            input.expectedFields,
+          );
+        } catch (error) {
+          throw new ClientBillingValidationError(
+            error instanceof Error
+              ? error.message
+              : "Billing changed. Reload before saving.",
+          );
+        }
+      }
       const document = await transaction.clientBillingDocument.findUnique({
         where: { id: input.billingDocumentId },
         select: {

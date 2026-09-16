@@ -146,7 +146,7 @@ export default async function ClientDetailPage({
               className="text-primary inline-block underline"
               href={`/billing?clientId=${client.id}`}
             >
-              View all Billing Events
+              View all Billing documents
             </Link>
           </div>
         </article>
@@ -155,7 +155,7 @@ export default async function ClientDetailPage({
       <RelatedRecordTable
         table={{
           id: "billing",
-          title: "Recent Billing Events",
+          title: "Recent Billing documents",
           description: "Latest 100 Billing documents for this Client.",
           columns: ["Reference", "Type", "Date", "Outstanding"],
           numericColumns: [3],

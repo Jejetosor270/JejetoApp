@@ -26,6 +26,8 @@ import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import { formatEnumLabel } from "@/domain/presentation/labels";
 
 interface BillingLinkDocument {
+  expectedVersion?: string;
+  expectedFields?: string;
   allocatedToOtherOrdersHt: string;
   availableForOrderHt: string;
   allocation: {
@@ -59,6 +61,8 @@ function RemoveBillingLink({
 }) {
   const router = useRouter();
   const [approveRemainder, setApproveRemainder] = useState(true);
+  const [expectedVersion] = useState(document.expectedVersion);
+  const [expectedFields] = useState(document.expectedFields);
   const { onSubmit, pending, state } = usePersistentActionState(
     updateOrderBillingLinkAction,
     initialState,
@@ -72,6 +76,12 @@ function RemoveBillingLink({
       onSubmit={onSubmit}
     >
       <input name="billingDocumentId" type="hidden" value={document.id} />
+      {expectedVersion && (
+        <input name="expectedVersion" type="hidden" value={expectedVersion} />
+      )}
+      {expectedFields && (
+        <input name="expectedFields" type="hidden" value={expectedFields} />
+      )}
       <input name="orderId" type="hidden" value={orderId} />
       <input name="remove" type="hidden" value="true" />
       <label className="flex items-center gap-1 text-xs">
@@ -232,19 +242,19 @@ export function OrderBillingReconciliation({
         ))}
         {linked.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            No Billing Events are linked yet.
+            No Billing documents are linked yet.
           </p>
         ) : null}
       </div>
       {canEdit && available.length ? (
         <div className="mt-4 rounded-md border p-3">
-          <Field label="Link an existing Project Billing Event">
+          <Field label="Link an existing Project Billing document">
             <select
               className={inputClassName}
               onChange={(event) => setSelectedId(event.target.value)}
               value={selectedId}
             >
-              <option value="">Choose Billing Event</option>
+              <option value="">Choose Billing document</option>
               {available.map((document) => (
                 <option key={document.id} value={document.id}>
                   {document.reference} · {document.documentType} ·{" "}

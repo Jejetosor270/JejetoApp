@@ -411,14 +411,14 @@ function expectedBillingError(error: unknown): BillingActionState | null {
     error instanceof ClientBillingNotFoundError
   )
     return {
-      formError: error.message || "Billing Event not found.",
-      message: error.message || "Billing Event not found.",
+      formError: error.message || "Billing document not found.",
+      message: error.message || "Billing document not found.",
       status: "error",
     };
   if (error instanceof Error && "code" in error && error.code === "P2002")
     return {
-      formError: "A Billing Event already uses this type and reference.",
-      message: "A Billing Event already uses this type and reference.",
+      formError: "A Billing document already uses this type and reference.",
+      message: "A Billing document already uses this type and reference.",
       status: "error",
     };
   return null;
@@ -430,11 +430,18 @@ export async function updateClientBillingDocumentAction(
 ): Promise<BillingActionState> {
   const actor = await requireMasterDataEditor();
   const input = parseBillingDocumentEdit(formData);
+  if (!formData.get("expectedVersion"))
+    return {
+      status: "error",
+      message: "Reload Billing before editing; the record version is missing.",
+      formError: "Reload Billing before editing; your draft is retained.",
+    };
   if (!input.success)
     return {
       fieldErrors: fieldErrorMap(input.error.issues),
-      formError: input.error.issues[0]?.message ?? "Check the Billing Event.",
-      message: input.error.issues[0]?.message ?? "Check the Billing Event.",
+      formError:
+        input.error.issues[0]?.message ?? "Check the Billing document.",
+      message: input.error.issues[0]?.message ?? "Check the Billing document.",
       status: "error",
     };
   try {
@@ -443,14 +450,14 @@ export async function updateClientBillingDocumentAction(
     revalidatePath(`/billing/${input.data.id}`);
     revalidatePath("/orders", "layout");
     revalidateProjectFinancialViews();
-    return { message: "Billing Event updated.", status: "success" };
+    return { message: "Billing document updated.", status: "success" };
   } catch (error) {
     const expected = expectedBillingError(error);
     if (expected) return expected;
-    console.error("Unable to update Billing Event.", error);
+    console.error("Unable to update Billing document.", error);
     return {
-      formError: "The Billing Event could not be updated.",
-      message: "The Billing Event could not be updated.",
+      formError: "The Billing document could not be updated.",
+      message: "The Billing document could not be updated.",
       status: "error",
     };
   }

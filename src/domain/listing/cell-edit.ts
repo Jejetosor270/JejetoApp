@@ -1,5 +1,6 @@
 import { z } from "zod";
 export const orderCellFields = [
+  "dueDate",
   "shortDescription",
   "orderNumber",
   "status",

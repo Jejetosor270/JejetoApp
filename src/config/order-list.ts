@@ -1,3 +1,4 @@
+import { financialLabels } from "@/domain/presentation/labels";
 export const orderSortLabels = {
   updated: "Updated date",
   reference: "Reference",
@@ -14,10 +15,10 @@ export const orderSortLabels = {
   economicCost: "Economic Landed Cost HT",
   sell: "Total Order Sell HT",
   markup: "Planned Markup",
-  payable: "Payable",
-  scheduled: "Scheduled",
-  paid: "Paid",
-  outstanding: "Outstanding",
+  payable: "Payable TTC",
+  scheduled: "Scheduled TTC",
+  paid: financialLabels.supplierPaid,
+  outstanding: financialLabels.remaining,
   expectedReady: "Expected ready",
   carrier: "Carrier",
   tracking: "Tracking reference",

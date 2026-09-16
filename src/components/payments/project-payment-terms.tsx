@@ -1,3 +1,4 @@
+import { formatEnumLabel } from "@/domain/presentation/labels";
 import { billingIsIssued } from "@/domain/billing/status";
 import { getDatabase } from "@/lib/db";
 import { requireUser } from "@/lib/auth/current-user";
@@ -103,7 +104,8 @@ export async function ProjectPaymentTerms({
           document && (
             <details className="rounded border p-4" key={document.id}>
               <summary className="cursor-pointer font-medium">
-                Billing · {document.reference} · {document.documentType}
+                Billing · {document.reference} ·{" "}
+                {formatEnumLabel(document.documentType)}
               </summary>
               <div className="mt-4">
                 <BillingScheduleManager

@@ -24,11 +24,13 @@ export async function OrderFreightCoverage({ order }: { order: OrderSummary }) {
     })?.toFixed(4) ?? null;
   return (
     <section className="bg-card rounded-lg border p-4">
-      <h2 className="text-sm font-semibold">Freight coverage</h2>
+      <h2 className="text-sm font-semibold">
+        Allocated billing less freight cost
+      </h2>
       <dl className="mt-3 grid gap-3 sm:grid-cols-2">
         {[
-          ["Invoiced freight coverage HT", billed.invoicedFreightHt],
-          ["Quoted freight coverage HT (planned)", billed.quotedFreightHt],
+          ["Allocated invoiced freight HT", billed.invoicedFreightHt],
+          ["Allocated quoted freight HT (planned)", billed.quotedFreightHt],
           ["Order freight cost HT", cost],
           [
             "Invoiced coverage less freight cost HT",

@@ -40,9 +40,7 @@ export function ProjectCoverage({
   return (
     <div className="space-y-4">
       <section className="bg-card rounded-lg border p-4">
-        <h2 className="text-sm font-semibold">
-          Billing/Purchasing Cash Coverage
-        </h2>
+        <h2 className="text-sm font-semibold">Cash balance</h2>
         <p className="text-muted-foreground mt-1 text-xs">
           Actual Client Invoice receipts minus Supplier and Project-freight
           payments, TTC. Each payment uses its own recorded FX.
@@ -52,7 +50,7 @@ export function ProjectCoverage({
           values={[
             ["Supplier & freight paid TTC", data.cash.paid],
             ["Client Invoice receipts TTC", data.received],
-            ["Cash Coverage TTC", data.cash.net, true],
+            ["Cash balance TTC", data.cash.net, true],
           ]}
         />
         {data.cash.net === null && (
@@ -75,9 +73,7 @@ export function ProjectCoverage({
         )}
       </section>
       <section className="bg-card rounded-lg border p-4">
-        <h2 className="text-sm font-semibold">
-          Billing/Purchasing Freight Coverage
-        </h2>
+        <h2 className="text-sm font-semibold">Freight recovery surplus</h2>
         <p className="text-muted-foreground mt-1 text-xs">
           Order freight plus Project freight expenses, excluding VAT. Project
           freight markup: {formatRate(freight.projectMarkup)}.
@@ -85,9 +81,9 @@ export function ProjectCoverage({
         <CoverageFigures
           currency={data.currency}
           values={[
-            ["Supplier Freight invoiced HT", freight.supplierHt],
+            ["Recorded Supplier freight HT", freight.supplierHt],
             ["Supplier Freight Project markup HT", freight.supplierMarkupHt],
-            ["Supplier Freight Sell HT", freight.supplierSellHt],
+            ["Project-default freight target HT", freight.supplierSellHt],
           ]}
         />
         <CoverageFigures
@@ -103,16 +99,19 @@ export function ProjectCoverage({
           payment.
         </p>
         <div className="mt-4 border-t pt-3">
-          <h3 className="text-sm font-semibold">Available freight coverage</h3>
           <CoverageFigures
             currency={data.currency}
             values={[
               [
-                "Invoiced Freight Coverage HT",
+                "Invoiced less Project-default target HT",
                 freight.invoicedCoverageHt,
                 true,
               ],
-              ["Paid Freight Coverage HT", freight.paidCoverageHt, true],
+              [
+                "Received less Project-default target HT",
+                freight.paidCoverageHt,
+                true,
+              ],
             ]}
           />
         </div>

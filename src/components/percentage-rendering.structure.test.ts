@@ -16,8 +16,8 @@ describe("financial percentage presentation boundaries", () => {
     ],
     [
       "Order detail",
-      "src/app/(app)/orders/[orderId]/page.tsx",
-      "formatRate(cost.markupRate)",
+      "src/components/procurement/order-budget-comparison.tsx",
+      "formatRate(order.costs.markupRate)",
     ],
     [
       "Billing",

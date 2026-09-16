@@ -1,4 +1,7 @@
-import { derivePaymentStatus } from "@/domain/payments/calculations";
+import {
+  derivePaymentStatus,
+  installmentOutstanding,
+} from "@/domain/payments/calculations";
 
 export type CalendarEventType =
   | "ISSUE_INVOICE"
@@ -13,6 +16,8 @@ export type CalendarEventType =
   | "ITEM_INSTALLATION";
 
 export interface ProcurementCalendarEvent {
+  originalAmount?: string;
+  documentType?: "QUOTE" | "INVOICE";
   amount: string | null;
   currencyCode: string | null;
   date: string;
@@ -35,6 +40,7 @@ export function buildCalendarEvents(input: {
     partyName: string;
   }[];
   installments: readonly {
+    documentType?: "QUOTE" | "INVOICE";
     currencyCode: string;
     direction: "SUPPLIER_PAYMENT" | "CLIENT_RECEIPT";
     dueDate: string | null;
@@ -75,7 +81,14 @@ export function buildCalendarEvents(input: {
         item.dueDate !== null,
     )
     .map((item) => ({
-      amount: item.scheduledAmount,
+      amount: item.isCancelled
+        ? "0"
+        : installmentOutstanding(
+            item.scheduledAmount,
+            item.paidAmount,
+          ).toString(),
+      originalAmount: item.scheduledAmount,
+      ...(item.documentType ? { documentType: item.documentType } : {}),
       currencyCode: item.currencyCode,
       date: item.dueDate,
       href: item.href ?? `/orders/${item.orderId}#payments`,

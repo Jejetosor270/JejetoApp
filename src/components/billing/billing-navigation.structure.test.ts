@@ -78,7 +78,7 @@ describe("Billing operational navigation", () => {
     expect(detail).toContain("usePersistentActionState");
     expect(detail).toContain('if (state.status !== "success") return;');
     expect(detail).toContain("allocations: current.allocations.map");
-    expect(detail).toContain("Save Billing Event");
+    expect(detail).toContain("Save Billing document");
     expect(receiptEditor).toContain("usePersistentActionState");
     expect(receiptEditor).toContain('if (state.status !== "success") return;');
     expect(receiptEditor).toContain("value={draft.amount}");

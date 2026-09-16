@@ -77,6 +77,7 @@ export async function globalSearch(
           OR: [
             { orderNumber: contains },
             { packageName: contains },
+            { shortDescription: contains },
             { supplierQuoteReference: contains },
           ],
         },
@@ -85,6 +86,7 @@ export async function globalSearch(
           id: true,
           orderNumber: true,
           packageName: true,
+          shortDescription: true,
           project: { select: { name: true } },
           supplier: { select: { displayName: true } },
         },
@@ -118,7 +120,9 @@ export async function globalSearch(
           })
         : Promise.resolve([]),
       database.clientBillingDocument.findMany({
-        where: { reference: contains },
+        where: {
+          OR: [{ reference: contains }, { shortDescription: contains }],
+        },
         orderBy: { updatedAt: "desc" },
         select: {
           client: { select: { displayName: true } },
@@ -126,6 +130,7 @@ export async function globalSearch(
           id: true,
           project: { select: { name: true } },
           reference: true,
+          shortDescription: true,
         },
         take: 8,
       }),
@@ -162,14 +167,14 @@ export async function globalSearch(
       type: "Supplier" as const,
     })),
     ...orders.map((order) => ({
-      context: `${order.project?.name ?? "Unassigned"} · ${order.supplier?.displayName ?? "Unassigned"} · ${order.packageName}`,
+      context: `${order.project?.name ?? "Unassigned"} · ${order.supplier?.displayName ?? "Unassigned"} · ${order.shortDescription || order.packageName}`,
       href: `/orders/${order.id}`,
       id: order.id,
       label: order.orderNumber,
       type: "Order" as const,
     })),
     ...billing.map((document) => ({
-      context: `${document.client?.displayName ?? "Unassigned"} · ${document.project?.name ?? "Unassigned"} · ${document.documentType}`,
+      context: `${document.client?.displayName ?? "Unassigned"} · ${document.project?.name ?? "Unassigned"} · ${document.shortDescription || formatEnumLabel(document.documentType)}`,
       href: `/billing/${document.id}`,
       id: document.id,
       label: document.reference,
@@ -193,3 +198,4 @@ export async function globalSearch(
     })),
   ];
 }
+import { formatEnumLabel } from "@/domain/presentation/labels";

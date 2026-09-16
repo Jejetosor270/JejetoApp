@@ -11,7 +11,7 @@ import {
 } from "@/lib/billing/billing";
 import { listProjectOrders } from "@/lib/procurement/orders";
 
-export const metadata: Metadata = { title: "Billing Event" };
+export const metadata: Metadata = { title: "Billing document" };
 
 export default async function BillingDetailPage({
   params,

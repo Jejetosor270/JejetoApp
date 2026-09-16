@@ -94,6 +94,38 @@ describe("Phase 11.12 global reporting", () => {
     });
   });
 
+  it("scopes Supplier cash at transaction level, includes freight-only Projects, and suppresses unrelated receipts", async () => {
+    const report = await getActualCashReport({ supplierId: "supplier-1" });
+    expect(report.supplierScoped).toBe(true);
+    expect(database.clientReceipt.findMany).not.toHaveBeenCalled();
+    expect(database.project.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { orders: { some: { supplierId: "supplier-1" } } },
+            { freightExpenses: { some: { supplierId: "supplier-1" } } },
+          ],
+        }),
+      }),
+    );
+    expect(database.paymentSettlement.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          installment: expect.objectContaining({
+            order: expect.objectContaining({ supplierId: "supplier-1" }),
+          }),
+        }),
+      }),
+    );
+    expect(database.freightExpensePayment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          expense: expect.objectContaining({ supplierId: "supplier-1" }),
+        }),
+      }),
+    );
+  });
+
   it("aggregates freight money rather than averaging rates", () => {
     const report = aggregateFreightRows([
       {

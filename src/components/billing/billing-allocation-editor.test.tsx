@@ -151,7 +151,7 @@ describe("dedicated Billing allocation editor", () => {
     const onSaved = vi.fn();
     actions.save.mockResolvedValueOnce({
       status: "error",
-      message: "Allocation exceeds the remaining Billing Event amount.",
+      message: "Allocation exceeds the remaining Billing document amount.",
       fieldErrors: { allocatedAmount: "Amount exceeds remaining Billing HT." },
     });
     actions.save.mockResolvedValueOnce({

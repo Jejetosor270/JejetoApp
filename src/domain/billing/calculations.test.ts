@@ -179,7 +179,7 @@ describe("billing calculations", () => {
     ).toBeNull();
   });
 
-  it("summarizes Order coverage across multiple Billing Events", () => {
+  it("summarizes Order coverage across multiple Billing documents", () => {
     expect(orderBillingCoverage("100000", "80000")).toEqual({
       allocated: "80000.0000",
       coverageRate: "0.8",

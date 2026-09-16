@@ -65,6 +65,13 @@ export function ProjectRecordDetails({ project }: { project: ProjectView }) {
                 value: money(project.estimatedPurchaseCostHt),
               },
               {
+                label: "Other/services budget HT",
+                value:
+                  project.estimatedOtherCostHt == null
+                    ? "Not budgeted"
+                    : money(project.estimatedOtherCostHt),
+              },
+              {
                 label: "Budgeted freight HT (automatic)",
                 value: money(
                   projectFreightBudget(

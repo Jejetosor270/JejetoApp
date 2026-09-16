@@ -21,8 +21,8 @@ it("keeps pre-invoice and cancelled states stable even after due dates", () => {
     expect(billingIsIssued({ isCancelled: false, workflowStatus })).toBe(false);
   }
 });
-it("derives paid and overdue precisely, retaining invoiced for partial payment", () => {
-  expect(billingStatus({ ...invoice, paid: "120" })).toBe("INVOICED");
+it("derives paid and overdue precisely, distinguishing partial payment", () => {
+  expect(billingStatus({ ...invoice, paid: "120" })).toBe("PARTIALLY_PAID");
   expect(billingStatus({ ...invoice, paid: "120.0001" })).toBe("PAID");
   expect(billingStatus({ ...invoice, paid: "30", dueDate: "2026-09-10" })).toBe(
     "OVERDUE",

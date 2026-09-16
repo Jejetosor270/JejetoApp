@@ -131,7 +131,7 @@ it("sorts every advertised column, preserves filters and excludes Trash", async 
   }
 });
 
-it("sorts dates and displayed manual payment statuses", async () => {
+it("sorts dates and derived payment statuses, ignoring legacy overrides", async () => {
   for (const sort of ["invoiceDate", "dueDate", "expectedDelivery"] as const) {
     const result = await listOrdersPage({
       ...filters,
@@ -146,8 +146,7 @@ it("sorts dates and displayed manual payment statuses", async () => {
     projectId,
     sort: "paymentStatus",
   });
-  expect(result.items[0]?.orderNumber).toBe("SORT-01");
-  expect(result.items[0]?.paymentStatusOverride).toBe("PAID");
+  expect(result.items[0]?.paymentStatusOverride).toBeNull();
   expect(result.items[0]?.supplierPayment.paid).toBe("0");
 });
 

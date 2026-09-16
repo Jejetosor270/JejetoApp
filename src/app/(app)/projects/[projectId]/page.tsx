@@ -1,3 +1,4 @@
+import { projectRead } from "@/lib/reporting/project-diagnostics";
 import { projectFreightBudget } from "@/domain/freight/calculations";
 import { ProjectPaymentTerms } from "@/components/payments/project-payment-terms";
 import { ProjectCoverage } from "@/components/reporting/project-coverage";
@@ -82,17 +83,23 @@ export default async function ProjectPage({
   ] = await Promise.all([
     requireUser(),
     listProjectFormOptions(),
-    getProject(projectId),
-    getProjectReportingSnapshot(projectId, { horizon }),
-    getProjectClientBillingSummary(projectId),
-    getProjectFreightReconciliation(projectId),
-    listProjectFreightExpenses(projectId),
-    getProjectRelations(projectId),
-    getProjectControl(projectId),
+    projectRead("record", () => getProject(projectId)),
+    projectRead("reporting", () =>
+      getProjectReportingSnapshot(projectId, { horizon }),
+    ),
+    projectRead("billing", () => getProjectClientBillingSummary(projectId)),
+    projectRead("freight", () => getProjectFreightReconciliation(projectId)),
+    projectRead("freight expenses", () =>
+      listProjectFreightExpenses(projectId),
+    ),
+    projectRead("relations", () => getProjectRelations(projectId)),
+    projectRead("financials", () => getProjectControl(projectId)),
   ]);
   if (!result || !reporting) notFound();
   const { buildings, project } = result;
   const targets = calculateProjectTargets({
+    estimatedOtherCostHt: project.estimatedOtherCostHt?.toString() ?? null,
+    defaultOtherCostMarkupRate: project.defaultOtherCostMarkupRate.toString(),
     defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
     defaultProductMarkupRate: project.defaultProductMarkupRate.toString(),
     estimatedFreightCostHt: projectFreightBudget(
@@ -266,6 +273,7 @@ export default async function ProjectPage({
       managers={options.managers}
       project={{
         ...project,
+        estimatedOtherCostHt: project.estimatedOtherCostHt?.toString() ?? null,
         clientId: project.clientId ?? "",
         client: project.client ?? { id: "", displayName: "Unassigned" },
         clientBudgetTargetHt: project.clientBudgetTargetHt?.toString() ?? null,

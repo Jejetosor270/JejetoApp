@@ -4,6 +4,10 @@ import { afterEach, expect, it, vi } from "vitest";
 import { mountForm, clickText, enter, control } from "@/test/dom-form";
 import type { ClientBillingView } from "@/lib/billing/billing";
 vi.mock("server-only", () => ({}));
+const paid = vi.hoisted(() => vi.fn(async () => ({ error: null })));
+vi.mock("@/app/(app)/payments/term-paid-actions", () => ({
+  payTermRemainingAction: paid,
+}));
 vi.mock("@/app/(app)/billing/actions", () => ({
   createClientBillingInstallmentAction: vi.fn(),
   recordClientReceiptAction: vi.fn(async () => ({
@@ -57,7 +61,11 @@ it("marks a term paid from its exact remaining balance and preserves a rejected 
   expect(view.container.textContent).toContain("Date needed · Partially paid");
   expect(view.container.querySelector("details")?.open).toBe(false);
   await clickText("Mark paid");
-  expect(control("amount").value).toBe("20 000.00");
+  expect(paid).toHaveBeenCalledWith(
+    expect.objectContaining({ kind: "client", id: "term", documentId: "bill" }),
+  );
+  await clickText("Record partial payment");
+  expect(control("amount").value).toBe("");
   expect(control("installmentId").value).toBe("term");
   expect(control("installmentId").tagName).toBe("INPUT");
   await enter("amount", "5000");
