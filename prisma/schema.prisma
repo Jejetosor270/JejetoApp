@@ -151,6 +151,7 @@ enum ClientDocumentImportAction {
 }
 
 model User {
+  financialAttentionSnoozes FinancialAttentionSnooze[]
   createdFreightPayments FreightExpensePayment[] @relation("FreightPaymentCreatedBy")
   updatedFreightPayments FreightExpensePayment[] @relation("FreightPaymentUpdatedBy")
   createdOrderPackages OrderPackage[] @relation("OrderPackageCreatedBy")
@@ -221,6 +222,23 @@ model User {
 
   @@index([isActive])
   @@map("users")
+}
+
+// Personal reminder preferences only; financial issues remain derived from source records.
+model FinancialAttentionSnooze {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String?  @db.Uuid
+  issueKey    String   @db.VarChar(120)
+  fingerprint String   @db.Char(64)
+  until       DateTime @db.Date
+  reason      String   @db.VarChar(300)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, issueKey])
+  @@index([userId, until])
+  @@map("financial_attention_snoozes")
 }
 
 model Currency {

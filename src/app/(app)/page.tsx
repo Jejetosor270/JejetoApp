@@ -1,201 +1,192 @@
-import { PageHeader } from "@/components/layout/page-header";
-import { OverflowList } from "@/components/layout/overflow-list";
-import { formatEnumLabel } from "@/domain/presentation/labels";
 import type { Metadata } from "next";
 import Link from "next/link";
-
-import { OverdueItems } from "@/components/reporting/overdue-items";
-import { formatMoney } from "@/domain/procurement/presentation";
-import { ProjectStatus } from "@/generated/prisma/client";
+import { PageHeader } from "@/components/layout/page-header";
+import { Pagination } from "@/components/listing/pagination";
+import { FinancialAttentionTable } from "@/components/reporting/financial-attention-table";
 import { requireUser } from "@/lib/auth/current-user";
-import { getPortfolioReportingSnapshot } from "@/lib/reporting/reports";
+import { getDatabase } from "@/lib/db";
+import { getFinancialAttention } from "@/lib/reporting/financial-attention";
+import {
+  attentionHorizons,
+  type AttentionHorizon,
+} from "@/domain/finance/attention";
+import { isAttentionSnoozed } from "@/domain/finance/attention-snooze";
+import {
+  businessToday,
+  dateOnlyToDate,
+  dateToDateOnly,
+} from "@/domain/payments/dates";
 
 export const metadata: Metadata = { title: "Home" };
-
-export default async function DashboardPage() {
-  const [, report] = await Promise.all([
-    requireUser(),
-    getPortfolioReportingSnapshot(
-      { projectStatus: ProjectStatus.ACTIVE },
-      { horizon: "30d" },
-    ),
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const user = await requireUser();
+  const query = await searchParams;
+  const horizon: AttentionHorizon =
+    query.horizon === "7" ? 7 : query.horizon === "90" ? 90 : 30;
+  const snoozed = query.attention === "snoozed";
+  const today = businessToday();
+  const [snapshot, preferences] = await Promise.all([
+    getFinancialAttention(horizon, today),
+    getDatabase().financialAttentionSnooze.findMany({
+      where: { userId: user.id, until: { gt: dateOnlyToDate(today) } },
+    }),
   ]);
-  const billing = report.clientBilling;
-  const currency = report.companyCurrencyCode;
-
+  const snoozes = new Map(
+    preferences.map((row) => [
+      row.issueKey,
+      {
+        fingerprint: row.fingerprint,
+        until: dateToDateOnly(row.until),
+        reason: row.reason,
+      },
+    ]),
+  );
+  const all = snapshot.issues.map((issue) => ({
+    ...issue,
+    snooze: isAttentionSnoozed(issue, snoozes.get(issue.key), today)
+      ? (snoozes.get(issue.key) ?? null)
+      : null,
+  }));
+  const filtered = all.filter((issue) => snoozed === (issue.snooze !== null));
+  const pageSize =
+    query.pageSize === "50" ? 50 : query.pageSize === "100" ? 100 : 25;
+  const requestedPage =
+    typeof query.page === "string" && /^\d{1,6}$/.test(query.page)
+      ? Math.max(1, Number(query.page))
+      : 1;
+  const page = Math.min(
+    requestedPage,
+    Math.max(1, Math.ceil(filtered.length / pageSize)),
+  );
+  const href = (days: number, state = snoozed ? "snoozed" : "active") =>
+    "/?horizon=" + days + "&attention=" + state;
   return (
     <div className="space-y-8">
       <PageHeader
         title="Home"
-        description="What needs attention across your active Projects."
+        description="Financial attention across non-archived Projects."
         actions={
           <Link
-            className="rounded-md border px-3 py-2 text-sm font-medium"
             href="/reports"
+            className="rounded-md border px-3 py-2 text-sm font-medium"
           >
             Open Reports
           </Link>
         }
       />
-      <section className="space-y-4">
-        <h2 className="text-base font-semibold">Needs attention</h2>
-        <div className="divide-y rounded-lg border">
-          <Link
-            href="/installments?tab=supplier&status=OVERDUE"
-            className="hover:bg-muted flex items-center justify-between gap-4 p-4"
+      <section
+        className="space-y-4"
+        aria-labelledby="financial-attention-heading"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2
+            id="financial-attention-heading"
+            className="text-base font-semibold"
           >
-            <span className="text-sm">Overdue Supplier Payments</span>
-            <span className="financial-figure text-destructive text-sm font-semibold">
-              {formatMoney(
-                report.payments.supplier.overdue.complete
-                  ? report.payments.supplier.overdue.value
-                  : null,
-                currency,
-              )}
-            </span>
-          </Link>
-          <Link
-            href="/billing?status=OVERDUE"
-            className="hover:bg-muted flex items-center justify-between gap-4 p-4"
-          >
-            <span className="text-sm">Overdue Billing</span>
-            <span className="financial-figure text-destructive text-sm font-semibold">
-              {formatMoney(
-                billing.complete ? billing.overdueTtc : null,
-                currency,
-              )}
-            </span>
-          </Link>
-          <div className="flex items-center justify-between gap-4 p-4 text-sm">
-            <span>Projects with a commercial funding gap</span>
-            <span className="font-semibold">
-              {report.fundingCoverage.gapProjectCount}
-            </span>
-          </div>
-        </div>
-        {(!billing.complete ||
-          !report.fundingCoverage.complete ||
-          !report.payments.supplier.overdue.complete) && (
-          <p
-            role="status"
-            className="bg-warning-muted text-warning rounded-md p-3 text-sm"
-          >
-            Some balances are incomplete. Review missing manual FX in the
-            relevant Project.
-          </p>
-        )}
-        <details>
-          <summary className="text-muted-foreground text-sm">
-            Overdue Supplier installment detail
-          </summary>
-          <div className="mt-3">
-            <OverdueItems
-              items={report.overdueItems}
-              showClientReceipts={false}
-            />
-          </div>
-        </details>
-      </section>
-      <section className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold">
-            Active Projects{" "}
-            <span className="text-muted-foreground text-sm font-normal">
-              {report.activeProjectCount}
-            </span>
+            Financial attention
           </h2>
+          <nav aria-label="Attention horizon" className="flex gap-2">
+            {attentionHorizons.map((days) => (
+              <Link
+                key={days}
+                href={href(days)}
+                aria-current={days === horizon ? "page" : undefined}
+                className={
+                  "rounded-md border px-3 py-2 text-sm " +
+                  (days === horizon
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted")
+                }
+              >
+                Next {days} days
+              </Link>
+            ))}
+          </nav>
+        </div>
+        <p className="text-muted-foreground text-xs">
+          Overdue and incomplete-data issues always appear. Future due dates
+          follow the selected horizon. Amounts retain their own currency and
+          HT/TTC basis; no combined money total. Unassigned records and archived
+          Projects are outside this view.
+        </p>
+        <nav aria-label="Attention visibility" className="flex gap-4 text-sm">
           <Link
-            className="text-primary text-sm hover:underline"
+            href={href(horizon, "active")}
+            aria-current={!snoozed ? "page" : undefined}
+            className={
+              !snoozed ? "font-semibold underline" : "text-muted-foreground"
+            }
+          >
+            Needs attention ({all.filter((row) => !row.snooze).length})
+          </Link>
+          <Link
+            href={href(horizon, "snoozed")}
+            aria-current={snoozed ? "page" : undefined}
+            className={
+              snoozed ? "font-semibold underline" : "text-muted-foreground"
+            }
+          >
+            Snoozed by me ({all.filter((row) => row.snooze).length})
+          </Link>
+        </nav>
+        <div className="overflow-hidden rounded-lg border">
+          <FinancialAttentionTable
+            rows={filtered.slice((page - 1) * pageSize, page * pageSize)}
+            today={today}
+            horizon={horizon}
+            snoozed={snoozed}
+          />
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={filtered.length}
+            pathname="/"
+            queryString={
+              "horizon=" +
+              horizon +
+              "&attention=" +
+              (snoozed ? "snoozed" : "active")
+            }
+          />
+        </div>
+      </section>
+      <section className="space-y-3">
+        <div className="flex justify-between">
+          <h2 className="text-base font-semibold">Active Projects</h2>
+          <Link
             href="/projects?status=ACTIVE"
+            className="text-primary text-sm underline"
           >
             View all Projects
           </Link>
         </div>
         <div className="divide-y rounded-lg border">
-          <OverflowList limit={6} title="Active Projects">
-            {report.projects.map((project) => (
+          {snapshot.projects
+            .filter((project) => project.status === "ACTIVE")
+            .slice(0, 6)
+            .map((project) => (
               <Link
                 key={project.id}
-                href={`/projects/${project.id}`}
-                className="hover:bg-muted flex items-center justify-between gap-4 p-4"
+                href={"/projects/" + project.id}
+                className="hover:bg-muted block p-4 text-sm"
               >
-                <span>
-                  <span className="block text-sm font-medium">
-                    {project.name}
-                  </span>
-                  <span className="text-muted-foreground text-xs">
-                    {project.code} · {project.clientName}
-                  </span>
-                </span>
-                <span className="text-muted-foreground text-right text-xs">
-                  {project.reportingCurrencyCode}
-                  <span className="mt-1 block">
-                    {project.fundingCoverage.complete
-                      ? formatEnumLabel(project.fundingCoverage.status ?? "")
-                      : "Funding coverage incomplete"}
-                  </span>
-                </span>
+                {project.name}{" "}
+                <span className="text-muted-foreground">· {project.code}</span>
               </Link>
             ))}
-          </OverflowList>
-          {report.projects.length === 0 && (
-            <p className="text-muted-foreground p-6 text-sm">
-              No active Projects. Open Projects to review or create one.
+          {!snapshot.projects.some(
+            (project) => project.status === "ACTIVE",
+          ) && (
+            <p className="text-muted-foreground p-4 text-sm">
+              No active Projects.
             </p>
           )}
         </div>
       </section>
-      <section className="bg-card rounded-lg border p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">
-              Upcoming cash · next 30 days
-            </h2>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Outstanding scheduled installments due in the next 30 days.
-            </p>
-          </div>
-          <Link
-            className="text-primary text-xs hover:underline"
-            href="/reports?view=cash-flow&horizon=30d"
-          >
-            View cash flow
-          </Link>
-        </div>
-        <dl className="mt-4 grid gap-3 sm:grid-cols-3">
-          {(
-            [
-              ["Expected cash in", report.cashFlow.totals.expectedIn],
-              ["Expected cash out", report.cashFlow.totals.expectedOut],
-              ["Expected net", report.cashFlow.totals.expectedNet],
-            ] as const
-          ).map(([label, value]) => (
-            <div
-              className="border-l pl-4 first:border-l-0 first:pl-0"
-              key={label}
-            >
-              <dt className="text-muted-foreground text-xs">{label}</dt>
-              <dd className="financial-figure mt-1 text-base font-semibold">
-                {formatMoney(value, currency)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-        {!report.cashFlow.totals.expectedComplete ? (
-          <p className="text-destructive mt-3 text-xs">
-            Upcoming totals are incomplete because{" "}
-            {report.cashFlow.totals.missingExpectedCount} installment(s) lack
-            required FX.
-          </p>
-        ) : null}
-      </section>
-      {report.excludedCurrencyProjects.length > 0 && (
-        <p className="text-warning text-xs">
-          Company totals include comparable {currency} values.{" "}
-          {report.excludedCurrencyProjects.length} Project(s) in another
-          reporting currency are excluded.
-        </p>
-      )}
     </div>
   );
 }

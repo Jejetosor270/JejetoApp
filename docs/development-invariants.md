@@ -511,3 +511,11 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 - Billing filters include derived status. Monetary/status sorting occurs before pagination and exports share the same validated filter/sort scope. Unlike currencies are grouped, never summed or compared as if equivalent.
 - Allocation presentation distinguishes Merchandise, Freight and Other/services, with total/allocated/Project remainder. Payment term labels remain unchanged, with percentage/fixed basis in a separate column.
 - Missing states are contextual: Not set, Not applicable, Missing FX, Not budgeted or Budget incomplete; zero remains a numeric value. Percentage-point differences use pp and FX keeps higher precision.
+
+## Financial attention list
+
+- Home presents one derived, paginated attention list across non-archived Projects. Next 7/30/90 days controls upcoming events; overdue and incomplete-data issues remain visible regardless of horizon. Unassigned records are outside this view.
+- Checks cover Supplier and Client outstanding terms, issue-invoice reminders, missing dates/FX, incomplete schedules, provisional invoiced markup below target, possible duplicate invoices and scheduled cash shortfalls. Duplicate detection is advisory, using party, side, currency, invoice date and TTC amount; it never merges records.
+- Actual cash, remaining terms, matched Quote/Invoice receipts and profitability reuse authoritative financial helpers. Cash outlook excludes opening bank balances and becomes incomplete when required dates, schedules or FX are missing. Unlike currencies are never combined without valid conversion.
+- Attention actions open existing records. Personal snoozes require a reason and a future date, expire on that business date, and stop hiding an issue when its displayed financial details or urgency change. Snoozing never changes financial records or hides issues from other employees.
+- Migration `20260923000000_financial_attention_snoozes` adds personal snooze preferences only; it must be deployed separately before this Home implementation is used. Financial issues and totals are not persisted.

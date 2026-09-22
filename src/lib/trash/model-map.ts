@@ -8,10 +8,28 @@ export interface ModelMetadata {
   >;
 }
 export const modelMap: Record<string, ModelMetadata> = {
+  FinancialAttentionSnooze: {
+    table: "financial_attention_snoozes",
+    trash: false,
+    relations: {
+      user: {
+        model: "User",
+        many: false,
+        optional: true,
+        fields: ["userId"],
+      },
+    },
+  },
   User: {
     table: "users",
     trash: false,
     relations: {
+      financialAttentionSnoozes: {
+        model: "FinancialAttentionSnooze",
+        many: true,
+        optional: false,
+        fields: [],
+      },
       createdFreightPayments: {
         model: "FreightExpensePayment",
         many: true,

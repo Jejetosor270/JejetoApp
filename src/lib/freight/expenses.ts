@@ -64,7 +64,7 @@ function freightVat(
   };
 }
 
-function freightExpenseEconomicCost(input: {
+export function freightExpenseEconomicCost(input: {
   costAmountHt: { toString(): string };
   recoverability: Parameters<
     typeof calculateInputVatRecovery
