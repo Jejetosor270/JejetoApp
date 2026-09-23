@@ -253,7 +253,7 @@ describe("workspace accessibility and navigation contracts", () => {
       ),
     ]) {
       expect(html.match(/<h1 /g)).toHaveLength(1);
-      expect(html).toContain("break-words");
+      expect(html).toContain("page-title");
       expect(html).toContain("flex-wrap");
     }
     const pagination = renderToStaticMarkup(

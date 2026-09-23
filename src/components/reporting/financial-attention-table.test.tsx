@@ -55,6 +55,12 @@ it("opens records, formats amounts/dates and preserves a rejected snooze draft",
   expect(document.body.textContent).toContain("20/09/2026");
   expect(document.body.textContent).toContain("EUR");
   expect(document.body.textContent).toContain("TTC");
+  expect(document.querySelector('[data-slot="badge"]')?.className).toContain(
+    "text-destructive",
+  );
+  expect(document.querySelector("td.financial-figure")?.className).toContain(
+    "text-right",
+  );
   await clickText("Snooze");
   await enter("reason", "Waiting for approval");
   await act(async () => {

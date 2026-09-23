@@ -31,7 +31,10 @@ import {
 } from "@/domain/payments/dates";
 import { formatMoney } from "@/domain/procurement/presentation";
 import { formatEnumLabel } from "@/domain/presentation/labels";
-import { tableHeaderClassName } from "@/components/listing/table-styles";
+import {
+  tableHeaderClassName,
+  tableBodyClassName,
+} from "@/components/listing/table-styles";
 
 interface PaymentInstallmentRow {
   actualDate: string | null;
@@ -309,7 +312,7 @@ export function PaymentInstallmentTable({
               {canEdit ? <th className="px-3 py-2 text-right">Edit</th> : null}
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className={tableBodyClassName}>
             {installments.map((installment) => (
               <InstallmentRow
                 canEdit={canEdit}

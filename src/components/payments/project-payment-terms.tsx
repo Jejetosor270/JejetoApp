@@ -42,9 +42,9 @@ export async function ProjectPaymentTerms({
   return (
     <section className="space-y-4" id="payment-terms">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">Payment terms</h2>
+        <h2 className="section-title">Payment terms</h2>
         {canEdit && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <RelatedCashCreate
               scope={{ kind: "project", id: projectId }}
               kind="supplier-installment"
@@ -62,7 +62,7 @@ export async function ProjectPaymentTerms({
         </p>
       )}
       {supplier.map(({ order, summary }) => (
-        <details className="rounded border p-4" key={order.id}>
+        <details className="record-divider" key={order.id}>
           <summary className="cursor-pointer font-medium">
             Purchasing · {order.orderNumber} · {summary.installments.length}{" "}
             terms
@@ -83,7 +83,7 @@ export async function ProjectPaymentTerms({
       {documents.map(
         (document) =>
           document && (
-            <details className="rounded border p-4" key={document.id}>
+            <details className="record-divider" key={document.id}>
               <summary className="cursor-pointer font-medium">
                 Billing · {document.reference} ·{" "}
                 {formatEnumLabel(document.documentType)}

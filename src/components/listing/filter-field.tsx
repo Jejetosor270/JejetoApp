@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
+import { controlVariants } from "@/components/forms/control-styles";
 
-export const filterControlClassName =
-  "border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full min-w-0 rounded-md border px-3 text-sm outline-none focus-visible:ring-2";
+export const filterControlClassName = controlVariants();
 
 export function FilterField({
   children,

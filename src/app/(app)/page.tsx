@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { NavigationTabs } from "@/components/layout/navigation-tabs";
 import { PageHeader } from "@/components/layout/page-header";
 import { Pagination } from "@/components/listing/pagination";
 import { FinancialAttentionTable } from "@/components/reporting/financial-attention-table";
@@ -65,17 +68,14 @@ export default async function DashboardPage({
   const href = (days: number, state = snoozed ? "snoozed" : "active") =>
     "/?horizon=" + days + "&attention=" + state;
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Home"
         description="Financial attention across non-archived Projects."
         actions={
-          <Link
-            href="/reports"
-            className="rounded-md border px-3 py-2 text-sm font-medium"
-          >
-            Open Reports
-          </Link>
+          <Button asChild variant="outline">
+            <Link href="/reports">Open Reports</Link>
+          </Button>
         }
       />
       <section
@@ -83,27 +83,25 @@ export default async function DashboardPage({
         aria-labelledby="financial-attention-heading"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2
-            id="financial-attention-heading"
-            className="text-base font-semibold"
-          >
+          <h2 id="financial-attention-heading" className="section-title">
             Financial attention
           </h2>
-          <nav aria-label="Attention horizon" className="flex gap-2">
+          <nav aria-label="Attention horizon" className="flex flex-wrap gap-2">
             {attentionHorizons.map((days) => (
-              <Link
+              <Button
+                asChild
+                size="sm"
+                variant={days === horizon ? "default" : "outline"}
                 key={days}
-                href={href(days)}
-                aria-current={days === horizon ? "page" : undefined}
-                className={
-                  "rounded-md border px-3 py-2 text-sm " +
-                  (days === horizon
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-muted")
-                }
               >
-                Next {days} days
-              </Link>
+                <Link
+                  key={days}
+                  href={href(days)}
+                  aria-current={days === horizon ? "page" : undefined}
+                >
+                  Next {days} days
+                </Link>
+              </Button>
             ))}
           </nav>
         </div>
@@ -113,26 +111,23 @@ export default async function DashboardPage({
           HT/TTC basis; no combined money total. Unassigned records and archived
           Projects are outside this view.
         </p>
-        <nav aria-label="Attention visibility" className="flex gap-4 text-sm">
-          <Link
-            href={href(horizon, "active")}
-            aria-current={!snoozed ? "page" : undefined}
-            className={
-              !snoozed ? "font-semibold underline" : "text-muted-foreground"
-            }
-          >
-            Needs attention ({all.filter((row) => !row.snooze).length})
-          </Link>
-          <Link
-            href={href(horizon, "snoozed")}
-            aria-current={snoozed ? "page" : undefined}
-            className={
-              snoozed ? "font-semibold underline" : "text-muted-foreground"
-            }
-          >
-            Snoozed by me ({all.filter((row) => row.snooze).length})
-          </Link>
-        </nav>
+        <NavigationTabs
+          label="Attention visibility"
+          tabs={[
+            {
+              id: "active",
+              label: `Needs attention (${all.filter((row) => !row.snooze).length})`,
+              href: href(horizon, "active"),
+              active: !snoozed,
+            },
+            {
+              id: "snoozed",
+              label: `Snoozed by me (${all.filter((row) => row.snooze).length})`,
+              href: href(horizon, "snoozed"),
+              active: snoozed,
+            },
+          ]}
+        />
         <div className="overflow-hidden rounded-lg border">
           <FinancialAttentionTable
             rows={filtered.slice((page - 1) * pageSize, page * pageSize)}
@@ -156,7 +151,7 @@ export default async function DashboardPage({
       </section>
       <section className="space-y-3">
         <div className="flex justify-between">
-          <h2 className="text-base font-semibold">Active Projects</h2>
+          <h2 className="section-title">Active Projects</h2>
           <Link
             href="/projects?status=ACTIVE"
             className="text-primary text-sm underline"
@@ -180,11 +175,7 @@ export default async function DashboardPage({
             ))}
           {!snapshot.projects.some(
             (project) => project.status === "ACTIVE",
-          ) && (
-            <p className="text-muted-foreground p-4 text-sm">
-              No active Projects.
-            </p>
-          )}
+          ) && <EmptyState title="No active Projects." />}
         </div>
       </section>
     </div>

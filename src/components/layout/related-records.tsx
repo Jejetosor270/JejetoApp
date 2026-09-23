@@ -5,6 +5,12 @@ import { DateInput } from "@/components/forms/date-input";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  tableHeaderClassName,
+  tableBodyClassName,
+} from "@/components/listing/table-styles";
+import { controlVariants } from "@/components/forms/control-styles";
 import { RecordSectionHeading } from "./record-presentation";
 import type { RelatedTableData } from "@/lib/related-records/types";
 import { unassignCashAction } from "@/app/(app)/unassigned-cash/actions";
@@ -86,13 +92,13 @@ export function RelatedRecordTable({
   );
   const selection = useBulkSelection(visible.map((row) => row.id));
   return (
-    <section className="bg-card rounded-lg border p-4" aria-label={table.title}>
+    <section className="record-surface" aria-label={table.title}>
       <RecordSectionHeading
         title={`${table.title} (${table.rows.length})`}
         description={table.description}
         actions={actions}
       />
-      <div className="mt-4 overflow-x-auto rounded-md border">
+      <div className="mt-4 overflow-x-auto border-y">
         {(table.removal || table.trashKind) && (
           <BulkActionBar
             unlink={!table.trashKind}
@@ -127,7 +133,7 @@ export function RelatedRecordTable({
         )}
         <table className="w-full min-w-[36rem] text-left text-sm">
           <caption className="sr-only">{table.title}</caption>
-          <thead className="bg-muted/40 text-muted-foreground text-xs">
+          <thead className={tableHeaderClassName}>
             <tr>
               {(table.removal || table.trashKind) && (
                 <SelectionHeader
@@ -153,7 +159,7 @@ export function RelatedRecordTable({
               ) : null}
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className={tableBodyClassName}>
             {visible.map((row) => (
               <tr
                 key={row.id}
@@ -217,7 +223,9 @@ export function RelatedRecordTable({
                             <DateInput
                               key={field.name}
                               aria-label={table.columns[index]}
-                              className="border-input bg-background rounded border px-2 py-1"
+                              className={controlVariants({
+                                density: "compact",
+                              })}
                               value={fieldDraft[field.name] ?? ""}
                               disabled={pending}
                               onChange={(event) =>
@@ -298,7 +306,9 @@ export function RelatedRecordTable({
                   }
                   className="text-muted-foreground px-3 py-6 text-center"
                 >
-                  No related {table.title.toLowerCase()}.
+                  <EmptyState
+                    title={`No related ${table.title.toLowerCase()}.`}
+                  />
                 </td>
               </tr>
             ) : null}

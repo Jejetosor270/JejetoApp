@@ -1,5 +1,9 @@
 import type { ProjectControl } from "@/lib/reporting/project-control";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
+import {
+  tableHeaderClassName,
+  tableBodyClassName,
+} from "@/components/listing/table-styles";
 
 export function ProjectFinancialControl({ data }: { data: ProjectControl }) {
   const money = (value: string | null) => formatMoney(value, data.currency);
@@ -16,7 +20,7 @@ export function ProjectFinancialControl({ data }: { data: ProjectControl }) {
   return (
     <section className="space-y-4">
       <div>
-        <h2 className="text-sm font-semibold">Financials</h2>
+        <h2 className="section-title">Financials</h2>
         <p className="text-muted-foreground mt-1 text-xs">
           Revenue and costs in {data.currency}. Positive differences are
           surpluses; negative differences are shortfalls. Billing coverage is
@@ -24,8 +28,8 @@ export function ProjectFinancialControl({ data }: { data: ProjectControl }) {
         </p>
       </div>
       <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full min-w-[40rem] text-left text-xs">
-          <thead className="bg-muted/40">
+        <table className="w-full min-w-[40rem] text-left text-sm">
+          <thead className={tableHeaderClassName}>
             <tr>
               <th className="p-3">Measure</th>
               {["Merchandise", "Freight", "Other/services", "Total"].map(
@@ -37,7 +41,7 @@ export function ProjectFinancialControl({ data }: { data: ProjectControl }) {
               )}
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className={tableBodyClassName}>
             <tr>
               <th className="p-3 font-medium">
                 Current Project markup default
@@ -94,7 +98,7 @@ export function ProjectFinancialControl({ data }: { data: ProjectControl }) {
         </table>
       </div>
       <section
-        className="rounded-lg border p-4"
+        className="record-divider"
         aria-label="Economic cost reconciliation"
       >
         <h3 className="text-sm font-semibold">Economic cost reconciliation</h3>

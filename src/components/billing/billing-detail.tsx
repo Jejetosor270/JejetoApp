@@ -28,7 +28,7 @@ import {
   RecordSectionHeading,
 } from "@/components/layout/record-presentation";
 import { RecordWorkspace } from "@/components/layout/record-workspace";
-import { EditorDrawer } from "@/components/forms/editor-drawer";
+import { EditorActions, EditorDrawer } from "@/components/forms/editor-drawer";
 import { SheetClose } from "@/components/ui/sheet";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -986,7 +986,7 @@ export function BillingDetail({
                   </label>
                 ) : null}
               </section>
-              <div className="flex flex-wrap items-center gap-2">
+              <EditorActions>
                 <SubmitButton pending={pending}>
                   Save Billing document
                 </SubmitButton>
@@ -996,7 +996,7 @@ export function BillingDetail({
                   </Button>
                 </SheetClose>
                 <ActionFeedback state={state} />
-              </div>
+              </EditorActions>
             </>
           </form>
         </EditorDrawer>
@@ -1049,6 +1049,7 @@ export function BillingDetail({
                   <article className="bg-card rounded-lg border p-4">
                     <RecordSectionHeading title="Amounts & VAT" />
                     <RecordFields
+                      valueKind="financial"
                       values={[
                         {
                           label: "HT",

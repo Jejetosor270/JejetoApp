@@ -24,7 +24,11 @@ export function ProjectRecordDetails({ project }: { project: ProjectView }) {
                 label: "Project manager",
                 value: project.projectManager?.name ?? "—",
               },
-              { label: "Status", value: formatEnumLabel(project.status) },
+              {
+                label: "Status",
+                value: formatEnumLabel(project.status),
+                kind: "status",
+              },
               {
                 label: "Country",
                 value:
@@ -38,10 +42,12 @@ export function ProjectRecordDetails({ project }: { project: ProjectView }) {
               },
               {
                 label: "Start date",
+                kind: "date",
                 value: formatDateOnly(project.startDate?.slice(0, 10) ?? null),
               },
               {
                 label: "Expected completion",
+                kind: "date",
                 value: formatDateOnly(
                   project.expectedCompletionDate?.slice(0, 10) ?? null,
                 ),
@@ -55,6 +61,7 @@ export function ProjectRecordDetails({ project }: { project: ProjectView }) {
             description="Project planning values and default Order markups, not actual costs or revenue."
           />
           <RecordFields
+            valueKind="financial"
             values={[
               {
                 label: "Client budget target HT",

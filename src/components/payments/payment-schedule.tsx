@@ -177,7 +177,7 @@ export function PaymentSchedule({
                 </summary>
                 {term.settlements.map((payment) => (
                   <div
-                    className="my-2 space-y-2 rounded border p-2"
+                    className="my-2 space-y-2 border-t py-2 text-xs"
                     key={payment.id}
                   >
                     <p>

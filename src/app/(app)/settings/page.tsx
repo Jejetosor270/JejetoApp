@@ -42,14 +42,14 @@ export default async function SettingsPage() {
             label: "Company",
             content: (
               <>
-                <section className="bg-card rounded-lg border p-5">
-                  <h2 className="text-sm font-semibold">Company</h2>
+                <section className="record-surface">
+                  <h2 className="section-title">Company</h2>
                   <div className="mt-4">
                     <SettingsForm companyName={settings.companyName} />
                   </div>
                 </section>
-                <section className="bg-card rounded-lg border p-5">
-                  <h2 className="text-sm font-semibold">Financial reporting</h2>
+                <section className="record-surface">
+                  <h2 className="section-title">Financial reporting</h2>
                   <dl className="mt-4 grid gap-1 text-sm">
                     <dt className="text-muted-foreground">
                       Company reporting currency
@@ -71,8 +71,8 @@ export default async function SettingsPage() {
             label: "Optional modules",
             content: (
               <>
-                <section className="bg-card rounded-lg border p-5">
-                  <h2 className="text-sm font-semibold">Optional modules</h2>
+                <section className="record-surface">
+                  <h2 className="section-title">Optional modules</h2>
                   {user.role === "ADMIN" ? (
                     <div className="mt-4">
                       <ItemManagementSettingForm
@@ -95,8 +95,8 @@ export default async function SettingsPage() {
             label: "Locations",
             content: (
               <>
-                <section className="bg-card rounded-lg border p-5">
-                  <h2 className="text-sm font-semibold">Logistics Locations</h2>
+                <section className="record-surface">
+                  <h2 className="section-title">Logistics Locations</h2>
                   <p className="text-muted-foreground mt-2 text-xs">
                     Reusable operational destinations only; this does not track
                     inventory.
@@ -115,8 +115,8 @@ export default async function SettingsPage() {
             id: "diagnostics",
             label: "AI processing",
             content: (
-              <section className="bg-card rounded-lg border p-5">
-                <h2 className="text-sm font-semibold">AI processing models</h2>
+              <section className="record-surface">
+                <h2 className="section-title">AI processing models</h2>
                 <div className="mt-4">
                   <AiProcessingForm models={models} />
                 </div>

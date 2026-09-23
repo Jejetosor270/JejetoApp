@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
+import { controlVariants } from "@/components/forms/control-styles";
 import { Check, Pencil, X } from "lucide-react";
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -152,7 +153,10 @@ export function EditableCell({
         {type === "select" ? (
           <select
             {...common}
-            className="border-input bg-background h-8 max-w-64 rounded border px-2 text-xs"
+            className={controlVariants({
+              density: "compact",
+              className: "max-w-64",
+            })}
             onChange={(event) => setDraft(event.target.value)}
           >
             {!options.some((option) => option.value === draft) && (
@@ -167,7 +171,7 @@ export function EditableCell({
         ) : type === "date" ? (
           <DateInput
             {...common}
-            className="border-input h-8 rounded border px-2 text-xs"
+            className={controlVariants({ density: "compact" })}
             onChange={(event) => setDraft(event.target.value)}
           />
         ) : type === "money" ? (
@@ -180,7 +184,10 @@ export function EditableCell({
         ) : (
           <input
             {...common}
-            className="border-input bg-background h-8 max-w-64 rounded border px-2 text-xs"
+            className={controlVariants({
+              density: "compact",
+              className: "max-w-64",
+            })}
             onChange={(event) => setDraft(event.target.value)}
           />
         )}
@@ -221,6 +228,7 @@ export function EditableCell({
   return type === "select" || type === "money" ? (
     <EditorDrawer
       open
+      size="compact"
       title={`Edit ${label}`}
       onOpenChange={(open) => {
         if (!open && !pending) close();
@@ -260,7 +268,12 @@ export function SourceCell({
           className="text-muted-foreground size-3 shrink-0"
         />
       </button>
-      <EditorDrawer open={open} title={label} onOpenChange={setOpen}>
+      <EditorDrawer
+        open={open}
+        size="compact"
+        title={label}
+        onOpenChange={setOpen}
+      >
         <p className="mb-4 text-sm">
           This value is calculated from related records. Edit the source records
           to update it without overwriting a financial total.

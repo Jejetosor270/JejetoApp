@@ -1,5 +1,6 @@
 "use client";
 import { DateInput } from "@/components/forms/date-input";
+import { controlVariants } from "@/components/forms/control-styles";
 
 import {
   useEffect,
@@ -15,8 +16,10 @@ import {
   formatPercentageInput,
 } from "@/domain/procurement/presentation";
 
-export const inlineControlClassName =
-  "border-input bg-background h-8 min-w-20 rounded border px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60";
+export const inlineControlClassName = controlVariants({
+  density: "compact",
+  className: "min-w-20",
+});
 
 interface InputProps {
   ariaLabel: string;

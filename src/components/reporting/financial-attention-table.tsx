@@ -19,6 +19,11 @@ import {
 import { formatMoney } from "@/domain/procurement/presentation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  tableHeaderClassName,
+  tableBodyClassName,
+} from "@/components/listing/table-styles";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { DateInput } from "@/components/forms/date-input";
 import { Field, inputClassName } from "@/components/master-data/form-ui";
@@ -69,7 +74,7 @@ export function FinancialAttentionTable({
               ? "Your snoozed financial issues"
               : "Financial issues needing attention"}
           </caption>
-          <thead className="bg-muted/40 text-muted-foreground text-xs">
+          <thead className={tableHeaderClassName}>
             <tr>
               {[
                 "Priority",
@@ -79,17 +84,31 @@ export function FinancialAttentionTable({
                 "Date",
                 "Action",
               ].map((label) => (
-                <th scope="col" key={label} className="px-4 py-3">
+                <th
+                  scope="col"
+                  key={label}
+                  className={label === "Amount" ? "text-right" : undefined}
+                >
                   {label}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className={tableBodyClassName}>
             {rows.map((row) => (
               <tr key={row.key}>
                 <td className="px-4 py-3 align-top">
-                  <Badge variant="outline">{row.priority}</Badge>
+                  <Badge
+                    variant={
+                      row.priority === "Overdue"
+                        ? "destructive"
+                        : row.priority === "Upcoming"
+                          ? "info"
+                          : "warning"
+                    }
+                  >
+                    {row.priority}
+                  </Badge>
                 </td>
                 <td className="max-w-md px-4 py-3 align-top">
                   <p className="font-medium">{row.title}</p>
@@ -111,7 +130,7 @@ export function FinancialAttentionTable({
                     </p>
                   )}
                 </td>
-                <td className="financial-figure px-4 py-3 align-top whitespace-nowrap">
+                <td className="financial-figure px-4 py-3 text-right align-top whitespace-nowrap">
                   {row.amount === null ? (
                     "—"
                   ) : (
@@ -169,15 +188,18 @@ export function FinancialAttentionTable({
         </table>
       </div>
       {rows.length === 0 && (
-        <p className="text-muted-foreground p-6 text-sm">
-          {snoozed
-            ? "No current issues are snoozed."
-            : "No financial issues need attention in this view."}
-        </p>
+        <EmptyState
+          title={
+            snoozed
+              ? "No current issues are snoozed."
+              : "No financial issues need attention in this view."
+          }
+        />
       )}
       {editing && (
         <EditorDrawer
           open
+          size="compact"
           title="Snooze financial reminder"
           description="For you only. The reminder returns on this date, or earlier if its displayed financial information changes. Financial records and colleagues’ reminders are unaffected."
           onOpenChange={(open) => {

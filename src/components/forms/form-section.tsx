@@ -12,7 +12,7 @@ export function FormSection({
 }) {
   return (
     <fieldset className="min-w-0 space-y-4">
-      <legend className="mb-1 text-sm font-semibold">{title}</legend>
+      <legend className="section-title mb-1">{title}</legend>
       {description ? (
         <p className="text-muted-foreground text-xs leading-5">{description}</p>
       ) : null}

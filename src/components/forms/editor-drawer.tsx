@@ -29,6 +29,7 @@ export function EditorDrawer({
   description = "Review your changes before saving.",
   trigger,
   wide = false,
+  size = "standard",
   open: controlledOpen,
   onOpenChange,
 }: {
@@ -37,6 +38,7 @@ export function EditorDrawer({
   description?: string;
   trigger?: ReactNode;
   wide?: boolean;
+  size?: "compact" | "standard" | "wide";
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -71,11 +73,15 @@ export function EditorDrawer({
           ref={content}
           showCloseButton={false}
           className={cn(
-            "gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-2xl",
-            wide && "data-[side=right]:sm:max-w-[calc(100vw-3rem)]",
+            "gap-0 data-[side=right]:w-full",
+            wide || size === "wide"
+              ? "data-[side=right]:sm:max-w-[calc(100vw-3rem)]"
+              : size === "compact"
+                ? "data-[side=right]:sm:max-w-md"
+                : "data-[side=right]:sm:max-w-2xl",
           )}
         >
-          <SheetHeader className="shrink-0 border-b p-4 sm:p-6">
+          <SheetHeader className="shrink-0 border-b p-4">
             <div className="flex items-center justify-between gap-3">
               <SheetTitle className="min-w-0 break-words">{title}</SheetTitle>
               <Button
@@ -88,7 +94,7 @@ export function EditorDrawer({
             </div>
             <SheetDescription>{description}</SheetDescription>
           </SheetHeader>
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="@container min-h-0 min-w-0 flex-1 overflow-y-auto p-4">
             <DraftGuard>{children}</DraftGuard>
           </div>
         </SheetContent>
@@ -121,5 +127,14 @@ export function EditorDrawer({
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+/** Keep inside the owning form so native submission and validation are unchanged. */
+export function EditorActions({ children }: { children: ReactNode }) {
+  return (
+    <div className="bg-background sticky bottom-0 z-10 flex flex-wrap items-center gap-2 border-t py-3">
+      {children}
+    </div>
   );
 }

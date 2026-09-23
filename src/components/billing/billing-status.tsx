@@ -157,6 +157,7 @@ export function BillingStatusControl({
         )}
       <EditorDrawer
         open={open}
+        size="compact"
         title="Billing status"
         onOpenChange={(value) => {
           if (!pending) setOpen(value);

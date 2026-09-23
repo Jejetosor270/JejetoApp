@@ -106,7 +106,7 @@ export function OrderRow({
               order.orderNumber,
               { href: recordHref },
             )}
-            <div className="text-muted-foreground mt-1 font-sans">
+            <div className="text-muted-foreground mt-1 text-xs font-normal">
               {cell(
                 "shortDescription",
                 "Short description",
@@ -343,7 +343,7 @@ export function OrderRow({
       {orderViewColumns[view].map((field) => (
         <td
           key={field}
-          className={`px-4 py-3 ${orderNumericColumns.includes(field) ? "financial-figure text-right" : ""} ${field === "reference" ? "font-mono text-xs" : ""}`}
+          className={`px-4 py-3 ${orderNumericColumns.includes(field) ? "financial-figure text-right" : ""} ${field === "reference" ? "text-sm font-medium" : ""}`}
         >
           {content(field)}
         </td>

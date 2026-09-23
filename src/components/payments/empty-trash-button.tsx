@@ -13,9 +13,17 @@ export function EmptyTrashButton() {
   } as BulkActionState);
   const [confirmation, setConfirmation] = useState("");
   return (
-    <EditorDrawer title="Empty Trash permanently">
+    <EditorDrawer
+      title="Empty Trash permanently"
+      size="compact"
+      trigger={
+        <Button variant="destructive" type="button">
+          Empty Trash permanently
+        </Button>
+      }
+    >
       <form action={action} className="space-y-4">
-        <p>
+        <p className="border-destructive/30 bg-destructive/5 text-destructive rounded-md border p-3 text-sm">
           All records currently in Trash and their dependent data will be
           permanently deleted. They cannot be restored. The audit log will
           remain.

@@ -41,7 +41,7 @@ export function SortHeader({
     >
       <Link
         href={`${pathname}?${query}`}
-        className="inline-flex items-center gap-1.5"
+        className={`hover:text-foreground inline-flex items-center gap-1.5 rounded-sm ${active ? "text-foreground" : ""}`}
         aria-label={`${label}: sort ${nextDirection === "asc" ? "ascending" : "descending"}`}
       >
         {label}

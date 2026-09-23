@@ -24,6 +24,7 @@ import { formatMoney } from "@/domain/procurement/presentation";
 import type { ClientBillingView } from "@/lib/billing/billing";
 import {
   tableContainerClassName,
+  tableBodyClassName,
   tableHeaderClassName,
 } from "@/components/listing/table-styles";
 
@@ -85,7 +86,7 @@ function BillingRow({
           label={document.reference}
         />
       )}
-      <td className="px-3 py-3 font-mono text-xs">
+      <td className="px-3 py-3 text-sm font-medium">
         {cell(
           "reference",
           "Reference",
@@ -93,7 +94,7 @@ function BillingRow({
           document.reference,
           { href },
         )}
-        <span className="text-muted-foreground mt-1 block font-sans">
+        <span className="text-muted-foreground mt-1 block text-xs font-normal">
           {cell(
             "shortDescription",
             "Short description",
@@ -291,7 +292,7 @@ export function BillingTable({
               />
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className={tableBodyClassName}>
             {documents.map((document) => (
               <BillingRow
                 options={options}

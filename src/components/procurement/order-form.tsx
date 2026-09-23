@@ -1,4 +1,5 @@
 "use client";
+import { EditorActions } from "@/components/forms/editor-drawer";
 import { carriers } from "@/config/carriers";
 import { AllocationInputs } from "@/components/billing/allocation-inputs";
 import {
@@ -1959,12 +1960,12 @@ export function OrderForm({
             </div>
           </details>
         ) : null}
-        <div className="flex items-center gap-3">
+        <EditorActions>
           <SubmitButton pending={pending}>
             {isEditing ? "Save Order" : "Create Order"}
           </SubmitButton>
           <ActionFeedback state={state} />
-        </div>
+        </EditorActions>
       </form>
     </section>
   );

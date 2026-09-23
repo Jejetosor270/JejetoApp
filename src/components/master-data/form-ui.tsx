@@ -17,14 +17,14 @@ import {
 
 import type { MasterDataActionState } from "@/components/master-data/action-state";
 import { Button } from "@/components/ui/button";
+import { controlVariants } from "@/components/forms/control-styles";
 import {
   formatMoneyInput,
   formatPercentageInput,
   normalizeMoneyInput,
 } from "@/domain/procurement/presentation";
 
-export const inputClassName =
-  "border-input bg-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full min-w-0 rounded-md border px-3 text-sm outline-none focus-visible:ring-2";
+export const inputClassName = controlVariants();
 
 const FieldContext = createContext<{ errorId?: string; invalid?: boolean }>({});
 

@@ -10,6 +10,7 @@ import { ListEmptyState } from "@/components/listing/empty-state";
 import { SortHeader } from "@/components/listing/sort-header";
 import {
   tableContainerClassName,
+  tableBodyClassName,
   tableHeaderClassName,
 } from "@/components/listing/table-styles";
 import type { OrderSummary } from "@/lib/procurement/orders";
@@ -79,7 +80,7 @@ export function OrderTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className={tableBodyClassName}>
             {orders.map((order) => (
               <OrderRow
                 canEdit={canEdit}

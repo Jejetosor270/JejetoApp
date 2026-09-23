@@ -121,6 +121,7 @@ export function RecordPaymentStatus({
       {open && (
         <EditorDrawer
           open
+          size="compact"
           title="Purchasing payment status"
           onOpenChange={(open) => {
             if (!pending) setOpen(open);

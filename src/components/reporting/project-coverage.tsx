@@ -16,7 +16,7 @@ export function CoverageFigures({
   return (
     <dl className="mt-4 grid gap-3 sm:grid-cols-3">
       {values.map(([label, value, signed]) => (
-        <div key={label} className="bg-muted/25 rounded-md border p-3">
+        <div key={label} className="min-w-0 border-l-2 pl-3">
           <dt className="text-muted-foreground text-xs">{label}</dt>
           <dd className="financial-figure mt-1 text-sm font-semibold">
             {signed
