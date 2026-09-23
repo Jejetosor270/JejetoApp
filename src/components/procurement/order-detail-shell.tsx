@@ -29,7 +29,7 @@ export function OrderDetailShell({
     <div className="relative space-y-6">
       {canEdit ? (
         <Button
-          className="float-right ml-4"
+          className="float-right mt-4 mr-4 ml-4 sm:mt-5 sm:mr-5"
           onClick={() => setEditing(true)}
           type="button"
           variant="outline"

@@ -172,6 +172,21 @@ it("shows allocation and freight figures in Details, separately from Client outs
   );
 });
 
+it("contains the allocation table within a shrinkable single column on narrow screens", async () => {
+  await mount();
+  const details = view.container.querySelector('section[aria-label="Details"]');
+  expect(details?.classList.contains("grid-cols-1")).toBe(true);
+  expect(details?.classList.contains("lg:grid-cols-2")).toBe(true);
+  for (const article of details?.querySelectorAll("article") ?? []) {
+    expect(article.classList.contains("min-w-0")).toBe(true);
+  }
+  expect(
+    details
+      ?.querySelector("table")
+      ?.parentElement?.classList.contains("overflow-x-auto"),
+  ).toBe(true);
+});
+
 it("keeps zero allocations explicit and all freight at Project level", async () => {
   await mount({ ...record, allocations: [] });
   expect(matrix("Project remainder", 0)).toBe("800.00 EUR");

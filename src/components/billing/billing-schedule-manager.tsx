@@ -107,7 +107,7 @@ export function BillingScheduleManager({
   );
   return (
     <div className="space-y-3">
-      <p className="text-sm">
+      <p className="bg-muted/60 rounded-md border px-4 py-3 text-sm tabular-nums">
         Total: {formatMoney(document.totalTtc, document.currencyCode)} · Paid:{" "}
         {formatMoney(document.paid, document.currencyCode)} · Remaining:{" "}
         {formatMoney(document.outstanding, document.currencyCode)}
@@ -133,7 +133,7 @@ export function BillingScheduleManager({
             });
             return [
               term.id,
-              <div key={term.id} className="space-y-2">
+              <div key={term.id} className="payment-term-actions">
                 {canEdit &&
                   !document.isCancelled &&
                   !term.isCancelled &&

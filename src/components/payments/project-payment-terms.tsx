@@ -62,12 +62,12 @@ export async function ProjectPaymentTerms({
         </p>
       )}
       {supplier.map(({ order, summary }) => (
-        <details className="record-divider" key={order.id}>
-          <summary className="cursor-pointer font-medium">
+        <details className="bg-card rounded-lg border" key={order.id}>
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
             Purchasing · {order.orderNumber} · {summary.installments.length}{" "}
             terms
           </summary>
-          <div className="mt-4">
+          <div className="border-t p-4">
             <PaymentSchedule
               canEdit={canEdit && order.status !== "CANCELLED"}
               currencies={currencies}
@@ -83,12 +83,12 @@ export async function ProjectPaymentTerms({
       {documents.map(
         (document) =>
           document && (
-            <details className="record-divider" key={document.id}>
-              <summary className="cursor-pointer font-medium">
+            <details className="bg-card rounded-lg border" key={document.id}>
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
                 Billing · {document.reference} ·{" "}
                 {formatEnumLabel(document.documentType)}
               </summary>
-              <div className="mt-4">
+              <div className="border-t p-4">
                 <BillingScheduleManager
                   canEdit={canEdit}
                   document={

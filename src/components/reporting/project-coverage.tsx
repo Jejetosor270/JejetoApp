@@ -16,9 +16,9 @@ export function CoverageFigures({
   return (
     <dl className="mt-4 grid gap-3 sm:grid-cols-3">
       {values.map(([label, value, signed]) => (
-        <div key={label} className="min-w-0 border-l-2 pl-3">
+        <div key={label} className="bg-muted/60 min-w-0 rounded-md border p-4">
           <dt className="text-muted-foreground text-xs">{label}</dt>
-          <dd className="financial-figure mt-1 text-sm font-semibold">
+          <dd className="financial-figure mt-2 overflow-x-auto text-xl font-semibold tracking-tight">
             {signed
               ? formatSignedMoney(value, currency)
               : formatMoney(value, currency)}
@@ -39,7 +39,7 @@ export function ProjectCoverage({
   const freight = data.freightCoverage;
   return (
     <div className="space-y-4">
-      <section className="bg-card rounded-lg border p-4">
+      <section className="record-surface">
         <h2 className="text-sm font-semibold">Cash balance</h2>
         <p className="text-muted-foreground mt-1 text-xs">
           Actual Client Invoice receipts minus Supplier and Project-freight
@@ -72,7 +72,7 @@ export function ProjectCoverage({
           </p>
         )}
       </section>
-      <section className="bg-card rounded-lg border p-4">
+      <section className="record-surface">
         <h2 className="text-sm font-semibold">Freight recovery surplus</h2>
         <p className="text-muted-foreground mt-1 text-xs">
           Order freight plus Project freight expenses, excluding VAT. Project

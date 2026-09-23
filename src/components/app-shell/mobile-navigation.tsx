@@ -34,7 +34,10 @@ export function MobileNavigation({
           <Menu aria-hidden="true" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="bg-sidebar w-[18rem] p-0">
+      <SheetContent
+        side="left"
+        className="navigation-surface bg-sidebar w-[18rem] p-0"
+      >
         <SheetHeader className="border-b p-4">
           <SheetTitle className="sr-only">Application navigation</SheetTitle>
           <SheetDescription className="sr-only">

@@ -46,7 +46,7 @@ export function NavigationLinks({
                 "flex min-h-9 items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium transition-colors",
                 active
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
                 collapsed && "justify-center px-0",
               )}
             >
@@ -75,7 +75,7 @@ export function SidebarNavigation({
   const pathname = usePathname();
   const groups = navigationForRole(user.role, itemManagementEnabled);
   return (
-    <div className="flex h-full flex-col gap-5 px-2 py-4">
+    <div className="flex h-full flex-col gap-6 px-3 py-5">
       <div className={cn("flex min-h-9 items-center", !collapsed && "px-2")}>
         {!collapsed && (
           <div className="min-w-0 flex-1">
@@ -113,7 +113,7 @@ export function SidebarNavigation({
             type="search"
             aria-label="Search records"
             placeholder="Search records…"
-            className="bg-background h-9 w-full rounded-md border pr-2 pl-8 text-[13px]"
+            className="bg-sidebar-accent/40 placeholder:text-sidebar-foreground/80 h-9 w-full rounded-md border pr-2 pl-8 text-[13px]"
           />
         </form>
       )}

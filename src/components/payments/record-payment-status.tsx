@@ -11,6 +11,9 @@ import {
   inputClassName,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { recordStatusTone } from "@/components/ui/record-status-tone";
+import { ChevronDown } from "lucide-react";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 
 export function RecordPaymentStatus({
@@ -81,13 +84,20 @@ export function RecordPaymentStatus({
             size="sm"
             variant="ghost"
             aria-label="Change payment status"
+            className="gap-1 px-0 hover:bg-transparent"
             disabled={pending}
             onClick={() => {
               setFeedback("");
               setOpen(true);
             }}
           >
-            {recordPaymentStatusLabel(automatic)}
+            <Badge variant={recordStatusTone(automatic)}>
+              {recordPaymentStatusLabel(automatic)}
+            </Badge>
+            <ChevronDown
+              aria-hidden="true"
+              className="text-muted-foreground size-3"
+            />
           </Button>
           {automatic !== "PAID" && (
             <Button
@@ -116,7 +126,9 @@ export function RecordPaymentStatus({
           )}
         </div>
       ) : (
-        <span>{recordPaymentStatusLabel(automatic, override, cancelled)}</span>
+        <Badge variant={recordStatusTone(cancelled ? "CANCELLED" : automatic)}>
+          {recordPaymentStatusLabel(automatic, override, cancelled)}
+        </Badge>
       )}
       {open && (
         <EditorDrawer

@@ -88,10 +88,14 @@ export function FilterBar({ children }: { children: ReactNode }) {
     else advanced.push(field);
   }
   return (
-    <form method="get" data-draft-guard="off" className="space-y-3">
+    <form
+      method="get"
+      data-draft-guard="off"
+      className="bg-card space-y-2 rounded-lg border p-3 shadow-[var(--shadow-surface)]"
+    >
       {hidden}
       <div className="flex flex-wrap items-end gap-3">
-        <div className="grid w-full min-w-0 flex-auto gap-3 sm:flex-1 sm:grid-cols-3">
+        <div className="grid w-full min-w-0 gap-3 sm:max-w-3xl sm:flex-1 sm:grid-cols-3">
           {primary}
         </div>
         <div className="flex flex-wrap items-center gap-2">{actions}</div>

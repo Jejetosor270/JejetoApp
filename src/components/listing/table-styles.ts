@@ -1,8 +1,8 @@
 /** Shared behavior styles; each domain table keeps its own columns and row component. */
 export const tableContainerClassName =
-  "bg-card overflow-hidden rounded-lg border";
+  "bg-card overflow-hidden rounded-lg border shadow-[var(--shadow-surface)]";
 export const tableHeaderClassName =
-  "bg-muted text-muted-foreground sticky top-0 z-10 border-b text-xs [&>tr>th]:px-3 [&>tr>th]:py-2.5 [&>tr>th]:font-medium";
+  "bg-muted text-muted-foreground sticky top-0 z-10 border-b text-[11px] tracking-wide [&>tr>th]:px-3 [&>tr>th]:py-3 [&>tr>th]:font-semibold";
 export const tableRowClassName =
   "hover:bg-muted/50 focus-within:bg-accent/40 has-[:checked]:bg-accent/60 align-top [&>td]:px-3 [&>td]:py-2.5";
 

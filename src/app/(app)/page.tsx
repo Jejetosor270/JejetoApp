@@ -79,7 +79,7 @@ export default async function DashboardPage({
         }
       />
       <section
-        className="space-y-4"
+        className="record-surface space-y-4"
         aria-labelledby="financial-attention-heading"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -128,7 +128,7 @@ export default async function DashboardPage({
             },
           ]}
         />
-        <div className="overflow-hidden rounded-lg border">
+        <div className="bg-card overflow-hidden rounded-lg border">
           <FinancialAttentionTable
             rows={filtered.slice((page - 1) * pageSize, page * pageSize)}
             today={today}
@@ -159,7 +159,7 @@ export default async function DashboardPage({
             View all Projects
           </Link>
         </div>
-        <div className="divide-y rounded-lg border">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {snapshot.projects
             .filter((project) => project.status === "ACTIVE")
             .slice(0, 6)
@@ -167,7 +167,7 @@ export default async function DashboardPage({
               <Link
                 key={project.id}
                 href={"/projects/" + project.id}
-                className="hover:bg-muted block p-4 text-sm"
+                className="bg-card hover:border-primary/40 hover:bg-accent/40 block rounded-lg border p-4 text-sm font-medium shadow-[var(--shadow-surface)]"
               >
                 {project.name}{" "}
                 <span className="text-muted-foreground">· {project.code}</span>

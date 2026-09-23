@@ -18,7 +18,7 @@ export function ProjectFinancialControl({ data }: { data: ProjectControl }) {
     ["Unallocated Invoice HT", "projectRemainder"],
   ] as const;
   return (
-    <section className="space-y-4">
+    <section className="record-surface space-y-4">
       <div>
         <h2 className="section-title">Financials</h2>
         <p className="text-muted-foreground mt-1 text-xs">
@@ -79,7 +79,7 @@ export function ProjectFinancialControl({ data }: { data: ProjectControl }) {
                   </td>
                 ))}
                 <td
-                  className="financial-figure p-3 text-right font-semibold"
+                  className="financial-figure bg-muted/60 p-3 text-right font-semibold"
                   title={
                     data.totals[key] === null
                       ? "Incomplete: a category value or required FX is missing."

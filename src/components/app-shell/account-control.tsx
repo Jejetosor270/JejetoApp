@@ -39,7 +39,7 @@ export function AccountControl({
       className={`flex min-w-0 items-center gap-2 ${collapsed ? "flex-col" : "px-1"}`}
     >
       <Avatar className="size-8 border">
-        <AvatarFallback className="bg-card text-xs font-semibold">
+        <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-xs font-semibold">
           {getInitials(user.name)}
         </AvatarFallback>
       </Avatar>

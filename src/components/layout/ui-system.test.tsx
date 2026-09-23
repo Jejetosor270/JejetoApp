@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it } from "vitest";
 import { mountForm, clickText, enter, control } from "@/test/dom-form";
-import { RecordFields } from "./record-presentation";
+import { RecordFields, RecordSummary } from "./record-presentation";
+import { PageHeader } from "./page-header";
+import { recordStatusTone } from "@/components/ui/record-status-tone";
+import { tabClassName, tabListClassName } from "./tab-styles";
 import { Badge, badgeVariants } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { controlVariants } from "@/components/forms/control-styles";
@@ -14,6 +17,20 @@ import { EditorDrawer, EditorActions } from "@/components/forms/editor-drawer";
 let view: Awaited<ReturnType<typeof mountForm>>;
 afterEach(async () => {
   await view?.unmount();
+});
+
+it("stacks page actions below the title on narrow screens instead of squeezing the heading", () => {
+  const markup = renderToStaticMarkup(
+    <PageHeader
+      title="Purchasing"
+      description="Supplier Orders, payment status and delivery dates."
+      actions={<button>New Order</button>}
+    />,
+  );
+  expect(markup).toContain("flex-col");
+  expect(markup).toContain("sm:flex-row");
+  expect(markup).toContain("Purchasing");
+  expect(markup).toContain("New Order");
 });
 
 it("uses the loaded Geist variables and coherent semantic aliases", () => {
@@ -38,6 +55,39 @@ it("shares standard controls and provides a compact variant with accessible stat
     expect(controlVariants({ density })).toContain("focus-visible:ring-2");
   }
   expect(buttonVariants({ size: "icon-xs" })).toContain("size-7");
+});
+
+it("separates canvas, working surface and graphite navigation without changing field semantics", () => {
+  const css = readFileSync("src/app/globals.css", "utf8");
+  expect(css).toContain("--background: #f3f5f8");
+  expect(css).toContain("--sidebar: #192331");
+  expect(css).toContain(".navigation-surface");
+  expect(controlVariants()).toContain("bg-card");
+  expect(tabListClassName).toContain("overflow-x-auto");
+  expect(tabClassName(true)).toContain("bg-accent");
+  expect(tabClassName(false)).toContain("focus-visible:outline-2");
+});
+
+it("emphasizes financial summaries while retaining exact serialized amounts and currency", () => {
+  const markup = renderToStaticMarkup(
+    <RecordSummary
+      values={[{ label: "Outstanding TTC", value: "100 000.00 EUR" }]}
+    />,
+  );
+  expect(markup).toContain("100 000.00 EUR");
+  expect(markup).toContain("Outstanding TTC");
+  expect(markup).toContain("overflow-x-auto");
+  expect(markup).toContain("financial-figure");
+});
+
+it("uses the same visual payment vocabulary without deriving or overriding statuses", () => {
+  expect(recordStatusTone("PAID")).toBe("success");
+  expect(recordStatusTone("OVERDUE")).toBe("destructive");
+  expect(recordStatusTone("PARTIALLY_PAID")).toBe("warning");
+  expect(recordStatusTone("TO_BE_INVOICED")).toBe("warning");
+  expect(recordStatusTone("INVOICED")).toBe("info");
+  expect(recordStatusTone("CANCELLED")).toBe("neutral");
+  expect(recordStatusTone("UNKNOWN")).toBe("neutral");
 });
 
 it.each(["neutral", "info", "success", "warning", "destructive"] as const)(

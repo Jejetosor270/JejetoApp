@@ -61,7 +61,7 @@ export function AppShell({
           Skip to main content
         </a>
         <aside
-          className={`border-sidebar-border bg-sidebar fixed inset-y-0 left-0 z-40 hidden border-r lg:block ${collapsed ? "w-[60px]" : "w-56"}`}
+          className={`navigation-surface border-sidebar-border bg-sidebar fixed inset-y-0 left-0 z-40 hidden border-r lg:block ${collapsed ? "w-[60px]" : "w-56"}`}
         >
           <SidebarNavigation
             companyName={companyName}

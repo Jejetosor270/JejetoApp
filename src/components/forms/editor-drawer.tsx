@@ -73,7 +73,7 @@ export function EditorDrawer({
           ref={content}
           showCloseButton={false}
           className={cn(
-            "gap-0 data-[side=right]:w-full",
+            "bg-card gap-0 shadow-[var(--shadow-drawer)] data-[side=right]:w-full",
             wide || size === "wide"
               ? "data-[side=right]:sm:max-w-[calc(100vw-3rem)]"
               : size === "compact"
@@ -81,7 +81,7 @@ export function EditorDrawer({
                 : "data-[side=right]:sm:max-w-2xl",
           )}
         >
-          <SheetHeader className="shrink-0 border-b p-4">
+          <SheetHeader className="bg-muted/70 shrink-0 border-b p-5 sm:px-6">
             <div className="flex items-center justify-between gap-3">
               <SheetTitle className="min-w-0 break-words">{title}</SheetTitle>
               <Button
@@ -94,7 +94,7 @@ export function EditorDrawer({
             </div>
             <SheetDescription>{description}</SheetDescription>
           </SheetHeader>
-          <div className="@container min-h-0 min-w-0 flex-1 overflow-y-auto p-4">
+          <div className="@container min-h-0 min-w-0 flex-1 overflow-y-auto p-5 sm:p-6">
             <DraftGuard>{children}</DraftGuard>
           </div>
         </SheetContent>
@@ -133,7 +133,7 @@ export function EditorDrawer({
 /** Keep inside the owning form so native submission and validation are unchanged. */
 export function EditorActions({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-background sticky bottom-0 z-10 flex flex-wrap items-center gap-2 border-t py-3">
+    <div className="bg-card sticky bottom-0 z-10 flex flex-wrap items-center gap-2 border-t py-4">
       {children}
     </div>
   );

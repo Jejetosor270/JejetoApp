@@ -116,7 +116,7 @@ export function EditableCell({
             {!href && display}
             <Pencil
               aria-hidden="true"
-              className="text-muted-foreground size-3 shrink-0 opacity-40 group-hover/cell:opacity-100"
+              className="text-muted-foreground size-3 shrink-0 opacity-40 group-focus-within/cell:opacity-100 group-hover/cell:opacity-100"
             />
           </button>
         )}
@@ -260,12 +260,12 @@ export function SourceCell({
         onClick={() => setOpen(true)}
         aria-label={`Manage ${label}`}
         title="Edit the underlying records"
-        className="hover:bg-muted focus-visible:ring-ring inline-flex min-h-8 items-center gap-2 rounded px-1 focus-visible:ring-2"
+        className="group/source hover:bg-muted focus-visible:ring-ring inline-flex min-h-8 items-center gap-2 rounded px-1 focus-visible:ring-2"
       >
         {children}
         <Pencil
           aria-hidden="true"
-          className="text-muted-foreground size-3 shrink-0"
+          className="text-muted-foreground size-3 shrink-0 opacity-40 group-hover/source:opacity-100 group-focus-visible/source:opacity-100"
         />
       </button>
       <EditorDrawer

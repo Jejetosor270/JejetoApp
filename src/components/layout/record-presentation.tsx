@@ -31,11 +31,11 @@ export function RecordSummary({
   values: { label: string; value: string }[];
 }) {
   return (
-    <dl className="grid gap-4 sm:grid-cols-3">
+    <dl className="grid gap-3 sm:grid-cols-3">
       {values.map(({ label, value }) => (
-        <div key={label} className="min-w-0 border-b py-4">
+        <div key={label} className="bg-muted/60 min-w-0 rounded-md border p-4">
           <dt className="text-muted-foreground text-xs">{label}</dt>
-          <dd className="financial-figure mt-2 text-lg font-semibold">
+          <dd className="financial-figure mt-2 overflow-x-auto text-xl font-semibold tracking-tight">
             {value}
           </dd>
         </div>
@@ -56,11 +56,11 @@ export function RecordFields({
   valueKind?: "text" | "financial";
 }) {
   return (
-    <dl className="@container mt-4 space-y-3 text-sm">
+    <dl className="@container mt-4 divide-y text-sm">
       {values.map(({ label, value, kind = valueKind }) => (
         <div
           key={label}
-          className="grid min-w-0 gap-1 @min-[22rem]:grid-cols-2 @min-[22rem]:items-baseline @min-[22rem]:gap-3"
+          className="grid min-w-0 gap-1 py-3 @min-[22rem]:grid-cols-2 @min-[22rem]:items-baseline @min-[22rem]:gap-3"
         >
           <dt className="text-muted-foreground">{label}</dt>
           <dd

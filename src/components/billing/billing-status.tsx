@@ -6,6 +6,9 @@ import { formatEnumLabel } from "@/domain/presentation/labels";
 import { formatMoney } from "@/domain/procurement/presentation";
 import { changeBillingStatusAction } from "@/app/(app)/billing/status-actions";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { recordStatusTone } from "@/components/ui/record-status-tone";
+import { ChevronDown } from "lucide-react";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { DateInput } from "@/components/forms/date-input";
 import {
@@ -127,7 +130,12 @@ export function BillingStatusControl({
         setFeedback("Could not save. Your selection is retained.");
       }
     });
-  if (!canEdit) return <span>{formatEnumLabel(status)}</span>;
+  if (!canEdit)
+    return (
+      <Badge variant={recordStatusTone(status)}>
+        {formatEnumLabel(status)}
+      </Badge>
+    );
   return (
     <>
       <Button
@@ -140,8 +148,15 @@ export function BillingStatusControl({
           setOpen(true);
         }}
         aria-label="Change Billing status"
+        className="gap-1 px-0 hover:bg-transparent"
       >
-        {formatEnumLabel(status)}
+        <Badge variant={recordStatusTone(status)}>
+          {formatEnumLabel(status)}
+        </Badge>
+        <ChevronDown
+          aria-hidden="true"
+          className="text-muted-foreground size-3"
+        />
       </Button>
       {documentType === "INVOICE" &&
         !["PAID", "CANCELLED"].includes(status) && (

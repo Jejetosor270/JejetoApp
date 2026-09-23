@@ -146,7 +146,7 @@ export function FinancialAttentionTable({
                   {row.date ? formatDateOnly(row.date) : "—"}
                 </td>
                 <td className="px-4 py-3 align-top">
-                  <div className="flex flex-col items-start gap-2">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <Link
                       href={row.href}
                       className="text-primary whitespace-nowrap underline"

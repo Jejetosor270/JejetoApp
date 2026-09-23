@@ -24,14 +24,16 @@ export function DetailPageHeader({
   title: ReactNode;
 }) {
   return (
-    <header className="pb-1">
+    <header className="record-surface">
       <ReturnLink
         className="text-muted-foreground text-xs hover:underline"
         href={backHref}
       >
         ← {backLabel}
       </ReturnLink>
-      <p className="text-muted-foreground mt-4 text-xs">{eyebrow}</p>
+      <p className="text-muted-foreground mt-4 text-[11px] font-medium tracking-wider uppercase">
+        {eyebrow}
+      </p>
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
           <h1 className="page-title min-w-0">{title}</h1>

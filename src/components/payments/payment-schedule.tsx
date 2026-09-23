@@ -96,7 +96,7 @@ export function PaymentSchedule({
   };
   return (
     <div className="space-y-3">
-      <p className="text-sm">
+      <p className="bg-muted/60 rounded-md border px-4 py-3 text-sm tabular-nums">
         Payable: {formatMoney(summary.baseAmount, summary.baseCurrencyCode)} ·
         Paid: {formatMoney(summary.paid, summary.baseCurrencyCode)} · Remaining:{" "}
         {formatMoney(summary.remainingTotal, summary.baseCurrencyCode)}
@@ -145,7 +145,7 @@ export function PaymentSchedule({
         rowActions={Object.fromEntries(
           summary.installments.map((term) => [
             term.id,
-            <div key={term.id} className="space-y-2">
+            <div key={term.id} className="payment-term-actions">
               {canEdit &&
                 !term.isCancelled &&
                 term.outstandingAmount !== "0" && (

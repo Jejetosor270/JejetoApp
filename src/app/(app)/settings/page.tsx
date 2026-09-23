@@ -41,7 +41,7 @@ export default async function SettingsPage() {
             id: "company",
             label: "Company",
             content: (
-              <>
+              <div className="grid items-start gap-4 xl:grid-cols-2">
                 <section className="record-surface">
                   <h2 className="section-title">Company</h2>
                   <div className="mt-4">
@@ -63,7 +63,7 @@ export default async function SettingsPage() {
                     own reporting currencies and historical manual FX rates.
                   </p>
                 </section>
-              </>
+              </div>
             ),
           },
           {

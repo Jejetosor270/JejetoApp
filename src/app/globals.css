@@ -59,42 +59,44 @@
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #20242c;
+  --background: #f3f5f8;
+  --foreground: #1c2534;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.23 0.018 264);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.23 0.018 264);
-  --primary: #315b85;
+  --primary: #305bea;
   --primary-foreground: #ffffff;
   --secondary: oklch(0.955 0.008 264);
   --secondary-foreground: oklch(0.31 0.025 264);
-  --muted: #f7f8fa;
-  --muted-foreground: #5b6472;
-  --accent: #eaf0f7;
-  --accent-foreground: #315b85;
-  --destructive: #a63232;
-  --positive: #24634a;
-  --positive-muted: oklch(0.96 0.03 155);
-  --warning: #805500;
-  --warning-muted: oklch(0.97 0.035 85);
-  --border: #e5e7eb;
-  --input: #838d9c;
-  --ring: #315b85;
+  --muted: #f7f8fb;
+  --muted-foreground: #626e80;
+  --accent: #edf2ff;
+  --accent-foreground: #305bea;
+  --destructive: #b43b46;
+  --positive: #21714f;
+  --positive-muted: #eaf6ef;
+  --warning: #875909;
+  --warning-muted: #fff5de;
+  --border: #dfe4ec;
+  --input: #8995a7;
+  --ring: #305bea;
   --chart-1: oklch(0.55 0.14 255);
   --chart-2: oklch(0.58 0.13 155);
   --chart-3: oklch(0.64 0.13 75);
   --chart-4: oklch(0.52 0.11 310);
   --chart-5: oklch(0.56 0.1 25);
   --radius: 0.5rem;
-  --sidebar: #f7f8fa;
-  --sidebar-foreground: oklch(0.28 0.02 264);
+  --sidebar: #192331;
+  --sidebar-foreground: #c1cbd9;
   --sidebar-primary: oklch(0.39 0.11 255);
   --sidebar-primary-foreground: oklch(0.985 0.004 255);
-  --sidebar-accent: #eaf0f7;
-  --sidebar-accent-foreground: #315b85;
-  --sidebar-border: #e5e7eb;
+  --sidebar-accent: #2a3850;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #344156;
   --sidebar-ring: oklch(0.58 0.12 255);
+  --shadow-surface: 0 1px 2px rgb(28 37 52 / 3.5%);
+  --shadow-drawer: -12px 0 40px rgb(28 37 52 / 12%);
 }
 
 .dark {
@@ -171,6 +173,16 @@
 }
 
 @layer utilities {
+  /* Scope navigation text/controls without affecting dialogs rendered in portals. */
+  .navigation-surface {
+    --foreground: var(--sidebar-accent-foreground);
+    --muted-foreground: var(--sidebar-foreground);
+    --muted: var(--sidebar-accent);
+    --border: var(--sidebar-border);
+    --accent: var(--sidebar-accent);
+    --accent-foreground: var(--sidebar-accent-foreground);
+    color: var(--sidebar-foreground);
+  }
   .page-title {
     @apply text-2xl leading-8 font-semibold tracking-tight break-words;
   }
@@ -178,7 +190,8 @@
     @apply text-sm leading-5 font-semibold;
   }
   .record-surface {
-    @apply bg-card rounded-lg border p-4;
+    @apply bg-card rounded-lg border p-4 sm:p-5;
+    box-shadow: var(--shadow-surface);
   }
   .record-divider {
     @apply border-t pt-4;
@@ -186,5 +199,14 @@
   .financial-figure {
     font-variant-numeric: tabular-nums lining-nums;
     white-space: nowrap;
+  }
+  .payment-term-actions {
+    @apply mt-2 flex max-w-80 min-w-48 flex-wrap items-center justify-end gap-2;
+  }
+  .payment-term-actions > details {
+    @apply w-full;
+  }
+  .payment-term-actions > [data-slot="button"] {
+    @apply h-8 text-xs;
   }
 }

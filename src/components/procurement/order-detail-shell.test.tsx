@@ -25,6 +25,9 @@ it("keeps detail drafts mounted while the Order editor uses the guarded side pan
     </OrderDetailShell>,
   );
   await enter("scheduleDraft", "Keep schedule");
+  const editButton = view.container.querySelector("button");
+  expect(editButton?.classList.contains("mt-4")).toBe(true);
+  expect(editButton?.classList.contains("mr-4")).toBe(true);
   await clickText("Edit order");
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
     "Edit Order",

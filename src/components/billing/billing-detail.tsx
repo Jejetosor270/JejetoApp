@@ -1044,9 +1044,9 @@ export function BillingDetail({
                 />
                 <section
                   aria-label="Details"
-                  className="grid gap-3 lg:grid-cols-2"
+                  className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2"
                 >
-                  <article className="bg-card rounded-lg border p-4">
+                  <article className="bg-card min-w-0 rounded-lg border p-4">
                     <RecordSectionHeading title="Amounts & VAT" />
                     <RecordFields
                       valueKind="financial"
@@ -1090,7 +1090,7 @@ export function BillingDetail({
                       ]}
                     />
                   </article>
-                  <article className="bg-card rounded-lg border p-4">
+                  <article className="bg-card min-w-0 rounded-lg border p-4">
                     <RecordSectionHeading title="Invoice allocation HT" />
                     <div className="mt-3 overflow-x-auto">
                       <table className="w-full text-sm">

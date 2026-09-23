@@ -10,7 +10,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="space-y-2 px-4 py-6 text-center text-sm">
+    <div className="bg-muted/30 space-y-2 rounded-md px-4 py-10 text-center text-sm">
       <p className="font-medium">{title}</p>
       {description ? (
         <p className="text-muted-foreground mx-auto max-w-md text-xs leading-5">

@@ -79,12 +79,9 @@ function FundingCoverageSummary({
           ? "Order sell covered"
           : "Incomplete";
   return (
-    <section className="bg-card rounded-lg border p-4">
+    <section className="record-surface">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-muted-foreground text-[0.6875rem] font-medium tracking-wide uppercase">
-            Billing less Order sell
-          </p>
           <h2 className="mt-0.5 text-sm font-semibold">
             Billing less Order sell
           </h2>
@@ -111,9 +108,12 @@ function FundingCoverageSummary({
             ["Billing less Order sell HT", coverage.fundingCoverageHt],
           ] as const
         ).map(([label, value], index) => (
-          <div className="bg-muted/25 rounded-md border p-3" key={label}>
+          <div
+            className="bg-muted/60 min-w-0 rounded-md border p-4"
+            key={label}
+          >
             <dt className="text-muted-foreground text-xs">{label}</dt>
-            <dd className="financial-figure mt-1 text-sm font-semibold">
+            <dd className="financial-figure mt-2 overflow-x-auto text-xl font-semibold tracking-tight">
               {index === 2
                 ? formatSignedMoney(value, currencyCode)
                 : formatMoney(value, currencyCode)}
@@ -287,7 +287,7 @@ export function ProjectFinancialDashboard({
         </article>
       )}
       {section === "overview" && (
-        <section className="bg-card rounded-lg border p-4">
+        <section className="record-surface">
           <h2 className="text-sm font-semibold">Billing less cost</h2>
           <p className="text-muted-foreground mt-1 text-xs">
             Client Invoice HT minus all recorded Purchasing economic costs,

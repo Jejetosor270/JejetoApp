@@ -98,7 +98,7 @@ export function RelatedRecordTable({
         description={table.description}
         actions={actions}
       />
-      <div className="mt-4 overflow-x-auto border-y">
+      <div className="mt-4 overflow-x-auto rounded-md border">
         {(table.removal || table.trashKind) && (
           <BulkActionBar
             unlink={!table.trashKind}
@@ -251,7 +251,7 @@ export function RelatedRecordTable({
                     ) : index === 0 && row.href ? (
                       <Link
                         href={row.href}
-                        className="font-medium underline underline-offset-2"
+                        className="text-primary font-medium underline-offset-2 hover:underline"
                       >
                         {value}
                       </Link>

@@ -1,0 +1,4 @@
+# Use the project's managed Vercel variables, never local machine credentials.
+.env
+.env.*
+!.env.example
