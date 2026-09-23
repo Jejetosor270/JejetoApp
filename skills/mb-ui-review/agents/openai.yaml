@@ -1,0 +1,4 @@
+interface:
+  display_name: "MB UI Review"
+  short_description: "Review MB ERP layouts, editing and formatting"
+  default_prompt: "Use $mb-ui-review to review the requested MB ERP screens for consistency and workflow conflicts."

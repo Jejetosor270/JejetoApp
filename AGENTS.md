@@ -14,6 +14,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 This repository is actively developed from both Windows and macOS machines. Before starting work, check Git synchronization and working-tree status. Keep tracked files and scripts cross-platform, preserve LF line endings, avoid machine-specific paths/configuration, and never commit local environment secrets.
 
+## Focused tool and skill routing
+
+Before broad investigation, read the relevant repository skill: `skills/mb-erp-development/SKILL.md`, `skills/mb-production-debug/SKILL.md`, `skills/mb-ui-review/SKILL.md` or `skills/mb-release/SKILL.md`. These portable packages are routed here rather than relying on machine-local skill discovery. GitHub, Vercel, Sentry, Sonar and Neon are intended routes, not guaranteed connections: verify actual access. Prefer scoped production diagnostics over speculation, load only relevant references, and preserve the Mac/Windows workflow. The central skill references record verified access gaps.
+
 ## Mission and boundaries
 
 Build MB Interiors' internal procurement-finance ERP incrementally. The business spine is:

@@ -1,0 +1,4 @@
+interface:
+  display_name: "MB Production Debug"
+  short_description: "Evidence-first MB ERP production diagnosis"
+  default_prompt: "Use $mb-production-debug to diagnose this MB ERP production failure without changing production data."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "MB ERP Development"
+  short_description: "Focused MB ERP development and context recovery"
+  default_prompt: "Use $mb-erp-development to implement the requested MB ERP change with focused evidence and verification."

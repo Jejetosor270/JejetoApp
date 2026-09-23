@@ -1,0 +1,4 @@
+interface:
+  display_name: "MB Release"
+  short_description: "Check MB ERP release readiness and rollout evidence"
+  default_prompt: "Use $mb-release to check MB ERP release readiness; do not deploy without explicit authorization."
