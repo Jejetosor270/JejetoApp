@@ -35,6 +35,18 @@ import { trashSelectedAction } from "@/app/(app)/settings/trash/actions";
 
 const PAGE_SIZE = 10;
 
+function relatedRemovalAction(table: RelatedTableData) {
+  if (table.trashKind) return trashSelectedAction.bind(null, table.trashKind);
+  if (!table.removal)
+    return async () => ({
+      status: "error" as const,
+      message: "No action is available.",
+    });
+  if (table.removal.kind === "payment" || table.removal.kind === "receipt")
+    return unassignCashAction.bind(null, table.removal.kind);
+  return removeOptionalLinksAction.bind(null, table.removal);
+}
+
 export function RelatedRecordTable({
   table,
   actions,
@@ -57,6 +69,9 @@ export function RelatedRecordTable({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [fieldDraft, setFieldDraft] = useState<Record<string, string>>({});
+  const updateFieldDraft = (name: string, value: string) => {
+    setFieldDraft((current) => ({ ...current, [name]: value }));
+  };
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
   const save = () => {
@@ -102,19 +117,7 @@ export function RelatedRecordTable({
         {(table.removal || table.trashKind) && (
           <BulkActionBar
             unlink={!table.trashKind}
-            action={
-              table.trashKind
-                ? trashSelectedAction.bind(null, table.trashKind)
-                : (table.removal &&
-                    (table.removal.kind === "payment" ||
-                    table.removal.kind === "receipt"
-                      ? unassignCashAction.bind(null, table.removal.kind)
-                      : removeOptionalLinksAction.bind(null, table.removal))) ||
-                  (async () => ({
-                    status: "error" as const,
-                    message: "No action is available.",
-                  }))
-            }
+            action={relatedRemovalAction(table)}
             clearSelection={() => {
               onRemoved?.(selection.selectedIds);
               selection.clear();
@@ -207,10 +210,7 @@ export function RelatedRecordTable({
                                 value={fieldDraft[field.name] ?? ""}
                                 disabled={pending}
                                 onChange={(value) =>
-                                  setFieldDraft((current) => ({
-                                    ...current,
-                                    [field.name]: value,
-                                  }))
+                                  updateFieldDraft(field.name, value)
                                 }
                               />
                               {field.currency ? (
@@ -229,10 +229,7 @@ export function RelatedRecordTable({
                               value={fieldDraft[field.name] ?? ""}
                               disabled={pending}
                               onChange={(event) =>
-                                setFieldDraft((current) => ({
-                                  ...current,
-                                  [field.name]: event.target.value,
-                                }))
+                                updateFieldDraft(field.name, event.target.value)
                               }
                             />
                           ),

@@ -69,7 +69,7 @@ export function PaymentScheduleEditor({
   supplierPayable: string;
 }) {
   const [payments, setPayments] = useState<EditablePayment[]>(() =>
-    initialPayments.map(editablePayment),
+    initialPayments.map((payment, index) => editablePayment(payment, index)),
   );
   const [approveSchedule, setApproveSchedule] = useState(false);
   const [nextId, setNextId] = useState(initialPayments.length + 1);

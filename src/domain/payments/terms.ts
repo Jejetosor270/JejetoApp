@@ -1,5 +1,19 @@
 import Decimal from "decimal.js";
-import { derivePaymentStatus, installmentOutstanding } from "./calculations";
+import {
+  derivePaymentStatus,
+  installmentOutstanding,
+  type DerivedPaymentStatus,
+} from "./calculations";
+
+const termStatusLabels: Record<DerivedPaymentStatus, string> = {
+  DATE_NEEDED: "Date needed",
+  UPCOMING: "Unpaid",
+  DUE: "Due today",
+  PARTIALLY_PAID: "Partially paid",
+  OVERDUE: "Overdue",
+  PAID: "Paid",
+  CANCELLED: "Cancelled",
+};
 
 export function overdueTermAmount(input: {
   terms: readonly {
@@ -131,20 +145,7 @@ export function paymentTermState(input: {
     today: input.today,
   });
   const partial = paid.greaterThan(0) && remaining.greaterThan(0);
-  const label =
-    status === "DATE_NEEDED"
-      ? "Date needed"
-      : status === "UPCOMING"
-        ? "Unpaid"
-        : status === "DUE"
-          ? "Due today"
-          : status === "PARTIALLY_PAID"
-            ? "Partially paid"
-            : status === "OVERDUE"
-              ? "Overdue"
-              : status === "PAID"
-                ? "Paid"
-                : "Cancelled";
+  const label = termStatusLabels[status];
   return {
     paid: paid.toString(),
     remaining: remaining.toString(),

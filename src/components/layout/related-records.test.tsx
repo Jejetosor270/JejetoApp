@@ -8,9 +8,16 @@ import {
   type RelatedTableData,
 } from "@/lib/related-records/types";
 
-const actions = vi.hoisted(() => ({ edit: vi.fn(), unassign: vi.fn() }));
+const actions = vi.hoisted(() => ({
+  edit: vi.fn(),
+  unassign: vi.fn(),
+  financial: vi.fn(),
+  remove: vi.fn(),
+  trash: vi.fn(),
+}));
 vi.mock("@/app/(app)/related-records/actions", () => ({
   editRelatedNameAction: actions.edit,
+  removeOptionalLinksAction: actions.remove,
 }));
 vi.mock("@/app/(app)/unassigned-cash/actions", () => ({
   unassignCashAction: actions.unassign,
@@ -21,7 +28,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh: vi.fn() }),
 }));
 let view: Awaited<ReturnType<typeof mountForm>>;
-beforeEach(() => push.mockClear());
+beforeEach(() => vi.clearAllMocks());
 afterEach(async () => {
   await view?.unmount();
 });
@@ -131,34 +138,101 @@ it("edits a related row in place and retains rejected drafts", async () => {
   expect(document.body.textContent).toContain("Reference is already used.");
   expect(push).not.toHaveBeenCalled();
 });
-it("removes only checked visible cash links after confirmation", async () => {
-  actions.unassign.mockResolvedValue({
-    status: "success",
-    message: "Unassigned",
-  });
-  view = await mountForm(
-    <RelatedRecordTable table={{ ...table, removal: { kind: "payment" } }} />,
-  );
-  await act(async () =>
-    document
-      .querySelector<HTMLInputElement>('input[aria-label="Select Order 0"]')
-      ?.click(),
-  );
-  await clickText("Remove selected links");
-  expect(document.body.textContent).toContain("Unassigned cash records");
-  await clickText("Cancel");
-  expect(actions.unassign).not.toHaveBeenCalled();
-  await clickText("Remove selected links");
-  await clickText("Remove links");
-  expect(actions.unassign.mock.calls[0]?.[0]).toBe("payment");
-  expect(
-    (actions.unassign.mock.calls[0]?.[1] as FormData).getAll("selectedIds"),
-  ).toEqual(["0"]);
-});
+it.each(["payment", "receipt"] as const)(
+  "removes only checked visible %s links after confirmation",
+  async (kind) => {
+    actions.unassign.mockResolvedValue({
+      status: "success",
+      message: "Unassigned",
+    });
+    view = await mountForm(
+      <RelatedRecordTable table={{ ...table, removal: { kind } }} />,
+    );
+    await act(async () =>
+      document
+        .querySelector<HTMLInputElement>('input[aria-label="Select Order 0"]')
+        ?.click(),
+    );
+    await clickText("Remove selected links");
+    expect(document.body.textContent).toContain("Unassigned cash records");
+    await clickText("Cancel");
+    expect(actions.unassign).not.toHaveBeenCalled();
+    await clickText("Remove selected links");
+    await clickText("Remove links");
+    expect(actions.unassign.mock.calls[0]?.[0]).toBe(kind);
+    expect(
+      (actions.unassign.mock.calls[0]?.[1] as FormData).getAll("selectedIds"),
+    ).toEqual(["0"]);
+  },
+);
 
 vi.mock("@/app/(app)/related-records/inline-actions", () => ({
-  editRelatedFinancialRowAction: vi.fn(),
+  editRelatedFinancialRowAction: actions.financial,
 }));
 vi.mock("@/app/(app)/settings/trash/actions", () => ({
-  trashSelectedAction: vi.fn(),
+  trashSelectedAction: actions.trash,
 }));
+
+it("keeps money and date drafts together after a rejected financial edit", async () => {
+  actions.financial.mockResolvedValue({
+    status: "error",
+    message: "Review the amount.",
+  });
+  view = await mountForm(
+    <RelatedRecordTable
+      table={{
+        ...table,
+        editKind: "payment",
+        editParentId: "parent",
+        columns: ["Payment", "Amount", "Date"],
+        rows: [
+          {
+            id: "cash",
+            cells: ["Payment", "10.00 EUR", "24/09/2026"],
+            editFields: [
+              {
+                column: 1,
+                name: "amount",
+                type: "money",
+                value: "10",
+                currency: "EUR",
+              },
+              { column: 2, name: "date", type: "date", value: "2026-09-24" },
+            ],
+          },
+        ],
+      }}
+    />,
+  );
+  await clickText("Edit");
+  for (const [label, value] of [
+    ["Amount", "15.1256"],
+    ["Date", "25/09/2026"],
+  ]) {
+    const input = document.querySelector<HTMLInputElement>(
+      `input[aria-label="${label}"]`,
+    );
+    if (!input) throw new Error(`Missing ${label} field`);
+    await act(async () => {
+      input.focus();
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set?.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  await clickText("Save");
+  expect(document.body.textContent).toContain("Review the amount.");
+  expect(actions.financial).toHaveBeenCalledTimes(1);
+  const saved = actions.financial.mock.calls[0];
+  if (!saved) throw new Error("Missing financial edit submission");
+  const [kind, parent, data] = saved;
+  expect([kind, parent]).toEqual(["payment", "parent"]);
+  expect(data.get("amount")).toBe("15.1256");
+  expect(data.get("date")).toBe("2026-09-25");
+  await clickText("Save");
+  expect(actions.financial.mock.calls[1]?.[2].get("amount")).toBe("15.1256");
+  expect(actions.financial.mock.calls[1]?.[2].get("date")).toBe("2026-09-25");
+  expect(push).not.toHaveBeenCalled();
+});

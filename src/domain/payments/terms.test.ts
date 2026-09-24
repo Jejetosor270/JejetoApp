@@ -5,6 +5,29 @@ import {
   overdueTermAmount,
 } from "./terms";
 
+it.each([
+  [null, "0", false, "DATE_NEEDED", "Date needed"],
+  ["2026-09-10", "0", false, "UPCOMING", "Unpaid"],
+  ["2026-09-09", "0", false, "DUE", "Due today"],
+  ["2026-09-10", "30", false, "PARTIALLY_PAID", "Partially paid"],
+  ["2026-09-08", "0", false, "OVERDUE", "Overdue"],
+  [null, "100", false, "PAID", "Paid"],
+  ["2026-09-08", "30", true, "CANCELLED", "Cancelled"],
+] as const)(
+  "preserves the %s / %s / %s status label",
+  (dueDate, paid, cancelled, status, label) => {
+    expect(
+      paymentTermState({
+        amount: "100",
+        payments: [{ amount: paid }],
+        dueDate,
+        cancelled,
+        today: "2026-09-09",
+      }),
+    ).toMatchObject({ status, label, paid });
+  },
+);
+
 it("keeps undated and partially paid commitments explicit", () => {
   expect(
     paymentTermState({
