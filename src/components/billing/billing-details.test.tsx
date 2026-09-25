@@ -7,6 +7,12 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { mountForm, enter, control, clickText } from "@/test/dom-form";
 import type { ClientBillingView } from "@/lib/billing/billing";
 import { BillingDetail } from "./billing-detail";
+import { BillingTable } from "./billing-table";
+
+vi.mock("@/app/(app)/cell-actions", () => ({ saveTableCellAction: vi.fn() }));
+vi.mock("@/app/(app)/settings/trash/actions", () => ({
+  trashSelectedAction: vi.fn(),
+}));
 
 vi.mock("@/components/payments/related-cash-create", () => ({
   RelatedCashCreate: () => <button>Add related cash record</button>,
@@ -26,6 +32,7 @@ vi.mock("@/app/(app)/billing/actions", () => ({
   updateBillingFreightCoverageAction: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/billing",
   useRouter: () => ({ refresh: actions.refresh }),
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -56,6 +63,7 @@ const record = {
   isCancelled: false,
   isProjectRemainderApproved: false,
   paid: "100",
+  paidAt: null,
   outstanding: "1100",
   status: "INVOICED",
   client: { id: "client-id", displayName: "Fictional Client" },
@@ -143,6 +151,61 @@ async function mount(documentData: ClientBillingView = record, canEdit = true) {
     />,
   );
 }
+
+it("keeps the Billing table layout and shows a paid date linked to the receipts", async () => {
+  view = await mountForm(
+    <BillingTable
+      canEdit
+      documents={[
+        {
+          ...record,
+          status: "PAID",
+          paid: "1200",
+          outstanding: "0",
+          dueDate: null,
+          paidAt: "2026-09-26",
+        },
+      ]}
+    />,
+  );
+  expect(
+    document.querySelector('button[aria-label="Manage Paid date for INV-001"]')
+      ?.textContent,
+  ).toBe("26/09/2026");
+  expect(
+    document.querySelector('button[aria-label="Edit Due date for INV-001"]'),
+  ).toBeNull();
+  const headings = [...document.querySelectorAll("thead th")].map(
+    (el) => el.textContent,
+  );
+  expect(headings).toContain("Due");
+  await act(async () =>
+    document
+      .querySelector<HTMLButtonElement>(
+        'button[aria-label="Manage Paid date for INV-001"]',
+      )
+      ?.click(),
+  );
+  expect(
+    document.querySelector('[role="dialog"] a')?.getAttribute("href"),
+  ).toBe("/billing/billing-id?tab=related#schedule");
+});
+
+it("continues showing the due date for partially paid Billing", async () => {
+  view = await mountForm(
+    <BillingTable
+      canEdit
+      documents={[{ ...record, status: "PARTIALLY_PAID" }]}
+    />,
+  );
+  expect(
+    document.querySelector('button[aria-label="Edit Due date for INV-001"]')
+      ?.textContent,
+  ).toContain("01/01/2099");
+  expect(
+    document.querySelector('button[aria-label="Manage Paid date for INV-001"]'),
+  ).toBeNull();
+});
 
 it("shows allocation and freight figures in Details, separately from Client outstanding", async () => {
   await mount();

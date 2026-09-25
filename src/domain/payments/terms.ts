@@ -15,6 +15,18 @@ const termStatusLabels: Record<DerivedPaymentStatus, string> = {
   CANCELLED: "Cancelled",
 };
 
+/** Actual completion date for list display only; never replaces a scheduled due date. */
+export function completedPaymentDate(
+  isPaid: boolean,
+  paymentDates: readonly (string | null)[],
+): string | null {
+  if (!isPaid) return null;
+  return paymentDates.reduce<string | null>(
+    (latest, date) => (date && (!latest || date > latest) ? date : latest),
+    null,
+  );
+}
+
 export function overdueTermAmount(input: {
   terms: readonly {
     dueDate: string | null;

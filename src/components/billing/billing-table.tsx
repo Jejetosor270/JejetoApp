@@ -135,15 +135,25 @@ function BillingRow({
         )}
       </td>
       <td className="px-3 py-3">
-        {cell(
-          "dueDate",
-          "Due date",
-          document.dueDate,
-          formatDateOnly(document.dueDate),
-          {
-            type: "date",
-            hint: "Updates the earliest unpaid term only; uses the document due date when no unpaid term exists.",
-          },
+        {document.paidAt ? (
+          <SourceCell
+            href={`${href}?tab=related#schedule`}
+            label={`Paid date for ${document.reference}`}
+            canEdit={editable}
+          >
+            {formatDateOnly(document.paidAt)}
+          </SourceCell>
+        ) : (
+          cell(
+            "dueDate",
+            "Due date",
+            document.dueDate,
+            formatDateOnly(document.dueDate),
+            {
+              type: "date",
+              hint: "Updates the earliest unpaid term only; uses the document due date when no unpaid term exists.",
+            },
+          )
         )}
       </td>
       <td className="financial-figure px-3 py-3 text-right">

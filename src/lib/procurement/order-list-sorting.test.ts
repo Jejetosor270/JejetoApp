@@ -41,3 +41,30 @@ it("breaks equal-value ties by immutable ID without mutating the input", () => {
   ).toEqual(["a", "b"]);
   expect(rows[0]?.id).toBe("b");
 });
+
+it("sorts paid dates alongside unpaid due dates in both directions", () => {
+  const rows = [
+    {
+      ...row("paid", "100"),
+      supplierPayment: { nextDueDate: null, paidAt: "2026-09-20" },
+    },
+    {
+      ...row("unpaid", "100"),
+      supplierPayment: { nextDueDate: "2026-09-16", paidAt: null },
+    },
+    {
+      ...row("missing", "100"),
+      supplierPayment: { nextDueDate: null, paidAt: null },
+    },
+  ] as OrderSummary[];
+  expect(sortOrderSummaries(rows, "dueDate", "asc").map((r) => r.id)).toEqual([
+    "unpaid",
+    "paid",
+    "missing",
+  ]);
+  expect(sortOrderSummaries(rows, "dueDate", "desc").map((r) => r.id)).toEqual([
+    "paid",
+    "unpaid",
+    "missing",
+  ]);
+});

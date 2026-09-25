@@ -3,6 +3,7 @@ import { changeBillingStatusInTransaction } from "./status";
 import { billingIsIssued } from "@/domain/billing/status";
 import { sortBillingRows, type billingSorts } from "@/domain/billing/listing";
 import {
+  completedPaymentDate,
   earliestUnpaidTermDate,
   overdueTermAmount,
 } from "@/domain/payments/terms";
@@ -125,6 +126,7 @@ function receiptRecords(record: BillingRecord) {
 
 function billingView(record: BillingRecord, today = businessToday()) {
   const receipts = receiptRecords(record);
+  const status = billingRecordStatus(record, today);
   const visibleInstallments = record.matchedInstallment
     ? [record.matchedInstallment]
     : record.paymentInstallments;
@@ -203,6 +205,10 @@ function billingView(record: BillingRecord, today = businessToday()) {
     notes: record.notes,
     outstanding: calculated.outstanding,
     paid: calculated.paid,
+    paidAt: completedPaymentDate(
+      status === "PAID",
+      receipts.map((receipt) => dateToDateOnly(receipt.receivedAt)),
+    ),
     receipts: record.receipts.map((receipt) => ({
       amount: receipt.amount.toString(),
       fxRate: receipt.fxRateToReporting?.toString() ?? null,
@@ -251,7 +257,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
     },
     projectId: record.projectId ?? "",
     reference: record.reference,
-    status: billingRecordStatus(record, today),
+    status,
     workflowStatus: record.workflowStatus,
     freightCoverageHt: record.freightCoverageHt?.toString() ?? "0",
     otherCoverageHt: record.otherCoverageHt?.toString() ?? "0",

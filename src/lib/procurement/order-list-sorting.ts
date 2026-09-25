@@ -44,7 +44,10 @@ function sortValue(order: OrderSummary, field: OrderSort): SortValue {
         ),
       };
     case "dueDate":
-      return { value: order.supplierPayment.nextDueDate };
+      return {
+        value:
+          order.supplierPayment.paidAt ?? order.supplierPayment.nextDueDate,
+      };
     case "carrier":
       return {
         value: order.carrierCode

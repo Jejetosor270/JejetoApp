@@ -56,6 +56,7 @@ import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
 import { paginationSkip, type PageInput } from "@/domain/listing/validation";
 import { supplierPayableBase } from "@/domain/payments/calculations";
+import { completedPaymentDate } from "@/domain/payments/terms";
 import {
   inputVatRecoverabilityApplies,
   recoverabilityFromRate,
@@ -279,6 +280,7 @@ export interface OrderSummary {
   supplierQuoteReference: string | null;
   paymentStatusOverride?: string | null;
   supplierPayment: {
+    paidAt: string | null;
     nextDueDate: string | null;
     outstanding: string | null;
     paid: string;
@@ -996,6 +998,14 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
     supplierQuoteReference: order.supplierQuoteReference,
     paymentStatusOverride: order.paymentStatusOverride,
     supplierPayment: {
+      paidAt: completedPaymentDate(
+        order.status !== "CANCELLED" && supplierPaymentStatus === "PAID",
+        order.paymentInstallments.flatMap((installment) =>
+          installment.settlements.map((settlement) =>
+            dateToDateOnly(settlement.settledAt),
+          ),
+        ),
+      ),
       nextDueDate: nextSupplierDue
         ? dateToDateOnly(nextSupplierDue.dueDate)
         : null,

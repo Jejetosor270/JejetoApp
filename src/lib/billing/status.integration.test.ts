@@ -130,6 +130,19 @@ it("recognizes matched Quote cash only for issued Invoices and keeps invoice rem
       (event) => event.id === `issue-invoice-${invoice.id}`,
     ),
   ).toBe(true);
+  await db.clientReceipt.update({
+    where: { id: receipt.id },
+    data: { amount: "100" },
+  });
+  await db.clientBillingDocument.update({
+    where: { id: invoice.id },
+    data: { workflowStatus: "INVOICED" },
+  });
+  expect(await getClientBillingDocument(invoice.id)).toMatchObject({
+    status: "PAID",
+    paidAt: "2026-09-14",
+    receipts: [],
+  });
   await db.clientBillingDocument.update({
     where: { id: invoice.id },
     data: { trashedAt: new Date() },
@@ -194,6 +207,7 @@ it("creates paid billing and its automatic full term atomically after employee c
   expect(saved?.paymentInstallments).toHaveLength(1);
   expect(saved?.paymentInstallments[0]?.receipts[0]?.amount).toBe("120");
   expect(saved?.receipts[0]?.receivedAt).toBe("2026-09-10");
+  expect(saved?.paidAt).toBe("2026-09-10");
   const defaultDateId = await confirmClientBillingDocument(actor.id, {
     ...input,
     reference: "DEFAULT-DATE-PAID",
@@ -299,6 +313,8 @@ it("excludes pre-invoice billing, records confirmed Paid across terms, and reope
   const saved = await getClientBillingDocument(invoice.id);
   expect(saved?.status).toBe("PAID");
   expect(saved?.paid).toBe("120.0000");
+  expect(saved?.paidAt).toBe("2026-09-11");
+  expect(saved?.dueDate).toBeNull();
   expect(saved?.receipts.map((r) => r.amount)).toEqual(["40", "80"]);
   const summary = await getProjectClientBillingSummary(project.id);
   expect(summary?.invoicedHt).toBe("80.0000");
@@ -318,6 +334,10 @@ it("excludes pre-invoice billing, records confirmed Paid across terms, and reope
     billingDocumentId: invoice.id,
   });
   expect((await getClientBillingDocument(invoice.id))?.status).toBe("OVERDUE");
+  expect(await getClientBillingDocument(invoice.id)).toMatchObject({
+    paidAt: null,
+    dueDate: "2026-01-02",
+  });
   expect((await getClientBillingDocument(invoice.id))?.outstanding).toBe(
     "40.0000",
   );

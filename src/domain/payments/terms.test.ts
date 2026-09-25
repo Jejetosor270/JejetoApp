@@ -1,9 +1,19 @@
 import { expect, it } from "vitest";
 import {
+  completedPaymentDate,
   earliestUnpaidTermDate,
   paymentTermState,
   overdueTermAmount,
 } from "./terms";
+
+it("uses the latest actual cash date only when fully paid, without fabricating missing dates", () => {
+  const dates = ["2026-09-26", null, "2026-08-01", "2026-09-10"];
+  expect(completedPaymentDate(true, dates)).toBe("2026-09-26");
+  expect(completedPaymentDate(false, dates)).toBeNull();
+  expect(completedPaymentDate(true, [])).toBeNull();
+  expect(completedPaymentDate(true, [null])).toBeNull();
+  expect(dates[0]).toBe("2026-09-26");
+});
 
 it.each([
   [null, "0", false, "DATE_NEEDED", "Date needed"],

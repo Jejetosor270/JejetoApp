@@ -143,6 +143,7 @@ function existingOrder(): OrderSummary {
     supplierOrderConfirmationReference: null,
     supplierQuoteReference: "OLD-QUOTE",
     supplierPayment: {
+      paidAt: null,
       nextDueDate: null,
       outstanding: null,
       paid: "0",

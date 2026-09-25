@@ -47,6 +47,7 @@ export function sortBillingRows<
     paid: string;
     outstanding: string;
     dueDate: string | null;
+    paidAt?: string | null;
     status: string;
     reference: string;
     documentDate: string;
@@ -66,13 +67,15 @@ export function sortBillingRows<
         new Decimal(a[sort]).comparedTo(b[sort]);
     else {
       const key = (row: T) =>
-        sort === "project"
-          ? row.project.name
-          : sort === "date"
-            ? row.documentDate
-            : sort === "updated"
-              ? (row.updatedAt ?? "")
-              : row[sort];
+        sort === "dueDate"
+          ? (row.paidAt ?? row.dueDate)
+          : sort === "project"
+            ? row.project.name
+            : sort === "date"
+              ? row.documentDate
+              : sort === "updated"
+                ? (row.updatedAt ?? "")
+                : row[sort];
       const left = key(a),
         right = key(b);
       if (left === null || right === null)

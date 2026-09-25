@@ -298,6 +298,16 @@ export function OrderRow({
           paymentsHref,
         );
       case "dueDate":
+        if (order.supplierPayment.paidAt)
+          return (
+            <SourceCell
+              label={`Paid date for ${order.orderNumber}`}
+              href={paymentsHref}
+              canEdit={editable}
+            >
+              {formatDateOnly(order.supplierPayment.paidAt)}
+            </SourceCell>
+          );
         return (
           <EditableCell
             label={`Payment due date for ${order.orderNumber}`}

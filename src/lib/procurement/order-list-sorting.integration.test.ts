@@ -226,3 +226,62 @@ it("saves a distinct invoice date, preserves it when omitted, and clears it expl
   );
   expect((await getOrder(id))?.invoiceDate).toBeNull();
 });
+
+it("shows the final Supplier cash date only once fully paid and restores due dates after correction", async () => {
+  const db = memory.raw;
+  const order = await db.procurementOrder.findUniqueOrThrow({
+    where: { orderNumber: "SORT-02" },
+  });
+  const term = await db.paymentInstallment.findFirstOrThrow({
+    where: { orderId: order.id },
+  });
+  await db.paymentSettlement.create({
+    data: {
+      installmentId: term.id,
+      amount: "10",
+      settledAt: new Date("2026-09-10"),
+    },
+  });
+  expect((await getOrder(order.id))?.supplierPayment).toMatchObject({
+    paidAt: null,
+    nextDueDate: "2030-09-02",
+    status: "PARTIALLY_PAID",
+  });
+  const final = await db.paymentSettlement.create({
+    data: {
+      installmentId: term.id,
+      amount: "16",
+      settledAt: new Date("2026-09-26"),
+    },
+  });
+  // Legacy client planning cash is not a Supplier payment date.
+  await db.paymentInstallment.create({
+    data: {
+      orderId: order.id,
+      sequence: 1,
+      direction: "CLIENT_RECEIPT",
+      label: "Legacy client cash",
+      basis: "FIXED_AMOUNT",
+      scheduledAmount: "1",
+      currencyCode: "EUR",
+      settlements: {
+        create: { amount: "1", settledAt: new Date("2099-01-01") },
+      },
+    },
+  });
+  expect((await getOrder(order.id))?.supplierPayment).toMatchObject({
+    paidAt: "2026-09-26",
+    nextDueDate: null,
+    status: "PAID",
+  });
+  expect(
+    (await db.paymentInstallment.findUniqueOrThrow({ where: { id: term.id } }))
+      .dueDate,
+  ).toEqual(new Date("2030-09-02"));
+  await db.paymentSettlement.delete({ where: { id: final.id } });
+  expect((await getOrder(order.id))?.supplierPayment).toMatchObject({
+    paidAt: null,
+    nextDueDate: "2030-09-02",
+    status: "PARTIALLY_PAID",
+  });
+});

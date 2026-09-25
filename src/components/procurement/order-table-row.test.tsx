@@ -152,4 +152,42 @@ describe("Purchasing click-to-edit on every column set", () => {
       document.querySelector('[role="dialog"] a')?.getAttribute("href"),
     ).toBe("/orders/order-id?tab=related#payments");
   });
+  it("shows the paid date in the same cell and directs edits to actual payments", async () => {
+    mounted = await mountForm(
+      <table>
+        <tbody>
+          <OrderRow
+            order={{
+              ...order,
+              supplierPayment: {
+                ...order.supplierPayment,
+                status: "PAID",
+                paidAt: "2026-09-26",
+                nextDueDate: null,
+              },
+            }}
+            view="general"
+            canEdit
+            statuses={["DRAFT"]}
+            isSelected={false}
+            onSelect={vi.fn()}
+          />
+        </tbody>
+      </table>,
+    );
+    const paid = document.querySelector(
+      'button[aria-label="Manage Paid date for PO-001"]',
+    );
+    expect(paid?.textContent).toBe("26/09/2026");
+    expect(
+      document.querySelector(
+        'button[aria-label="Edit Payment due date for PO-001"]',
+      ),
+    ).toBeNull();
+    await button("Manage Paid date for PO-001");
+    expect(
+      document.querySelector('[role="dialog"] a')?.getAttribute("href"),
+    ).toBe("/orders/order-id?tab=related#payments");
+    expect(save).not.toHaveBeenCalled();
+  });
 });
