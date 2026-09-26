@@ -36,7 +36,10 @@ describe("Project financial performance presentation", () => {
 
   it("keeps cash and freight reconciliation separate", () => {
     expect(dashboard).not.toContain("Freight reconciliation");
-    expect(projectPage).toContain("<ProjectCoverage data={control}");
+    expect(projectPage).toMatch(/<ProjectCoverage\s+data=\{control\}/);
+    expect(projectPage).toContain("showCash={false}");
+    expect(projectPage).toContain("<ProjectFinancialOverview");
+    expect(projectPage).not.toContain('section="overview"');
     expect(dashboard).toContain("Client collection");
     expect(dashboard).toContain("Cash timing does not change");
   });

@@ -5,6 +5,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => state.db }));
 import { prismaMemoryDatabase } from "@/test/prisma-memory-database";
 import { getProjectControl } from "./project-control";
+import { businessToday, dateOnlyToDate } from "@/domain/payments/dates";
 let memory: Awaited<ReturnType<typeof prismaMemoryDatabase>>;
 beforeAll(async () => {
   memory = await prismaMemoryDatabase();
@@ -18,6 +19,103 @@ beforeAll(async () => {
 }, 30000);
 afterAll(async () => {
   await memory.close();
+});
+
+it("separates issued and planned receipts, deduplicates matched terms, and preserves unscheduled cash warnings", async () => {
+  const db = memory.raw;
+  const project = await db.project.create({
+    data: { code: "OUTLOOK", name: "Outlook", reportingCurrencyCode: "EUR" },
+  });
+  const createBill = (
+    reference: string,
+    documentType: "QUOTE" | "INVOICE",
+    workflowStatus: "INVOICED" | "TO_BE_INVOICED" | "DRAFT",
+  ) =>
+    db.clientBillingDocument.create({
+      data: {
+        projectId: project.id,
+        reference,
+        documentType,
+        workflowStatus,
+        documentDate: dateOnlyToDate(businessToday()),
+        currencyCode: "EUR",
+        totalHt: "100",
+        totalTtc: "100",
+      },
+    });
+  const quote = await createBill("OUT-Q", "QUOTE", "TO_BE_INVOICED");
+  const term = await db.clientPaymentInstallment.create({
+    data: {
+      billingDocumentId: quote.id,
+      sequence: 1,
+      label: "Matched",
+      basis: "FIXED_AMOUNT",
+      scheduledAmount: "100",
+      currencyCode: "EUR",
+      dueDate: dateOnlyToDate(businessToday()),
+    },
+  });
+  const invoice = await createBill("OUT-I", "INVOICE", "INVOICED");
+  await db.clientBillingDocument.update({
+    where: { id: invoice.id },
+    data: { matchedInstallmentId: term.id },
+  });
+  await db.clientReceipt.create({
+    data: {
+      billingDocumentId: invoice.id,
+      installmentId: term.id,
+      amount: "20",
+      receivedAt: dateOnlyToDate(businessToday()),
+    },
+  });
+  await db.clientReceipt.create({
+    data: {
+      billingDocumentId: invoice.id,
+      amount: "10",
+      receivedAt: dateOnlyToDate(businessToday()),
+    },
+  });
+  const planned = await createBill("OUT-P", "INVOICE", "TO_BE_INVOICED");
+  await db.clientPaymentInstallment.create({
+    data: {
+      billingDocumentId: planned.id,
+      sequence: 1,
+      label: "Planned",
+      basis: "FIXED_AMOUNT",
+      scheduledAmount: "100",
+      currencyCode: "EUR",
+      dueDate: dateOnlyToDate(businessToday()),
+    },
+  });
+  await createBill("OUT-D", "INVOICE", "DRAFT");
+  const result = await getProjectControl(project.id);
+  expect(result.cashOutlook.windows[0]).toMatchObject({
+    expectedIn: "70.0000",
+    plannedIn: "100.0000",
+    projectedCash: "100.0000",
+  });
+  expect(result.cashOutlook.undatedCount).toBe(0);
+  await db.clientBillingDocument.update({
+    where: { id: quote.id },
+    data: { totalHt: "200", totalTtc: "200" },
+  });
+  expect((await getProjectControl(project.id)).cashOutlook.plannedUndated).toBe(
+    "100.0000",
+  );
+  await createBill("OUT-U", "INVOICE", "INVOICED");
+  const unscheduled = await getProjectControl(project.id);
+  expect(unscheduled.cashOutlook).toMatchObject({
+    undatedIn: "100.0000",
+    unscheduledCount: 1,
+  });
+  expect(unscheduled.cashOutlook.windows[0]?.projectedCash).toBeNull();
+  await db.clientBillingDocument.update({
+    where: { id: planned.id },
+    data: { trashedAt: new Date() },
+  });
+  expect(
+    (await getProjectControl(project.id)).cashOutlook.windows[0]?.plannedIn,
+  ).toBe("0.0000");
 });
 
 it("requires explicit Other budget, honors approved direct sell, and reconciles freight VAT outside HT", async () => {

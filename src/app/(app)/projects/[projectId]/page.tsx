@@ -16,7 +16,11 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { ProjectDetail } from "@/app/(app)/projects/[projectId]/project-detail";
-import { ProjectFinancialDashboard } from "@/components/reporting/project-financial-dashboard";
+import {
+  ProjectFinancialDashboard,
+  FundingCoverageSummary,
+} from "@/components/reporting/project-financial-dashboard";
+import { ProjectFinancialOverview } from "@/components/reporting/project-financial-overview";
 import { isCashFlowHorizon, type CashFlowHorizon } from "@/config/reporting";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listProjectFormOptions } from "@/lib/master-data/lookups";
@@ -211,25 +215,45 @@ export default async function ProjectPage({
           </div>
         ),
         overview: (
-          <div className="space-y-4">
-            <ProjectFinancialDashboard
-              section="overview"
-              billing={billing}
-              financialPerformance={financialPerformance}
-              freight={freight}
-              fundingCoverage={fundingCoverage}
-              horizon={horizon}
-              phase11CashPosition={phase11CashPosition}
-              projectId={projectId}
-              report={reporting}
-              vatPosition={vatPosition}
-            />
-            <ProjectCoverage data={control} projectId={projectId} />
-          </div>
+          <ProjectFinancialOverview
+            data={control}
+            performance={financialPerformance}
+            projectId={projectId}
+          />
         ),
         finance: (
           <div className="space-y-5">
-            <ProjectFinancialControl data={control} />
+            <details className="record-surface">
+              <summary className="cursor-pointer text-sm font-semibold">
+                Merchandise, freight & services breakdown
+              </summary>
+              <div className="mt-4">
+                <ProjectFinancialControl data={control} />
+              </div>
+            </details>
+            <details className="record-surface">
+              <summary className="cursor-pointer text-sm font-semibold">
+                Billing allocation coverage
+              </summary>
+              <div className="mt-4">
+                <FundingCoverageSummary
+                  coverage={fundingCoverage}
+                  currencyCode={project.reportingCurrencyCode}
+                />
+              </div>
+            </details>
+            <details className="record-surface">
+              <summary className="cursor-pointer text-sm font-semibold">
+                Freight recovery breakdown
+              </summary>
+              <div className="mt-4">
+                <ProjectCoverage
+                  data={control}
+                  projectId={projectId}
+                  showCash={false}
+                />
+              </div>
+            </details>
             <ProjectFinancialDashboard
               section="finance"
               billing={billing}
@@ -260,7 +284,16 @@ export default async function ProjectPage({
             />
           </div>
         ),
-        budget: <ProjectPurchaseBudget projectId={projectId} />,
+        budget: (
+          <details className="record-surface">
+            <summary className="cursor-pointer text-sm font-semibold">
+              Purchase budget allocation
+            </summary>
+            <div className="mt-4">
+              <ProjectPurchaseBudget projectId={projectId} />
+            </div>
+          </details>
+        ),
         packages: (
           <ProjectPackages
             projectId={projectId}

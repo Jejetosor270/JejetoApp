@@ -32,46 +32,50 @@ export function CoverageFigures({
 export function ProjectCoverage({
   data,
   projectId,
+  showCash = true,
 }: {
   data: ProjectControl;
   projectId: string;
+  showCash?: boolean;
 }) {
   const freight = data.freightCoverage;
   return (
     <div className="space-y-4">
-      <section className="record-surface">
-        <h2 className="text-sm font-semibold">Cash balance</h2>
-        <p className="text-muted-foreground mt-1 text-xs">
-          Actual Client Invoice receipts minus Supplier and Project-freight
-          payments, TTC. Each payment uses its own recorded FX.
-        </p>
-        <CoverageFigures
-          currency={data.currency}
-          values={[
-            ["Supplier & freight paid TTC", data.cash.paid],
-            ["Client Invoice receipts TTC", data.received],
-            ["Cash balance TTC", data.cash.net, true],
-          ]}
-        />
-        {data.cash.net === null && (
-          <p role="status" className="text-warning-foreground mt-3 text-xs">
-            Cash coverage is incomplete: check payment FX.
+      {showCash && (
+        <section className="record-surface">
+          <h2 className="text-sm font-semibold">Cash balance</h2>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Actual Client Invoice receipts minus Supplier and Project-freight
+            payments, TTC. Each payment uses its own recorded FX.
           </p>
-        )}
-        {data.excludedReceiptCount > 0 && (
-          <p role="status" className="text-warning-foreground mt-3 text-xs">
-            {data.excludedReceiptCount} historical receipts have no active
-            Invoice context and are excluded.{" "}
-            <Link
-              className="underline"
-              href={`/receipts?projectId=${projectId}`}
-            >
-              Review receipts
-            </Link>
-            .
-          </p>
-        )}
-      </section>
+          <CoverageFigures
+            currency={data.currency}
+            values={[
+              ["Supplier & freight paid TTC", data.cash.paid],
+              ["Client Invoice receipts TTC", data.received],
+              ["Cash balance TTC", data.cash.net, true],
+            ]}
+          />
+          {data.cash.net === null && (
+            <p role="status" className="text-warning-foreground mt-3 text-xs">
+              Cash coverage is incomplete: check payment FX.
+            </p>
+          )}
+          {data.excludedReceiptCount > 0 && (
+            <p role="status" className="text-warning-foreground mt-3 text-xs">
+              {data.excludedReceiptCount} historical receipts have no active
+              Invoice context and are excluded.{" "}
+              <Link
+                className="underline"
+                href={`/receipts?projectId=${projectId}`}
+              >
+                Review receipts
+              </Link>
+              .
+            </p>
+          )}
+        </section>
+      )}
       <section className="record-surface">
         <h2 className="text-sm font-semibold">Freight recovery surplus</h2>
         <p className="text-muted-foreground mt-1 text-xs">

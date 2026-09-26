@@ -775,7 +775,16 @@ export function ProjectDetail({
             id: "general",
             group: "details",
             label: "General & planning",
-            content: <ProjectRecordDetails project={project} />,
+            content: (
+              <details className="record-surface">
+                <summary className="cursor-pointer text-sm font-semibold">
+                  Project details & budget assumptions
+                </summary>
+                <div className="mt-4">
+                  <ProjectRecordDetails project={project} />
+                </div>
+              </details>
+            ),
           },
           {
             id: "finance",

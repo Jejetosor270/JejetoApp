@@ -1,5 +1,25 @@
 # Development invariants
 
+## Simplified Project financial overview
+
+- Project Details leads with actual cash, expected cash and profitability. Allocation coverage,
+  category/freight breakdowns, VAT, purchase-budget allocation and planning fields remain in
+  collapsed sections; Details/Related, editing and underlying records are unchanged.
+- Actual cash remains recognized Client Invoice receipts less Supplier and Project-freight payments,
+  using actual FX. It is net tracked Project cash, not a bank balance or freely available funds.
+- The Project overview offers 7/30/90-day cash windows (30 by default), from today through day N−1.
+  Issued Invoice unpaid terms are primary receipts; Quotes and To be invoiced documents are separate
+  plans and never enter projected net cash. Matched Quote terms count once under their Invoice.
+  Draft/cancelled/trashed documents are excluded. Existing Reports/calendar forecast scope is unchanged.
+- Expected amounts use term FX and remaining balances capped by the document balance, including
+  receipts without term assignment. Unscheduled and undated balances remain visible. Overdue
+  balances are shown separately, not silently moved to today. Missing required values/FX,
+  undated commitments or overdue balances make projected cash incomplete pending review.
+- Provisional profitability reuses issued Invoice HT less all recorded Order and Project-freight
+  economic costs. Expected profitability uses the approved full-Project budget, not an invented
+  estimate-to-complete. Effective markup/margin use monetary totals; no averaging or cash basis.
+  Missing budgets remain incomplete; zero budgets are explicit. No schema change or migration.
+
 ## Unified Billing status and Project coverage
 
 Billing has one workflow status: Draft, To be invoiced, Invoiced, Partially paid, Paid,

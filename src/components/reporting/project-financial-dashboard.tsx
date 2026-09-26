@@ -63,7 +63,7 @@ function AggregateMoney({
   );
 }
 
-function FundingCoverageSummary({
+export function FundingCoverageSummary({
   coverage,
   currencyCode,
 }: {

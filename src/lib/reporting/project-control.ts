@@ -1,6 +1,10 @@
 import { billingIsIssued } from "@/domain/billing/status";
 import "server-only";
 import Decimal from "decimal.js";
+import {
+  projectCashOutlook,
+  type CashOutlookDocument,
+} from "@/domain/finance/project-cash-outlook";
 import { calculateProjectTargets } from "@/domain/projects/targets";
 import { projectFreightBudget } from "@/domain/freight/calculations";
 import {
@@ -51,6 +55,13 @@ export async function getProjectControl(projectId: string) {
           where: { isCancelled: false },
           include: {
             allocations: { include: { order: { select: { status: true } } } },
+            receipts: { select: { id: true, amount: true } },
+            paymentInstallments: {
+              include: { receipts: { select: { id: true, amount: true } } },
+            },
+            matchedInstallment: {
+              include: { receipts: { select: { id: true, amount: true } } },
+            },
           },
         },
         freightExpenses: { include: { payments: true } },
@@ -378,7 +389,117 @@ export async function getProjectControl(projectId: string) {
   const orderHtCost = sumKnown(
     activeOrders.map((order) => order.costs.reportingLandedCost),
   );
+  const totalPaid = (
+    rows: readonly { id: string; amount: { toString(): string } }[],
+  ) =>
+    [...new Map(rows.map((row) => [row.id, row])).values()]
+      .reduce((sum, row) => sum.plus(row.amount.toString()), new Decimal(0))
+      .toFixed(4);
+  const outlookDocuments: CashOutlookDocument[] = activeOrders.map((order) => ({
+    kind: "payment",
+    currency: order.orderCurrencyCode,
+    total: order.supplierPayment.totalPayable,
+    paid: order.supplierPayment.paid,
+    fx: order.costs.purchaseFxRate,
+    terms: installments
+      .filter((term) => term.orderId === order.id)
+      .map((term) => ({
+        amount: term.scheduledAmount,
+        paid: term.paidAmount,
+        due: term.dueDate,
+        fx: term.expectedFxRate,
+        cancelled: term.isCancelled,
+      })),
+  }));
+  const outlookBills = project.billingDocuments.filter(
+    (doc) =>
+      doc.workflowStatus !== "CANCELLED" && doc.workflowStatus !== "DRAFT",
+  );
+  const matchedTerms = new Set(
+    outlookBills
+      .filter((doc) => doc.documentType === "INVOICE")
+      .flatMap((doc) =>
+        doc.matchedInstallmentId ? [doc.matchedInstallmentId] : [],
+      ),
+  );
+  for (const doc of outlookBills) {
+    const quote = doc.documentType === "QUOTE";
+    const allTerms = doc.matchedInstallment
+      ? [doc.matchedInstallment]
+      : doc.paymentInstallments;
+    const terms = quote
+      ? allTerms.filter((term) => !matchedTerms.has(term.id))
+      : allTerms;
+    const partlyMatchedQuote = quote && terms.length !== allTerms.length;
+    const transferredTerms = partlyMatchedQuote
+      ? allTerms.filter((term) => matchedTerms.has(term.id))
+      : [];
+    const transferredReceipts = new Set(
+      transferredTerms.flatMap((term) =>
+        term.receipts.map((receipt) => receipt.id),
+      ),
+    );
+    // Once an Invoice owns a Quote term, that term is no longer planned revenue.
+    const receipts = partlyMatchedQuote
+      ? doc.receipts.filter((receipt) => !transferredReceipts.has(receipt.id))
+      : [...doc.receipts, ...(doc.matchedInstallment?.receipts ?? [])];
+    outlookDocuments.push({
+      kind: !quote && billingIsIssued(doc) ? "issued" : "planned",
+      currency: doc.currencyCode,
+      total: partlyMatchedQuote
+        ? Decimal.max(
+            0,
+            new Decimal(doc.totalTtc.toString()).minus(
+              transferredTerms.reduce(
+                (sum, term) => sum.plus(term.scheduledAmount),
+                new Decimal(0),
+              ),
+            ),
+          ).toFixed(4)
+        : doc.totalTtc.toString(),
+      paid: totalPaid(receipts),
+      fx: doc.fxRateToReporting?.toString() ?? null,
+      terms: terms.map((term) => ({
+        amount: term.scheduledAmount.toString(),
+        paid: totalPaid(term.receipts),
+        due: dateToDateOnly(term.dueDate ?? doc.dueDate),
+        fx: term.expectedFxRateToReporting?.toString() ?? null,
+        cancelled: term.isCancelled,
+      })),
+    });
+  }
+  for (const expense of project.freightExpenses) {
+    const total = freightPayable(
+      expense.costAmountHt.toString(),
+      expense.vatAmount?.toString() ?? null,
+      expense.vatTreatment,
+    );
+    const paid = totalPaid(expense.payments);
+    const fx = expense.fxRateToReporting?.toString() ?? null;
+    outlookDocuments.push({
+      kind: "payment",
+      currency: expense.currencyCode,
+      total,
+      paid,
+      fx,
+      terms: [
+        {
+          amount: total,
+          paid,
+          fx,
+          due: dateToDateOnly(expense.dueDate),
+          cancelled: false,
+        },
+      ],
+    });
+  }
   return {
+    cashOutlook: projectCashOutlook(
+      outlookDocuments,
+      currency,
+      businessToday(),
+      difference(received, sumKnown([supplierPaid, freightPaid])),
+    ),
     currency,
     categories,
     directTarget: project.targetMode === "EXPECTED_SELL",

@@ -12,6 +12,7 @@ import {
   projectFreightCoverage,
 } from "@/domain/finance/project-coverage";
 import type { ProjectControl } from "@/lib/reporting/project-control";
+import { projectCashOutlook } from "@/domain/finance/project-cash-outlook";
 
 const categories = recoveryCategories.map((category) => ({
   category,
@@ -26,6 +27,7 @@ const categories = recoveryCategories.map((category) => ({
   }),
 }));
 const data: ProjectControl = {
+  cashOutlook: projectCashOutlook([], "EUR", "2026-09-01", "60"),
   directTarget: false,
   economicReconciliation: {
     recordedHt: "210",
