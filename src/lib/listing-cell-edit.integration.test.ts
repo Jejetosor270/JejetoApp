@@ -334,3 +334,159 @@ it("rejects edits to trashed records", async () => {
     }),
   ).rejects.toThrow();
 });
+
+async function isolatedOrder(orderNumber: string) {
+  return memory.raw.procurementOrder.create({
+    data: {
+      orderNumber,
+      packageName: "Cell regression",
+      projectId,
+      supplierId,
+      orderCurrencyCode: "EUR",
+      sellingCurrencyCode: "EUR",
+      status: "DRAFT",
+    },
+  });
+}
+
+it("preserves carrier validation, normalization and audited clearing", async () => {
+  const order = await isolatedOrder("CARRIER-CELL");
+  const edit = (field: string, previous: string, value: string) =>
+    saveTableCell(actorId, {
+      kind: "order",
+      id: order.id,
+      field,
+      previous,
+      value,
+    });
+  await expect(edit("carrierCode", "", "INVALID")).rejects.toThrow(
+    "valid carrier",
+  );
+  await expect(edit("carrierCode", "", "OTHER")).rejects.toThrow(
+    "Delivery editor",
+  );
+  await expect(edit("carrierOtherName", "", "Custom")).rejects.toThrow(
+    "Select Other",
+  );
+  await memory.raw.procurementOrder.update({
+    where: { id: order.id },
+    data: { carrierCode: "OTHER", carrierOtherName: "Original" },
+  });
+  await expect(edit("carrierOtherName", "Original", " ")).rejects.toThrow(
+    "carrier name",
+  );
+  await edit("carrierOtherName", "Original", "  New carrier  ");
+  await edit("carrierCode", "OTHER", "");
+  await edit("trackingReference", "", "  TRACK-1  ");
+  await edit("trackingReference", "TRACK-1", " ");
+  const saved = await memory.raw.procurementOrder.findUniqueOrThrow({
+    where: { id: order.id },
+  });
+  expect(saved).toMatchObject({
+    carrierCode: null,
+    carrierOtherName: null,
+    trackingReference: null,
+    updatedById: actorId,
+  });
+  const audits = await memory.raw.auditEvent.findMany({
+    where: { entityId: order.id },
+  });
+  expect(audits).toHaveLength(4);
+  expect(audits.map((audit) => audit.metadata)).toContainEqual({
+    field: "trackingReference",
+    previous: "TRACK-1",
+    value: null,
+  });
+});
+
+it("reschedules only the earliest unpaid Supplier term and rejects stale or invalid dates", async () => {
+  const order = await isolatedOrder("DUE-CELL");
+  const terms = await Promise.all(
+    [1, 2, 3].map((sequence) =>
+      memory.raw.paymentInstallment.create({
+        data: {
+          orderId: order.id,
+          direction: "SUPPLIER_PAYMENT",
+          sequence,
+          label: `Term ${sequence}`,
+          basis: "FIXED_AMOUNT",
+          scheduledAmount: "100",
+          currencyCode: "EUR",
+          dueDate: new Date(`2026-10-0${sequence}`),
+        },
+      }),
+    ),
+  );
+  const [paid, next, later] = terms;
+  if (!paid || !next || !later) throw new Error("Missing fixture terms");
+  await memory.raw.paymentSettlement.create({
+    data: {
+      installmentId: paid.id,
+      amount: "100",
+      settledAt: new Date("2026-10-01"),
+    },
+  });
+  const input = {
+    kind: "order",
+    id: order.id,
+    field: "dueDate",
+    previous: "2026-10-02",
+    value: "2026-10-04",
+  };
+  await expect(
+    saveTableCell(actorId, { ...input, value: "2026-02-30" }),
+  ).rejects.toThrow("valid date");
+  await saveTableCell(actorId, input);
+  await expect(saveTableCell(actorId, input)).rejects.toThrow(
+    "next unpaid term changed",
+  );
+  const saved = await memory.raw.paymentInstallment.findMany({
+    where: { orderId: order.id },
+    orderBy: { sequence: "asc" },
+  });
+  expect(saved.map((term) => term.dueDate?.toISOString().slice(0, 10))).toEqual(
+    ["2026-10-01", "2026-10-04", "2026-10-03"],
+  );
+  expect(saved.map((term) => term.scheduledAmount.toString())).toEqual([
+    "100",
+    "100",
+    "100",
+  ]);
+  expect(
+    await memory.raw.auditEvent.count({
+      where: {
+        entityId: order.id,
+        summary: "Rescheduled the next unpaid Supplier term.",
+      },
+    }),
+  ).toBe(1);
+});
+
+it("rejects cancellation through a cell and blocks edits to cancelled Orders", async () => {
+  const order = await isolatedOrder("CANCEL-CELL");
+  await expect(
+    saveTableCell(actorId, {
+      kind: "order",
+      id: order.id,
+      field: "status",
+      previous: "DRAFT",
+      value: "CANCELLED",
+    }),
+  ).rejects.toThrow("Cancel Order in Details");
+  await memory.raw.procurementOrder.update({
+    where: { id: order.id },
+    data: { status: "CANCELLED" },
+  });
+  await expect(
+    saveTableCell(actorId, {
+      kind: "order",
+      id: order.id,
+      field: "shortDescription",
+      previous: "",
+      value: "Changed",
+    }),
+  ).rejects.toThrow("cancelled");
+  expect(
+    await memory.raw.auditEvent.count({ where: { entityId: order.id } }),
+  ).toBe(0);
+});
