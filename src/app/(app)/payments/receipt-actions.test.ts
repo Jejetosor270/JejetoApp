@@ -143,6 +143,27 @@ describe("central receipt entry uses existing authorities", () => {
       );
     },
   );
+  it.each(["DRAFT", "TO_BE_INVOICED", "CANCELLED"])(
+    "rejects direct receipts on %s Invoices in central and contextual entry",
+    async (workflowStatus) => {
+      mocks.tx.clientBillingDocument.findUnique.mockResolvedValue({
+        id: billingDocumentId,
+        documentType: "INVOICE",
+        workflowStatus,
+        isCancelled: workflowStatus === "CANCELLED",
+      });
+      for (const action of [
+        recordReceiptEntryAction,
+        recordClientReceiptAction,
+      ]) {
+        const result = await action(initial, form("CLIENT"));
+        expect(result.status).toBe("error");
+        expect(result.message).toContain("active Invoice");
+      }
+      expect(mocks.tx.clientReceipt.create).not.toHaveBeenCalled();
+      expect(mocks.audit).not.toHaveBeenCalled();
+    },
+  );
   it.each(["SUPPLIER", "CLIENT"])(
     "rejects cross-Project %s records",
     async (type) => {

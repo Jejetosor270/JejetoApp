@@ -1,7 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { billingStatuses } from "@/domain/billing/status";
+import { billingIsIssued, billingStatuses } from "@/domain/billing/status";
 import { formatEnumLabel } from "@/domain/presentation/labels";
 import { formatMoney } from "@/domain/procurement/presentation";
 import { changeBillingStatusAction } from "@/app/(app)/billing/status-actions";
@@ -21,15 +21,18 @@ import { businessToday } from "@/domain/payments/dates";
 function StatusOptions({
   documentType,
   creation = false,
+  allowReceipts = true,
 }: {
   documentType: string;
   creation?: boolean;
+  allowReceipts?: boolean;
 }) {
   return billingStatuses
     .filter(
       (s) =>
         s !== "OVERDUE" &&
         (!creation || s !== "PARTIALLY_PAID") &&
+        (allowReceipts || !["PAID", "PARTIALLY_PAID"].includes(s)) &&
         (documentType !== "QUOTE" ||
           ["DRAFT", "TO_BE_INVOICED", "CANCELLED"].includes(s)),
     )
@@ -107,6 +110,12 @@ export function BillingStatusControl({
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const canRecordReceipt =
+    documentType === "INVOICE" &&
+    billingIsIssued({
+      workflowStatus: status,
+      isCancelled: status === "CANCELLED",
+    });
   const save = (value: string, fields = new FormData()) =>
     startTransition(async () => {
       try {
@@ -158,18 +167,17 @@ export function BillingStatusControl({
           className="text-muted-foreground size-3"
         />
       </Button>
-      {documentType === "INVOICE" &&
-        !["PAID", "CANCELLED"].includes(status) && (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={pending}
-            onClick={() => save("PAID")}
-          >
-            Mark as paid
-          </Button>
-        )}
+      {canRecordReceipt && status !== "PAID" && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onClick={() => save("PAID")}
+        >
+          Mark as paid
+        </Button>
+      )}
       <EditorDrawer
         open={open}
         size="compact"
@@ -216,9 +224,18 @@ export function BillingStatusControl({
                 if (e.target.value === "PAID") save("PAID");
               }}
             >
-              <StatusOptions documentType={documentType} />
+              <StatusOptions
+                documentType={documentType}
+                allowReceipts={canRecordReceipt}
+              />
             </select>
           </Field>
+          {documentType === "INVOICE" && !canRecordReceipt && (
+            <p className="text-muted-foreground text-sm">
+              Set the status to Invoiced and save first. Then record the
+              receipt. Changing to Invoiced does not record a payment.
+            </p>
+          )}
           {draft === "PARTIALLY_PAID" && (
             <Field label={`Actual received TTC (${currency})`}>
               <MoneyInput name="amount" required />

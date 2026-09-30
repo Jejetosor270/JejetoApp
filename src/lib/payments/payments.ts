@@ -1322,12 +1322,18 @@ export async function getProcurementCalendarEvents(
       ...clientInstallments
         .filter(
           (item) =>
-            item.dueDate !== null && item.dueDate >= from && item.dueDate <= to,
+            (item.reviewReason ||
+              item.cashKind !== "planned" ||
+              item.documentType === "QUOTE") &&
+            item.dueDate !== null &&
+            item.dueDate >= from &&
+            item.dueDate <= to,
         )
         .map((item) => ({
           currencyCode: item.currencyCode,
           direction: PaymentDirection.CLIENT_RECEIPT,
           documentType: item.documentType as "QUOTE" | "INVOICE",
+          ...(item.reviewReason ? { reviewReason: item.reviewReason } : {}),
           dueDate: item.dueDate,
           href: `/billing/${item.billingDocumentId}`,
           id: item.id,

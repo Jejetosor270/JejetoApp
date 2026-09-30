@@ -266,7 +266,12 @@ it("excludes pre-invoice billing, records confirmed Paid across terms, and reope
     expect((await getProjectClientBillingSummary(project.id))?.invoicedHt).toBe(
       "0.0000",
     );
-    expect(await listClientCashInstallments([project.id])).toEqual([]);
+    const cashTerms = await listClientCashInstallments([project.id]);
+    if (value === "DRAFT") expect(cashTerms).toEqual([]);
+    else {
+      expect(cashTerms).toHaveLength(2);
+      expect(cashTerms.every((term) => term.cashKind === "planned")).toBe(true);
+    }
     expect(
       (await getBilledFreight({ projectId: project.id }, "EUR"))
         .invoicedFreightHt,
@@ -280,6 +285,28 @@ it("excludes pre-invoice billing, records confirmed Paid across terms, and reope
       receivedAt: "2026-09-11",
     }),
   ).rejects.toThrow("active Invoice");
+  for (const value of ["PAID", "PARTIALLY_PAID"]) {
+    await expect(
+      changeBillingStatus(actor.id, {
+        id: invoice.id,
+        value,
+        confirmedAmount: "120",
+        amount: "20",
+        paymentDate: "2026-09-11",
+        paymentFx: "0.9",
+      }),
+    ).rejects.toThrow("Invoiced and save before recording a receipt");
+  }
+  expect((await getClientBillingDocument(invoice.id))?.status).toBe(
+    "TO_BE_INVOICED",
+  );
+  expect(
+    await db.clientReceipt.count({ where: { billingDocumentId: invoice.id } }),
+  ).toBe(0);
+  await changeBillingStatus(actor.id, { id: invoice.id, value: "INVOICED" });
+  expect(
+    await db.clientReceipt.count({ where: { billingDocumentId: invoice.id } }),
+  ).toBe(0);
   await expect(
     changeBillingStatus(actor.id, {
       id: invoice.id,
@@ -297,9 +324,7 @@ it("excludes pre-invoice billing, records confirmed Paid across terms, and reope
       paymentDate: "2026-09-11",
     }),
   ).rejects.toThrow("FX");
-  expect((await getClientBillingDocument(invoice.id))?.status).toBe(
-    "TO_BE_INVOICED",
-  );
+  expect((await getClientBillingDocument(invoice.id))?.status).toBe("OVERDUE");
   expect(
     await db.clientReceipt.count({ where: { billingDocumentId: invoice.id } }),
   ).toBe(0);

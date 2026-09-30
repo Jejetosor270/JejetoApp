@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Prisma } from "@/generated/prisma/client";
+import { editFieldVersions, editVersion } from "@/lib/edit-version";
+import { projectBudgetSnapshot } from "@/lib/master-data/project-budget";
+import { writeAuditEvent } from "@/lib/audit/events";
 
 const databaseMocks = vi.hoisted(() => {
   const transaction = {
@@ -38,18 +42,40 @@ const clientId = "f45ac9c9-10e9-4e42-b93f-38796de4f65a";
 const projectId = "a12b6b9b-10e9-4e42-b93f-38796de4f65a";
 const managerId = "b12b6b9b-10e9-4e42-b93f-38796de4f65a";
 
+function currentBudget() {
+  return {
+    id: projectId,
+    code: "PRJ",
+    reportingCurrencyCode: "EUR",
+    clientBudgetTargetHt: null,
+    estimatedPurchaseCostHt: new Prisma.Decimal("500"),
+    estimatedOtherCostHt: null,
+    estimatedFreightCostHt: null,
+    freightEstimateRate: null,
+    freightEstimateNotes: "Reviewed freight notes",
+    defaultProductMarkupRate: new Prisma.Decimal("0.15"),
+    defaultFreightMarkupRate: new Prisma.Decimal("0.1"),
+    defaultOtherCostMarkupRate: new Prisma.Decimal("0"),
+    targetMode: "MARKUP" as const,
+    expectedSellHt: null,
+    targetMarkupRate: null,
+  };
+}
+
 describe("project and building writes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("updates only budget/pricing fields, derives freight and target with Decimal and audits the actor", async () => {
-    databaseMocks.transaction.project.findUnique.mockResolvedValue({
-      id: projectId,
-      code: "PRJ",
-    });
+    const current = currentBudget();
+    databaseMocks.transaction.project.findUnique.mockResolvedValue(current);
+    databaseMocks.transaction.project.update.mockImplementation(
+      async ({ data }) => ({ ...current, ...data }),
+    );
     await updateProjectBudget(actorId, {
       id: projectId,
+      expectedVersion: editVersion(projectBudgetSnapshot(current)),
       estimatedPurchaseCostHt: "1000",
       estimatedOtherCostHt: "0",
       freightEstimateRate: "0.1",
@@ -76,12 +102,71 @@ describe("project and building writes", () => {
     ])
       expect(data).not.toHaveProperty(field);
     expect(databaseMocks.database.client.findFirst).not.toHaveBeenCalled();
+    expect(writeAuditEvent).toHaveBeenCalledWith(
+      databaseMocks.transaction,
+      actorId,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          before: expect.objectContaining({
+            estimatedPurchaseCostHt: "500",
+            estimatedOtherCostHt: null,
+          }),
+          after: expect.objectContaining({
+            estimatedPurchaseCostHt: "1000",
+            estimatedOtherCostHt: "0",
+            estimatedFreightCostHt: "100.0000",
+          }),
+          changedFields: expect.arrayContaining([
+            "estimatedPurchaseCostHt",
+            "estimatedOtherCostHt",
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it("rejects a stale financial snapshot without writing or auditing, even after an unrelated refresh", async () => {
+    const previous = currentBudget();
+    databaseMocks.transaction.project.findUnique.mockResolvedValue({
+      ...previous,
+      defaultProductMarkupRate: new Prisma.Decimal("0.25"),
+    });
+    await expect(
+      updateProjectBudget(actorId, {
+        id: projectId,
+        expectedVersion: editVersion(projectBudgetSnapshot(previous)),
+        expectedFields: editFieldVersions(projectBudgetSnapshot(previous)),
+        targetMode: "MARKUP",
+      }),
+    ).rejects.toThrow(
+      "Changed since editing began: default Product Markup Rate",
+    );
+    expect(databaseMocks.transaction.project.update).not.toHaveBeenCalled();
+    expect(writeAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("does not accept an omitted edit token through the service", async () => {
+    databaseMocks.transaction.project.findUnique.mockResolvedValue(
+      currentBudget(),
+    );
+    await expect(
+      updateProjectBudget(actorId, {
+        id: projectId,
+        expectedVersion: "",
+        targetMode: "MARKUP",
+      }),
+    ).rejects.toThrow("Reopen the budget editor");
+    expect(databaseMocks.transaction.project.update).not.toHaveBeenCalled();
   });
 
   it("rejects budget writes to missing or trashed Projects", async () => {
     databaseMocks.transaction.project.findUnique.mockResolvedValue(null);
     await expect(
-      updateProjectBudget(actorId, { id: projectId, targetMode: "MARKUP" }),
+      updateProjectBudget(actorId, {
+        id: projectId,
+        targetMode: "MARKUP",
+        expectedVersion: "a".repeat(64),
+      }),
     ).rejects.toThrow("no longer exists");
     expect(databaseMocks.transaction.project.update).not.toHaveBeenCalled();
   });

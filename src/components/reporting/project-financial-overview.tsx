@@ -318,19 +318,34 @@ export function ProjectFinancialOverview({
               </p>
               {(outlook.overdueCount > 0 ||
                 outlook.undatedCount > 0 ||
-                outlook.missingFxCount > 0) && (
+                outlook.missingFxCount > 0 ||
+                outlook.reviewCount > 0) && (
                 <div
                   role="status"
                   className="text-warning-foreground mt-3 space-y-1 border-t pt-3 text-xs"
                 >
                   <p>
-                    Projection incomplete. Review overdue amounts, dates or
-                    missing financial/FX information in{" "}
+                    Projection incomplete. Review overdue amounts, dates, linked
+                    documents or missing financial/FX information in{" "}
                     <Link href={related} className="underline">
                       Related payment terms
                     </Link>
                     .
                   </p>
+                  {outlook.reviewCount > 0 && (
+                    <p>
+                      Cash expectations needing review: {outlook.reviewCount}.
+                      Check for different currencies or a payment term linked to
+                      multiple Invoices.{" "}
+                      <ProjectFinancialLink
+                        className="underline"
+                        href="#financial:incoming"
+                      >
+                        Review source records
+                      </ProjectFinancialLink>
+                      .
+                    </p>
+                  )}
                   {outlook.overdueCount > 0 && (
                     <p>
                       Overdue — client:{" "}
@@ -373,6 +388,21 @@ export function ProjectFinancialOverview({
                 <summary className="cursor-pointer font-medium">
                   Planned receipts · separate from cash forecast
                 </summary>
+                {outlook.plannedReviewCount > 0 && (
+                  <p role="status" className="text-warning-foreground mt-3">
+                    Planned receipts needing source-data review:{" "}
+                    {outlook.plannedReviewCount}. Check currencies and linked
+                    Invoice terms. These plans do not affect the primary cash
+                    projection.{" "}
+                    <ProjectFinancialLink
+                      className="underline"
+                      href="#financial:planned"
+                    >
+                      Review planned records
+                    </ProjectFinancialLink>
+                    .
+                  </p>
+                )}
                 <dl className="mt-3 grid gap-3 sm:grid-cols-3">
                   {[
                     [

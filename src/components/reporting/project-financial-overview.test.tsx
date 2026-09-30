@@ -79,7 +79,7 @@ const data = {
     "100",
   ),
 };
-async function mount(missing = false) {
+async function mount(missing = false, cashOutlook = data.cashOutlook) {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   const container = document.createElement("div");
   document.body.append(container);
@@ -89,7 +89,11 @@ async function mount(missing = false) {
       <>
         <input aria-label="Unrelated draft" defaultValue="Keep my draft" />
         <ProjectFinancialOverview
-          data={missing ? { ...data, cash: { ...data.cash, net: null } } : data}
+          data={{
+            ...data,
+            cashOutlook,
+            ...(missing ? { cash: { ...data.cash, net: null } } : {}),
+          }}
           performance={
             missing
               ? {
@@ -166,4 +170,35 @@ it("shows missing cash and budget as incomplete rather than zero", async () => {
   expect(document.body.textContent?.match(/Budget incomplete/g)).toHaveLength(
     1,
   );
+});
+
+it("explains invalid cash links without mislabelling them as missing FX", async () => {
+  await mount(false, {
+    ...data.cashOutlook,
+    reviewCount: 1,
+    windows: data.cashOutlook.windows.map((window) => ({
+      ...window,
+      projectedCash: null,
+    })),
+  });
+  const outlook = document.querySelector(
+    '[aria-labelledby="project-outlook-heading"]',
+  );
+  expect(outlook?.textContent).toContain("Projection incomplete");
+  expect(outlook?.textContent).toContain(
+    "different currencies or a payment term linked to multiple Invoices",
+  );
+  expect(outlook?.textContent).toContain("Review source records");
+});
+
+it("keeps invalid planned links separate from the primary projection", async () => {
+  await mount(false, { ...data.cashOutlook, plannedReviewCount: 1 });
+  const outlook = document.querySelector(
+    '[aria-labelledby="project-outlook-heading"]',
+  );
+  expect(outlook?.textContent).toContain(
+    "Planned receipts needing source-data review",
+  );
+  expect(outlook?.textContent).toContain("+150.00 EUR");
+  expect(outlook?.textContent).not.toContain("Projection incomplete");
 });

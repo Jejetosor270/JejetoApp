@@ -110,3 +110,118 @@ it.each([
   expect(control("detailDraft")).toBeTruthy();
   expect(control("paymentDraft")).toBeTruthy();
 });
+
+const projectWorkspace = (
+  <RecordWorkspace
+    label="Project"
+    relatedNavigation
+    sections={[
+      {
+        id: "overview",
+        label: "Summary",
+        group: "details",
+        content: <input name="detailDraft" defaultValue="Original detail" />,
+      },
+      {
+        id: "work",
+        label: "Billing",
+        group: "related",
+        content: <input name="billingDraft" defaultValue="Original billing" />,
+      },
+      {
+        id: "freight",
+        label: "Freight",
+        group: "related",
+        content: <input name="freightDraft" defaultValue="Original freight" />,
+      },
+    ]}
+  />
+);
+
+function selectedRelatedSection() {
+  return document.querySelector(
+    'nav[aria-label="Project related sections"] [aria-pressed="true"]',
+  )?.textContent;
+}
+
+it.each([
+  ["?tab=related#freight", "Freight"],
+  ["?tab=freight", "Freight"],
+  ["#freight", "Freight"],
+  ["?tab=related&section=freight", "Freight"],
+  ["?tab=related&section=work#freight", "Billing"],
+  ["?tab=freight&section=work", "Billing"],
+  ["?tab=related&section=missing#freight", "Freight"],
+  ["?tab=freight&section=missing#work", "Freight"],
+  ["?tab=related&section=missing#missing", "Billing"],
+])(
+  "opens the intended Project related work area for %s",
+  async (url, section) => {
+    window.history.replaceState(null, "", "/projects/demo" + url);
+    view = await mountForm(projectWorkspace);
+    expect(
+      document.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+    ).toBe("Related");
+    expect(selectedRelatedSection()).toBe(section);
+  },
+);
+
+it("keeps the explicit Details tab even with a remembered Related section", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/projects/demo?tab=details&section=freight",
+  );
+  view = await mountForm(projectWorkspace);
+  expect(
+    document.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+  ).toBe("Details");
+  await clickText("Related");
+  expect(selectedRelatedSection()).toBe("Freight");
+});
+
+it("preserves drafts through section selection, hash changes and history navigation", async () => {
+  window.history.replaceState(null, "", "/projects/demo?tab=related#freight");
+  view = await mountForm(projectWorkspace);
+  const freightInput = control("freightDraft");
+  await enter("freightDraft", "Keep freight");
+  await clickText("Billing");
+  await enter("billingDraft", "Keep billing");
+  expect(window.location.search).toBe("?tab=related&section=work");
+  expect(window.location.hash).toBe("");
+
+  // Reproduce the browser's restored URL and popstate notification on Back.
+  await act(async () => {
+    window.history.replaceState(null, "", "/projects/demo?tab=related#freight");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  expect(selectedRelatedSection()).toBe("Freight");
+  expect(control("freightDraft")).toBe(freightInput);
+  expect(freightInput.value).toBe("Keep freight");
+
+  // Forward restores the explicit section selection without remounting editors.
+  await act(async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/projects/demo?tab=related&section=work",
+    );
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  expect(selectedRelatedSection()).toBe("Billing");
+  expect(control("billingDraft").value).toBe("Keep billing");
+
+  await act(async () => {
+    window.history.replaceState(null, "", "/projects/demo?tab=related");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    window.location.hash = "freight";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+  expect(selectedRelatedSection()).toBe("Freight");
+  await clickText("Details");
+  await enter("detailDraft", "Keep detail");
+  await clickText("Related");
+  expect(control("freightDraft").value).toBe("Keep freight");
+  expect(control("billingDraft").value).toBe("Keep billing");
+  expect(control("detailDraft").value).toBe("Keep detail");
+});

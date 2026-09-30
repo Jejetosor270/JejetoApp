@@ -16,6 +16,7 @@ export type CalendarEventType =
   | "ITEM_INSTALLATION";
 
 export interface ProcurementCalendarEvent {
+  reviewReason?: string | null;
   originalAmount?: string;
   documentType?: "QUOTE" | "INVOICE";
   amount: string | null;
@@ -40,6 +41,7 @@ export function buildCalendarEvents(input: {
     partyName: string;
   }[];
   installments: readonly {
+    reviewReason?: string | null;
     documentType?: "QUOTE" | "INVOICE";
     currencyCode: string;
     direction: "SUPPLIER_PAYMENT" | "CLIENT_RECEIPT";
@@ -81,12 +83,15 @@ export function buildCalendarEvents(input: {
         item.dueDate !== null,
     )
     .map((item) => ({
-      amount: item.isCancelled
-        ? "0"
-        : installmentOutstanding(
-            item.scheduledAmount,
-            item.paidAmount,
-          ).toString(),
+      ...(item.reviewReason ? { reviewReason: item.reviewReason } : {}),
+      amount: item.reviewReason
+        ? null
+        : item.isCancelled
+          ? "0"
+          : installmentOutstanding(
+              item.scheduledAmount,
+              item.paidAmount,
+            ).toString(),
       originalAmount: item.scheduledAmount,
       ...(item.documentType ? { documentType: item.documentType } : {}),
       currencyCode: item.currencyCode,
@@ -96,14 +101,18 @@ export function buildCalendarEvents(input: {
       orderNumber: item.orderNumber,
       partyName: item.partyName,
       projectName: item.projectName,
-      status: derivePaymentStatus({
-        dueDate: item.dueDate,
-        isCancelled: item.isCancelled,
-        paidAmount: item.paidAmount,
-        scheduledAmount: item.scheduledAmount,
-        today: input.today,
-      }),
-      title: item.label,
+      status: item.reviewReason
+        ? "REVIEW"
+        : derivePaymentStatus({
+            dueDate: item.dueDate,
+            isCancelled: item.isCancelled,
+            paidAmount: item.paidAmount,
+            scheduledAmount: item.scheduledAmount,
+            today: input.today,
+          }),
+      title: item.reviewReason
+        ? `${item.label} · Review Billing match`
+        : item.label,
       type: item.direction,
     }));
   const orderEvents = input.orders.flatMap((order) => {

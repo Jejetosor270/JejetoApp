@@ -52,6 +52,8 @@ interface CurrencyOption {
   name: string;
 }
 export interface ProjectView {
+  budgetEditVersion: string;
+  budgetEditFields: string;
   clientBudgetTargetHt: { toString(): string } | string | null;
   client: { id: string; displayName: string };
   clientId: string;

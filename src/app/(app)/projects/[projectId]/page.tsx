@@ -1,4 +1,6 @@
 import { projectRead } from "@/lib/reporting/project-diagnostics";
+import { editVersion, editFieldVersions } from "@/lib/edit-version";
+import { projectBudgetSnapshot } from "@/lib/master-data/project-budget";
 import { getFinancialAttention } from "@/lib/reporting/financial-attention";
 import { ProjectAttention } from "@/components/reporting/project-attention";
 import { projectFreightBudget } from "@/domain/freight/calculations";
@@ -301,6 +303,8 @@ export default async function ProjectPage({
       managers={options.managers}
       project={{
         ...project,
+        budgetEditVersion: editVersion(projectBudgetSnapshot(project)),
+        budgetEditFields: editFieldVersions(projectBudgetSnapshot(project)),
         estimatedOtherCostHt: project.estimatedOtherCostHt?.toString() ?? null,
         clientId: project.clientId ?? "",
         client: project.client ?? { id: "", displayName: "Unassigned" },

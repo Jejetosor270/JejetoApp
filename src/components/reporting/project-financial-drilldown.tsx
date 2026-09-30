@@ -180,7 +180,7 @@ export function ProjectFinancialDrilldowns({
         >
           <p className="text-muted-foreground text-sm">
             Amounts in {currency}. Open a source record to review or edit its
-            details. Missing FX stays incomplete.
+            details. Missing FX or inconsistent source data stays incomplete.
           </p>
           {(view.period === "upcoming" || selected === "forecast") && (
             <p className="mt-2 text-xs">
@@ -207,7 +207,7 @@ export function ProjectFinancialDrilldowns({
                     </span>
                     <span className="financial-figure">
                       {row.amount === null
-                        ? "Incomplete · check FX or source amount"
+                        ? "Incomplete · check source data and FX"
                         : formatMoney(row.amount, currency)}
                     </span>
                   </div>

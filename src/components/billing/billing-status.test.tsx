@@ -71,3 +71,90 @@ it("confirms the remaining amount and keeps payment details when saving fails", 
   );
   expect(actions.refresh).not.toHaveBeenCalled();
 });
+
+it.each(["DRAFT", "TO_BE_INVOICED", "CANCELLED"])(
+  "requires a saved issued state before offering cash actions on %s",
+  async (status) => {
+    view = await mountForm(
+      <BillingStatusControl
+        id="billing"
+        status={status}
+        documentType="INVOICE"
+        remaining="80.0000"
+        currency="EUR"
+        canEdit
+      />,
+    );
+    expect(document.body.textContent).not.toContain("Mark as paid");
+    const statusButton = document.querySelector<HTMLButtonElement>(
+      '[aria-label="Change Billing status"]',
+    );
+    if (!statusButton) throw new Error("Missing status button");
+    await act(async () => statusButton.click());
+    const options = [
+      ...control("billingStatus").querySelectorAll("option"),
+    ].map((option) => option.value);
+    expect(options).not.toContain("PAID");
+    expect(options).not.toContain("PARTIALLY_PAID");
+    expect(document.body.textContent).toContain(
+      "Changing to Invoiced does not record a payment",
+    );
+    await enter("billingStatus", "INVOICED");
+    expect(actions.save).not.toHaveBeenCalled();
+    expect(document.querySelector('[name="paymentDate"]')).toBeNull();
+    actions.save.mockResolvedValue({ status: "success", message: "Saved" });
+    const form = document.querySelector("form");
+    if (!form) throw new Error("Missing status form");
+    await act(async () =>
+      form.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      ),
+    );
+    expect(actions.save).toHaveBeenCalledExactlyOnceWith({
+      id: "billing",
+      value: "INVOICED",
+      confirmedAmount: "80.0000",
+      amount: "",
+      paymentDate: "",
+      paymentFx: "",
+    });
+  },
+);
+
+it("retains the one-click full receipt action for an issued, partially paid Invoice", async () => {
+  actions.save.mockResolvedValue({ status: "success", message: "Saved" });
+  view = await mountForm(
+    <BillingStatusControl
+      id="billing"
+      status="PARTIALLY_PAID"
+      documentType="INVOICE"
+      remaining="80.0000"
+      currency="EUR"
+      canEdit
+    />,
+  );
+  await clickText("Mark as paid");
+  expect(actions.save).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      id: "billing",
+      value: "PAID",
+      confirmedAmount: "80.0000",
+    }),
+  );
+});
+
+it("shows only the status badge to read-only employees", async () => {
+  view = await mountForm(
+    <BillingStatusControl
+      id="billing"
+      status="INVOICED"
+      documentType="INVOICE"
+      remaining="80.0000"
+      currency="EUR"
+      canEdit={false}
+    />,
+  );
+  expect(document.body.textContent).toContain("Invoiced");
+  expect(document.querySelector("button")).toBeNull();
+  expect(actions.save).not.toHaveBeenCalled();
+});

@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { cashWindowEnd } from "@/domain/payments/dates";
 import { installmentOutstanding } from "@/domain/payments/calculations";
+import { cappedCashTerms } from "@/domain/payments/cash-expectations";
 import { reportingAmount } from "@/domain/finance/calculations";
 import { formatRate } from "@/domain/procurement/presentation";
 
@@ -32,6 +33,7 @@ export interface AttentionTerm {
   actualFxMissing: boolean;
 }
 export interface AttentionDocument {
+  reviewReason?: string | null;
   id: string;
   side: "supplier" | "client" | "freight";
   projectId: string;
@@ -352,8 +354,27 @@ function checkPaymentTerms(
   position: CashPosition,
 ) {
   if (schedule.incomplete) position.complete = false;
-  for (const term of schedule.terms) {
-    const balance = installmentOutstanding(term.scheduled, term.paid);
+  const capped =
+    schedule.comparable && doc.totalTtc !== null
+      ? cappedCashTerms(
+          doc.totalTtc,
+          doc.paid,
+          schedule.terms.map((term) => ({
+            source: term,
+            amount: term.scheduled,
+            paid: term.paid,
+            due: term.dueDate ?? (doc.side === "client" ? doc.dueDate : null),
+            cancelled: term.cancelled,
+          })),
+        ).terms
+      : schedule.terms.map((term) => ({
+          term: { source: term },
+          amount: installmentOutstanding(term.scheduled, term.paid),
+        }));
+  for (const {
+    term: { source: term },
+    amount: balance,
+  } of capped) {
     checkTermActualFx(doc, term, add);
     if (!balance.greaterThan(0)) continue;
     const due = term.dueDate ?? (doc.side === "client" ? doc.dueDate : null);
@@ -483,6 +504,21 @@ export function buildFinancialAttention(
   for (const doc of documents) {
     checkInvoiceIssuing(doc, today, end, add);
     if (!doc.issued) continue;
+    if (doc.reviewReason) {
+      add(
+        doc,
+        "cash-match",
+        "Review Billing payment match",
+        "Incomplete",
+        doc.reviewReason,
+      );
+      cash.set(doc.projectId, {
+        incoming: new Decimal(0),
+        outgoing: new Decimal(0),
+        complete: false,
+      });
+      continue;
+    }
     checkDocumentFx(doc, add);
     const schedule = paymentSchedule(doc);
     checkScheduleInformation(doc, schedule, add);

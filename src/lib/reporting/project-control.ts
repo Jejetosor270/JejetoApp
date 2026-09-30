@@ -23,6 +23,7 @@ import {
 } from "@/lib/freight/expenses";
 import { getProjectClientBillingSummary } from "@/lib/billing/reporting";
 import { reportingAmount } from "@/domain/finance/calculations";
+import { billingCashContexts } from "@/domain/billing/cash-expectations";
 import {
   cashFunding,
   categoryPosition,
@@ -417,54 +418,15 @@ export async function getProjectControl(projectId: string) {
         cancelled: term.isCancelled,
       })),
   }));
-  const outlookBills = project.billingDocuments.filter(
-    (doc) =>
-      doc.workflowStatus !== "CANCELLED" && doc.workflowStatus !== "DRAFT",
-  );
-  const matchedTerms = new Set(
-    outlookBills
-      .filter((doc) => doc.documentType === "INVOICE")
-      .flatMap((doc) =>
-        doc.matchedInstallmentId ? [doc.matchedInstallmentId] : [],
-      ),
-  );
-  for (const doc of outlookBills) {
-    const quote = doc.documentType === "QUOTE";
-    const allTerms = doc.matchedInstallment
-      ? [doc.matchedInstallment]
-      : doc.paymentInstallments;
-    const terms = quote
-      ? allTerms.filter((term) => !matchedTerms.has(term.id))
-      : allTerms;
-    const partlyMatchedQuote = quote && terms.length !== allTerms.length;
-    const transferredTerms = partlyMatchedQuote
-      ? allTerms.filter((term) => matchedTerms.has(term.id))
-      : [];
-    const transferredReceipts = new Set(
-      transferredTerms.flatMap((term) =>
-        term.receipts.map((receipt) => receipt.id),
-      ),
-    );
-    // Once an Invoice owns a Quote term, that term is no longer planned revenue.
-    const receipts = partlyMatchedQuote
-      ? doc.receipts.filter((receipt) => !transferredReceipts.has(receipt.id))
-      : [...doc.receipts, ...(doc.matchedInstallment?.receipts ?? [])];
+  for (const context of billingCashContexts(project.billingDocuments)) {
+    const { document: doc, terms } = context;
     outlookDocuments.push({
       source: { label: doc.reference, href: `/billing/${doc.id}?tab=related` },
-      kind: !quote && billingIsIssued(doc) ? "issued" : "planned",
+      kind: context.kind,
+      reviewReason: context.reviewReason,
       currency: doc.currencyCode,
-      total: partlyMatchedQuote
-        ? Decimal.max(
-            0,
-            new Decimal(doc.totalTtc.toString()).minus(
-              transferredTerms.reduce(
-                (sum, term) => sum.plus(term.scheduledAmount),
-                new Decimal(0),
-              ),
-            ),
-          ).toFixed(4)
-        : doc.totalTtc.toString(),
-      paid: totalPaid(receipts),
+      total: context.total,
+      paid: context.paid,
       fx: doc.fxRateToReporting?.toString() ?? null,
       terms: terms.map((term) => ({
         amount: term.scheduledAmount.toString(),

@@ -40,6 +40,72 @@ describe("portfolio Client financial integrity", () => {
     billing.listClientCashInstallments.mockResolvedValue([]);
   });
 
+  it("keeps missing planned FX separate from complete issued cash forecasts", async () => {
+    billing.getProjectsClientBillingSummaries.mockResolvedValue(
+      new Map([
+        [
+          "project-1",
+          {
+            complete: true,
+            coverageComplete: true,
+            coverageHt: "1000",
+            invoicedHt: "1000",
+            outstandingTtc: "600",
+            overdueTtc: "0",
+            paidTtc: "400",
+          },
+        ],
+      ]),
+    );
+    const base = {
+      billingDocumentId: "invoice",
+      billingReference: "INV",
+      clientName: "Client",
+      currencyCode: "EUR",
+      dueDate: "2099-01-01",
+      expectedFxRate: null,
+      id: "term",
+      isCancelled: false,
+      label: "Term",
+      outstandingAmount: "600",
+      projectId: "project-1",
+      projectName: "Project",
+      scheduledAmount: "1000",
+      status: "UPCOMING",
+    };
+    billing.listClientCashInstallments.mockResolvedValue([
+      { ...base, cashKind: "issued", documentType: "INVOICE" },
+      {
+        ...base,
+        id: "planned",
+        cashKind: "planned",
+        documentType: "INVOICE",
+        currencyCode: "USD",
+      },
+      {
+        ...base,
+        id: "quote",
+        cashKind: "planned",
+        documentType: "QUOTE",
+        outstandingAmount: "100",
+      },
+    ]);
+    const report = await getPortfolioReportingSnapshot(
+      { projectStatus: "ACTIVE" },
+      { horizon: "30d", start: "2099-01-01", end: "2099-01-31" },
+    );
+    expect(report.cashFlow.totals).toMatchObject({
+      expectedIn: "600",
+      expectedComplete: true,
+      missingExpectedCount: 0,
+    });
+    expect(report.cashFlow.planned).toMatchObject({
+      amount: "100",
+      complete: false,
+      missingCount: 1,
+    });
+  });
+
   it("uses actual Billing receipts for outstanding and cash position", async () => {
     billing.getProjectsClientBillingSummaries.mockResolvedValue(
       new Map([

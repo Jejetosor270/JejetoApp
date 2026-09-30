@@ -17,11 +17,14 @@ import type {
 import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
 import { paginationSkip, type PageInput } from "@/domain/listing/validation";
+import { assertEditVersion } from "@/lib/edit-version";
+import { projectBudgetSelect, projectBudgetSnapshot } from "./project-budget";
 
 import {
   InvalidMasterDataRelationError,
   MasterDataNotFoundError,
   ProjectReportingCurrencyLockedError,
+  ProjectBudgetConflictError,
 } from "./errors";
 
 const projectSelect = {
@@ -349,10 +352,22 @@ export async function updateProjectBudget(
     async (transaction) => {
       const current = await transaction.project.findUnique({
         where: { id: input.id },
-        select: { id: true, code: true },
+        select: { ...projectBudgetSelect, code: true },
       });
       if (!current)
         throw new MasterDataNotFoundError("This project no longer exists.");
+      const before = projectBudgetSnapshot(current);
+      if (!input.expectedVersion)
+        throw new ProjectBudgetConflictError(
+          "Reopen the budget editor to load its current version. Your draft is retained.",
+        );
+      try {
+        assertEditVersion(input.expectedVersion, before, input.expectedFields);
+      } catch (error) {
+        if (error instanceof Error)
+          throw new ProjectBudgetConflictError(error.message);
+        throw error;
+      }
       const estimatedFreightCostHt = projectFreightBudget(
         input.estimatedPurchaseCostHt,
         input.freightEstimateRate,
@@ -367,7 +382,7 @@ export async function updateProjectBudget(
         targetMode: input.targetMode,
         expectedSellHt: input.expectedSellHt ?? null,
       });
-      await transaction.project.update({
+      const updated = await transaction.project.update({
         where: { id: input.id },
         data: {
           clientBudgetTargetHt: input.clientBudgetTargetHt ?? null,
@@ -384,12 +399,18 @@ export async function updateProjectBudget(
           targetMarkupRate: targets.effectiveMarkupRate,
           updatedById: actorId,
         },
+        select: projectBudgetSelect,
       });
+      const after = projectBudgetSnapshot(updated);
+      const changedFields = Object.keys(before).filter(
+        (key) => before[key] !== after[key],
+      );
       await writeAuditEvent(transaction, actorId, {
         action: "UPDATED",
         entityId: current.id,
         entityReference: current.code,
         entityType: "PROJECT",
+        metadata: { before, after, changedFields },
         summary: "Updated Project budget and pricing.",
       });
     },

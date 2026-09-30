@@ -1,12 +1,11 @@
 import Decimal from "decimal.js";
-import {
-  convertPaymentAmount,
-  installmentOutstanding,
-} from "@/domain/payments/calculations";
+import { convertPaymentAmount } from "@/domain/payments/calculations";
+import { cappedCashTerms } from "@/domain/payments/cash-expectations";
 import { cashWindowEnd } from "@/domain/payments/dates";
 import { sumKnown, difference } from "./project-control";
 
 export interface CashOutlookDocument {
+  reviewReason?: string | null;
   source?: { label: string; href: string };
   kind: "issued" | "planned" | "payment";
   currency: string;
@@ -30,6 +29,7 @@ export function projectCashOutlook(
   currentCash: string | null,
 ) {
   const entries: {
+    reviewReason?: string;
     kind: CashOutlookDocument["kind"];
     due: string | null;
     amount: string | null;
@@ -38,6 +38,19 @@ export function projectCashOutlook(
   let unscheduledCount = 0;
   let plannedUnscheduledCount = 0;
   for (const document of documents) {
+    if (document.reviewReason) {
+      const activeTerms = document.terms.filter((term) => !term.cancelled);
+      for (const term of activeTerms.length ? activeTerms : [{ due: null }]) {
+        entries.push({
+          kind: document.kind,
+          due: term.due,
+          amount: null,
+          reviewReason: document.reviewReason,
+          ...(document.source ? { source: document.source } : {}),
+        });
+      }
+      continue;
+    }
     if (document.total === null) {
       entries.push({
         kind: document.kind,
@@ -47,7 +60,11 @@ export function projectCashOutlook(
       });
       continue;
     }
-    let remaining = installmentOutstanding(document.total, document.paid);
+    const schedule = cappedCashTerms(
+      document.total,
+      document.paid,
+      document.terms,
+    );
     const convert = (amount: Decimal, fx: string | null) =>
       convertPaymentAmount({
         amount,
@@ -55,15 +72,7 @@ export function projectCashOutlook(
         reportingCurrencyCode: currency,
         fxRateToReporting: fx,
       })?.toFixed(4) ?? null;
-    // Cap terms by the document balance, including receipts recorded without a term.
-    for (const term of [...document.terms].sort((a, b) =>
-      (a.due ?? "9999").localeCompare(b.due ?? "9999"),
-    )) {
-      if (term.cancelled || remaining.isZero()) continue;
-      const amount = Decimal.min(
-        remaining,
-        installmentOutstanding(term.amount, term.paid),
-      );
+    for (const { term, amount } of schedule.terms) {
       if (amount.isZero()) continue;
       entries.push({
         ...(document.source ? { source: document.source } : {}),
@@ -71,8 +80,8 @@ export function projectCashOutlook(
         due: term.due,
         amount: convert(amount, term.fx),
       });
-      remaining = remaining.minus(amount);
     }
+    const remaining = schedule.unscheduled;
     if (remaining.greaterThan(0)) {
       if (document.kind === "planned") plannedUnscheduledCount++;
       else unscheduledCount++;
@@ -101,7 +110,14 @@ export function projectCashOutlook(
     (entry) => entry.kind !== "planned" && entry.due === null,
   ).length;
   const missingFxCount = entries.filter(
-    (entry) => entry.kind !== "planned" && entry.amount === null,
+    (entry) =>
+      entry.kind !== "planned" && entry.amount === null && !entry.reviewReason,
+  ).length;
+  const reviewCount = entries.filter(
+    (entry) => entry.kind !== "planned" && entry.reviewReason,
+  ).length;
+  const plannedReviewCount = entries.filter(
+    (entry) => entry.kind === "planned" && entry.reviewReason,
   ).length;
   const overdueCount = entries.filter(
     (entry) =>
@@ -120,6 +136,8 @@ export function projectCashOutlook(
     overdueCount,
     undatedCount,
     missingFxCount,
+    reviewCount,
+    plannedReviewCount,
     unscheduledCount,
     plannedUnscheduledCount,
     plannedUndated: sum("planned", (due) => due === null),
@@ -138,7 +156,7 @@ export function projectCashOutlook(
         plannedIn: sum("planned", inWindow),
         // Overdue and undated balances need review before any confident projection.
         projectedCash:
-          overdueCount || undatedCount || missingFxCount
+          overdueCount || undatedCount || missingFxCount || reviewCount
             ? null
             : sumKnown([currentCash, difference(expectedIn, expectedOut)]),
       };

@@ -233,6 +233,13 @@ export type CreateProjectInput = z.infer<typeof createProjectInputSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectInputSchema>;
 export const updateProjectBudgetInputSchema = z.object({
   id: z.uuid("Invalid project."),
+  expectedVersion: z
+    .string()
+    .regex(
+      /^[a-f0-9]{64}$/,
+      "Reopen the budget editor to load its current version.",
+    ),
+  expectedFields: z.string().max(10000).optional(),
   clientBudgetTargetHt: optionalMoney,
   estimatedPurchaseCostHt: optionalMoney,
   estimatedOtherCostHt: optionalMoney,

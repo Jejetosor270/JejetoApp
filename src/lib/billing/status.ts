@@ -2,7 +2,7 @@ import "server-only";
 import Decimal from "decimal.js";
 import { z } from "zod";
 import { businessToday } from "@/domain/payments/dates";
-import { billingStatuses } from "@/domain/billing/status";
+import { billingIsIssued, billingStatuses } from "@/domain/billing/status";
 import { clientReceiptSchema } from "@/domain/billing/validation";
 import { Prisma } from "@/generated/prisma/client";
 import { getDatabase } from "@/lib/db";
@@ -61,6 +61,10 @@ export async function changeBillingStatusInTransaction(
   )
     throw new ClientBillingValidationError(
       "Create or select an Invoice to use this status. Quotes remain planning documents.",
+    );
+  if (["PAID", "PARTIALLY_PAID"].includes(input.value) && !billingIsIssued(doc))
+    throw new ClientBillingValidationError(
+      "Set the Invoice status to Invoiced and save before recording a receipt.",
     );
   if (
     ["DRAFT", "TO_BE_INVOICED", "CANCELLED"].includes(input.value) &&

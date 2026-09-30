@@ -14,6 +14,8 @@ vi.mock("@/lib/master-data/projects", () => ({
 import { ProjectBudgetProvider } from "./project-budget-editor";
 import { EditProjectBudgetButton } from "./project-budget-context";
 import { updateProjectBudgetAction } from "@/app/(app)/projects/[projectId]/actions";
+import { ProjectBudgetConflictError } from "@/lib/master-data/errors";
+import { useState } from "react";
 let view: Awaited<ReturnType<typeof mountForm>>;
 afterEach(async () => {
   await view?.unmount();
@@ -72,4 +74,66 @@ it("hides editing for read-only users and enforces authorization on direct actio
     updateProjectBudgetAction({ status: "idle", message: "" }, new FormData()),
   ).rejects.toThrow("Forbidden");
   expect(services.update).not.toHaveBeenCalled();
+});
+
+it.each([undefined, "invalid"])(
+  "rejects a missing or malformed budget version (%s) before persistence",
+  async (version) => {
+    services.actor.mockResolvedValue({ id: "actor" });
+    const data = new FormData();
+    data.set("id", projectEditorFixture().project.id);
+    data.set("targetMode", "MARKUP");
+    if (version !== undefined) data.set("expectedVersion", version);
+    const result = await updateProjectBudgetAction(
+      { status: "idle", message: "" },
+      data,
+    );
+    expect(result.status).toBe("error");
+    expect(result.fieldErrors).toHaveProperty("expectedVersion");
+    expect(services.update).not.toHaveBeenCalled();
+  },
+);
+
+it("keeps a stale budget draft and its original version after server props refresh", async () => {
+  function RefreshedProject() {
+    const [version, setVersion] = useState("a".repeat(64));
+    return (
+      <ProjectBudgetProvider
+        project={{
+          ...projectEditorFixture().project,
+          budgetEditVersion: version,
+        }}
+        canEdit
+      >
+        <EditProjectBudgetButton />
+        <button onClick={() => setVersion("b".repeat(64))}>
+          Refresh server props
+        </button>
+      </ProjectBudgetProvider>
+    );
+  }
+  services.actor.mockResolvedValue({ id: "actor" });
+  view = await mountForm(<RefreshedProject />);
+  await clickText("Edit budget & pricing");
+  await enter("estimatedPurchaseCostHt", "1234.56");
+  await clickText("Refresh server props");
+  services.update.mockRejectedValue(
+    new ProjectBudgetConflictError(
+      "Changed since editing began: budget. Your draft is retained.",
+    ),
+  );
+  await clickText("Save budget & pricing");
+  expect(services.update).toHaveBeenCalledWith(
+    "actor",
+    expect.objectContaining({
+      expectedVersion: "a".repeat(64),
+      estimatedPurchaseCostHt: "1234.5600",
+    }),
+  );
+  expect(control("estimatedPurchaseCostHt").value).toContain("234.56");
+  expect(document.body.textContent).toContain("Your draft is retained");
+  await clickText("Close");
+  await clickText("Discard changes");
+  await clickText("Edit budget & pricing");
+  expect(control("expectedVersion").value).toBe("b".repeat(64));
 });

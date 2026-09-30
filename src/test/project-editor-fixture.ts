@@ -15,6 +15,8 @@ export function projectEditorFixture(): Omit<
     managers: [{ id: reviewSupplierId, name: "Fictional manager" }],
     statuses: ["ACTIVE", "ARCHIVED"],
     project: {
+      budgetEditVersion: "a".repeat(64),
+      budgetEditFields: "{}",
       id: reviewProjectId,
       name: "Fictional Villa",
       code: "VILLA-A",

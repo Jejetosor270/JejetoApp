@@ -179,12 +179,14 @@ export function ProjectBudgetFields({
   );
 }
 function BudgetForm({
-  project,
+  project: latestProject,
   onClose,
 }: {
   project: ProjectView;
   onClose: () => void;
 }) {
+  // A refresh must not bless an old DOM draft with a newer concurrency token.
+  const [project] = useState(latestProject);
   const { state, onSubmit, pending } = usePersistentActionState(
     updateProjectBudgetAction,
     initialMasterDataActionState,
@@ -195,6 +197,16 @@ function BudgetForm({
   return (
     <form onSubmit={onSubmit} className="@container space-y-7">
       <input type="hidden" name="id" value={project.id} />
+      <input
+        type="hidden"
+        name="expectedVersion"
+        value={project.budgetEditVersion}
+      />
+      <input
+        type="hidden"
+        name="expectedFields"
+        value={project.budgetEditFields}
+      />
       <p className="text-muted-foreground text-sm">
         Amounts in {project.reportingCurrencyCode}, excluding VAT. Changing
         default markup also changes Orders using Project pricing; existing

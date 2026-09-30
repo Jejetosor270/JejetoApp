@@ -23,6 +23,13 @@ export class ProjectReportingCurrencyLockedError extends Error {
   }
 }
 
+export class ProjectBudgetConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProjectBudgetConflictError";
+  }
+}
+
 export function isDuplicateMasterDataError(error: unknown): boolean {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -35,10 +42,12 @@ export function isExpectedMasterDataError(
 ): error is
   | MasterDataNotFoundError
   | InvalidMasterDataRelationError
+  | ProjectBudgetConflictError
   | ProjectReportingCurrencyLockedError {
   return (
     error instanceof MasterDataNotFoundError ||
     error instanceof InvalidMasterDataRelationError ||
+    error instanceof ProjectBudgetConflictError ||
     error instanceof ProjectReportingCurrencyLockedError
   );
 }

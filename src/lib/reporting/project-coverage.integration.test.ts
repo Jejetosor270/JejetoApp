@@ -5,6 +5,9 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => state.db }));
 import { prismaMemoryDatabase } from "@/test/prisma-memory-database";
 import { getProjectControl } from "./project-control";
+import { getProjectReportingSnapshot } from "./reports";
+import { listClientCashInstallments } from "@/lib/billing/reporting";
+import { getProcurementCalendarEvents } from "@/lib/payments/payments";
 import { businessToday, dateOnlyToDate } from "@/domain/payments/dates";
 let memory: Awaited<ReturnType<typeof prismaMemoryDatabase>>;
 beforeAll(async () => {
@@ -19,6 +22,111 @@ beforeAll(async () => {
 }, 30000);
 afterAll(async () => {
   await memory.close();
+});
+
+it("keeps foreign and multiply matched terms visible but financially incomplete across surfaces", async () => {
+  const db = memory.raw;
+  const today = businessToday();
+  const project = await db.project.create({
+    data: {
+      code: "MATCH-REVIEW",
+      name: "Match review",
+      reportingCurrencyCode: "EUR",
+    },
+  });
+  const quote = await db.clientBillingDocument.create({
+    data: {
+      projectId: project.id,
+      reference: "MATCH-Q",
+      documentType: "QUOTE",
+      workflowStatus: "TO_BE_INVOICED",
+      documentDate: dateOnlyToDate(today),
+      currencyCode: "USD",
+      totalHt: "1000",
+      totalTtc: "1000",
+      fxRateToReporting: "0.9",
+    },
+  });
+  const term = await db.clientPaymentInstallment.create({
+    data: {
+      billingDocumentId: quote.id,
+      sequence: 1,
+      label: "Foreign term",
+      basis: "FIXED_AMOUNT",
+      scheduledAmount: "1000",
+      currencyCode: "USD",
+      dueDate: dateOnlyToDate(today),
+      expectedFxRateToReporting: "0.9",
+    },
+  });
+  const invoice = await db.clientBillingDocument.create({
+    data: {
+      projectId: project.id,
+      reference: "MATCH-I",
+      documentType: "INVOICE",
+      workflowStatus: "INVOICED",
+      documentDate: dateOnlyToDate(today),
+      currencyCode: "EUR",
+      totalHt: "800",
+      totalTtc: "800",
+      matchedInstallmentId: term.id,
+    },
+  });
+  const overview = await getProjectControl(project.id);
+  expect(overview.cashOutlook.windows[0]?.expectedIn).toBeNull();
+  expect(overview.cashOutlook.reviewCount).toBe(1);
+  expect(overview.cashOutlook.missingFxCount).toBe(0);
+  expect(
+    overview.cashOutlook.entries.find((entry) => entry.kind === "issued")
+      ?.source?.href,
+  ).toContain(invoice.id);
+  const report = await getProjectReportingSnapshot(project.id, {
+    horizon: "30d",
+  });
+  expect(report?.cashFlow.totals).toMatchObject({
+    expectedComplete: false,
+    missingExpectedCount: 1,
+  });
+  const calendar = await getProcurementCalendarEvents(today, today);
+  expect(
+    calendar.find((event) => event.href === `/billing/${invoice.id}`),
+  ).toMatchObject({ amount: null, status: "REVIEW" });
+
+  // A planned Invoice must never overwrite an issued owner's forecast row.
+  const second = await db.clientBillingDocument.create({
+    data: {
+      projectId: project.id,
+      reference: "MATCH-P",
+      documentType: "INVOICE",
+      workflowStatus: "TO_BE_INVOICED",
+      documentDate: dateOnlyToDate(today),
+      currencyCode: "USD",
+      totalHt: "1000",
+      totalTtc: "1000",
+      matchedInstallmentId: term.id,
+    },
+  });
+  const rows = await listClientCashInstallments([project.id]);
+  expect(
+    rows.filter((row) =>
+      [invoice.id, second.id].includes(row.billingDocumentId),
+    ),
+  ).toHaveLength(2);
+  expect(
+    rows.find((row) => row.billingDocumentId === invoice.id)?.cashKind,
+  ).toBe("issued");
+  expect(
+    rows.find((row) => row.billingDocumentId === second.id)?.reviewReason,
+  ).toContain("Several active Invoices");
+  await db.clientPaymentInstallment.update({
+    where: { id: term.id },
+    data: { dueDate: null },
+  });
+  const undated = await getProjectReportingSnapshot(project.id, {
+    horizon: "30d",
+  });
+  expect(undated?.cashFlow.totals.expectedComplete).toBe(false);
+  expect(undated?.cashFlow.planned?.complete).toBe(false);
 });
 
 it("separates issued and planned receipts, deduplicates matched terms, and preserves unscheduled cash warnings", async () => {
@@ -95,6 +203,32 @@ it("separates issued and planned receipts, deduplicates matched terms, and prese
     projectedCash: "100.0000",
   });
   expect(result.cashOutlook.undatedCount).toBe(0);
+  const cashTerms = await listClientCashInstallments([project.id]);
+  expect(cashTerms.filter((item) => item.id === term.id)).toHaveLength(1);
+  expect(cashTerms.find((item) => item.id === term.id)).toMatchObject({
+    cashKind: "issued",
+    billingDocumentId: invoice.id,
+    outstandingAmount: "70",
+    receivedAmount: "20",
+  });
+  const snapshot = await getProjectReportingSnapshot(project.id, {
+    horizon: "30d",
+  });
+  expect(snapshot?.cashFlow.totals.expectedIn).toBe("70");
+  expect(snapshot?.cashFlow.totals.actualIn).toBe("30");
+  expect(snapshot?.cashFlow.planned?.amount).toBe("100");
+  const calendar = await getProcurementCalendarEvents(
+    businessToday(),
+    businessToday(),
+  );
+  expect(
+    calendar.find((event) => event.id === `payment-${term.id}`)?.amount,
+  ).toBe("70");
+  expect(
+    calendar
+      .filter((event) => event.orderNumber === planned.reference)
+      .map((event) => event.type),
+  ).toEqual(["ISSUE_INVOICE"]);
   await db.clientBillingDocument.update({
     where: { id: quote.id },
     data: { totalHt: "200", totalTtc: "200" },

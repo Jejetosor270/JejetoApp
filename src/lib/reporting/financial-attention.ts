@@ -17,6 +17,7 @@ import {
 } from "@/domain/projects/targets";
 import { projectFreightBudget } from "@/domain/freight/calculations";
 import { billingIsIssued } from "@/domain/billing/status";
+import { billingCashContexts } from "@/domain/billing/cash-expectations";
 import { businessToday, dateToDateOnly } from "@/domain/payments/dates";
 import {
   buildFinancialAttention,
@@ -137,19 +138,24 @@ export async function getFinancialAttention(
       })),
     });
   }
-  for (const bill of bills) {
+  for (const context of billingCashContexts(bills)) {
+    const { document: bill } = context;
     const project = bill.projectId ? projectMap.get(bill.projectId) : undefined;
     if (!project) continue;
     const receipts = [
       ...new Map(
-        [...bill.receipts, ...(bill.matchedInstallment?.receipts ?? [])].map(
-          (row) => [row.id, row],
-        ),
+        [
+          ...bill.receipts,
+          ...(!context.reviewReason
+            ? (bill.matchedInstallment?.receipts ?? [])
+            : []),
+        ].map((row) => [row.id, row]),
       ).values(),
     ];
     documents.push({
       id: bill.id,
       side: "client",
+      reviewReason: context.reviewReason,
       projectId: project.id,
       projectName: project.name,
       reportingCurrency: project.reportingCurrencyCode,
@@ -161,7 +167,7 @@ export async function getFinancialAttention(
       currency: bill.currencyCode,
       totalHt: bill.totalHt.toString(),
       totalTtc: bill.totalTtc.toString(),
-      paid: paidTotal(receipts),
+      paid: context.paid,
       issued: billingIsIssued(bill),
       toInvoice: bill.workflowStatus === "TO_BE_INVOICED",
       fxMissing: missingFx(

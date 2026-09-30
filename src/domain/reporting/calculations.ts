@@ -116,6 +116,7 @@ export interface ReportingSettlementInput {
 }
 
 export interface ReportingInstallmentInput {
+  reviewRequired?: boolean;
   currencyCode: string;
   direction: "SUPPLIER_PAYMENT" | "CLIENT_RECEIPT";
   dueDate: string | null;
@@ -378,6 +379,7 @@ function expectedAmount(
   amount: string,
   reportingCurrencyCode: string,
 ): Decimal | null {
+  if (installment.reviewRequired) return null;
   return convertPaymentAmount({
     amount,
     currencyCode: installment.currencyCode,

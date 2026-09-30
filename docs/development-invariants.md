@@ -1,5 +1,29 @@
 # Development invariants
 
+## Financial trust — Phase 1
+
+- Main expected Client cash uses issued Invoices only. Quotes and To be invoiced
+  Invoices are separate planned receipts, never primary forecast income. Project,
+  Reports and Financial attention use the shared cash-expectation rules; term
+  balances are capped by the document balance, including unassigned receipts.
+  Explicit Quote/Invoice matches are attributed once. Actual and expected FX remain
+  independent; missing FX, overdue and undated balances stay visible.
+  Matched-term currency mismatches or ambiguous multiple-Invoice links are explicit
+  read-side review issues, never cross-currency numeric caps or arbitrarily selected
+  forecast owners. These guards do not rewrite historical links or receipts.
+- Existing Draft or To be invoiced Invoices must be explicitly saved as Invoiced
+  before recording a receipt or selecting a cash status. The server rejects bypasses;
+  issuing creates no cash. Issued-Invoice payment shortcuts and explicitly reviewed
+  Paid-at-create historical intake remain supported.
+- The focused Project budget/pricing editor carries a financial snapshot version.
+  A conflicting save is rejected transactionally and preserves the open draft,
+  including its original version across server refreshes. Reopening loads current
+  values. Audit metadata records exact before/after values and changed fields.
+  This protection is scoped to the focused budget/pricing editor.
+- Related navigation resolves the first valid section query, legacy tab or fragment.
+  Generic `tab=related` links do not mask a specific fragment; explicit Details and
+  draft-preserving mounted work areas remain supported.
+
 ## Simplified Project financial overview
 
 - Phase 3 keeps Details / Related, with mounted Related work areas for Billing, Purchasing,
@@ -33,7 +57,8 @@
   overdue amounts remain visible separately from the Project's future window.
   Issued Invoice unpaid terms are primary receipts; Quotes and To be invoiced documents are separate
   plans and never enter projected net cash. Matched Quote terms count once under their Invoice.
-  Draft/cancelled/trashed documents are excluded. Existing Reports/calendar forecast scope is unchanged.
+  Draft/cancelled/trashed documents are excluded. Reports separates planned receipts
+  from primary cash totals; Calendar preserves planning context and Issue invoice reminders.
 - Expected amounts use term FX and remaining balances capped by the document balance, including
   receipts without term assignment. Unscheduled and undated balances remain visible. Overdue
   balances are shown separately, not silently moved to today. Missing required values/FX,
@@ -60,7 +85,8 @@ uses the legacy display-only payment override; Purchasing also derives payment s
 
 To be invoiced Invoices appear in the calendar as one Issue invoice reminder on
 their document date. This is not a cash event and never creates a receipt or
-forecast balance. Changing the date moves the reminder; issuing, cancelling or
+primary forecast balance. Their terms can contribute to separately labelled planned
+receipts, not expected issued-Invoice income. Changing the date moves the reminder; issuing, cancelling or
 trashing the Invoice removes it. Draft documents and Quotes have no such reminder.
 
 Purchasing and Billing have an optional 240-character short description, edited

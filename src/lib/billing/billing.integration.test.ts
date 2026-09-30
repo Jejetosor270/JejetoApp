@@ -371,7 +371,7 @@ describe("Billing persistence", () => {
     });
   });
 
-  it("excludes cancelled, settled, undated and past terms from upcoming cash", async () => {
+  it("excludes Quote terms from recognized upcoming cash", async () => {
     const quote = summaryRecord({
       id: "schedule-filters",
       documentType: ClientBillingDocumentType.QUOTE,
@@ -413,8 +413,8 @@ describe("Billing persistence", () => {
       outstandingTtc: "0.0000",
       overdueTtc: "0.0000",
       scheduleComplete: true,
-      upcomingScheduledTtc: "199.7000",
-      nextDueDate: "2099-01-15",
+      upcomingScheduledTtc: "0.0000",
+      nextDueDate: null,
     });
   });
   it("shows Villa Apsaras as fully collected from its Invoice and Receipt", async () => {

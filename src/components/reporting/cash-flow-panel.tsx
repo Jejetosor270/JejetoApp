@@ -49,9 +49,9 @@ export function CashFlowPanel({
         <div>
           <h2 className="text-sm font-semibold">Cash-flow forecast</h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            Expected cash uses outstanding due-date balances; actual cash uses
-            recorded settlement dates. {formatDateOnly(cashFlow.start)}–
-            {formatDateOnly(cashFlow.end)}.
+            Expected receipts include issued Invoices only, capped by their
+            unpaid balances; actual cash uses recorded settlement dates.{" "}
+            {formatDateOnly(cashFlow.start)}–{formatDateOnly(cashFlow.end)}.
           </p>
         </div>
         {showHorizonControls ? (
@@ -89,10 +89,40 @@ export function CashFlowPanel({
       </dl>
       {!cashFlow.totals.expectedComplete || !cashFlow.totals.actualComplete ? (
         <p className="text-destructive mt-3 text-xs">
-          Incomplete FX: {cashFlow.totals.missingExpectedCount} expected and{" "}
+          Incomplete data: {cashFlow.totals.missingExpectedCount} expected and{" "}
           {cashFlow.totals.missingActualCount} actual cash amount(s) are not
-          included in converted totals.
+          included in converted totals. Review missing FX or inconsistent
+          Billing/payment-term links.
         </p>
+      ) : null}
+      {cashFlow.planned ? (
+        <details className="mt-3 rounded-md border p-3 text-xs">
+          <summary className="cursor-pointer font-medium">
+            Planned Client receipts · excluded from expected net
+            <span className="financial-figure ml-2">
+              {cashFlow.planned.complete
+                ? formatMoney(cashFlow.planned.amount, currencyCode)
+                : "Incomplete — review source data"}
+            </span>
+          </summary>
+          <p className="text-muted-foreground mt-2">
+            Quote and To be invoiced payment terms due in this period. Matched
+            Quote terms count once under their Invoice; plans are not issued
+            receivables.
+          </p>
+          <dl className="mt-2 space-y-1">
+            {cashFlow.planned.rows.map((row) => (
+              <div className="flex justify-between gap-3" key={row.month}>
+                <dt>{monthLabel(row.month)}</dt>
+                <dd className="financial-figure">
+                  {row.complete
+                    ? formatMoney(row.amount, currencyCode)
+                    : "Incomplete — review source data"}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </details>
       ) : null}
       {hasActivity ? (
         <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(34rem,1.2fr)]">

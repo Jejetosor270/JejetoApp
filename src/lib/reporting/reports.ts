@@ -107,6 +107,12 @@ export interface SerializedFinancialSummary {
 }
 
 export interface SerializedCashFlow {
+  planned?: {
+    amount: string;
+    complete: boolean;
+    missingCount: number;
+    rows: readonly { month: string; amount: string; complete: boolean }[];
+  };
   chart: readonly {
     cashInWidth: string;
     cashOutWidth: string;
@@ -332,6 +338,7 @@ function clientInstallmentInput(
   installment: ClientCashInstallment,
 ): ReportingInstallmentInput {
   return {
+    reviewRequired: Boolean(installment.reviewReason),
     currencyCode: installment.currencyCode,
     direction: PaymentDirection.CLIENT_RECEIPT,
     dueDate: installment.dueDate,
@@ -466,6 +473,9 @@ function serializedCashFlow(input: {
     };
   });
   const totals = summarizeMonthlyCashFlow(rows);
+  const undatedReviews = input.installments.filter(
+    (item) => item.reviewRequired && !item.isCancelled && item.dueDate === null,
+  ).length;
   return {
     chart: cashFlowChartScale(rows),
     end: input.end,
@@ -488,12 +498,12 @@ function serializedCashFlow(input: {
       actualIn: totals.actualIn.toString(),
       actualNet: totals.actualNet.toString(),
       actualOut: totals.actualOut.toString(),
-      expectedComplete: totals.expectedComplete,
+      expectedComplete: totals.expectedComplete && undatedReviews === 0,
       expectedIn: totals.expectedIn.toString(),
       expectedNet: totals.expectedNet.toString(),
       expectedOut: totals.expectedOut.toString(),
       missingActualCount: totals.missingActualIds.length,
-      missingExpectedCount: totals.missingExpectedIds.length,
+      missingExpectedCount: totals.missingExpectedIds.length + undatedReviews,
     },
   };
 }
@@ -539,15 +549,21 @@ function overdueClientItems(
 ): OverdueReportingItem[] {
   const today = businessToday();
   return installments
-    .filter((item) => item.status === "OVERDUE" && !item.isCancelled)
+    .filter(
+      (item) =>
+        item.status === "OVERDUE" &&
+        !item.isCancelled &&
+        !plannedClientTerm(item),
+    )
     .map((item) => ({
-      amount:
-        convertPaymentAmount({
-          amount: item.outstandingAmount,
-          currencyCode: item.currencyCode,
-          fxRateToReporting: item.expectedFxRate,
-          reportingCurrencyCode,
-        })?.toString() ?? null,
+      amount: item.reviewReason
+        ? null
+        : (convertPaymentAmount({
+            amount: item.outstandingAmount,
+            currencyCode: item.currencyCode,
+            fxRateToReporting: item.expectedFxRate,
+            reportingCurrencyCode,
+          })?.toString() ?? null),
       clientName: item.clientName,
       currencyCode: reportingCurrencyCode,
       daysOverdue: daysOverdue(item.dueDate, today),
@@ -561,6 +577,10 @@ function overdueClientItems(
       projectName: item.projectName,
       supplierName: "",
     }));
+}
+
+function plannedClientTerm(item: ClientCashInstallment) {
+  return item.cashKind === "planned" || item.documentType === "QUOTE";
 }
 
 function projectSnapshot(input: {
@@ -593,8 +613,19 @@ function projectSnapshot(input: {
   const cashFlowInstallments = [
     ...(input.freightCommitments ?? []),
     ...installments,
-    ...input.clientInstallments.map(clientInstallmentInput),
+    ...input.clientInstallments
+      .filter((item) => !plannedClientTerm(item))
+      .map(clientInstallmentInput),
   ];
+  const planned = serializedCashFlow({
+    clientReceipts: [],
+    installments: input.clientInstallments
+      .filter(plannedClientTerm)
+      .map(clientInstallmentInput),
+    reportingCurrencyCode: input.reportingCurrencyCode,
+    start: input.range.start,
+    end: input.range.end,
+  });
   const orderFinancials = new Map(
     financial.orders.map((order) => [order.id, order]),
   );
@@ -655,16 +686,28 @@ function projectSnapshot(input: {
     };
   });
   return {
-    cashFlow: serializedCashFlow({
-      clientReceipts: [
-        ...input.clientReceipts,
-        ...(input.freightPayments ?? []),
-      ],
-      end: input.range.end,
-      installments: cashFlowInstallments,
-      reportingCurrencyCode: input.reportingCurrencyCode,
-      start: input.range.start,
-    }),
+    cashFlow: {
+      ...serializedCashFlow({
+        clientReceipts: [
+          ...input.clientReceipts,
+          ...(input.freightPayments ?? []),
+        ],
+        end: input.range.end,
+        installments: cashFlowInstallments,
+        reportingCurrencyCode: input.reportingCurrencyCode,
+        start: input.range.start,
+      }),
+      planned: {
+        amount: planned.totals.expectedIn,
+        complete: planned.totals.expectedComplete,
+        missingCount: planned.totals.missingExpectedCount,
+        rows: planned.rows.map((row) => ({
+          month: row.month,
+          amount: row.expectedIn,
+          complete: row.expectedComplete,
+        })),
+      },
+    },
     freightPaid,
     cashPosition: difference(
       cashSum(input.clientReceipts),

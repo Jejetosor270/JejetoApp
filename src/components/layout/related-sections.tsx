@@ -22,7 +22,10 @@ export function RelatedSections({ sections }: { sections: RecordSection[] }) {
     () => window.location.hash.slice(1),
     () => "",
   );
-  const requested = search.get("section") || search.get("tab") || hash;
+  // Main tabs and stale section IDs must not hide a valid legacy hash link.
+  const requested = [search.get("section"), search.get("tab"), hash].find(
+    (candidate) => sections.some((section) => section.id === candidate),
+  );
   const selected =
     sections.find((section) => section.id === requested)?.id ?? sections[0]?.id;
   function select(section: string) {

@@ -6,6 +6,11 @@ import {
 import "server-only";
 
 import Decimal from "decimal.js";
+import {
+  billingCashContexts,
+  uniqueReceiptTotal,
+} from "@/domain/billing/cash-expectations";
+import { cappedCashTerms } from "@/domain/payments/cash-expectations";
 
 import { COMPANY_REPORTING_CURRENCY_CODE } from "@/config/reporting";
 import {
@@ -14,10 +19,7 @@ import {
   isRecognizedClientReceivable,
 } from "@/domain/billing/calculations";
 import { reportingAmount } from "@/domain/finance/calculations";
-import {
-  derivePaymentStatus,
-  installmentOutstanding,
-} from "@/domain/payments/calculations";
+import { derivePaymentStatus } from "@/domain/payments/calculations";
 import { businessToday, dateToDateOnly } from "@/domain/payments/dates";
 import { ClientBillingDocumentType, Prisma } from "@/generated/prisma/client";
 import { getDatabase } from "@/lib/db";
@@ -40,11 +42,13 @@ type BillingReportingRecord = Prisma.ClientBillingDocumentGetPayload<{
 }>;
 
 function receiptRecords(record: BillingReportingRecord) {
+  const matched =
+    record.matchedInstallment?.currencyCode === record.currencyCode
+      ? record.matchedInstallment.receipts
+      : [];
   return [
     ...new Map(
-      [...record.receipts, ...(record.matchedInstallment?.receipts ?? [])].map(
-        (receipt) => [receipt.id, receipt],
-      ),
+      [...record.receipts, ...matched].map((receipt) => [receipt.id, receipt]),
     ).values(),
   ];
 }
@@ -90,7 +94,7 @@ function createBillingSummaryState() {
   >();
   const uniqueInstallments = new Map<
     string,
-    BillingReportingRecord["paymentInstallments"][number]
+    { amount: string; due: string | null; currency: string; fx: string | null }
   >();
 
   return {
@@ -204,6 +208,7 @@ function addInvoiceTotals(
 function collectBillingCash(
   state: BillingSummaryState,
   record: BillingReportingRecord,
+  reviewRequired: boolean,
 ) {
   for (const receipt of record.documentType ===
   ClientBillingDocumentType.INVOICE
@@ -217,8 +222,32 @@ function collectBillingCash(
   const visibleInstallments = record.matchedInstallment
     ? [record.matchedInstallment]
     : record.paymentInstallments;
-  for (const installment of visibleInstallments)
-    state.uniqueInstallments.set(installment.id, installment);
+  if (reviewRequired) {
+    if (isRecognizedClientReceivable(record)) {
+      state.scheduleComplete = false;
+      state.missingIds.add(record.id);
+    }
+  } else if (isRecognizedClientReceivable(record)) {
+    const schedule = cappedCashTerms(
+      record.totalTtc.toString(),
+      uniqueReceiptTotal(receiptRecords(record)),
+      visibleInstallments.map((term) => ({
+        id: term.id,
+        amount: term.scheduledAmount.toString(),
+        paid: uniqueReceiptTotal(term.receipts),
+        due: dateToDateOnly(term.dueDate ?? record.dueDate),
+        cancelled: term.isCancelled,
+        currency: term.currencyCode,
+        fx: term.expectedFxRateToReporting?.toString() ?? null,
+      })),
+    );
+    for (const { term, amount } of schedule.terms) {
+      state.uniqueInstallments.set(term.id, {
+        ...term,
+        amount: amount.toString(),
+      });
+    }
+  }
 
   return visibleInstallments;
 }
@@ -296,23 +325,15 @@ function addUpcomingTerms(
   reportingCurrencyCode: string,
 ) {
   for (const installment of state.uniqueInstallments.values()) {
-    if (installment.isCancelled) continue;
-    const received = installment.receipts.reduce(
-      (total, receipt) => total.plus(receipt.amount),
-      new Decimal(0),
-    );
-    const outstanding = installmentOutstanding(
-      installment.scheduledAmount,
-      received,
-    );
-    const dueDate = dateToDateOnly(installment.dueDate);
+    const outstanding = new Decimal(installment.amount);
+    const dueDate = installment.due;
     if (!dueDate || outstanding.isZero() || dueDate < state.today) continue;
     state.nextDueDate = earlierDate(state.nextDueDate, dueDate);
     const convertedOutstanding = converted(
       outstanding.toString(),
-      installment.currencyCode,
+      installment.currency,
       reportingCurrencyCode,
-      installment.expectedFxRateToReporting?.toString() ?? null,
+      installment.fx,
     );
     if (convertedOutstanding === null) state.scheduleComplete = false;
     else
@@ -326,6 +347,12 @@ export function summarizeClientBillingRecords(
   reportingCurrencyCode: string,
 ) {
   const state = createBillingSummaryState();
+  const contexts = new Map(
+    billingCashContexts(records).map((context) => [
+      context.document.id,
+      context,
+    ]),
+  );
   for (const record of records) {
     if (
       record.isCancelled ||
@@ -337,8 +364,10 @@ export function summarizeClientBillingRecords(
     const fxRate = record.fxRateToReporting?.toString() ?? null;
     addDocumentRevenue(state, record, reportingCurrencyCode, fxRate);
     addInvoiceTotals(state, record, reportingCurrencyCode, fxRate);
-    const terms = collectBillingCash(state, record);
-    addReceivableBalance(state, record, reportingCurrencyCode, fxRate, terms);
+    const reviewRequired = Boolean(contexts.get(record.id)?.reviewReason);
+    const terms = collectBillingCash(state, record, reviewRequired);
+    if (!reviewRequired)
+      addReceivableBalance(state, record, reportingCurrencyCode, fxRate, terms);
   }
   addActualReceipts(state, reportingCurrencyCode);
   addUpcomingTerms(state, reportingCurrencyCode);
@@ -471,6 +500,8 @@ export async function getPortfolioClientBillingSummary() {
 }
 
 export interface ClientCashInstallment {
+  reviewReason?: string | null;
+  cashKind?: "issued" | "planned";
   clientId?: string;
   receivedAmount?: string;
   documentType?: string;
@@ -498,16 +529,18 @@ export async function listClientCashInstallments(
   const documents = await getDatabase().clientBillingDocument.findMany({
     where: {
       isCancelled: false,
-      OR: [
-        { documentType: "QUOTE" },
-        { workflowStatus: { notIn: ["DRAFT", "TO_BE_INVOICED", "CANCELLED"] } },
-      ],
+      workflowStatus: { notIn: ["DRAFT", "CANCELLED"] },
       ...(projectIds ? { projectId: { in: [...projectIds] } } : {}),
     },
     orderBy: { documentType: "desc" },
     select: {
       client: { select: { id: true, displayName: true } },
       documentType: true,
+      currencyCode: true,
+      workflowStatus: true,
+      isCancelled: true,
+      totalTtc: true,
+      receipts: { select: { id: true, amount: true } },
       dueDate: true,
       id: true,
       matchedInstallment: {
@@ -518,7 +551,7 @@ export async function listClientCashInstallments(
           id: true,
           isCancelled: true,
           label: true,
-          receipts: { select: { amount: true } },
+          receipts: { select: { id: true, amount: true } },
           scheduledAmount: true,
         },
       },
@@ -530,7 +563,7 @@ export async function listClientCashInstallments(
           id: true,
           isCancelled: true,
           label: true,
-          receipts: { select: { amount: true } },
+          receipts: { select: { id: true, amount: true } },
           scheduledAmount: true,
         },
       },
@@ -540,28 +573,38 @@ export async function listClientCashInstallments(
   });
   const today = businessToday();
   const unique = new Map<string, ClientCashInstallment>();
-  for (const document of documents) {
-    const installments = document.matchedInstallment
-      ? [document.matchedInstallment]
-      : document.paymentInstallments;
-    for (const installment of installments) {
-      // An Invoice matched to a Quote installment is the preferred display context.
-      if (
-        unique.has(installment.id) &&
-        document.documentType === ClientBillingDocumentType.QUOTE
-      )
-        continue;
-      const received = installment.receipts.reduce(
-        (total, receipt) => total.plus(receipt.amount),
-        new Decimal(0),
-      );
-      const outstanding = installment.isCancelled
-        ? new Decimal(0)
-        : installmentOutstanding(installment.scheduledAmount, received);
-      const dueDate = dateToDateOnly(installment.dueDate ?? document.dueDate);
-      unique.set(installment.id, {
+  for (const context of billingCashContexts(documents)) {
+    const { document } = context;
+    const terms = context.terms.map((term) => ({
+      source: term,
+      amount: term.scheduledAmount.toString(),
+      paid: context.reviewReason ? "0" : uniqueReceiptTotal(term.receipts),
+      due: dateToDateOnly(term.dueDate ?? document.dueDate),
+      cancelled: term.isCancelled,
+    }));
+    // Diagnostic amounts remain original-currency evidence only. Consumers must not aggregate them.
+    const schedule = context.reviewReason
+      ? {
+          terms: terms.map((term) => ({
+            term,
+            amount: new Decimal(term.amount),
+          })),
+        }
+      : cappedCashTerms(context.total, context.paid, terms);
+    for (const { term, amount: outstanding } of schedule.terms) {
+      const installment = term.source;
+      const received = new Decimal(term.paid);
+      const dueDate = term.due;
+      const id = context.reviewReason
+        ? `${document.id}:${installment.id}`
+        : installment.id;
+      unique.set(id, {
+        reviewReason: context.reviewReason,
+        cashKind: context.kind,
         clientId: document.client?.id ?? "",
-        receivedAmount: received.toString(),
+        ...(!context.reviewReason
+          ? { receivedAmount: received.toString() }
+          : {}),
         documentType: document.documentType,
         billingDocumentId: document.id,
         billingReference: document.reference,
@@ -570,7 +613,7 @@ export async function listClientCashInstallments(
         dueDate,
         expectedFxRate:
           installment.expectedFxRateToReporting?.toString() ?? null,
-        id: installment.id,
+        id,
         isCancelled: installment.isCancelled,
         label: installment.label,
         outstandingAmount: outstanding.toString(),
@@ -580,8 +623,9 @@ export async function listClientCashInstallments(
         status: derivePaymentStatus({
           dueDate,
           isCancelled: installment.isCancelled,
-          paidAmount: received,
-          scheduledAmount: installment.scheduledAmount,
+          // A document-level receipt reduces forecast balance, not stored term cash.
+          paidAmount: new Decimal(term.amount).minus(outstanding),
+          scheduledAmount: term.amount,
           today,
         }),
       });

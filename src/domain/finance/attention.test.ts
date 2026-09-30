@@ -59,6 +59,22 @@ const build = (rows: AttentionDocument[], horizon: 7 | 30 | 90 = 7) =>
   buildFinancialAttention(rows, [project], today, horizon);
 
 describe("financial attention", () => {
+  it("caps Client term reminders by the Invoice balance after unassigned receipts", () => {
+    const issues = build([
+      {
+        ...doc,
+        side: "client",
+        totalTtc: "1000",
+        paid: "400",
+        terms: [{ ...term, scheduled: "1000", paid: "0" }],
+      },
+    ]);
+    expect(issues.find((issue) => issue.key === "term-due:term")?.amount).toBe(
+      "600.0000",
+    );
+    // Schedule reconciliation remains visible; the projection never promises the extra 400.
+    expect(issues.map((issue) => issue.key)).toContain("schedule:doc");
+  });
   it.each([7, 30, 90] as const)(
     "shares the inclusive %s-day window and excludes the next day",
     (days) => {
