@@ -308,6 +308,28 @@ it("counts matched Quote receipts once, using Invoice freight and each receipt's
   expect(report.received).toBe("840.0000");
   expect(report.cash.paid).toBe("260.0000");
   expect(report.cash.net).toBe("580.0000");
+  expect(
+    report.drilldowns
+      .filter((row) => row.kind === "received")
+      .map((row) => row.amount)
+      .sort(),
+  ).toEqual(["300.0000", "540.0000"]);
+  expect(
+    report.drilldowns
+      .filter((row) => row.kind === "paid")
+      .map((row) => row.amount)
+      .sort(),
+  ).toEqual(["200.0000", "60.0000"]);
+  expect(
+    report.drilldowns
+      .filter((row) => row.kind === "billed")
+      .map((row) => row.amount),
+  ).toEqual(["800.0000"]);
+  expect(
+    report.drilldowns.some(
+      (row) => row.kind === "cost" && row.amount === "120.0000",
+    ),
+  ).toBe(true);
   expect(report.excludedReceiptCount).toBe(1);
   expect(report.freightCoverage).toMatchObject({
     supplierHt: "100.0000",
@@ -329,6 +351,11 @@ it("counts matched Quote receipts once, using Invoice freight and each receipt's
   });
   const incomplete = await getProjectControl(project.id);
   expect(incomplete.received).toBeNull();
+  expect(
+    incomplete.drilldowns.some(
+      (row) => row.kind === "received" && row.amount === null,
+    ),
+  ).toBe(true);
   expect(incomplete.cash.net).toBeNull();
   expect(incomplete.freightCoverage.clientPaidHt).toBeNull();
   expect(incomplete.freightCoverage.clientInvoicedHt).toBe("80.0000");
@@ -338,5 +365,8 @@ it("counts matched Quote receipts once, using Invoice freight and each receipt's
   });
   const cancelled = await getProjectControl(project.id);
   expect(cancelled.received).toBe("0.0000");
+  expect(cancelled.drilldowns.filter((row) => row.kind === "received")).toEqual(
+    [],
+  );
   expect(cancelled.freightCoverage.clientPaidHt).toBe("0.0000");
 });

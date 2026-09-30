@@ -27,6 +27,7 @@ const categories = recoveryCategories.map((category) => ({
   }),
 }));
 const data: ProjectControl = {
+  drilldowns: [],
   cashOutlook: projectCashOutlook([], "EUR", "2026-09-01", "60"),
   directTarget: false,
   economicReconciliation: {

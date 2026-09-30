@@ -12,6 +12,7 @@ import type {
   CreateProjectInput,
   UpdateBuildingInput,
   UpdateProjectInput,
+  UpdateProjectBudgetInput,
 } from "@/domain/master-data/validation";
 import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
@@ -337,6 +338,63 @@ export async function updateProject(
     }
     throw error;
   }
+}
+
+/** Only budget/pricing fields are written; general details are never resubmitted. */
+export async function updateProjectBudget(
+  actorId: string,
+  input: UpdateProjectBudgetInput,
+) {
+  return getDatabase().$transaction(
+    async (transaction) => {
+      const current = await transaction.project.findUnique({
+        where: { id: input.id },
+        select: { id: true, code: true },
+      });
+      if (!current)
+        throw new MasterDataNotFoundError("This project no longer exists.");
+      const estimatedFreightCostHt = projectFreightBudget(
+        input.estimatedPurchaseCostHt,
+        input.freightEstimateRate,
+      );
+      const targets = calculateProjectTargets({
+        estimatedPurchaseCostHt: input.estimatedPurchaseCostHt ?? null,
+        estimatedOtherCostHt: input.estimatedOtherCostHt ?? null,
+        estimatedFreightCostHt,
+        defaultProductMarkupRate: input.defaultProductMarkupRate ?? "0",
+        defaultFreightMarkupRate: input.defaultFreightMarkupRate ?? "0",
+        defaultOtherCostMarkupRate: input.defaultOtherCostMarkupRate ?? "0",
+        targetMode: input.targetMode,
+        expectedSellHt: input.expectedSellHt ?? null,
+      });
+      await transaction.project.update({
+        where: { id: input.id },
+        data: {
+          clientBudgetTargetHt: input.clientBudgetTargetHt ?? null,
+          estimatedPurchaseCostHt: input.estimatedPurchaseCostHt ?? null,
+          estimatedOtherCostHt: input.estimatedOtherCostHt ?? null,
+          estimatedFreightCostHt,
+          freightEstimateRate: input.freightEstimateRate ?? null,
+          freightEstimateNotes: input.freightEstimateNotes ?? null,
+          defaultProductMarkupRate: input.defaultProductMarkupRate ?? "0",
+          defaultFreightMarkupRate: input.defaultFreightMarkupRate ?? "0",
+          defaultOtherCostMarkupRate: input.defaultOtherCostMarkupRate ?? "0",
+          targetMode: input.targetMode,
+          expectedSellHt: targets.expectedSellHt,
+          targetMarkupRate: targets.effectiveMarkupRate,
+          updatedById: actorId,
+        },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: current.id,
+        entityReference: current.code,
+        entityType: "PROJECT",
+        summary: "Updated Project budget and pricing.",
+      });
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }
 
 export async function createBuilding(

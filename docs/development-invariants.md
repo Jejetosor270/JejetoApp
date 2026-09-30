@@ -2,6 +2,12 @@
 
 ## Simplified Project financial overview
 
+- Phase 2 adds Project-scoped attention (overdue plus a 30-day funding horizon), with upcoming
+  reminders separate. Overview figures open source-record drawers: recognized receipts use actual
+  FX, commitments reuse capped cash-outlook entries, and planned/overdue/undated amounts stay distinct.
+  The focused budget/pricing drawer writes only financial target/default fields with role checks and
+  transactional audit; unrelated Project details and existing payment terms are never resubmitted.
+
 - Project Details leads with the full-Project commercial position (issued Invoice HT, recorded
   economic cost and Billing less cost), then actual TTC cash, all-date outstanding commitments,
   upcoming cash and approved budget comparison. Billing less cost is not a final-profit headline.

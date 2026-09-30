@@ -1,4 +1,6 @@
 import { projectRead } from "@/lib/reporting/project-diagnostics";
+import { getFinancialAttention } from "@/lib/reporting/financial-attention";
+import { ProjectAttention } from "@/components/reporting/project-attention";
 import { projectFreightBudget } from "@/domain/freight/calculations";
 import { missingProjectBudgetInputs } from "@/domain/projects/budget-information";
 import { ProjectPaymentTerms } from "@/components/payments/project-payment-terms";
@@ -85,6 +87,7 @@ export default async function ProjectPage({
     freightExpenses,
     relations,
     control,
+    attention,
   ] = await Promise.all([
     requireUser(),
     listProjectFormOptions(),
@@ -99,6 +102,9 @@ export default async function ProjectPage({
     ),
     projectRead("relations", () => getProjectRelations(projectId)),
     projectRead("financials", () => getProjectControl(projectId)),
+    projectRead("attention", () =>
+      getFinancialAttention(30, undefined, projectId),
+    ),
   ]);
   if (!result || !reporting) notFound();
   const { buildings, project } = result;
@@ -217,6 +223,7 @@ export default async function ProjectPage({
         ),
         overview: (
           <ProjectFinancialOverview
+            attention={<ProjectAttention issues={attention.issues} />}
             missingBudgetInputs={missingProjectBudgetInputs({
               estimatedPurchaseCostHt:
                 project.estimatedPurchaseCostHt?.toString() ?? null,

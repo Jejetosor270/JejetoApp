@@ -80,6 +80,7 @@ const data = {
   ),
 };
 async function mount(missing = false) {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -153,9 +154,7 @@ it("switches 7/30/90 days locally without including planned receipts or losing a
   expect(expected?.textContent).toContain("+100.00 EUR");
   expect(expected?.textContent).not.toContain("+1 050.00 EUR");
   expect(document.querySelector("input")?.value).toBe("Keep my draft");
-  expect(
-    document.querySelector('a[href="/projects/test?tab=related"]'),
-  ).not.toBeNull();
+  expect(expected?.querySelector("dd button")).not.toBeNull();
 });
 it("shows missing cash and budget as incomplete rather than zero", async () => {
   await mount(true);

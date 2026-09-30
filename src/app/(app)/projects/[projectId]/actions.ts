@@ -7,6 +7,7 @@ import {
   createBuildingInputSchema,
   updateBuildingInputSchema,
   updateProjectInputSchema,
+  updateProjectBudgetInputSchema,
 } from "@/domain/master-data/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import {
@@ -33,8 +34,30 @@ import {
   createBuilding,
   updateBuilding,
   updateProject,
+  updateProjectBudget,
 } from "@/lib/master-data/projects";
 import { revalidateProjectFinancialViews } from "@/lib/reporting/revalidation";
+
+export async function updateProjectBudgetAction(
+  _: MasterDataActionState,
+  formData: FormData,
+): Promise<MasterDataActionState> {
+  const actor = await requireMasterDataEditor();
+  const input = updateProjectBudgetInputSchema.safeParse(
+    Object.fromEntries(formData),
+  );
+  if (!input.success) return validationActionError(input.error);
+  try {
+    await updateProjectBudget(actor.id, input.data);
+  } catch (error) {
+    if (isExpectedMasterDataError(error))
+      return { message: error.message, status: "error" };
+    console.error("Unable to update Project budget.", error);
+    return unexpectedActionError("Project budget");
+  }
+  revalidateProject(input.data.id);
+  return { message: "Budget and pricing updated.", status: "success" };
+}
 
 function revalidateProject(projectId: string): void {
   revalidatePath("/projects");

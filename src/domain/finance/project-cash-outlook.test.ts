@@ -29,6 +29,19 @@ const report = (
 ) => projectCashOutlook(documents, "EUR", "2026-09-26", cash);
 
 describe("Project cash outlook", () => {
+  it("keeps source attribution on capped terms, unscheduled balances and incomplete totals", () => {
+    const source = { label: "INV-1", href: "/billing/one" };
+    const result = report([
+      document({ source }),
+      document({ source, terms: [] }),
+      document({ source, total: null }),
+    ]);
+    expect(result.entries).toEqual([
+      { source, kind: "issued", due: "2026-09-30", amount: "80.0000" },
+      { source, kind: "issued", due: null, amount: "80.0000" },
+      { source, kind: "issued", due: null, amount: null },
+    ]);
+  });
   it("includes later and undated balances in all-date totals while keeping plans separate", () => {
     const result = report([
       document({

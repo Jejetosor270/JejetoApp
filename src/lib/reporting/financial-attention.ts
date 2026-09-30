@@ -42,10 +42,14 @@ const termInclude = { receipts: { select: receiptSelect } } as const;
 export async function getFinancialAttention(
   horizon: AttentionHorizon,
   today = businessToday(),
+  projectId?: string,
 ) {
   const db = getDatabase();
   const projects = await db.project.findMany({
-    where: { status: { not: "ARCHIVED" } },
+    where: {
+      status: { not: "ARCHIVED" },
+      ...(projectId ? { id: projectId } : {}),
+    },
     orderBy: [{ name: "asc" }, { id: "asc" }],
   });
   const projectIds = projects.map((project) => project.id);

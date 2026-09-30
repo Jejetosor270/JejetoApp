@@ -202,6 +202,29 @@ it("loads real Project reminders, counts matched receipts once and excludes canc
   ).toBe(false);
 });
 
+it("scopes Project attention without leaking another Project's issues", async () => {
+  const project = await memory.raw.project.create({
+    data: {
+      code: "EMPTY",
+      name: "Empty",
+      reportingCurrencyCode: "EUR",
+      status: "ACTIVE",
+    },
+  });
+  const report = await getFinancialAttention(30, "2026-09-22", project.id);
+  expect(report.projects.map((row) => row.id)).toEqual([project.id]);
+  expect(report.issues.every((row) => row.projectId === project.id)).toBe(true);
+  expect(
+    (
+      await getFinancialAttention(
+        30,
+        "2026-09-22",
+        "00000000-0000-4000-8000-000000000001",
+      )
+    ).issues,
+  ).toEqual([]);
+});
+
 it("keeps snoozes per employee and does not delete business records when an employee is removed", async () => {
   const db = memory.raw;
   const a = await db.user.create({

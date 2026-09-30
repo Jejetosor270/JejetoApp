@@ -7,6 +7,7 @@ import { cashWindowEnd } from "@/domain/payments/dates";
 import { sumKnown, difference } from "./project-control";
 
 export interface CashOutlookDocument {
+  source?: { label: string; href: string };
   kind: "issued" | "planned" | "payment";
   currency: string;
   total: string | null;
@@ -32,12 +33,18 @@ export function projectCashOutlook(
     kind: CashOutlookDocument["kind"];
     due: string | null;
     amount: string | null;
+    source?: { label: string; href: string };
   }[] = [];
   let unscheduledCount = 0;
   let plannedUnscheduledCount = 0;
   for (const document of documents) {
     if (document.total === null) {
-      entries.push({ kind: document.kind, due: null, amount: null });
+      entries.push({
+        kind: document.kind,
+        due: null,
+        amount: null,
+        ...(document.source ? { source: document.source } : {}),
+      });
       continue;
     }
     let remaining = installmentOutstanding(document.total, document.paid);
@@ -59,6 +66,7 @@ export function projectCashOutlook(
       );
       if (amount.isZero()) continue;
       entries.push({
+        ...(document.source ? { source: document.source } : {}),
         kind: document.kind,
         due: term.due,
         amount: convert(amount, term.fx),
@@ -69,6 +77,7 @@ export function projectCashOutlook(
       if (document.kind === "planned") plannedUnscheduledCount++;
       else unscheduledCount++;
       entries.push({
+        ...(document.source ? { source: document.source } : {}),
         kind: document.kind,
         due: null,
         amount: convert(remaining, document.fx),
@@ -99,6 +108,7 @@ export function projectCashOutlook(
       entry.kind !== "planned" && entry.due !== null && entry.due < today,
   ).length;
   return {
+    entries,
     today,
     outstandingIn: sum("issued", () => true),
     outstandingOut: sum("payment", () => true),

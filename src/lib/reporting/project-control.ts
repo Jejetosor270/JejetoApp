@@ -1,6 +1,7 @@
 import { billingIsIssued } from "@/domain/billing/status";
 import "server-only";
 import Decimal from "decimal.js";
+import type { ProjectFinancialRow } from "@/domain/projects/financial-drilldown";
 import {
   projectCashOutlook,
   type CashOutlookDocument,
@@ -16,7 +17,10 @@ import { getDatabase } from "@/lib/db";
 import { recognizedReceiptWhere } from "@/lib/billing/receipt-eligibility";
 import { listProjectOrders } from "@/lib/procurement/orders";
 import { listPaymentInstallments } from "@/lib/payments/payments";
-import { getProjectFreightReconciliation } from "@/lib/freight/expenses";
+import {
+  freightExpenseEconomicCost,
+  getProjectFreightReconciliation,
+} from "@/lib/freight/expenses";
 import { getProjectClientBillingSummary } from "@/lib/billing/reporting";
 import { reportingAmount } from "@/domain/finance/calculations";
 import {
@@ -75,6 +79,7 @@ export async function getProjectControl(projectId: string) {
       include: {
         billingDocument: {
           select: {
+            reference: true,
             currencyCode: true,
             documentType: true,
             isCancelled: true,
@@ -393,6 +398,10 @@ export async function getProjectControl(projectId: string) {
       .reduce((sum, row) => sum.plus(row.amount.toString()), new Decimal(0))
       .toFixed(4);
   const outlookDocuments: CashOutlookDocument[] = activeOrders.map((order) => ({
+    source: {
+      label: order.orderNumber,
+      href: `/orders/${order.id}?tab=related`,
+    },
     kind: "payment",
     currency: order.orderCurrencyCode,
     total: order.supplierPayment.totalPayable,
@@ -441,6 +450,7 @@ export async function getProjectControl(projectId: string) {
       ? doc.receipts.filter((receipt) => !transferredReceipts.has(receipt.id))
       : [...doc.receipts, ...(doc.matchedInstallment?.receipts ?? [])];
     outlookDocuments.push({
+      source: { label: doc.reference, href: `/billing/${doc.id}?tab=related` },
       kind: !quote && billingIsIssued(doc) ? "issued" : "planned",
       currency: doc.currencyCode,
       total: partlyMatchedQuote
@@ -474,6 +484,10 @@ export async function getProjectControl(projectId: string) {
     const paid = totalPaid(expense.payments);
     const fx = expense.fxRateToReporting?.toString() ?? null;
     outlookDocuments.push({
+      source: {
+        label: expense.description,
+        href: `/projects/${projectId}?tab=freight`,
+      },
       kind: "payment",
       currency: expense.currencyCode,
       total,
@@ -490,13 +504,91 @@ export async function getProjectControl(projectId: string) {
       ],
     });
   }
-  return {
-    cashOutlook: projectCashOutlook(
-      outlookDocuments,
-      currency,
-      businessToday(),
-      difference(received, sumKnown([supplierPaid, freightPaid])),
+  const cashOutlook = projectCashOutlook(
+    outlookDocuments,
+    currency,
+    businessToday(),
+    difference(received, sumKnown([supplierPaid, freightPaid])),
+  );
+  const drilldowns: ProjectFinancialRow[] = [
+    ...invoices.map((doc) => ({
+      kind: "billed" as const,
+      label: doc.reference,
+      href: `/billing/${doc.id}`,
+      due: null,
+      amount: convert(
+        doc.totalHt.toString(),
+        doc.currencyCode,
+        doc.fxRateToReporting?.toString() ?? null,
+      ),
+    })),
+    ...activeOrders.map((order) => ({
+      kind: "cost" as const,
+      label: order.orderNumber,
+      href: `/orders/${order.id}`,
+      due: null,
+      amount: order.costs.reportingEconomicLandedCost,
+    })),
+    ...project.freightExpenses.map((expense) => ({
+      kind: "cost" as const,
+      label: expense.description,
+      href: `/projects/${projectId}?tab=freight`,
+      due: null,
+      amount: convert(
+        freightExpenseEconomicCost(expense).toString(),
+        expense.currencyCode,
+        expense.fxRateToReporting?.toString() ?? null,
+      ),
+    })),
+    ...actualReceipts.map((receipt) => ({
+      kind: "received" as const,
+      label: receipt.billingDocument.reference,
+      href: `/billing/${receipt.billingDocumentId}?tab=related`,
+      due: dateToDateOnly(receipt.receivedAt),
+      amount: convert(
+        receipt.amount.toString(),
+        receipt.billingDocument.currencyCode,
+        receipt.fxRateToReporting?.toString() ?? null,
+      ),
+    })),
+    ...installments.flatMap((term) =>
+      term.settlements.map((payment) => ({
+        kind: "paid" as const,
+        label: `${term.orderNumber} · ${term.label}`,
+        href: `/orders/${term.orderId}?tab=related`,
+        due: payment.settledAt,
+        amount: convert(payment.amount, term.currencyCode, payment.fxRate),
+      })),
     ),
+    ...project.freightExpenses.flatMap((expense) =>
+      expense.payments.map((payment) => ({
+        kind: "paid" as const,
+        label: expense.description,
+        href: `/projects/${projectId}?tab=freight`,
+        due: dateToDateOnly(payment.paidAt),
+        amount: convert(
+          payment.amount.toString(),
+          expense.currencyCode,
+          payment.fxRateToReporting?.toString() ?? null,
+        ),
+      })),
+    ),
+    ...cashOutlook.entries.flatMap((entry) =>
+      entry.source
+        ? [
+            {
+              kind: entry.kind,
+              ...entry.source,
+              amount: entry.amount,
+              due: entry.due,
+            },
+          ]
+        : [],
+    ),
+  ];
+  return {
+    cashOutlook,
+    drilldowns,
     currency,
     categories,
     directTarget: project.targetMode === "EXPECTED_SELL",

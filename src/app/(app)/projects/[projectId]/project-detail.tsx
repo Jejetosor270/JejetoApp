@@ -9,7 +9,10 @@ import { ProjectRecordDetails } from "@/components/master-data/project-record-de
 import { FormSection } from "@/components/forms/form-section";
 import type { MasterDataActionState } from "@/components/master-data/action-state";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
-import Decimal from "decimal.js";
+import {
+  ProjectBudgetFields,
+  ProjectBudgetProvider,
+} from "@/components/projects/project-budget-editor";
 import { Pencil, Plus } from "lucide-react";
 import { type ReactNode, useEffect, useState, useTransition } from "react";
 
@@ -28,8 +31,6 @@ import {
   ActionFeedback,
   Field,
   inputClassName,
-  MoneyInput,
-  PercentageInput,
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
@@ -235,145 +236,7 @@ function ProjectFields({
           />
         </Field>
       </FormSection>
-      <FormSection
-        title="Planning / Budget"
-        description="Amounts are HT in the Project reporting currency. Freight allowance applies to expected Product Purchase Cost HT."
-      >
-        <Field
-          error={fieldErrors?.clientBudgetTargetHt}
-          label="Client Budget Target HT"
-        >
-          <MoneyInput
-            className={inputClassName}
-            defaultValue={project.clientBudgetTargetHt?.toString() ?? ""}
-            name="clientBudgetTargetHt"
-          />
-        </Field>
-        <Field
-          error={fieldErrors?.estimatedPurchaseCostHt}
-          label="Estimated Purchase Cost HT"
-        >
-          <MoneyInput
-            className={inputClassName}
-            defaultValue={project.estimatedPurchaseCostHt?.toString() ?? ""}
-            name="estimatedPurchaseCostHt"
-          />
-        </Field>
-        <Field
-          error={fieldErrors?.estimatedOtherCostHt}
-          label="Other/services budget HT"
-        >
-          <MoneyInput
-            className={inputClassName}
-            defaultValue={project.estimatedOtherCostHt?.toString() ?? ""}
-            name="estimatedOtherCostHt"
-          />
-          <p className="text-muted-foreground text-xs">
-            Enter 0 to approve a zero budget; blank means not budgeted.
-          </p>
-        </Field>
-        <Field label="Budgeted freight HT (automatic)">
-          <p className="text-muted-foreground text-sm">
-            Calculated from expected Product Purchase Cost HT × Project freight
-            %.
-          </p>
-        </Field>
-        <Field
-          error={fieldErrors?.freightEstimateRate}
-          label="Expected freight allowance %"
-        >
-          <PercentageInput
-            className={inputClassName}
-            defaultValue={
-              project.freightEstimateRate
-                ? new Decimal(project.freightEstimateRate.toString())
-                    .times(100)
-                    .toString()
-                : ""
-            }
-            name="freightEstimateRate"
-          />
-        </Field>
-      </FormSection>
-      <FormSection title="Default Pricing">
-        <Field
-          error={fieldErrors?.defaultProductMarkupRate}
-          label="Default Product Markup %"
-        >
-          <PercentageInput
-            className={inputClassName}
-            defaultValue={new Decimal(
-              project.defaultProductMarkupRate.toString(),
-            )
-              .times(100)
-              .toString()}
-            name="defaultProductMarkupRate"
-          />
-        </Field>
-        <Field
-          error={fieldErrors?.defaultFreightMarkupRate}
-          label="Default Freight Markup %"
-        >
-          <PercentageInput
-            className={inputClassName}
-            defaultValue={new Decimal(
-              project.defaultFreightMarkupRate.toString(),
-            )
-              .times(100)
-              .toString()}
-            name="defaultFreightMarkupRate"
-          />
-        </Field>
-        <Field
-          error={fieldErrors?.defaultOtherCostMarkupRate}
-          label="Default Other Cost Markup %"
-        >
-          <PercentageInput
-            className={inputClassName}
-            defaultValue={new Decimal(
-              project.defaultOtherCostMarkupRate.toString(),
-            )
-              .times(100)
-              .toString()}
-            name="defaultOtherCostMarkupRate"
-          />
-        </Field>
-      </FormSection>
-      <FormSection title="Project selling target">
-        <Field label="Target mode">
-          <select
-            className={inputClassName}
-            name="targetMode"
-            defaultValue={project.targetMode}
-          >
-            <option value="MARKUP">Category markup</option>
-            <option value="EXPECTED_SELL">Approved selling target</option>
-          </select>
-        </Field>
-        <Field
-          label="Approved selling target HT (direct mode)"
-          error={fieldErrors?.expectedSellHt}
-        >
-          <MoneyInput
-            name="expectedSellHt"
-            defaultValue={project.expectedSellHt?.toString() ?? ""}
-          />
-        </Field>
-      </FormSection>
-      <FormSection title="Freight">
-        <div className="@min-[28rem]:col-span-2">
-          <Field
-            error={fieldErrors?.freightEstimateNotes}
-            label="Expected freight allowance notes"
-          >
-            <input
-              className={inputClassName}
-              defaultValue={project.freightEstimateNotes ?? ""}
-              name="freightEstimateNotes"
-            />
-          </Field>
-        </div>
-      </FormSection>
+      <ProjectBudgetFields project={project} fieldErrors={fieldErrors} />
       <FormSection title="Notes">
         <div className="@min-[28rem]:col-span-2">
           <Field label="Notes" error={fieldErrors?.notes}>
@@ -769,7 +632,11 @@ export function ProjectDetail({
             id: "overview",
             group: "details",
             label: "Overview",
-            content: workspace.overview,
+            content: (
+              <ProjectBudgetProvider project={project} canEdit={canEdit}>
+                {workspace.overview}
+              </ProjectBudgetProvider>
+            ),
           },
           {
             id: "general",

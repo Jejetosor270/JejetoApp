@@ -30,6 +30,7 @@ import {
   createProject,
   getProject,
   updateProject,
+  updateProjectBudget,
 } from "@/lib/master-data/projects";
 
 const actorId = "d1ba89a0-c7d0-4657-a922-80cdf9f9b94e";
@@ -40,6 +41,49 @@ const managerId = "b12b6b9b-10e9-4e42-b93f-38796de4f65a";
 describe("project and building writes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("updates only budget/pricing fields, derives freight and target with Decimal and audits the actor", async () => {
+    databaseMocks.transaction.project.findUnique.mockResolvedValue({
+      id: projectId,
+      code: "PRJ",
+    });
+    await updateProjectBudget(actorId, {
+      id: projectId,
+      estimatedPurchaseCostHt: "1000",
+      estimatedOtherCostHt: "0",
+      freightEstimateRate: "0.1",
+      defaultProductMarkupRate: "0.2",
+      defaultFreightMarkupRate: "0.1",
+      targetMode: "MARKUP",
+    });
+    const data =
+      databaseMocks.transaction.project.update.mock.calls[0]?.[0].data;
+    expect(data).toMatchObject({
+      estimatedFreightCostHt: "100.0000",
+      expectedSellHt: "1310.0000",
+      updatedById: actorId,
+      estimatedOtherCostHt: "0",
+    });
+    for (const field of [
+      "name",
+      "code",
+      "clientId",
+      "status",
+      "reportingCurrencyCode",
+      "notes",
+      "startDate",
+    ])
+      expect(data).not.toHaveProperty(field);
+    expect(databaseMocks.database.client.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("rejects budget writes to missing or trashed Projects", async () => {
+    databaseMocks.transaction.project.findUnique.mockResolvedValue(null);
+    await expect(
+      updateProjectBudget(actorId, { id: projectId, targetMode: "MARKUP" }),
+    ).rejects.toThrow("no longer exists");
+    expect(databaseMocks.transaction.project.update).not.toHaveBeenCalled();
   });
 
   it("verifies the client, currency, and manager before attributing project creation", async () => {

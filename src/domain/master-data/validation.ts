@@ -231,5 +231,21 @@ export type CreateSupplierInput = z.infer<typeof createSupplierInputSchema>;
 export type UpdateSupplierInput = z.infer<typeof updateSupplierInputSchema>;
 export type CreateProjectInput = z.infer<typeof createProjectInputSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectInputSchema>;
+export const updateProjectBudgetInputSchema = z.object({
+  id: z.uuid("Invalid project."),
+  clientBudgetTargetHt: optionalMoney,
+  estimatedPurchaseCostHt: optionalMoney,
+  estimatedOtherCostHt: optionalMoney,
+  freightEstimateRate: optionalPercentRate,
+  freightEstimateNotes: optionalText(500),
+  defaultProductMarkupRate: optionalPercentRate,
+  defaultFreightMarkupRate: optionalPercentRate,
+  defaultOtherCostMarkupRate: optionalPercentRate,
+  targetMode: z.enum(ProjectTargetMode),
+  expectedSellHt: optionalMoney,
+});
+export type UpdateProjectBudgetInput = z.infer<
+  typeof updateProjectBudgetInputSchema
+>;
 export type CreateBuildingInput = z.infer<typeof createBuildingInputSchema>;
 export type UpdateBuildingInput = z.infer<typeof updateBuildingInputSchema>;
