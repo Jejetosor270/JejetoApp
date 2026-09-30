@@ -65,11 +65,11 @@ const data: ProjectControl = {
 it("renders the simplified Financials rows and money totals without the removed panels", () => {
   const html = renderToStaticMarkup(<ProjectFinancialControl data={data} />);
   for (const label of [
-    "Financials",
-    "Budgeted Sell HT",
-    "Target Revenue HT",
-    "Allocated Client Invoice Amount HT",
-    "Unallocated Invoice HT",
+    "Budget, recorded costs &amp; billing attribution",
+    "Budgeted sell HT · full Project",
+    "Recorded cost + markup HT",
+    "Invoice HT allocated to Orders",
+    "Invoice HT not allocated to Orders",
     "Total",
     "300.00 EUR",
   ])

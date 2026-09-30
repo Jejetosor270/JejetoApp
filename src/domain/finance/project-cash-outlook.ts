@@ -3,7 +3,7 @@ import {
   convertPaymentAmount,
   installmentOutstanding,
 } from "@/domain/payments/calculations";
-import { dateOnlyToDate, dateToDateOnly } from "@/domain/payments/dates";
+import { cashWindowEnd } from "@/domain/payments/dates";
 import { sumKnown, difference } from "./project-control";
 
 export interface CashOutlookDocument {
@@ -100,6 +100,9 @@ export function projectCashOutlook(
   ).length;
   return {
     today,
+    outstandingIn: sum("issued", () => true),
+    outstandingOut: sum("payment", () => true),
+    plannedTotal: sum("planned", () => true),
     overdueIn,
     overdueOut,
     undatedIn,
@@ -112,9 +115,7 @@ export function projectCashOutlook(
     plannedUndated: sum("planned", (due) => due === null),
     plannedOverdue: sum("planned", (due) => due !== null && due < today),
     windows: ([7, 30, 90] as const).map((days) => {
-      const endDate = dateOnlyToDate(today);
-      endDate.setUTCDate(endDate.getUTCDate() + days - 1);
-      const end = dateToDateOnly(endDate);
+      const end = cashWindowEnd(today, days);
       const inWindow = (due: string | null) =>
         due !== null && due >= today && due <= end;
       const expectedIn = sum("issued", inWindow);

@@ -29,6 +29,42 @@ const report = (
 ) => projectCashOutlook(documents, "EUR", "2026-09-26", cash);
 
 describe("Project cash outlook", () => {
+  it("includes later and undated balances in all-date totals while keeping plans separate", () => {
+    const result = report([
+      document({
+        terms: [
+          {
+            amount: "100",
+            paid: "20",
+            due: "2027-01-01",
+            fx: null,
+            cancelled: false,
+          },
+        ],
+      }),
+      document({ kind: "payment", terms: [] }),
+      document({ kind: "planned", terms: [] }),
+    ]);
+    expect(result).toMatchObject({
+      outstandingIn: "80.0000",
+      outstandingOut: "80.0000",
+      plannedTotal: "80.0000",
+    });
+    expect(result.windows[1]).toMatchObject({
+      expectedIn: "0.0000",
+      expectedOut: "0.0000",
+    });
+  });
+  it("keeps all-date totals incomplete for missing FX without contaminating the other direction", () => {
+    expect(report([document({ currency: "USD", terms: [] })])).toMatchObject({
+      outstandingIn: null,
+      outstandingOut: "0.0000",
+      plannedTotal: "0.0000",
+    });
+    expect(
+      report([document({ kind: "payment", total: null })]).outstandingOut,
+    ).toBeNull();
+  });
   it("adds issued receipts and subtracts payments without including planned receipts", () => {
     const result = report([
       document(),

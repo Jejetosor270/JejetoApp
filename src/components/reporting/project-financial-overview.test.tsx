@@ -103,22 +103,40 @@ async function mount(missing = false) {
                 }
               : performance
           }
+          missingBudgetInputs={missing ? ["Other/services budget"] : []}
           projectId="test"
         />
       </>,
     ),
   );
 }
-it("shows three clear groups and uses actual and approved-budget profitability", async () => {
+it("leads with commercial position and separates cash, commitments and budget", async () => {
   await mount();
   expect(
     [...document.querySelectorAll("h2")].map((element) => element.textContent),
-  ).toEqual(["Cash · actual to date", "Expected cash", "Profitability"]);
+  ).toEqual([
+    "Commercial position · recorded to date",
+    "Cash · actual to date",
+    "Outstanding commitments · all dates",
+    "Upcoming cash",
+    "Budget & recorded position",
+  ]);
   expect(document.body.textContent).toContain("20%");
   expect(document.body.textContent).toContain("220.00 EUR");
-  expect(document.body.textContent).toContain("Current · provisional");
-  expect(document.body.textContent).toContain("Expected · approved budget");
+  expect(document.body.textContent).toContain("Recorded to date");
+  expect(document.body.textContent).toContain("Approved full-Project budget");
   expect(document.body.textContent).not.toContain("Billing less Order sell");
+  expect(document.body.textContent).not.toContain("Gross profit");
+  expect(
+    document.querySelector('[aria-labelledby="project-commercial-heading"]')
+      ?.textContent,
+  ).toContain("Billing less cost");
+  const outstanding = document.querySelector(
+    '[aria-labelledby="project-outstanding-heading"]',
+  );
+  expect(outstanding?.textContent).toContain("50.00 EUR");
+  expect(outstanding?.textContent).toContain("900.00 EUR");
+  expect(outstanding?.textContent).toContain("Of which overdue");
   expect(document.querySelector("details")?.open).toBe(false);
 });
 it("switches 7/30/90 days locally without including planned receipts or losing a draft", async () => {
@@ -143,4 +161,10 @@ it("shows missing cash and budget as incomplete rather than zero", async () => {
   await mount(true);
   expect(document.body.textContent).toContain("Actual cash is incomplete");
   expect(document.body.textContent).toContain("Budget incomplete");
+  expect(document.body.textContent).toContain(
+    "Budget incomplete — missing: Other/services budget.",
+  );
+  expect(document.body.textContent?.match(/Budget incomplete/g)).toHaveLength(
+    1,
+  );
 });

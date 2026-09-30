@@ -2,12 +2,19 @@
 
 ## Simplified Project financial overview
 
-- Project Details leads with actual cash, expected cash and profitability. Allocation coverage,
+- Project Details leads with the full-Project commercial position (issued Invoice HT, recorded
+  economic cost and Billing less cost), then actual TTC cash, all-date outstanding commitments,
+  upcoming cash and approved budget comparison. Billing less cost is not a final-profit headline.
+  All-date commitments reuse capped outstanding terms and unscheduled balances, keep expected FX
+  incompleteness, and separate planned client receipts. Missing budget inputs are named explicitly;
+  zero is an approved value, never a replacement for missing information. Allocation coverage,
   category/freight breakdowns, VAT, purchase-budget allocation and planning fields remain in
   collapsed sections; Details/Related, editing and underlying records are unchanged.
 - Actual cash remains recognized Client Invoice receipts less Supplier and Project-freight payments,
   using actual FX. It is net tracked Project cash, not a bank balance or freely available funds.
 - The Project overview offers 7/30/90-day cash windows (30 by default), from today through day N−1.
+  Financial attention uses the same inclusive end date through the shared cashWindowEnd helper;
+  overdue amounts remain visible separately from the Project's future window.
   Issued Invoice unpaid terms are primary receipts; Quotes and To be invoiced documents are separate
   plans and never enter projected net cash. Matched Quote terms count once under their Invoice.
   Draft/cancelled/trashed documents are excluded. Existing Reports/calendar forecast scope is unchanged.

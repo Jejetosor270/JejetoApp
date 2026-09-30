@@ -1,6 +1,5 @@
 import Decimal from "decimal.js";
-import { addDays } from "date-fns";
-import { dateOnlyToDate, dateToDateOnly } from "@/domain/payments/dates";
+import { cashWindowEnd } from "@/domain/payments/dates";
 import { installmentOutstanding } from "@/domain/payments/calculations";
 import { reportingAmount } from "@/domain/finance/calculations";
 import { formatRate } from "@/domain/procurement/presentation";
@@ -476,7 +475,7 @@ export function buildFinancialAttention(
   today: string,
   horizon: AttentionHorizon,
 ): AttentionIssue[] {
-  const end = dateToDateOnly(addDays(dateOnlyToDate(today), horizon));
+  const end = cashWindowEnd(today, horizon);
   const issues: AttentionIssue[] = [];
   const add = createIssueAdder(issues);
   const cash = new Map<string, CashPosition>();

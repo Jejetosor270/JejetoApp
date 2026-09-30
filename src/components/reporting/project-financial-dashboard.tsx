@@ -104,7 +104,10 @@ export function FundingCoverageSummary({
         {(
           [
             ["Orders Sell HT", coverage.supplierOrderSellHt],
-            ["Billing Coverage HT", coverage.clientBillingCoverageHt],
+            [
+              "Allocated + approved Project remainder HT",
+              coverage.clientBillingCoverageHt,
+            ],
             ["Billing less Order sell HT", coverage.fundingCoverageHt],
           ] as const
         ).map(([label, value], index) => (

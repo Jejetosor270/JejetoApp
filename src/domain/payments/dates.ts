@@ -15,6 +15,13 @@ export function dateOnlyToDate(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
+/** Inclusive calendar window: today is day one, independent of host timezone. */
+export function cashWindowEnd(today: string, days: 7 | 30 | 90): string {
+  const end = dateOnlyToDate(today);
+  end.setUTCDate(end.getUTCDate() + days - 1);
+  return dateToDateOnly(end);
+}
+
 export function dateToDateOnly(value: Date): string;
 export function dateToDateOnly(value: Date | null): string | null;
 export function dateToDateOnly(value: Date | null): string | null {

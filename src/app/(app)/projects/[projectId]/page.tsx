@@ -1,5 +1,6 @@
 import { projectRead } from "@/lib/reporting/project-diagnostics";
 import { projectFreightBudget } from "@/domain/freight/calculations";
+import { missingProjectBudgetInputs } from "@/domain/projects/budget-information";
 import { ProjectPaymentTerms } from "@/components/payments/project-payment-terms";
 import { ProjectCoverage } from "@/components/reporting/project-coverage";
 import { getProjectControl } from "@/lib/reporting/project-control";
@@ -216,6 +217,16 @@ export default async function ProjectPage({
         ),
         overview: (
           <ProjectFinancialOverview
+            missingBudgetInputs={missingProjectBudgetInputs({
+              estimatedPurchaseCostHt:
+                project.estimatedPurchaseCostHt?.toString() ?? null,
+              estimatedOtherCostHt:
+                project.estimatedOtherCostHt?.toString() ?? null,
+              freightEstimateRate:
+                project.freightEstimateRate?.toString() ?? null,
+              targetMode: project.targetMode,
+              expectedSellHt: project.expectedSellHt?.toString() ?? null,
+            })}
             data={control}
             performance={financialPerformance}
             projectId={projectId}

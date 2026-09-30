@@ -10,21 +10,25 @@ export function ProjectFinancialControl({ data }: { data: ProjectControl }) {
   const rows = [
     ["Budgeted cost HT", "budget"],
     ["Recorded cost HT", "recordedCost"],
-    ["Budgeted Sell HT", "budgetTarget"],
-    ["Target Revenue HT", "recordedTarget"],
+    ["Budgeted sell HT · full Project", "budgetTarget"],
+    ["Recorded cost + markup HT", "recordedTarget"],
     ["Quoted revenue (planned)", "quoted"],
     ["Invoiced revenue HT", "billed"],
-    ["Allocated Client Invoice Amount HT", "allocated"],
-    ["Unallocated Invoice HT", "projectRemainder"],
+    ["Invoice HT allocated to Orders", "allocated"],
+    ["Invoice HT not allocated to Orders", "projectRemainder"],
   ] as const;
   return (
     <section className="record-surface space-y-4">
       <div>
-        <h2 className="section-title">Financials</h2>
+        <h2 className="section-title">
+          Budget, recorded costs & billing attribution
+        </h2>
         <p className="text-muted-foreground mt-1 text-xs">
           Revenue and costs in {data.currency}. Positive differences are
           surpluses; negative differences are shortfalls. Billing coverage is
-          not cash received.
+          not cash received. Budgeted sell covers the full Project; recorded
+          cost + markup applies pricing to recorded costs only. Unallocated
+          Invoice HT includes both approved and unapproved Project remainder.
         </p>
       </div>
       <div className="overflow-x-auto rounded-lg border">

@@ -12,7 +12,6 @@ import {
   freightReceiptHt,
   projectFreightCoverage,
 } from "@/domain/finance/project-coverage";
-import { addDays } from "date-fns";
 import { getDatabase } from "@/lib/db";
 import { recognizedReceiptWhere } from "@/lib/billing/receipt-eligibility";
 import { listProjectOrders } from "@/lib/procurement/orders";
@@ -34,7 +33,7 @@ import {
 import {
   businessToday,
   dateToDateOnly,
-  dateOnlyToDate,
+  cashWindowEnd,
 } from "@/domain/payments/dates";
 
 export async function getProjectControl(projectId: string) {
@@ -380,9 +379,7 @@ export async function getProjectControl(projectId: string) {
       ),
     });
   }
-  const horizonEnd = dateToDateOnly(
-    addDays(dateOnlyToDate(businessToday()), 30),
-  );
+  const horizonEnd = cashWindowEnd(businessToday(), 30);
   const totalOrderEconomicCost = sumKnown(
     activeOrders.map((order) => order.costs.reportingEconomicLandedCost),
   );

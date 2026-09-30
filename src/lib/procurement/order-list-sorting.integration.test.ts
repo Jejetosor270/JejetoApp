@@ -146,8 +146,19 @@ it("sorts dates and derived payment statuses, ignoring legacy overrides", async 
     projectId,
     sort: "paymentStatus",
   });
-  expect(result.items[0]?.paymentStatusOverride).toBeNull();
-  expect(result.items[0]?.supplierPayment.paid).toBe("0");
+  // All fixtures are unpaid: equal statuses must use IDs, regardless of the legacy override.
+  const expected = await memory.raw.procurementOrder.findMany({
+    where: { projectId, trashedAt: null },
+    orderBy: { id: "asc" },
+    select: { id: true },
+    take: filters.pageSize,
+  });
+  expect(result.items.map((row) => row.id)).toEqual(
+    expected.map((row) => row.id),
+  );
+  expect(result.items.every((row) => row.supplierPayment.paid === "0")).toBe(
+    true,
+  );
 });
 
 it("uses the earliest unpaid installment, ignoring settled and cancelled installments", async () => {

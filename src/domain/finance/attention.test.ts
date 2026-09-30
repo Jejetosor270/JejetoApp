@@ -5,6 +5,11 @@ import {
   type AttentionTerm,
 } from "./attention";
 import {
+  cashWindowEnd,
+  dateOnlyToDate,
+  dateToDateOnly,
+} from "@/domain/payments/dates";
+import {
   attentionSnoozeSchema,
   isAttentionSnoozed,
   validSnoozeDate,
@@ -54,6 +59,35 @@ const build = (rows: AttentionDocument[], horizon: 7 | 30 | 90 = 7) =>
   buildFinancialAttention(rows, [project], today, horizon);
 
 describe("financial attention", () => {
+  it.each([7, 30, 90] as const)(
+    "shares the inclusive %s-day window and excludes the next day",
+    (days) => {
+      const end = cashWindowEnd(today, days);
+      const next = dateOnlyToDate(end);
+      next.setUTCDate(next.getUTCDate() + 1);
+      const issues = build(
+        [
+          { ...doc, terms: [{ ...term, id: "last-day", dueDate: end }] },
+          {
+            ...doc,
+            id: "later",
+            terms: [{ ...term, id: "next-day", dueDate: dateToDateOnly(next) }],
+          },
+        ],
+        days,
+      );
+      expect(issues.some((issue) => issue.key === "term-due:last-day")).toBe(
+        true,
+      );
+      expect(issues.some((issue) => issue.key === "term-due:next-day")).toBe(
+        false,
+      );
+      expect(
+        issues.find((issue) => issue.key === `cash-gap-${days}:project`)
+          ?.amount,
+      ).toBe("90.0500");
+    },
+  );
   it.each(["supplier", "freight"] as const)(
     "does not borrow document dates for %s terms",
     (side) => {
@@ -106,14 +140,14 @@ describe("financial attention", () => {
       id: "future",
       currency: "USD",
       terms: [
-        { ...term, id: "future", currency: "USD", dueDate: "2026-10-22" },
+        { ...term, id: "future", currency: "USD", dueDate: "2026-10-21" },
       ],
     };
     const near = build([doc, future], 7);
     expect(near.find((issue) => issue.key === "term-fx:future")).toMatchObject({
       amount: "90.0500",
       currency: "USD",
-      date: "2026-10-22",
+      date: "2026-10-21",
     });
     expect(
       near.find((issue) => issue.key === "cash-gap-7:project")?.amount,
@@ -252,7 +286,7 @@ describe("financial attention", () => {
     const next = {
       ...doc,
       id: "future",
-      terms: [{ ...term, id: "future", dueDate: "2026-10-22" }],
+      terms: [{ ...term, id: "future", dueDate: "2026-10-21" }],
     };
     expect(
       build([doc, next], 7).filter((row) => row.key.startsWith("term-due")),
@@ -262,7 +296,7 @@ describe("financial attention", () => {
     ).toHaveLength(2);
     expect(
       build(
-        [{ ...next, terms: [{ ...term, dueDate: "2026-12-21" }] }],
+        [{ ...next, terms: [{ ...term, dueDate: "2026-12-20" }] }],
         90,
       ).some((row) => row.priority === "Upcoming"),
     ).toBe(true);

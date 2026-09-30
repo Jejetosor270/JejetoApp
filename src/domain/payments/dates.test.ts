@@ -4,6 +4,7 @@ import {
   addWeeksToDateOnly,
   addMonthsToDateOnly,
   businessToday,
+  cashWindowEnd,
   dateOnlyToDate,
   dateOnlyToEuropeanInput,
   dateToDateOnly,
@@ -17,6 +18,15 @@ import {
 } from "@/domain/payments/dates";
 
 describe("date-only payment helpers", () => {
+  it.each([
+    ["2026-09-30", 7, "2026-10-06"],
+    ["2026-09-30", 30, "2026-10-29"],
+    ["2026-09-30", 90, "2026-12-28"],
+    ["2028-02-27", 7, "2028-03-04"],
+    ["2026-12-30", 7, "2027-01-05"],
+  ] as const)("ends %s plus %s inclusive days on %s", (today, days, end) => {
+    expect(cashWindowEnd(today, days)).toBe(end);
+  });
   it("round-trips business dates without timezone shifts", () => {
     expect(dateToDateOnly(dateOnlyToDate("2026-09-15"))).toBe("2026-09-15");
     expect(formatDateOnly("2026-09-15")).toBe("15/09/2026");
