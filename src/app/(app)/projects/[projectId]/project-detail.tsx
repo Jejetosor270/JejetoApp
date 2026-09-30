@@ -555,6 +555,9 @@ export function ProjectDetail({
   currencies: CurrencyOption[];
   workspace: {
     related?: ReactNode;
+    purchasing?: ReactNode;
+    payments?: ReactNode;
+    client?: ReactNode;
     overview: ReactNode;
     finance: ReactNode;
     budget: ReactNode;
@@ -626,6 +629,7 @@ export function ProjectDetail({
         </>
       }
       <RecordWorkspace
+        relatedNavigation
         label="Project workspace"
         sections={[
           {
@@ -668,30 +672,51 @@ export function ProjectDetail({
           {
             id: "work",
             group: "related",
-            label: "Project work",
+            label: "Billing",
             content: (
               <div className="space-y-4">
                 {workspace.related}
                 <Link
                   className="text-primary text-sm underline"
-                  href={"/reports?projectId=" + project.id}
+                  href={"/billing?projectId=" + project.id}
                 >
-                  Open Project reports
+                  Open Billing
                 </Link>
-                {workspace.items}
               </div>
             ),
           },
           {
             id: "orders",
             group: "related",
-            label: "Order Packages",
-            content: workspace.packages,
+            label: "Purchasing",
+            content: (
+              <div className="space-y-4">
+                <Link
+                  className="text-primary text-sm underline"
+                  href={"/orders?projectId=" + project.id}
+                >
+                  Open Purchasing
+                </Link>
+                {workspace.purchasing}
+                <details className="record-surface">
+                  <summary className="cursor-pointer text-sm font-semibold">
+                    Order packages
+                  </summary>
+                  <div className="mt-4">{workspace.packages}</div>
+                </details>
+              </div>
+            ),
+          },
+          {
+            id: "payment-terms",
+            group: "related",
+            label: "Payment terms",
+            content: workspace.payments,
           },
           {
             id: "freight",
             group: "related",
-            label: "Freight expenses",
+            label: "Freight",
             content: workspace.freightExpenses,
           },
           {
@@ -889,6 +914,26 @@ export function ProjectDetail({
               </>
             ),
           },
+          ...(workspace.client
+            ? [
+                {
+                  id: "client",
+                  group: "related" as const,
+                  label: "Client",
+                  content: workspace.client,
+                },
+              ]
+            : []),
+          ...(workspace.items
+            ? [
+                {
+                  id: "items",
+                  group: "related" as const,
+                  label: "Items (Beta)",
+                  content: workspace.items,
+                },
+              ]
+            : []),
         ]}
       />
     </div>

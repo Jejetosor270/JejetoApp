@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { freightPayable } from "@/domain/finance/project-control";
 import { getBilledFreight } from "@/lib/billing/freight-reporting";
 import { freightDifference } from "@/domain/billing/freight-reporting";
@@ -314,100 +315,103 @@ export async function deleteProjectFreightExpense(
   }
 }
 
-export async function getProjectFreightReconciliation(projectId: string) {
-  const database = getDatabase();
-  const [project, orders, expenses] = await Promise.all([
-    database.project.findUnique({
-      where: { id: projectId },
-      select: {
-        defaultFreightMarkupRate: true,
-        estimatedPurchaseCostHt: true,
-        freightEstimateRate: true,
-        reportingCurrencyCode: true,
-      },
-    }),
-    listProjectOrders(projectId),
-    database.projectFreightExpense.findMany({ where: { projectId } }),
-  ]);
-  if (!project) return null;
-  const activeOrders = orders.filter((order) => order.status !== "CANCELLED");
-  const convertedOrders = activeOrders.map((order) => ({
-    freightCostHt: order.costs.freight
-      ? convertedAmount({
-          amount: order.costs.freight,
-          currencyCode: order.orderCurrencyCode,
-          fxRate: order.costs.purchaseFxRate,
-          reportingCurrencyCode: project.reportingCurrencyCode,
-        })
-      : "0.0000",
-    freightMarkupRate: order.componentPricing.freightMarkupRate,
-  }));
-  const convertedExpenses = expenses.map((expense) => {
-    const recovery = calculateInputVatRecovery({
-      recoverability: expense.recoverability,
-      recoverableRate: expense.recoverableRate?.toString() ?? null,
-      vatAmount: expense.vatAmount?.toString() ?? "0",
-    });
-    const convert = (amount: string) =>
-      convertedAmount({
-        amount,
-        currencyCode: expense.currencyCode,
-        fxRate: expense.fxRateToReporting?.toString() ?? null,
-        reportingCurrencyCode: project.reportingCurrencyCode,
+export const getProjectFreightReconciliation = cache(
+  async function getProjectFreightReconciliation(projectId: string) {
+    const database = getDatabase();
+    const [project, orders, expenses] = await Promise.all([
+      database.project.findUnique({
+        where: { id: projectId },
+        select: {
+          defaultFreightMarkupRate: true,
+          estimatedPurchaseCostHt: true,
+          freightEstimateRate: true,
+          reportingCurrencyCode: true,
+        },
+      }),
+      listProjectOrders(projectId),
+      database.projectFreightExpense.findMany({ where: { projectId } }),
+    ]);
+    if (!project) return null;
+    const activeOrders = orders.filter((order) => order.status !== "CANCELLED");
+    const convertedOrders = activeOrders.map((order) => ({
+      freightCostHt: order.costs.freight
+        ? convertedAmount({
+            amount: order.costs.freight,
+            currencyCode: order.orderCurrencyCode,
+            fxRate: order.costs.purchaseFxRate,
+            reportingCurrencyCode: project.reportingCurrencyCode,
+          })
+        : "0.0000",
+      freightMarkupRate: order.componentPricing.freightMarkupRate,
+    }));
+    const convertedExpenses = expenses.map((expense) => {
+      const recovery = calculateInputVatRecovery({
+        recoverability: expense.recoverability,
+        recoverableRate: expense.recoverableRate?.toString() ?? null,
+        vatAmount: expense.vatAmount?.toString() ?? "0",
       });
-    return {
-      costHt: convert(freightExpenseEconomicCost(expense)),
-      deductibleInputVat: convert(recovery.deductibleVat.toString()),
-      id: expense.id,
-      inputVat: convert(expense.vatAmount?.toString() ?? "0"),
-      markupRate:
-        expense.freightMarkupOverrideRate?.toString() ??
-        project.defaultFreightMarkupRate.toString(),
-      nonDeductibleInputVat: convert(recovery.nonDeductibleVat.toString()),
-    };
-  });
-  const expenseAggregate = (
-    field: keyof Pick<
-      (typeof convertedExpenses)[number],
-      "costHt" | "deductibleInputVat" | "inputVat" | "nonDeductibleInputVat"
-    >,
-  ) =>
-    aggregateConvertedAmounts(
-      convertedExpenses.map((expense) => ({
+      const convert = (amount: string) =>
+        convertedAmount({
+          amount,
+          currencyCode: expense.currencyCode,
+          fxRate: expense.fxRateToReporting?.toString() ?? null,
+          reportingCurrencyCode: project.reportingCurrencyCode,
+        });
+      return {
+        costHt: convert(freightExpenseEconomicCost(expense)),
+        deductibleInputVat: convert(recovery.deductibleVat.toString()),
         id: expense.id,
-        value: expense[field],
-      })),
+        inputVat: convert(expense.vatAmount?.toString() ?? "0"),
+        markupRate:
+          expense.freightMarkupOverrideRate?.toString() ??
+          project.defaultFreightMarkupRate.toString(),
+        nonDeductibleInputVat: convert(recovery.nonDeductibleVat.toString()),
+      };
+    });
+    const expenseAggregate = (
+      field: keyof Pick<
+        (typeof convertedExpenses)[number],
+        "costHt" | "deductibleInputVat" | "inputVat" | "nonDeductibleInputVat"
+      >,
+    ) =>
+      aggregateConvertedAmounts(
+        convertedExpenses.map((expense) => ({
+          id: expense.id,
+          value: expense[field],
+        })),
+      );
+    const billed = await getBilledFreight(
+      { projectId },
+      project.reportingCurrencyCode,
     );
-  const billed = await getBilledFreight(
-    { projectId },
-    project.reportingCurrencyCode,
-  );
-  const reconciliation = reconcileProjectFreight({
-    expenses: convertedExpenses,
-    orders: convertedOrders,
-    projectExpectedProductPurchaseCostHt:
-      project.estimatedPurchaseCostHt?.toString() ?? null,
-    projectFreightEstimateRate: project.freightEstimateRate?.toString() ?? null,
-  });
-  return {
-    ...reconciliation,
-    ...billed,
-    actualFreightProfitHt: freightDifference(
-      billed.invoicedFreightHt,
-      reconciliation.actualCostHt,
-    ),
-    freightRecoveryGapHt: freightDifference(
-      reconciliation.recoveryTargetHt,
-      billed.invoicedFreightHt,
-    ),
-    defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
-    freightEstimateRate: project.freightEstimateRate?.toString() ?? null,
-    projectExpenseDeductibleInputVat: expenseAggregate("deductibleInputVat"),
-    projectExpenseEconomicCost: expenseAggregate("costHt"),
-    projectExpenseInputVat: expenseAggregate("inputVat"),
-    projectExpenseNonDeductibleInputVat: expenseAggregate(
-      "nonDeductibleInputVat",
-    ),
-    reportingCurrencyCode: project.reportingCurrencyCode,
-  };
-}
+    const reconciliation = reconcileProjectFreight({
+      expenses: convertedExpenses,
+      orders: convertedOrders,
+      projectExpectedProductPurchaseCostHt:
+        project.estimatedPurchaseCostHt?.toString() ?? null,
+      projectFreightEstimateRate:
+        project.freightEstimateRate?.toString() ?? null,
+    });
+    return {
+      ...reconciliation,
+      ...billed,
+      actualFreightProfitHt: freightDifference(
+        billed.invoicedFreightHt,
+        reconciliation.actualCostHt,
+      ),
+      freightRecoveryGapHt: freightDifference(
+        reconciliation.recoveryTargetHt,
+        billed.invoicedFreightHt,
+      ),
+      defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
+      freightEstimateRate: project.freightEstimateRate?.toString() ?? null,
+      projectExpenseDeductibleInputVat: expenseAggregate("deductibleInputVat"),
+      projectExpenseEconomicCost: expenseAggregate("costHt"),
+      projectExpenseInputVat: expenseAggregate("inputVat"),
+      projectExpenseNonDeductibleInputVat: expenseAggregate(
+        "nonDeductibleInputVat",
+      ),
+      reportingCurrencyCode: project.reportingCurrencyCode,
+    };
+  },
+);

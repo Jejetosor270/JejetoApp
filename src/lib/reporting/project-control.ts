@@ -16,7 +16,7 @@ import {
 import { getDatabase } from "@/lib/db";
 import { recognizedReceiptWhere } from "@/lib/billing/receipt-eligibility";
 import { listProjectOrders } from "@/lib/procurement/orders";
-import { listPaymentInstallments } from "@/lib/payments/payments";
+import { listProjectSupplierInstallments } from "@/lib/payments/payments";
 import {
   freightExpenseEconomicCost,
   getProjectFreightReconciliation,
@@ -71,7 +71,7 @@ export async function getProjectControl(projectId: string) {
       },
     }),
     listProjectOrders(projectId),
-    listPaymentInstallments({ direction: "SUPPLIER_PAYMENT", projectId }),
+    listProjectSupplierInstallments(projectId),
     getProjectFreightReconciliation(projectId),
     getProjectClientBillingSummary(projectId),
     db.clientReceipt.findMany({

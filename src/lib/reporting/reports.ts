@@ -1,3 +1,4 @@
+import { listProjectOrders } from "@/lib/procurement/orders";
 import {
   listFreightCash,
   listFreightCommitments,
@@ -46,6 +47,7 @@ import {
 } from "@/lib/billing/reporting";
 import {
   listPaymentInstallments,
+  listProjectSupplierInstallments,
   type PaymentInstallmentView,
 } from "@/lib/payments/payments";
 import { listOrders, type OrderSummary } from "@/lib/procurement/orders";
@@ -695,36 +697,42 @@ export async function getProjectReportingSnapshot(
   rangeInput: ReportingRangeInput,
 ): Promise<ProjectReportingSnapshot | null> {
   const database = getDatabase();
-  const [project, orders, installments, clientInstallments, receipts] =
-    await Promise.all([
-      database.project.findUnique({
-        where: { id: projectId },
-        select: { reportingCurrencyCode: true },
-      }),
-      listOrders({ projectId, query: "" }),
-      listPaymentInstallments({
-        direction: PaymentDirection.SUPPLIER_PAYMENT,
-        projectId,
-      }),
-      listClientCashInstallments([projectId]),
-      database.clientReceipt.findMany({
-        where: {
-          AND: [recognizedReceiptWhere],
-          billingDocument: { projectId },
-        },
-        select: {
-          amount: true,
-          billingDocument: { select: { currencyCode: true } },
-          fxRateToReporting: true,
-          id: true,
-          receivedAt: true,
-        },
-      }),
-    ]);
+  const [
+    project,
+    orders,
+    installments,
+    clientInstallments,
+    receipts,
+    freightPayments,
+    freightCommitments,
+  ] = await Promise.all([
+    database.project.findUnique({
+      where: { id: projectId },
+      select: { reportingCurrencyCode: true },
+    }),
+    listProjectOrders(projectId),
+    listProjectSupplierInstallments(projectId),
+    listClientCashInstallments([projectId]),
+    database.clientReceipt.findMany({
+      where: {
+        AND: [recognizedReceiptWhere],
+        billingDocument: { projectId },
+      },
+      select: {
+        amount: true,
+        billingDocument: { select: { currencyCode: true } },
+        fxRateToReporting: true,
+        id: true,
+        receivedAt: true,
+      },
+    }),
+    listFreightCash([projectId]),
+    listFreightCommitments([projectId]),
+  ]);
   if (!project) return null;
   return projectSnapshot({
-    freightPayments: await listFreightCash([projectId]),
-    freightCommitments: await listFreightCommitments([projectId]),
+    freightPayments,
+    freightCommitments,
     clientInstallments,
     clientReceipts: receipts.map((receipt) => ({
       amount: receipt.amount.toString(),

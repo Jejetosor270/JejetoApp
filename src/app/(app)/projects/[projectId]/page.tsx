@@ -8,7 +8,7 @@ import { ProjectCoverage } from "@/components/reporting/project-coverage";
 import { getProjectControl } from "@/lib/reporting/project-control";
 import { ProjectFinancialControl } from "@/components/reporting/project-control";
 import { ProjectFreightPayments } from "@/components/freight/project-freight-payments";
-import { RelatedCashCreate } from "@/components/payments/related-cash-create";
+import { getApplicationSettings } from "@/lib/settings/application-settings";
 import { RelatedItems } from "@/components/items/related-items";
 import { RelatedRecords } from "@/components/layout/related-records";
 import { getProjectRelations } from "@/lib/related-records/records";
@@ -77,10 +77,11 @@ export default async function ProjectPage({
   const horizon: CashFlowHorizon = isCashFlowHorizon(requestedHorizon)
     ? requestedHorizon
     : "12m";
+  const user = await requireUser();
+  const result = await projectRead("record", () => getProject(projectId));
+  if (!result) notFound();
   const [
-    user,
     options,
-    result,
     reporting,
     billing,
     freight,
@@ -88,10 +89,9 @@ export default async function ProjectPage({
     relations,
     control,
     attention,
+    settings,
   ] = await Promise.all([
-    requireUser(),
     listProjectFormOptions(),
-    projectRead("record", () => getProject(projectId)),
     projectRead("reporting", () =>
       getProjectReportingSnapshot(projectId, { horizon }),
     ),
@@ -100,13 +100,16 @@ export default async function ProjectPage({
     projectRead("freight expenses", () =>
       listProjectFreightExpenses(projectId),
     ),
-    projectRead("relations", () => getProjectRelations(projectId)),
+    projectRead("relations", () =>
+      getProjectRelations(projectId, { includeCash: false }),
+    ),
     projectRead("financials", () => getProjectControl(projectId)),
     projectRead("attention", () =>
       getFinancialAttention(30, undefined, projectId),
     ),
+    getApplicationSettings(),
   ]);
-  if (!result || !reporting) notFound();
+  if (!reporting) notFound();
   const { buildings, project } = result;
   const targets = calculateProjectTargets({
     estimatedOtherCostHt: project.estimatedOtherCostHt?.toString() ?? null,
@@ -173,53 +176,25 @@ export default async function ProjectPage({
       currencies={options.currencies}
       workspace={{
         related: (
-          <div className="space-y-4">
-            <ProjectPaymentTerms
-              projectId={project.id}
-              canEdit={canEditMasterData(user.role)}
-            />
-            <RelatedRecords
-              tables={relations.filter(
-                (table) =>
-                  ![
-                    "payments",
-                    "receipts",
-                    "supplier-installments",
-                    "client-installments",
-                  ].includes(table.id),
-              )}
-              actions={
-                canEditMasterData(user.role)
-                  ? {
-                      payments: (
-                        <RelatedCashCreate
-                          scope={{ kind: "project", id: project.id }}
-                          kind="payment"
-                        />
-                      ),
-                      receipts: (
-                        <RelatedCashCreate
-                          scope={{ kind: "project", id: project.id }}
-                          kind="receipt"
-                        />
-                      ),
-                      "supplier-installments": (
-                        <RelatedCashCreate
-                          scope={{ kind: "project", id: project.id }}
-                          kind="supplier-installment"
-                        />
-                      ),
-                      "client-installments": (
-                        <RelatedCashCreate
-                          scope={{ kind: "project", id: project.id }}
-                          kind="client-installment"
-                        />
-                      ),
-                    }
-                  : {}
-              }
-            />
-          </div>
+          <RelatedRecords
+            tables={relations.filter((table) => table.id === "billing")}
+          />
+        ),
+        purchasing: (
+          <RelatedRecords
+            tables={relations.filter((table) => table.id === "orders")}
+          />
+        ),
+        client: (
+          <RelatedRecords
+            tables={relations.filter((table) => table.id === "clients")}
+          />
+        ),
+        payments: (
+          <ProjectPaymentTerms
+            projectId={project.id}
+            canEdit={canEditMasterData(user.role)}
+          />
         ),
         overview: (
           <ProjectFinancialOverview
@@ -319,7 +294,9 @@ export default async function ProjectPage({
             canEdit={canEditMasterData(user.role)}
           />
         ),
-        items: <RelatedItems projectId={projectId} />,
+        items: settings.itemManagementEnabled ? (
+          <RelatedItems projectId={projectId} />
+        ) : null,
       }}
       managers={options.managers}
       project={{

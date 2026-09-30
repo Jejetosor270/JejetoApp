@@ -1,3 +1,4 @@
+import { cache } from "react";
 import {
   earliestUnpaidTermDate,
   overdueTermAmount,
@@ -388,24 +389,26 @@ export type ClientBillingSummary = ReturnType<
   typeof summarizeClientBillingRecords
 >;
 
-export async function getProjectClientBillingSummary(projectId: string) {
-  const project = await getDatabase().project.findUnique({
-    where: { id: projectId },
-    select: {
-      billingDocuments: {
-        where: { isCancelled: false },
-        include: billingReportingInclude,
+export const getProjectClientBillingSummary = cache(
+  async function getProjectClientBillingSummary(projectId: string) {
+    const project = await getDatabase().project.findUnique({
+      where: { id: projectId },
+      select: {
+        billingDocuments: {
+          where: { isCancelled: false },
+          include: billingReportingInclude,
+        },
+        reportingCurrencyCode: true,
       },
-      reportingCurrencyCode: true,
-    },
-  });
-  return project
-    ? summarizeClientBillingRecords(
-        project.billingDocuments,
-        project.reportingCurrencyCode,
-      )
-    : null;
-}
+    });
+    return project
+      ? summarizeClientBillingRecords(
+          project.billingDocuments,
+          project.reportingCurrencyCode,
+        )
+      : null;
+  },
+);
 
 export async function getProjectsClientBillingSummaries(
   projects: readonly { id: string; reportingCurrencyCode: string }[],

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { retainedCurrency } from "@/lib/related-records/context";
 import "server-only";
 import { nextInstallmentSequence } from "./sequence";
@@ -280,14 +281,7 @@ async function requiredOrder(orderId: string): Promise<OrderSummary> {
 export async function getProjectPaymentSummaries(projectId: string) {
   const [orders, records] = await Promise.all([
     listProjectOrders(projectId),
-    getDatabase().paymentInstallment.findMany({
-      where: {
-        order: { projectId },
-        direction: PaymentDirection.SUPPLIER_PAYMENT,
-      },
-      include: installmentInclude,
-      orderBy: [{ sequence: "asc" }, { id: "asc" }],
-    }),
+    projectSupplierInstallmentRecords(projectId),
   ]);
   const today = businessToday();
   const grouped = new Map<string, InstallmentRecord[]>();
@@ -1384,3 +1378,22 @@ export async function getProcurementCalendarEvents(
     today: businessToday(),
   });
 }
+
+// React cache is request-scoped: no financial data survives into a later request.
+const projectSupplierInstallmentRecords = cache(async (projectId: string) =>
+  getDatabase().paymentInstallment.findMany({
+    where: {
+      order: { projectId },
+      direction: PaymentDirection.SUPPLIER_PAYMENT,
+    },
+    include: installmentInclude,
+    orderBy: [{ sequence: "asc" }, { id: "asc" }],
+  }),
+);
+export const listProjectSupplierInstallments = cache(
+  async (projectId: string) => {
+    const records = await projectSupplierInstallmentRecords(projectId);
+    const today = businessToday();
+    return records.map((record) => installmentView(record, null, today));
+  },
+);

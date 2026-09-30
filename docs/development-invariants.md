@@ -2,6 +2,16 @@
 
 ## Simplified Project financial overview
 
+- Phase 3 keeps Details / Related, with mounted Related work areas for Billing, Purchasing,
+  payment terms, freight, buildings/rooms, Client and enabled Beta Items. Switching work areas
+  preserves drafts; the `section` query parameter retains selection and existing subsection
+  links still work. Package management is collapsed under Purchasing. Shared related tables
+  retain visible-page selection, inline editing and relationship-only removal.
+- Project rendering reuses React request-scoped reads for Orders, Supplier terms, Billing and
+  freight summaries; these are not persistent caches. Related omits unused legacy cash-table
+  queries. Resolve the active user and Project before financial reads; missing/trashed Projects
+  use not-found, while load failures show retry guidance rather than fabricated financial zeros.
+
 - Phase 2 adds Project-scoped attention (overdue plus a 30-day funding horizon), with upcoming
   reminders separate. Overview figures open source-record drawers: recognized receipts use actual
   FX, commitments reuse capped cash-outlook entries, and planned/overdue/undated amounts stay distinct.

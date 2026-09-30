@@ -2,8 +2,11 @@ import "server-only";
 import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
 import { getDatabase } from "@/lib/db";
-import { listOrders } from "@/lib/procurement/orders";
-import { listPaymentInstallments } from "@/lib/payments/payments";
+import { listOrders, listProjectOrders } from "@/lib/procurement/orders";
+import {
+  listPaymentInstallments,
+  listProjectSupplierInstallments,
+} from "@/lib/payments/payments";
 import { freightExpenseEconomicCost } from "@/lib/freight/expenses";
 import { freightPaymentBalance } from "@/domain/finance/project-control";
 import { reportingAmount } from "@/domain/finance/calculations";
@@ -56,8 +59,15 @@ export async function getFinancialAttention(
   const projectMap = new Map(projects.map((project) => [project.id, project]));
   const [orders, terms, bills, freight] = projectIds.length
     ? await Promise.all([
-        listOrders({ projectIds, query: "" }),
-        listPaymentInstallments({ projectIds, direction: "SUPPLIER_PAYMENT" }),
+        projectId
+          ? listProjectOrders(projectId)
+          : listOrders({ projectIds, query: "" }),
+        projectId
+          ? listProjectSupplierInstallments(projectId)
+          : listPaymentInstallments({
+              projectIds,
+              direction: "SUPPLIER_PAYMENT",
+            }),
         db.clientBillingDocument.findMany({
           where: {
             projectId: { in: projectIds },

@@ -4,7 +4,7 @@ import { RecordSectionHeading } from "@/components/layout/record-presentation";
 import Link from "next/link";
 import { getDatabase } from "@/lib/db";
 import { listProjectOrders } from "@/lib/procurement/orders";
-import { listPaymentInstallments } from "@/lib/payments/payments";
+import { listProjectSupplierInstallments } from "@/lib/payments/payments";
 import { summarizePackage } from "@/domain/packages/reporting";
 import { formatMoney } from "@/domain/procurement/presentation";
 import { PackageAssignment, PackageEditor } from "./package-management";
@@ -25,7 +25,7 @@ export async function ProjectPackages({
       select: { id: true, name: true, isActive: true },
     }),
     listProjectOrders(projectId),
-    listPaymentInstallments({ projectId, direction: "SUPPLIER_PAYMENT" }),
+    listProjectSupplierInstallments(projectId),
   ]);
   const manager = (
     <section className="bg-card space-y-4 rounded-lg border p-4">

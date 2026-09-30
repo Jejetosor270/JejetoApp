@@ -1,3 +1,4 @@
+import { cache } from "react";
 import "server-only";
 
 import { COMPANY_REPORTING_CURRENCY_CODE } from "@/config/reporting";
@@ -14,23 +15,25 @@ export interface ApplicationSettingsView {
   itemManagementEnabled: boolean;
 }
 
-export async function getApplicationSettings(): Promise<ApplicationSettingsView> {
-  const settings = await getDatabase().applicationSetting.findUnique({
-    where: { id: APPLICATION_SETTING_ID },
-    select: {
-      companyName: true,
-      companyReportingCurrencyCode: true,
-      itemManagementEnabled: true,
-    },
-  });
-  return (
-    settings ?? {
-      companyName: DEFAULT_COMPANY_NAME,
-      companyReportingCurrencyCode: COMPANY_REPORTING_CURRENCY_CODE,
-      itemManagementEnabled: false,
-    }
-  );
-}
+export const getApplicationSettings = cache(
+  async function getApplicationSettings(): Promise<ApplicationSettingsView> {
+    const settings = await getDatabase().applicationSetting.findUnique({
+      where: { id: APPLICATION_SETTING_ID },
+      select: {
+        companyName: true,
+        companyReportingCurrencyCode: true,
+        itemManagementEnabled: true,
+      },
+    });
+    return (
+      settings ?? {
+        companyName: DEFAULT_COMPANY_NAME,
+        companyReportingCurrencyCode: COMPANY_REPORTING_CURRENCY_CODE,
+        itemManagementEnabled: false,
+      }
+    );
+  },
+);
 
 export async function isItemManagementEnabled(): Promise<boolean> {
   return (await getApplicationSettings()).itemManagementEnabled;

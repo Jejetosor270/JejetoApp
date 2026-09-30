@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { billingIsIssued } from "@/domain/billing/status";
 import { createDefaultSupplierTerm } from "@/lib/payments/default-term";
 import "server-only";
@@ -1652,12 +1653,12 @@ export async function getOrder(orderId: string): Promise<OrderSummary | null> {
   });
   return order ? summarizeOrder(order) : null;
 }
-export async function listProjectOrders(
+export const listProjectOrders = cache(async function listProjectOrders(
   projectId: string,
 ): Promise<OrderSummary[]> {
   if (!projectId) return [];
   return listOrders({ projectId, query: "" });
-}
+});
 export async function createOrder(
   actorId: string,
   input: CreateOrderInput,

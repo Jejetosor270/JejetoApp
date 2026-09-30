@@ -71,6 +71,30 @@ it("scopes Project tables to its Orders, Billing, installments and actual cash w
   expect(mock.user).toHaveBeenCalled();
 });
 
+it("loads only the Project workspace tables and preserves edit/unassign controls without redundant cash queries", async () => {
+  mock.user.mockResolvedValue({ id, role: "MANAGER" });
+  mock.db.project.findUnique.mockResolvedValue({ client: party });
+  const tables = await getProjectRelations(id, { includeCash: false });
+  expect(tables.map((table) => table.id)).toEqual([
+    "clients",
+    "orders",
+    "billing",
+  ]);
+  expect(tables.find((table) => table.id === "billing")).toMatchObject({
+    editKind: "billing",
+    removal: { kind: "assignment", relation: "billing-project", parentId: id },
+  });
+  for (const model of [
+    mock.db.paymentInstallment,
+    mock.db.clientPaymentInstallment,
+    mock.db.paymentSettlement,
+    mock.db.clientReceipt,
+  ])
+    expect(model.findMany).not.toHaveBeenCalled();
+  expect(mock.db.procurementOrder.findMany).toHaveBeenCalledTimes(1);
+  expect(mock.db.clientBillingDocument.findMany).toHaveBeenCalledTimes(1);
+});
+
 it("never places linked Billing receipts or Client installments on Orders", async () => {
   mock.db.procurementOrder.findUnique.mockResolvedValue({
     project,

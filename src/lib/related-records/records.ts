@@ -30,6 +30,7 @@ import { relatedHref, type RelatedTableData } from "./types";
 
 async function getProjectRelationsInternal(
   projectId: string,
+  { includeCash = true }: { includeCash?: boolean } = {},
 ): Promise<RelatedTableData[]> {
   await requireUser();
   z.uuid().parse(projectId);
@@ -57,37 +58,52 @@ async function getProjectRelationsInternal(
       select: billingSelect,
       orderBy: [{ documentDate: "desc" }, { id: "asc" }],
     }),
-    db.paymentInstallment.findMany({
-      where: { order: { projectId }, direction: "SUPPLIER_PAYMENT" },
-      select: supplierInstallmentSelect,
-      orderBy: [{ dueDate: "asc" }, { id: "asc" }],
-    }),
-    db.clientPaymentInstallment.findMany({
-      where: { billingDocument: { projectId } },
-      select: clientInstallmentSelect,
-      orderBy: [{ dueDate: "asc" }, { id: "asc" }],
-    }),
-    db.paymentSettlement.findMany({
-      where: {
-        installment: { direction: "SUPPLIER_PAYMENT", order: { projectId } },
-      },
-      select: paymentSelect,
-      orderBy: [{ settledAt: "desc" }, { id: "asc" }],
-    }),
-    db.clientReceipt.findMany({
-      where: { billingDocument: { projectId } },
-      select: receiptSelect,
-      orderBy: [{ receivedAt: "desc" }, { id: "asc" }],
-    }),
+    includeCash
+      ? db.paymentInstallment.findMany({
+          where: { order: { projectId }, direction: "SUPPLIER_PAYMENT" },
+          select: supplierInstallmentSelect,
+          orderBy: [{ dueDate: "asc" }, { id: "asc" }],
+        })
+      : Promise.resolve([]),
+    includeCash
+      ? db.clientPaymentInstallment.findMany({
+          where: { billingDocument: { projectId } },
+          select: clientInstallmentSelect,
+          orderBy: [{ dueDate: "asc" }, { id: "asc" }],
+        })
+      : Promise.resolve([]),
+    includeCash
+      ? db.paymentSettlement.findMany({
+          where: {
+            installment: {
+              direction: "SUPPLIER_PAYMENT",
+              order: { projectId },
+            },
+          },
+          select: paymentSelect,
+          orderBy: [{ settledAt: "desc" }, { id: "asc" }],
+        })
+      : Promise.resolve([]),
+    includeCash
+      ? db.clientReceipt.findMany({
+          where: { billingDocument: { projectId } },
+          select: receiptSelect,
+          orderBy: [{ receivedAt: "desc" }, { id: "asc" }],
+        })
+      : Promise.resolve([]),
   ]);
   return [
     partiesTable("clients", project?.client ? [project.client] : []),
     ordersTable(orders),
     billingsTable(billing),
-    paymentsTable(payments),
-    receiptsTable(receipts),
-    supplierInstallmentsTable(installments),
-    clientInstallmentsTable(clientInstallments),
+    ...(includeCash
+      ? [
+          paymentsTable(payments),
+          receiptsTable(receipts),
+          supplierInstallmentsTable(installments),
+          clientInstallmentsTable(clientInstallments),
+        ]
+      : []),
   ];
 }
 

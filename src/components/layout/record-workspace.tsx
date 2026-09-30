@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { WorkspaceTabs } from "./workspace-tabs";
+import { RelatedSections } from "./related-sections";
 
 export interface RecordSection {
   id: string;
@@ -12,9 +13,11 @@ export interface RecordSection {
 export function RecordWorkspace({
   label,
   sections,
+  relatedNavigation = false,
 }: {
   label: string;
   sections: RecordSection[];
+  relatedNavigation?: boolean;
 }) {
   return (
     <WorkspaceTabs
@@ -25,19 +28,28 @@ export function RecordWorkspace({
       tabs={(["details", "related"] as const).map((group) => ({
         id: group,
         label: group === "details" ? "Details" : "Related",
-        content: sections
-          .filter((section) => section.group === group)
-          .map((section) => (
-            <section
-              key={section.id}
-              id={section.id}
-              data-workspace-section={section.id}
-              aria-label={section.label}
-              className="scroll-mt-4 space-y-4"
-            >
-              {section.content}
-            </section>
-          )),
+        content:
+          group === "related" && relatedNavigation ? (
+            <RelatedSections
+              sections={sections.filter(
+                (section) => section.group === "related",
+              )}
+            />
+          ) : (
+            sections
+              .filter((section) => section.group === group)
+              .map((section) => (
+                <section
+                  key={section.id}
+                  id={section.id}
+                  data-workspace-section={section.id}
+                  aria-label={section.label}
+                  className="scroll-mt-4 space-y-4"
+                >
+                  {section.content}
+                </section>
+              ))
+          ),
       }))}
     />
   );

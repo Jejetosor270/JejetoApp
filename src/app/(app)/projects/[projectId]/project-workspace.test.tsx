@@ -82,6 +82,65 @@ function visible() {
   return document.querySelector('[role="tabpanel"]:not([hidden])');
 }
 
+it("shows one Related work area at a time, preserves drafts across areas and remembers the selection across main tabs", async () => {
+  await mount();
+  await clickText("Related");
+  expect(
+    document.querySelector(
+      'nav[aria-label="Project related sections"] button[aria-pressed="true"]',
+    )?.textContent,
+  ).toBe("Billing");
+  await clickText("Purchasing");
+  expect(window.location.search).toContain("section=orders");
+  const panel = visible()?.querySelector(
+    'section[data-workspace-section="orders"]',
+  );
+  expect(panel?.hasAttribute("hidden")).toBe(false);
+  expect(
+    visible()
+      ?.querySelector('section[data-workspace-section="work"]')
+      ?.hasAttribute("hidden"),
+  ).toBe(true);
+  const draft = document.querySelector<HTMLInputElement>(
+    '[aria-label="Package draft"]',
+  );
+  if (!draft) throw new Error("Missing package draft");
+  draft.value = "Keep this package";
+  await clickText("Freight");
+  expect(panel?.hasAttribute("hidden")).toBe(true);
+  await clickText("Details");
+  await clickText("Related");
+  expect(
+    document.querySelector(
+      'nav[aria-label="Project related sections"] button[aria-pressed="true"]',
+    )?.textContent,
+  ).toBe("Freight");
+  await clickText("Purchasing");
+  expect(draft.value).toBe("Keep this package");
+  expect(document.querySelectorAll('[role="tab"]')).toHaveLength(2);
+  expect(
+    document.querySelector('nav[aria-label="Project related sections"]')
+      ?.textContent,
+  ).not.toContain("Items");
+});
+
+it.each([
+  ["?tab=buildings", "Buildings & Rooms"],
+  ["?tab=freight", "Freight"],
+  ["#orders", "Purchasing"],
+  ["?tab=related&section=payment-terms", "Payment terms"],
+  ["?tab=related&section=items", "Items (Beta)"],
+  ["?tab=related&section=unknown", "Billing"],
+])("opens the intended Related area for %s", async (url, section) => {
+  window.history.replaceState(null, "", "/projects/demo" + url);
+  await mount(false, true);
+  expect(
+    document.querySelector(
+      'nav[aria-label="Project related sections"] button[aria-pressed="true"]',
+    )?.textContent,
+  ).toBe(section);
+});
+
 it("uses Details/Related and keeps Project fields separate from scoped work and related records", async () => {
   await mount();
   expect(
@@ -106,7 +165,7 @@ it("uses Details/Related and keeps Project fields separate from scoped work and 
     visible()?.querySelector('a[href="/orders/linked?tab=related"]'),
   ).not.toBeNull();
   expect(
-    visible()?.querySelector('a[href="/reports?projectId=' + projectId + '"]'),
+    visible()?.querySelector('a[href="/billing?projectId=' + projectId + '"]'),
   ).not.toBeNull();
   expect(visible()?.textContent).toContain("Buildings (0)");
   expect(visible()?.textContent).toContain("Freight expenses");
