@@ -54,6 +54,184 @@ const build = (rows: AttentionDocument[], horizon: 7 | 30 | 90 = 7) =>
   buildFinancialAttention(rows, [project], today, horizon);
 
 describe("financial attention", () => {
+  it.each(["supplier", "freight"] as const)(
+    "does not borrow document dates for %s terms",
+    (side) => {
+      const issues = build([
+        { ...doc, side, dueDate: today, terms: [{ ...term, dueDate: null }] },
+      ]);
+      expect(issues.map((issue) => issue.key)).toContain("term-date:term");
+      expect(issues.map((issue) => issue.key)).toContain(
+        "cash-incomplete:project",
+      );
+      expect(
+        issues.some(
+          (issue) =>
+            issue.key.startsWith("term-due") ||
+            issue.key.startsWith("cash-gap"),
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it.each(["supplier", "client"] as const)(
+    "retains %s document fallback reminders without inventing scheduled cash",
+    (side) => {
+      const issues = build([{ ...doc, side, terms: [], dueDate: today }]);
+      expect(
+        issues.find((issue) => issue.key === "document-due:doc"),
+      ).toMatchObject({
+        priority: "Upcoming",
+        amount: "90.0500",
+        date: today,
+        basis: "TTC",
+        href: doc.href,
+        title:
+          side === "client"
+            ? "Client payment outstanding"
+            : "Supplier payment outstanding",
+      });
+      expect(issues.map((issue) => issue.key)).toContain(
+        "cash-incomplete:project",
+      );
+      expect(issues.some((issue) => issue.key.startsWith("cash-gap"))).toBe(
+        false,
+      );
+    },
+  );
+
+  it("reports missing future term FX without spoiling a complete nearer cash horizon", () => {
+    const future: AttentionDocument = {
+      ...doc,
+      id: "future",
+      currency: "USD",
+      terms: [
+        { ...term, id: "future", currency: "USD", dueDate: "2026-10-22" },
+      ],
+    };
+    const near = build([doc, future], 7);
+    expect(near.find((issue) => issue.key === "term-fx:future")).toMatchObject({
+      amount: "90.0500",
+      currency: "USD",
+      date: "2026-10-22",
+    });
+    expect(
+      near.find((issue) => issue.key === "cash-gap-7:project")?.amount,
+    ).toBe("90.0500");
+    expect(near.some((issue) => issue.key === "cash-incomplete:project")).toBe(
+      false,
+    );
+    const extended = build([doc, future], 30);
+    expect(extended.map((issue) => issue.key)).toContain(
+      "cash-incomplete:project",
+    );
+    expect(extended.some((issue) => issue.key.startsWith("cash-gap"))).toBe(
+      false,
+    );
+  });
+
+  it("does not repeat document-level actual FX warnings on individual terms", () => {
+    const issues = build([
+      {
+        ...doc,
+        actualFxMissing: true,
+        fxMissing: true,
+        terms: [{ ...term, actualFxMissing: true }],
+      },
+    ]);
+    expect(issues.map((issue) => issue.key)).toEqual(
+      expect.arrayContaining(["actual-fx:doc", "document-fx:doc"]),
+    );
+    expect(issues.some((issue) => issue.key === "term-actual-fx:term")).toBe(
+      false,
+    );
+    expect(
+      issues.find((issue) => issue.key === "cash-gap-7:project")?.amount,
+    ).toBe("90.0500");
+  });
+
+  it("keeps an unknown payable incomplete and does not reset that state for later documents", () => {
+    const unknown = { ...doc, id: "unknown", totalTtc: null, terms: [] };
+    for (const records of [
+      [unknown, doc],
+      [doc, unknown],
+    ]) {
+      const issues = build(records);
+      expect(
+        issues.find((issue) => issue.key === "schedule:unknown")?.amount,
+      ).toBeNull();
+      expect(
+        issues.find((issue) => issue.key === "missing-date:unknown")?.amount,
+      ).toBeNull();
+      expect(issues.map((issue) => issue.key)).toContain(
+        "cash-incomplete:project",
+      );
+      expect(issues.some((issue) => issue.key.startsWith("cash-gap"))).toBe(
+        false,
+      );
+    }
+  });
+
+  it("isolates Project shortfalls and suppresses warnings for fully funded Projects", () => {
+    const other = { ...project, id: "other", currency: "USD" };
+    const issues = buildFinancialAttention(
+      [
+        { ...doc, terms: [{ ...term, dueDate: null }] },
+        {
+          ...doc,
+          id: "other-doc",
+          projectId: other.id,
+          currency: "USD",
+          reportingCurrency: "USD",
+          terms: [{ ...term, id: "other-term", currency: "USD" }],
+        },
+      ],
+      [project, other],
+      today,
+      7,
+    );
+    expect(
+      issues.find((issue) => issue.key === "cash-gap-7:other"),
+    ).toMatchObject({ amount: "90.0500", currency: "USD" });
+    expect(issues.some((issue) => issue.key === "cash-gap-7:project")).toBe(
+      false,
+    );
+    for (const scheduled of ["100.1000", "200"]) {
+      const funded = build([
+        doc,
+        {
+          ...doc,
+          id: "incoming",
+          side: "client",
+          totalTtc: scheduled,
+          terms: [{ ...term, id: "incoming", scheduled }],
+        },
+      ]);
+      expect(funded.some((issue) => issue.key.startsWith("cash-"))).toBe(false);
+    }
+  });
+
+  it("keeps issue identity and priority/date ordering stable when document order changes", () => {
+    const second = {
+      ...doc,
+      id: "second",
+      reference: "OTHER",
+      terms: [{ ...term, id: "second", dueDate: today }],
+    };
+    const expected = build([doc, second]);
+    expect(build([second, doc])).toEqual(expected);
+    expect(expected.map((issue) => issue.key)).toEqual([
+      "term-due:term",
+      "duplicate:doc",
+      "cash-gap-7:project",
+      "profitability:project",
+      "term-due:second",
+    ]);
+    expect(
+      expected.find((issue) => issue.key === "duplicate:doc")?.detail,
+    ).toContain("REF, OTHER");
+  });
+
   it("uses exact remaining cash, preserves currency and labels provisional profitability", () => {
     const issues = build([doc]);
     expect(issues.find((row) => row.key === "term-due:term")).toMatchObject({
