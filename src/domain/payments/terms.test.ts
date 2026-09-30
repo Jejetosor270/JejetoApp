@@ -2,9 +2,96 @@ import { expect, it } from "vitest";
 import {
   completedPaymentDate,
   earliestUnpaidTermDate,
+  nextUnpaidTerm,
   paymentTermState,
   overdueTermAmount,
 } from "./terms";
+
+const unpaidTerm = {
+  id: "unpaid",
+  dueDate: "2026-10-01",
+  isCancelled: false,
+  scheduledAmount: "100",
+  payments: [] as { amount: string }[],
+};
+
+it("selects the earliest unpaid ISO date across years and months regardless of input order", () => {
+  const terms = [
+    { ...unpaidTerm, id: "next-year", dueDate: "2027-01-01" },
+    { ...unpaidTerm, id: "december", dueDate: "2026-12-01" },
+    { ...unpaidTerm, id: "earliest", dueDate: "2026-02-09" },
+    { ...unpaidTerm, id: "next-day", dueDate: "2026-02-10" },
+  ];
+  const original = structuredClone(terms);
+  for (const rows of [terms, terms.toReversed()]) {
+    expect(earliestUnpaidTermDate(rows, null)).toBe("2026-02-09");
+    expect(nextUnpaidTerm(rows)?.id).toBe("earliest");
+  }
+  expect(terms).toEqual(original);
+});
+
+it("ignores cancelled, fully paid, overpaid and zero terms while retaining a precise partial balance", () => {
+  const terms = [
+    {
+      ...unpaidTerm,
+      id: "cancelled",
+      dueDate: "2026-01-01",
+      isCancelled: true,
+    },
+    {
+      ...unpaidTerm,
+      id: "settled",
+      dueDate: "2026-01-02",
+      scheduledAmount: "0.3",
+      payments: [{ amount: "0.1" }, { amount: "0.2" }],
+    },
+    {
+      ...unpaidTerm,
+      id: "overpaid",
+      dueDate: "2026-01-03",
+      payments: [{ amount: "101" }],
+    },
+    { ...unpaidTerm, id: "zero", dueDate: "2026-01-04", scheduledAmount: "0" },
+    {
+      ...unpaidTerm,
+      id: "partial",
+      dueDate: "2026-09-30",
+      scheduledAmount: "0.3001",
+      payments: [{ amount: "0.1" }, { amount: "0.2" }],
+    },
+    unpaidTerm,
+  ];
+  expect(earliestUnpaidTermDate(terms, "2025-01-01")).toBe("2026-09-30");
+  expect(nextUnpaidTerm(terms)?.id).toBe("partial");
+  expect(earliestUnpaidTermDate(terms.slice(0, 4), "2025-01-01")).toBeNull();
+  expect(nextUnpaidTerm(terms.slice(0, 4))).toBeUndefined();
+});
+
+it.each([
+  ["2026-09-01", "2026-09-01", "undated"],
+  ["2026-11-01", "2026-10-01", "unpaid"],
+  [null, "2026-10-01", "unpaid"],
+] as const)(
+  "orders undated terms using fallback %s only when present",
+  (fallback, expected, id) => {
+    const terms = [unpaidTerm, { ...unpaidTerm, id: "undated", dueDate: null }];
+    expect(earliestUnpaidTermDate(terms, fallback)).toBe(expected);
+    expect(nextUnpaidTerm(terms, fallback)?.id).toBe(id);
+  },
+);
+
+it("keeps undated unpaid terms selectable without inventing a date and breaks equal-date ties by ID", () => {
+  const undated = [{ ...unpaidTerm, dueDate: null }];
+  expect(earliestUnpaidTermDate(undated, null)).toBeNull();
+  expect(nextUnpaidTerm(undated)?.id).toBe("unpaid");
+  const tied = [
+    { ...unpaidTerm, id: "b" },
+    { ...unpaidTerm, id: "a" },
+  ];
+  expect(earliestUnpaidTermDate(tied, null)).toBe("2026-10-01");
+  expect(nextUnpaidTerm(tied)?.id).toBe("a");
+  expect(nextUnpaidTerm(tied.toReversed())?.id).toBe("a");
+});
 
 it("uses the latest actual cash date only when fully paid, without fabricating missing dates", () => {
   const dates = ["2026-09-26", null, "2026-08-01", "2026-09-10"];

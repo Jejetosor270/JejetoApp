@@ -88,7 +88,7 @@ export function earliestUnpaidTermDate(
       const date = term.dueDate ?? fallback;
       return date ? [date] : [];
     })
-    .sort();
+    .sort((a, b) => a.localeCompare(b));
   return (
     dates[0] ??
     (terms.some(
