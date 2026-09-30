@@ -75,7 +75,6 @@ import {
   createClientBillingInstallment,
   deleteClientBillingInstallment,
   deleteClientReceipt,
-  getProjectsClientBillingSummaries,
   recordClientReceipt,
   updateClientBillingAllocations,
   updateClientBillingDocument,
@@ -84,6 +83,7 @@ import {
   updateClientReceipt,
   updateOrderBillingLink,
 } from "./billing";
+import { getProjectsClientBillingSummaries } from "./reporting";
 
 const clientId = "a12b6b9b-10e9-4e42-b93f-38796de4f65a";
 const projectId = "b12b6b9b-10e9-4e42-b93f-38796de4f65a";
@@ -208,6 +208,215 @@ describe("Billing persistence", () => {
     });
   });
 
+  it("deduplicates matched Quote cash and terms while preserving independent FX rates", async () => {
+    const quote = summaryRecord({
+      id: "matched-quote",
+      documentType: ClientBillingDocumentType.QUOTE,
+      totalHt: "100",
+      totalTtc: "120",
+      installments: [
+        {
+          dueDate: "2099-01-01",
+          scheduledAmount: "120",
+          receiptAmounts: ["30"],
+        },
+      ],
+    });
+    const terms = quote.paymentInstallments.map((term) => ({
+      ...term,
+      currencyCode: "USD",
+      expectedFxRateToReporting: new Decimal("0.8"),
+      receipts: term.receipts.map((receipt) => ({
+        ...receipt,
+        fxRateToReporting: new Decimal("0.7"),
+      })),
+    }));
+    const invoice = {
+      ...summaryRecord({
+        id: "matched-invoice",
+        allocations: ["60"],
+        totalHt: "100",
+        totalTtc: "120",
+      }),
+      currencyCode: "USD",
+      fxRateToReporting: new Decimal("0.9"),
+      matchedInstallment: terms[0],
+      receipts: terms.flatMap((term) => term.receipts),
+    };
+    database.clientBillingDocument.findMany.mockResolvedValue([
+      {
+        ...quote,
+        currencyCode: "USD",
+        fxRateToReporting: new Decimal("0.9"),
+        paymentInstallments: terms,
+      },
+      invoice,
+    ]);
+    const summaries = await getProjectsClientBillingSummaries([
+      { id: projectId, reportingCurrencyCode: "EUR" },
+    ]);
+    expect(summaries.get(projectId)).toMatchObject({
+      complete: true,
+      quotedHt: "90.0000",
+      invoicedHt: "90.0000",
+      invoicedTtc: "108.0000",
+      outputVat: "18.0000",
+      coverageHt: "54.0000",
+      paidTtc: "21.0000",
+      outstandingTtc: "81.0000",
+      overdueTtc: "0.0000",
+      nextDueDate: "2099-01-01",
+      upcomingScheduledTtc: "72.0000",
+      scheduleComplete: true,
+    });
+  });
+
+  it("keeps missing receipt FX separate from invoice and schedule completeness", async () => {
+    const invoice = summaryRecord({
+      id: "receipt-fx",
+      totalHt: "100",
+      totalTtc: "120",
+      installments: [
+        {
+          dueDate: "2099-01-01",
+          scheduledAmount: "120",
+          receiptAmounts: ["30"],
+        },
+      ],
+    });
+    database.clientBillingDocument.findMany.mockResolvedValue([
+      {
+        ...invoice,
+        currencyCode: "USD",
+        fxRateToReporting: new Decimal("0.9"),
+        paymentInstallments: invoice.paymentInstallments.map((term) => ({
+          ...term,
+          currencyCode: "USD",
+          expectedFxRateToReporting: new Decimal("0.8"),
+        })),
+      },
+    ]);
+    const summaries = await getProjectsClientBillingSummaries([
+      { id: projectId, reportingCurrencyCode: "EUR" },
+    ]);
+    expect(summaries.get(projectId)).toMatchObject({
+      complete: false,
+      missingIds: ["receipt-fx-receipt-0-0"],
+      invoicedComplete: true,
+      outputVatComplete: true,
+      coverageComplete: true,
+      paidTtc: "0.0000",
+      outstandingTtc: "81.0000",
+      scheduleComplete: true,
+      upcomingScheduledTtc: "72.0000",
+    });
+  });
+
+  it("retains the next due date when expected FX is missing without invalidating actual totals", async () => {
+    const invoice = summaryRecord({
+      id: "schedule-fx",
+      totalHt: "100",
+      totalTtc: "120",
+      installments: [{ dueDate: "2099-01-01", scheduledAmount: "120" }],
+    });
+    database.clientBillingDocument.findMany.mockResolvedValue([
+      {
+        ...invoice,
+        currencyCode: "USD",
+        fxRateToReporting: new Decimal("0.9"),
+        paymentInstallments: invoice.paymentInstallments.map((term) => ({
+          ...term,
+          currencyCode: "USD",
+        })),
+      },
+    ]);
+    const summaries = await getProjectsClientBillingSummaries([
+      { id: projectId, reportingCurrencyCode: "EUR" },
+    ]);
+    expect(summaries.get(projectId)).toMatchObject({
+      complete: true,
+      missingIds: [],
+      invoicedTtc: "108.0000",
+      outstandingTtc: "108.0000",
+      scheduleComplete: false,
+      upcomingScheduledTtc: null,
+      nextDueDate: "2099-01-01",
+    });
+  });
+
+  it("does not require coverage FX for an unallocated invoice with no approved remainder", async () => {
+    database.clientBillingDocument.findMany.mockResolvedValue([
+      {
+        ...summaryRecord({
+          id: "no-coverage",
+          totalHt: "100",
+          totalTtc: "120",
+        }),
+        currencyCode: "USD",
+      },
+    ]);
+    const summaries = await getProjectsClientBillingSummaries([
+      { id: projectId, reportingCurrencyCode: "EUR" },
+    ]);
+    expect(summaries.get(projectId)).toMatchObject({
+      complete: false,
+      missingIds: ["no-coverage"],
+      invoicedComplete: false,
+      invoiceMissingIds: ["no-coverage"],
+      outputVatComplete: false,
+      outputVatMissingIds: ["no-coverage"],
+      coverageComplete: true,
+      coverageMissingIds: [],
+      coverageHt: "0.0000",
+    });
+  });
+
+  it("excludes cancelled, settled, undated and past terms from upcoming cash", async () => {
+    const quote = summaryRecord({
+      id: "schedule-filters",
+      documentType: ClientBillingDocumentType.QUOTE,
+      totalHt: "600",
+      totalTtc: "600",
+      installments: [
+        { dueDate: "2099-01-01", scheduledAmount: "100" },
+        {
+          dueDate: "2099-01-02",
+          scheduledAmount: "100",
+          receiptAmounts: ["100"],
+        },
+        { dueDate: "2099-01-03", scheduledAmount: "100" },
+        { dueDate: "2000-01-01", scheduledAmount: "100" },
+        {
+          dueDate: "2099-02-01",
+          scheduledAmount: "100",
+          receiptAmounts: ["0.1", "0.2"],
+        },
+        { dueDate: "2099-01-15", scheduledAmount: "100" },
+      ],
+    });
+    database.clientBillingDocument.findMany.mockResolvedValue([
+      {
+        ...quote,
+        paymentInstallments: quote.paymentInstallments.map((term, index) => ({
+          ...term,
+          isCancelled: index === 0,
+          dueDate: index === 2 ? null : term.dueDate,
+        })),
+      },
+    ]);
+    const summaries = await getProjectsClientBillingSummaries([
+      { id: projectId, reportingCurrencyCode: "EUR" },
+    ]);
+    expect(summaries.get(projectId)).toMatchObject({
+      complete: true,
+      paidTtc: "0.0000",
+      outstandingTtc: "0.0000",
+      overdueTtc: "0.0000",
+      scheduleComplete: true,
+      upcomingScheduledTtc: "199.7000",
+      nextDueDate: "2099-01-15",
+    });
+  });
   it("shows Villa Apsaras as fully collected from its Invoice and Receipt", async () => {
     database.clientBillingDocument.findMany.mockResolvedValue([
       summaryRecord({

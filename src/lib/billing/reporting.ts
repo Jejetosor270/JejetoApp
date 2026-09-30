@@ -66,21 +66,18 @@ function earlierDate(current: string | null, candidate: string): string {
   return current === null || candidate < current ? candidate : current;
 }
 
-export function summarizeClientBillingRecords(
-  records: readonly BillingReportingRecord[],
-  reportingCurrencyCode: string,
-) {
-  let quoted = new Decimal(0);
-  let invoiced = new Decimal(0);
-  let invoicedTtc = new Decimal(0);
-  let outputVat = new Decimal(0);
-  let coverage = new Decimal(0);
-  let invoiceOutstanding = new Decimal(0);
-  let paid = new Decimal(0);
-  let overdue = new Decimal(0);
-  let upcomingScheduled = new Decimal(0);
-  let nextDueDate: string | null = null;
-  let scheduleComplete = true;
+function createBillingSummaryState() {
+  const quoted = new Decimal(0);
+  const invoiced = new Decimal(0);
+  const invoicedTtc = new Decimal(0);
+  const outputVat = new Decimal(0);
+  const coverage = new Decimal(0);
+  const invoiceOutstanding = new Decimal(0);
+  const paid = new Decimal(0);
+  const overdue = new Decimal(0);
+  const upcomingScheduled = new Decimal(0);
+  const nextDueDate = null as string | null;
+  const scheduleComplete: boolean = true;
   const today = businessToday();
   const missingIds = new Set<string>();
   const invoiceMissingIds = new Set<string>();
@@ -95,163 +92,209 @@ export function summarizeClientBillingRecords(
     BillingReportingRecord["paymentInstallments"][number]
   >();
 
-  for (const record of records) {
-    if (
-      record.isCancelled ||
-      (record.documentType === "INVOICE" &&
-        !isRecognizedClientReceivable(record))
-    )
-      continue;
-    if (!record.projectId) continue;
-    const fxRate = record.fxRateToReporting?.toString() ?? null;
-    const convertedHt = converted(
-      record.totalHt.toString(),
+  return {
+    quoted,
+    invoiced,
+    invoicedTtc,
+    outputVat,
+    coverage,
+    invoiceOutstanding,
+    paid,
+    overdue,
+    upcomingScheduled,
+    nextDueDate,
+    scheduleComplete,
+    today,
+    missingIds,
+    invoiceMissingIds,
+    outputVatMissingIds,
+    coverageMissingIds,
+    uniqueReceipts,
+    uniqueInstallments,
+  };
+}
+
+type BillingSummaryState = ReturnType<typeof createBillingSummaryState>;
+
+function addDocumentRevenue(
+  state: BillingSummaryState,
+  record: BillingReportingRecord,
+  reportingCurrencyCode: string,
+  fxRate: string | null,
+) {
+  const convertedHt = converted(
+    record.totalHt.toString(),
+    record.currencyCode,
+    reportingCurrencyCode,
+    fxRate,
+  );
+  if (convertedHt === null) {
+    state.missingIds.add(record.id);
+    if (record.documentType === ClientBillingDocumentType.INVOICE)
+      state.invoiceMissingIds.add(record.id);
+  } else if (record.documentType === ClientBillingDocumentType.QUOTE) {
+    state.quoted = state.quoted.plus(convertedHt);
+  } else {
+    state.invoiced = state.invoiced.plus(convertedHt);
+  }
+}
+
+function addInvoiceCoverage(
+  state: BillingSummaryState,
+  record: BillingReportingRecord,
+  reportingCurrencyCode: string,
+  fxRate: string | null,
+) {
+  const allocatedHt = record.allocations
+    .filter((allocation) => allocation.order.status !== "CANCELLED")
+    .reduce(
+      (total, allocation) => total.plus(allocation.allocatedAmount),
+      new Decimal(0),
+    );
+  const remainingHt = allocationReconciliation(
+    record.totalHt.toString(),
+    record.allocations.map((allocation) =>
+      allocation.allocatedAmount.toString(),
+    ),
+  ).remaining;
+  const coverageOriginal = record.isProjectRemainderApproved
+    ? allocatedHt.plus(remainingHt)
+    : allocatedHt;
+  if (!coverageOriginal.isZero()) {
+    const convertedCoverage = converted(
+      coverageOriginal.toString(),
       record.currencyCode,
       reportingCurrencyCode,
       fxRate,
     );
-    if (convertedHt === null) {
-      missingIds.add(record.id);
-      if (record.documentType === ClientBillingDocumentType.INVOICE)
-        invoiceMissingIds.add(record.id);
-    } else if (record.documentType === ClientBillingDocumentType.QUOTE) {
-      quoted = quoted.plus(convertedHt);
-    } else {
-      invoiced = invoiced.plus(convertedHt);
-    }
-
-    if (record.documentType === ClientBillingDocumentType.INVOICE) {
-      const allocatedHt = record.allocations
-        .filter((allocation) => allocation.order.status !== "CANCELLED")
-        .reduce(
-          (total, allocation) => total.plus(allocation.allocatedAmount),
-          new Decimal(0),
-        );
-      const remainingHt = allocationReconciliation(
-        record.totalHt.toString(),
-        record.allocations.map((allocation) =>
-          allocation.allocatedAmount.toString(),
-        ),
-      ).remaining;
-      const coverageOriginal = record.isProjectRemainderApproved
-        ? allocatedHt.plus(remainingHt)
-        : allocatedHt;
-      if (!coverageOriginal.isZero()) {
-        const convertedCoverage = converted(
-          coverageOriginal.toString(),
-          record.currencyCode,
-          reportingCurrencyCode,
-          fxRate,
-        );
-        if (convertedCoverage === null) coverageMissingIds.add(record.id);
-        else coverage = coverage.plus(convertedCoverage);
-      }
-      const convertedTtc = converted(
-        record.totalTtc.toString(),
-        record.currencyCode,
-        reportingCurrencyCode,
-        fxRate,
-      );
-      if (convertedTtc === null) missingIds.add(record.id);
-      else invoicedTtc = invoicedTtc.plus(convertedTtc);
-      const convertedVat = converted(
-        record.vatAmount.toString(),
-        record.currencyCode,
-        reportingCurrencyCode,
-        fxRate,
-      );
-      if (convertedVat === null) {
-        missingIds.add(record.id);
-        outputVatMissingIds.add(record.id);
-      } else outputVat = outputVat.plus(convertedVat);
-    }
-
-    for (const receipt of record.documentType ===
-    ClientBillingDocumentType.INVOICE
-      ? receiptRecords(record)
-      : []) {
-      uniqueReceipts.set(receipt.id, {
-        ...receipt,
-        currencyCode: record.currencyCode,
-      });
-    }
-    const visibleInstallments = record.matchedInstallment
-      ? [record.matchedInstallment]
-      : record.paymentInstallments;
-    for (const installment of visibleInstallments)
-      uniqueInstallments.set(installment.id, installment);
-
-    if (
-      isRecognizedClientReceivable({
-        documentType: record.documentType,
-        workflowStatus: record.workflowStatus,
-        isCancelled: record.isCancelled,
-      })
-    ) {
-      const view = calculateClientBillingAmounts({
-        documentType: record.documentType,
-        dueDate: earliestUnpaidTermDate(
-          visibleInstallments.map((term) => ({
-            dueDate: dateToDateOnly(term.dueDate),
-            isCancelled: term.isCancelled,
-            scheduledAmount: term.scheduledAmount.toString(),
-            payments: term.receipts.map((payment) => ({
-              amount: payment.amount.toString(),
-            })),
-          })),
-          dateToDateOnly(record.dueDate),
-        ),
-        isCancelled: record.isCancelled,
-        paidAmounts: receiptRecords(record).map((receipt) =>
-          receipt.amount.toString(),
-        ),
-        today,
-        totalTtc: record.totalTtc.toString(),
-      });
-      const outstanding = converted(
-        view.outstanding,
-        record.currencyCode,
-        reportingCurrencyCode,
-        fxRate,
-      );
-      if (outstanding === null) missingIds.add(record.id);
-      else {
-        invoiceOutstanding = invoiceOutstanding.plus(outstanding);
-        const overdueValue = converted(
-          overdueTermAmount({
-            terms: visibleInstallments.map((term) => ({
-              dueDate: dateToDateOnly(term.dueDate),
-              isCancelled: term.isCancelled,
-              scheduledAmount: term.scheduledAmount.toString(),
-              payments: term.receipts.map((payment) => ({
-                amount: payment.amount.toString(),
-              })),
-            })),
-            outstanding: view.outstanding,
-            fallbackDate: dateToDateOnly(record.dueDate),
-            today,
-          }),
-          record.currencyCode,
-          reportingCurrencyCode,
-          record.fxRateToReporting?.toString() ?? null,
-        );
-        if (overdueValue === null) missingIds.add(record.id);
-        else overdue = overdue.plus(overdueValue);
-      }
-    }
+    if (convertedCoverage === null) state.coverageMissingIds.add(record.id);
+    else state.coverage = state.coverage.plus(convertedCoverage);
   }
+}
 
-  for (const receipt of uniqueReceipts.values()) {
+function addInvoiceTotals(
+  state: BillingSummaryState,
+  record: BillingReportingRecord,
+  reportingCurrencyCode: string,
+  fxRate: string | null,
+) {
+  if (record.documentType !== ClientBillingDocumentType.INVOICE) return;
+  addInvoiceCoverage(state, record, reportingCurrencyCode, fxRate);
+  const convertedTtc = converted(
+    record.totalTtc.toString(),
+    record.currencyCode,
+    reportingCurrencyCode,
+    fxRate,
+  );
+  if (convertedTtc === null) state.missingIds.add(record.id);
+  else state.invoicedTtc = state.invoicedTtc.plus(convertedTtc);
+  const convertedVat = converted(
+    record.vatAmount.toString(),
+    record.currencyCode,
+    reportingCurrencyCode,
+    fxRate,
+  );
+  if (convertedVat === null) {
+    state.missingIds.add(record.id);
+    state.outputVatMissingIds.add(record.id);
+  } else state.outputVat = state.outputVat.plus(convertedVat);
+}
+
+function collectBillingCash(
+  state: BillingSummaryState,
+  record: BillingReportingRecord,
+) {
+  for (const receipt of record.documentType ===
+  ClientBillingDocumentType.INVOICE
+    ? receiptRecords(record)
+    : []) {
+    state.uniqueReceipts.set(receipt.id, {
+      ...receipt,
+      currencyCode: record.currencyCode,
+    });
+  }
+  const visibleInstallments = record.matchedInstallment
+    ? [record.matchedInstallment]
+    : record.paymentInstallments;
+  for (const installment of visibleInstallments)
+    state.uniqueInstallments.set(installment.id, installment);
+
+  return visibleInstallments;
+}
+
+function addReceivableBalance(
+  state: BillingSummaryState,
+  record: BillingReportingRecord,
+  reportingCurrencyCode: string,
+  fxRate: string | null,
+  visibleInstallments: BillingReportingRecord["paymentInstallments"],
+) {
+  if (!isRecognizedClientReceivable(record)) return;
+  const terms = visibleInstallments.map((term) => ({
+    dueDate: dateToDateOnly(term.dueDate),
+    isCancelled: term.isCancelled,
+    scheduledAmount: term.scheduledAmount.toString(),
+    payments: term.receipts.map((payment) => ({
+      amount: payment.amount.toString(),
+    })),
+  }));
+  const view = calculateClientBillingAmounts({
+    documentType: record.documentType,
+    dueDate: earliestUnpaidTermDate(terms, dateToDateOnly(record.dueDate)),
+    isCancelled: record.isCancelled,
+    paidAmounts: receiptRecords(record).map((receipt) =>
+      receipt.amount.toString(),
+    ),
+    today: state.today,
+    totalTtc: record.totalTtc.toString(),
+  });
+  const outstanding = converted(
+    view.outstanding,
+    record.currencyCode,
+    reportingCurrencyCode,
+    fxRate,
+  );
+  if (outstanding === null) {
+    state.missingIds.add(record.id);
+    return;
+  }
+  state.invoiceOutstanding = state.invoiceOutstanding.plus(outstanding);
+  const overdueValue = converted(
+    overdueTermAmount({
+      terms,
+      outstanding: view.outstanding,
+      fallbackDate: dateToDateOnly(record.dueDate),
+      today: state.today,
+    }),
+    record.currencyCode,
+    reportingCurrencyCode,
+    fxRate,
+  );
+  if (overdueValue === null) state.missingIds.add(record.id);
+  else state.overdue = state.overdue.plus(overdueValue);
+}
+
+function addActualReceipts(
+  state: BillingSummaryState,
+  reportingCurrencyCode: string,
+) {
+  for (const receipt of state.uniqueReceipts.values()) {
     const convertedReceipt = converted(
       receipt.amount.toString(),
       receipt.currencyCode,
       reportingCurrencyCode,
       receipt.fxRateToReporting?.toString() ?? null,
     );
-    if (convertedReceipt === null) missingIds.add(receipt.id);
-    else paid = paid.plus(convertedReceipt);
+    if (convertedReceipt === null) state.missingIds.add(receipt.id);
+    else state.paid = state.paid.plus(convertedReceipt);
   }
-  for (const installment of uniqueInstallments.values()) {
+}
+
+function addUpcomingTerms(
+  state: BillingSummaryState,
+  reportingCurrencyCode: string,
+) {
+  for (const installment of state.uniqueInstallments.values()) {
     if (installment.isCancelled) continue;
     const received = installment.receipts.reduce(
       (total, receipt) => total.plus(receipt.amount),
@@ -262,17 +305,59 @@ export function summarizeClientBillingRecords(
       received,
     );
     const dueDate = dateToDateOnly(installment.dueDate);
-    if (!dueDate || outstanding.isZero() || dueDate < today) continue;
-    nextDueDate = earlierDate(nextDueDate, dueDate);
+    if (!dueDate || outstanding.isZero() || dueDate < state.today) continue;
+    state.nextDueDate = earlierDate(state.nextDueDate, dueDate);
     const convertedOutstanding = converted(
       outstanding.toString(),
       installment.currencyCode,
       reportingCurrencyCode,
       installment.expectedFxRateToReporting?.toString() ?? null,
     );
-    if (convertedOutstanding === null) scheduleComplete = false;
-    else upcomingScheduled = upcomingScheduled.plus(convertedOutstanding);
+    if (convertedOutstanding === null) state.scheduleComplete = false;
+    else
+      state.upcomingScheduled =
+        state.upcomingScheduled.plus(convertedOutstanding);
   }
+}
+
+export function summarizeClientBillingRecords(
+  records: readonly BillingReportingRecord[],
+  reportingCurrencyCode: string,
+) {
+  const state = createBillingSummaryState();
+  for (const record of records) {
+    if (
+      record.isCancelled ||
+      !record.projectId ||
+      (record.documentType === "INVOICE" &&
+        !isRecognizedClientReceivable(record))
+    )
+      continue;
+    const fxRate = record.fxRateToReporting?.toString() ?? null;
+    addDocumentRevenue(state, record, reportingCurrencyCode, fxRate);
+    addInvoiceTotals(state, record, reportingCurrencyCode, fxRate);
+    const terms = collectBillingCash(state, record);
+    addReceivableBalance(state, record, reportingCurrencyCode, fxRate, terms);
+  }
+  addActualReceipts(state, reportingCurrencyCode);
+  addUpcomingTerms(state, reportingCurrencyCode);
+  const {
+    quoted,
+    invoiced,
+    invoicedTtc,
+    outputVat,
+    coverage,
+    invoiceOutstanding,
+    paid,
+    overdue,
+    upcomingScheduled,
+    nextDueDate,
+    scheduleComplete,
+    missingIds,
+    invoiceMissingIds,
+    outputVatMissingIds,
+    coverageMissingIds,
+  } = state;
   return {
     complete: missingIds.size === 0,
     coverageComplete: coverageMissingIds.size === 0,
