@@ -141,12 +141,15 @@ function BillingRow({
             label={`Paid date for ${document.reference}`}
             canEdit={editable}
           >
-            {formatDateOnly(document.paidAt)}
+            <span>
+              {formatDateOnly(document.paidAt)}
+              <span className="text-muted-foreground ml-1.5 text-xs">Paid</span>
+            </span>
           </SourceCell>
         ) : (
           cell(
             "dueDate",
-            "Due date",
+            "Next payment due",
             document.dueDate,
             formatDateOnly(document.dueDate),
             {
@@ -263,7 +266,7 @@ export function BillingTable({
               />
               <SortHeader
                 className="px-3 py-3"
-                label="Due"
+                label="Due / paid"
                 field="dueDate"
                 defaultSort="updated"
                 defaultDirection="desc"

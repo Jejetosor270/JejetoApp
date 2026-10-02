@@ -305,12 +305,17 @@ export function OrderRow({
               href={paymentsHref}
               canEdit={editable}
             >
-              {formatDateOnly(order.supplierPayment.paidAt)}
+              <span>
+                {formatDateOnly(order.supplierPayment.paidAt)}
+                <span className="text-muted-foreground ml-1.5 text-xs">
+                  Paid
+                </span>
+              </span>
             </SourceCell>
           );
         return (
           <EditableCell
-            label={`Payment due date for ${order.orderNumber}`}
+            label={`Next payment due for ${order.orderNumber}`}
             value={order.supplierPayment.nextDueDate ?? ""}
             display={formatDateOnly(order.supplierPayment.nextDueDate)}
             type="date"

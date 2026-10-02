@@ -1,9 +1,8 @@
 import { DateInput } from "@/components/forms/date-input";
 import { PageHeader } from "@/components/layout/page-header";
 import { FilterBar } from "@/components/listing/filter-bar";
-import { queryStringFromParams } from "@/domain/listing/validation";
 import type { Metadata } from "next";
-import { ViewSelector } from "@/components/listing/view-selector";
+import { ViewField } from "@/components/listing/view-selector";
 
 import { CashFlowPanel } from "@/components/reporting/cash-flow-panel";
 import {
@@ -91,13 +90,49 @@ function ReportingFilters({
   view: ReportView;
 }) {
   return (
-    <FilterBar>
-      <input name="view" type="hidden" value={view} />
-      <input
-        name="portfolioView"
-        type="hidden"
-        value={first(params, "portfolioView") ?? "commercial"}
-      />
+    <FilterBar
+      controls={
+        <>
+          <ViewField
+            field="view"
+            label="Report"
+            defaultValue={view}
+            options={views.map((item) => ({
+              value: item.value,
+              label:
+                item.value === "cash-flow"
+                  ? "Cash forecast"
+                  : item.value === "payments"
+                    ? "Cash transactions"
+                    : item.label,
+            }))}
+          />
+          {view === "projects" && (
+            <ViewField
+              field="portfolioView"
+              defaultValue={
+                selected(
+                  ["commercial", "funding", "cash"] as const,
+                  first(params, "portfolioView"),
+                ) ?? "commercial"
+              }
+              options={[
+                { label: "Order pricing plan", value: "commercial" },
+                { label: "Order sell coverage", value: "funding" },
+                { label: "Cash", value: "cash" },
+              ]}
+            />
+          )}
+        </>
+      }
+    >
+      {view !== "projects" && (
+        <input
+          name="portfolioView"
+          type="hidden"
+          value={first(params, "portfolioView") ?? "commercial"}
+        />
+      )}
       {view !== "payments" && (
         <input
           name="direction"
@@ -220,7 +255,7 @@ function ReportingFilters({
         className="bg-primary text-primary-foreground h-9 rounded-md px-3 text-sm font-medium"
         type="submit"
       >
-        Apply filters
+        Apply
       </button>
     </FilterBar>
   );
@@ -297,23 +332,6 @@ export default async function ReportsPage({
         }
       />
 
-      <ViewSelector
-        pathname="/reports"
-        queryString={queryStringFromParams(params)}
-        field="view"
-        label="Report"
-        defaultValue="projects"
-        options={views.map((item) => ({
-          value: item.value,
-          label:
-            item.value === "cash-flow"
-              ? "Cash forecast"
-              : item.value === "payments"
-                ? "Cash transactions"
-                : item.label,
-        }))}
-      />
-
       <ReportingFilters options={options} params={params} view={view} />
 
       {view === "projects" && report ? (
@@ -327,7 +345,6 @@ export default async function ReportsPage({
                 first(params, "portfolioView"),
               ) ?? "commercial"
             }
-            queryString={queryStringFromParams(params)}
           />
         </>
       ) : null}

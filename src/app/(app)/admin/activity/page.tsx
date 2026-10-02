@@ -10,6 +10,8 @@ import {
   filterControlClassName,
 } from "@/components/listing/filter-field";
 import { auditActions, auditEntityTypes } from "@/domain/audit/constants";
+import { auditEntityIdSchema } from "@/domain/audit/history";
+import Link from "next/link";
 import {
   firstQueryValue,
   parsePageInput,
@@ -34,6 +36,25 @@ export default async function ActivityPage({
 }) {
   const user = await requireMasterDataEditor();
   const params = await searchParams;
+  const recordFilter = auditEntityIdSchema
+    .optional()
+    .safeParse(params.entityId || undefined);
+  if (!recordFilter.success)
+    return (
+      <div className="space-y-6">
+        <SettingsNavigation role={user.role} />
+        <PageHeader
+          title="Activity history"
+          description={
+            <>The record filter is invalid. No activity was loaded.</>
+          }
+        />
+        <Link href="/admin/activity" className="text-primary text-sm underline">
+          Open all activity
+        </Link>
+      </div>
+    );
+  const entityId = recordFilter.data;
   const pageInput = parsePageInput(params);
   const action = selectedValue(auditActions, firstQueryValue(params, "action"));
   const entityType = selectedValue(
@@ -47,6 +68,7 @@ export default async function ActivityPage({
       dateFrom: auditDate(firstQueryValue(params, "dateFrom")),
       dateTo: auditDate(firstQueryValue(params, "dateTo"), true),
       entityType,
+      entityId,
       ...pageInput,
     }),
     listAuditActors(),
@@ -55,6 +77,9 @@ export default async function ActivityPage({
   for (const [key, value] of Object.entries(params)) {
     if (typeof value === "string") query.set(key, value);
   }
+  const unscopedQuery = new URLSearchParams(query);
+  unscopedQuery.delete("entityId");
+  unscopedQuery.delete("page");
   return (
     <div className="space-y-6">
       <SettingsNavigation role={user.role} />
@@ -63,6 +88,9 @@ export default async function ActivityPage({
         description={<>Important authoritative changes, newest first.</>}
       />
       <FilterBar>
+        {entityId ? (
+          <input type="hidden" name="entityId" value={entityId} />
+        ) : null}
         <FilterField label="Employee">
           <select
             className={filterControlClassName}
@@ -127,6 +155,17 @@ export default async function ActivityPage({
           Filter
         </button>
       </FilterBar>
+      {entityId ? (
+        <p className="text-muted-foreground text-xs">
+          Showing activity for this record only.{" "}
+          <Link
+            className="text-primary underline"
+            href={`/admin/activity?${unscopedQuery}`}
+          >
+            Clear record filter
+          </Link>
+        </p>
+      ) : null}
       <section className="bg-card overflow-hidden rounded-lg border">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[64rem] text-left text-sm">

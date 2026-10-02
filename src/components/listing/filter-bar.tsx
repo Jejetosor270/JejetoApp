@@ -3,7 +3,13 @@ import { AppliedFilters } from "@/components/listing/applied-filters";
 import { SlidersHorizontal } from "lucide-react";
 
 /** A single GET form keeps the existing validated query contract intact. */
-export function FilterBar({ children }: { children: ReactNode }) {
+export function FilterBar({
+  children,
+  controls,
+}: {
+  children: ReactNode;
+  controls?: ReactNode;
+}) {
   function flatten(nodes: ReactNode): ReactNode[] {
     return Children.toArray(nodes).flatMap((node) =>
       isValidElement<{ children?: ReactNode }>(node) && node.type === Fragment
@@ -98,7 +104,10 @@ export function FilterBar({ children }: { children: ReactNode }) {
         <div className="grid w-full min-w-0 gap-3 sm:max-w-3xl sm:flex-1 sm:grid-cols-3">
           {primary}
         </div>
-        <div className="flex flex-wrap items-center gap-2">{actions}</div>
+        <div className="flex min-w-0 flex-wrap items-end gap-2">
+          {controls}
+          {actions}
+        </div>
       </div>
       <AppliedFilters labels={labels} />
       {advanced.length > 0 && (

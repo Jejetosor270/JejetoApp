@@ -143,65 +143,74 @@ export function PaymentSchedule({
           )
         }
         rowActions={Object.fromEntries(
-          summary.installments.map((term) => [
-            term.id,
-            <div key={term.id} className="payment-term-actions">
-              {canEdit &&
-                !term.isCancelled &&
-                term.outstandingAmount !== "0" && (
-                  <TermPaymentActions supplier={term} />
-                )}
-              {canEdit && (
-                <EditorDrawer title="Term details">
-                  <InstallmentForm
-                    baseAmount={summary.baseAmount}
-                    currencies={currencies}
-                    defaultCurrencyCode={term.currencyCode}
-                    direction={direction}
-                    orderId={orderId}
-                    reportingCurrencyCode={reportingCurrencyCode}
-                    installment={term}
-                  />
-                </EditorDrawer>
-              )}
-              {canEdit && (
-                <TermStatusAction
-                  id={term.id}
-                  kind="supplier"
-                  cancelled={term.isCancelled}
-                />
-              )}
-              <details>
-                <summary className="cursor-pointer text-xs">
-                  Payment history ({term.settlements.length})
-                </summary>
-                {term.settlements.map((payment) => (
-                  <div
-                    className="my-2 space-y-2 border-t py-2 text-xs"
-                    key={payment.id}
+          summary.installments.map((term) => {
+            const state = paymentTermState({
+              amount: term.scheduledAmount,
+              payments: term.settlements,
+              dueDate: term.dueDate,
+              cancelled: term.isCancelled,
+              today,
+            });
+            return [
+              term.id,
+              <div key={term.id} className="payment-term-actions">
+                {canEdit && (
+                  <TermPaymentActions
+                    supplier={term}
+                    canPay={supplier && state.remaining !== "0"}
                   >
-                    <p>
-                      {formatDateOnly(payment.settledAt)} ·{" "}
-                      {formatMoney(payment.amount, term.currencyCode)} ·{" "}
-                      {payment.reference}
-                    </p>
-                    {canEdit && (
-                      <>
-                        <EditorDrawer title="Correct payment">
-                          <SettlementForm
-                            installment={term}
-                            settlement={payment}
-                            today={today}
-                          />
-                        </EditorDrawer>
-                        <SettlementCorrection settlement={payment} />
-                      </>
+                    <EditorDrawer title="Term details">
+                      <InstallmentForm
+                        baseAmount={summary.baseAmount}
+                        currencies={currencies}
+                        defaultCurrencyCode={term.currencyCode}
+                        direction={direction}
+                        orderId={orderId}
+                        reportingCurrencyCode={reportingCurrencyCode}
+                        installment={term}
+                      />
+                    </EditorDrawer>
+                    {(term.isCancelled || state.remaining !== "0") && (
+                      <TermStatusAction
+                        id={term.id}
+                        kind="supplier"
+                        cancelled={term.isCancelled}
+                      />
                     )}
-                  </div>
-                ))}
-              </details>
-            </div>,
-          ]),
+                  </TermPaymentActions>
+                )}
+                <details>
+                  <summary className="cursor-pointer text-xs">
+                    Payment history ({term.settlements.length})
+                  </summary>
+                  {term.settlements.map((payment) => (
+                    <div
+                      className="my-2 space-y-2 border-t py-2 text-xs"
+                      key={payment.id}
+                    >
+                      <p>
+                        {formatDateOnly(payment.settledAt)} ·{" "}
+                        {formatMoney(payment.amount, term.currencyCode)} ·{" "}
+                        {payment.reference}
+                      </p>
+                      {canEdit && (
+                        <>
+                          <EditorDrawer title="Correct payment">
+                            <SettlementForm
+                              installment={term}
+                              settlement={payment}
+                              today={today}
+                            />
+                          </EditorDrawer>
+                          <SettlementCorrection settlement={payment} />
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </details>
+              </div>,
+            ];
+          }),
         )}
       />
     </div>

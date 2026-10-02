@@ -31,13 +31,31 @@ vi.mock("@/app/(app)/billing/actions", () => ({
   updateOrderBillingLinkAction: vi.fn(),
   updateBillingFreightCoverageAction: vi.fn(),
 }));
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/billing",
-  useRouter: () => ({ refresh: actions.refresh }),
-  useSearchParams: () => new URLSearchParams(),
-}));
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  return {
+    usePathname: () => "/billing",
+    useRouter: () => ({ refresh: actions.refresh }),
+    useSearchParams: () =>
+      new URLSearchParams(
+        useSyncExternalStore(
+          (callback) => {
+            window.addEventListener("popstate", callback);
+            return () => window.removeEventListener("popstate", callback);
+          },
+          () => window.location.search,
+          () => "",
+        ),
+      ),
+  };
+});
 vi.mock("./billing-schedule-manager", () => ({
-  BillingScheduleManager: () => <p>Payment manager</p>,
+  BillingScheduleManager: () => (
+    <>
+      <p>Payment manager</p>
+      <input name="billingTermDraft" defaultValue="Original term" />
+    </>
+  ),
 }));
 
 const record = {
@@ -124,10 +142,17 @@ const options: ComponentProps<typeof BillingDetail>["options"] = {
 let view: Awaited<ReturnType<typeof mountForm>>;
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState(null, "", "/billing/billing-id");
+  const push = window.history.pushState.bind(window.history);
+  vi.spyOn(window.history, "pushState").mockImplementation((...args) => {
+    push(...args);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
   HTMLElement.prototype.scrollIntoView = vi.fn();
 });
 afterEach(async () => {
   await view?.unmount();
+  vi.restoreAllMocks();
 });
 
 function matrix(row: string, column: number) {
@@ -171,14 +196,16 @@ it("keeps the Billing table layout and shows a paid date linked to the receipts"
   expect(
     document.querySelector('button[aria-label="Manage Paid date for INV-001"]')
       ?.textContent,
-  ).toBe("26/09/2026");
+  ).toBe("26/09/2026Paid");
   expect(
-    document.querySelector('button[aria-label="Edit Due date for INV-001"]'),
+    document.querySelector(
+      'button[aria-label="Edit Next payment due for INV-001"]',
+    ),
   ).toBeNull();
   const headings = [...document.querySelectorAll("thead th")].map(
     (el) => el.textContent,
   );
-  expect(headings).toContain("Due");
+  expect(headings).toContain("Due / paid");
   await act(async () =>
     document
       .querySelector<HTMLButtonElement>(
@@ -199,8 +226,9 @@ it("continues showing the due date for partially paid Billing", async () => {
     />,
   );
   expect(
-    document.querySelector('button[aria-label="Edit Due date for INV-001"]')
-      ?.textContent,
+    document.querySelector(
+      'button[aria-label="Edit Next payment due for INV-001"]',
+    )?.textContent,
   ).toContain("01/01/2099");
   expect(
     document.querySelector('button[aria-label="Manage Paid date for INV-001"]'),
@@ -220,13 +248,13 @@ it("shows allocation and freight figures in Details, separately from Client outs
   expect(visible?.textContent).not.toContain("Payment manager");
   expect(
     document
-      .querySelector("#schedule")
+      .querySelector('[data-workspace-section="schedule"]')
       ?.closest('[role="tabpanel"]')
       ?.hasAttribute("hidden"),
   ).toBe(true);
   expect(
     document
-      .querySelector("#history")
+      .querySelector('[data-workspace-section="history"]')
       ?.closest('[role="tabpanel"]')
       ?.hasAttribute("hidden"),
   ).toBe(true);
@@ -336,6 +364,102 @@ it("does not expose editing to read-only employees", async () => {
   ).toBe(false);
   expect(document.querySelector('[name="recordStatus"]')).toBeNull();
   expect(matrix("Project remainder", 0)).toBe("725.00 EUR");
+});
+
+it.each([
+  ["?tab=related#schedule", "Payment terms"],
+  ["?tab=allocations", "Linked Orders"],
+  ["?tab=related&section=history", "History"],
+])("opens the Billing related work area from %s", async (url, label) => {
+  window.history.replaceState(null, "", "/billing/billing-id" + url);
+  await mount(record, false);
+  const nav = document.querySelector(
+    'nav[aria-label="Billing workspace related sections"]',
+  );
+  expect(nav?.querySelector('[aria-pressed="true"]')?.textContent).toBe(label);
+  expect(
+    document.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+  ).toBe("Related");
+  expect(nav?.querySelectorAll("button")).toHaveLength(4);
+});
+
+it("keeps Billing terms and related actions mounted while changing work areas", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/billing/billing-id?tab=related#schedule",
+  );
+  await mount();
+  const draft = control("billingTermDraft");
+  await enter("billingTermDraft", "Keep this payment term");
+  await clickText("Linked Orders");
+  expect(
+    document
+      .querySelector('[data-workspace-section="allocations"]')
+      ?.hasAttribute("hidden"),
+  ).toBe(false);
+  expect(
+    document
+      .querySelector('[data-workspace-section="schedule"]')
+      ?.hasAttribute("hidden"),
+  ).toBe(true);
+  await clickText("Details");
+  await clickText("Related");
+  await clickText("Payment terms");
+  expect(control("billingTermDraft")).toBe(draft);
+  expect(draft.value).toBe("Keep this payment term");
+});
+
+it("uses a standard editor and keeps collapsed allocation inputs in the submitted draft", async () => {
+  actions.save.mockResolvedValue({ status: "error", message: "Review notes." });
+  await mount();
+  await clickText("Edit");
+  const dialog = document.querySelector('[role="dialog"]');
+  expect(dialog?.classList.contains("data-[side=right]:sm:max-w-2xl")).toBe(
+    true,
+  );
+  const disclosure = dialog?.querySelector("details");
+  expect(disclosure?.open).toBe(false);
+  expect(disclosure?.querySelector("summary")?.textContent).toBe(
+    "Linked Orders",
+  );
+  await enter("notes", "Preserved draft");
+  await clickText("Save Billing document");
+  const values = actions.save.mock.calls[0]?.[1] as FormData;
+  expect(JSON.parse(String(values.get("allocations")))).toEqual([
+    expect.objectContaining({
+      orderId: "order-id",
+      allocatedAmount: "100.0000",
+    }),
+  ]);
+  expect(control("notes").value).toBe("Preserved draft");
+  expect(disclosure?.open).toBe(false);
+});
+
+it("opens allocations on native validation and server allocation errors without losing edits", async () => {
+  actions.save.mockResolvedValue({
+    status: "error",
+    message: "Review allocations.",
+    fieldErrors: { allocations: "Allocated amount exceeds Billing." },
+  });
+  await mount();
+  await clickText("Edit");
+  const disclosure = document.querySelector<HTMLDetailsElement>(
+    '[role="dialog"] details',
+  );
+  const allocationInput = disclosure?.querySelector("input");
+  expect(allocationInput).toBeTruthy();
+  await act(async () =>
+    allocationInput?.dispatchEvent(
+      new Event("invalid", { bubbles: false, cancelable: true }),
+    ),
+  );
+  expect(disclosure?.open).toBe(true);
+  if (disclosure) disclosure.open = false;
+  await enter("notes", "Still here");
+  await clickText("Save Billing document");
+  expect(disclosure?.open).toBe(true);
+  expect(control("notes").value).toBe("Still here");
 });
 
 vi.mock("@/app/(app)/related-records/actions", () => ({

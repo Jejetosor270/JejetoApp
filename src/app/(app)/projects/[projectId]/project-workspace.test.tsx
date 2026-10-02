@@ -74,6 +74,7 @@ async function mount(canEdit = true, items = false) {
         items: items ? (
           <Link href="/items?projectId=demo">Open Items</Link>
         ) : null,
+        history: canEdit ? <p>Project activity history</p> : null,
       }}
     />,
   );
@@ -87,7 +88,7 @@ it("shows one Related work area at a time, preserves drafts across areas and rem
   await clickText("Related");
   expect(
     document.querySelector(
-      'nav[aria-label="Project related sections"] button[aria-pressed="true"]',
+      'nav[aria-label="Project workspace related sections"] button[aria-pressed="true"]',
     )?.textContent,
   ).toBe("Billing");
   await clickText("Purchasing");
@@ -112,15 +113,16 @@ it("shows one Related work area at a time, preserves drafts across areas and rem
   await clickText("Related");
   expect(
     document.querySelector(
-      'nav[aria-label="Project related sections"] button[aria-pressed="true"]',
+      'nav[aria-label="Project workspace related sections"] button[aria-pressed="true"]',
     )?.textContent,
   ).toBe("Freight");
   await clickText("Purchasing");
   expect(draft.value).toBe("Keep this package");
   expect(document.querySelectorAll('[role="tab"]')).toHaveLength(2);
   expect(
-    document.querySelector('nav[aria-label="Project related sections"]')
-      ?.textContent,
+    document.querySelector(
+      'nav[aria-label="Project workspace related sections"]',
+    )?.textContent,
   ).not.toContain("Items");
 });
 
@@ -136,7 +138,7 @@ it.each([
   await mount(false, true);
   expect(
     document.querySelector(
-      'nav[aria-label="Project related sections"] button[aria-pressed="true"]',
+      'nav[aria-label="Project workspace related sections"] button[aria-pressed="true"]',
     )?.textContent,
   ).toBe(section);
 });
@@ -216,3 +218,29 @@ vi.mock("@/app/(app)/related-records/inline-actions", () => ({
 vi.mock("@/app/(app)/settings/trash/actions", () => ({
   trashSelectedAction: vi.fn(),
 }));
+
+it.each([true, false])(
+  "only offers Project History when supplied by the authorized reader (%s)",
+  async (canEdit) => {
+    window.history.replaceState(
+      null,
+      "",
+      "/projects/demo?tab=related&section=history",
+    );
+    await mount(canEdit);
+    const history = document.querySelector(
+      'section[data-workspace-section="history"]',
+    );
+    if (canEdit) {
+      expect(history?.hasAttribute("hidden")).toBe(false);
+      expect(history?.textContent).toBe("Project activity history");
+    } else {
+      expect(history).toBeNull();
+      expect(
+        document.querySelector(
+          'nav[aria-label="Project workspace related sections"]',
+        )?.textContent,
+      ).not.toContain("History");
+    }
+  },
+);

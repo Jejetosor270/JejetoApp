@@ -1,4 +1,3 @@
-import { ViewSelector } from "@/components/listing/view-selector";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -38,25 +37,25 @@ export function CompanyFinancialSummary({
       "/orders",
     ],
     [
-      "Economic Landed Cost HT",
+      "Order economic cost",
       formatMoney(report.financial.totals.economicLandedCost.value, currency),
       !report.financial.totals.economicLandedCost.complete,
       "/orders",
     ],
     [
-      "Order Planned Gross Profit HT",
+      "Order pricing profit",
       formatMoney(report.financial.grossProfit, currency),
       !report.financial.complete,
       "/orders",
     ],
     [
-      "Markup",
+      "Order pricing markup",
       formatRate(report.financial.markupRate),
       false,
       "/orders?view=financial",
     ],
     [
-      "Gross margin",
+      "Order pricing margin",
       formatRate(report.financial.grossMarginRate),
       false,
       "/orders",
@@ -103,10 +102,11 @@ export function CompanyFinancialSummary({
     <section className="bg-card rounded-lg border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">Portfolio commercial plan</h2>
+          <h2 className="text-sm font-semibold">Order pricing plan</h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            Order planned selling and economic costs. Comparable totals include{" "}
-            {currency}-reporting Projects only.
+            Order selling prices less Order economic costs, not actual Project
+            profit. Comparable totals include {currency}-reporting Projects
+            only.
           </p>
         </div>
         <Badge variant={report.financial.complete ? "outline" : "destructive"}>
@@ -139,7 +139,7 @@ export function CompanyFinancialSummary({
       </dl>
       <details className="mt-4 border-t pt-3">
         <summary className="text-sm font-medium">
-          Commercial ratios, exposure & funding
+          Order pricing ratios, exposure & coverage
         </summary>{" "}
         <dl className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
           {kpis
@@ -200,20 +200,18 @@ export function CompanyFinancialSummary({
 export function ProjectPortfolioTable({
   report,
   view = "commercial",
-  queryString = "view=projects",
 }: {
   report: PortfolioReportingSnapshot;
   view?: "commercial" | "funding" | "cash";
-  queryString?: string;
 }) {
   const labels =
     view === "commercial"
       ? [
-          "Order Sell HT",
-          "Economic Landed Cost HT",
-          "Planned Gross Profit HT",
-          "Planned Markup",
-          "Planned Margin",
+          "Order planned sell HT",
+          "Order economic cost",
+          "Order pricing profit",
+          "Order pricing markup",
+          "Order pricing margin",
         ]
       : view === "funding"
         ? ["Billing less Order sell HT"]
@@ -229,21 +227,10 @@ export function ProjectPortfolioTable({
           <h2 className="text-sm font-semibold">Project portfolio</h2>
           <p className="text-muted-foreground mt-1 text-xs">
             Each row remains in its Project reporting currency. Commercial
-            figures describe the Order plan; Billing less Order sell is
-            commercial coverage, separate from cash.
+            figures describe the Order pricing plan, not actual Project profit;
+            Billing less Order sell is commercial coverage, separate from cash.
           </p>
         </div>
-        <ViewSelector
-          pathname="/reports"
-          queryString={queryString}
-          field="portfolioView"
-          options={[
-            { label: "Commercial", value: "commercial" },
-            { label: "Funding", value: "funding" },
-            { label: "Cash", value: "cash" },
-          ]}
-          defaultValue="commercial"
-        />
       </header>
       <div
         className="overflow-x-auto"

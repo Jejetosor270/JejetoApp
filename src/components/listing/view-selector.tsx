@@ -1,3 +1,35 @@
+interface ViewFieldProps {
+  field: string;
+  label?: string;
+  options: readonly { label: string; value: string }[];
+  defaultValue?: string;
+}
+
+/** A presentation choice inside the workspace's existing filter form. */
+export function ViewField({
+  field,
+  label = "Columns",
+  options,
+  defaultValue = "",
+}: ViewFieldProps) {
+  return (
+    <label className="grid gap-1 text-xs font-medium">
+      {label}
+      <select
+        name={field}
+        defaultValue={defaultValue}
+        className="border-input bg-background h-9 max-w-full rounded-lg border px-3 text-sm"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 /** Secondary presentation choices, not competing workspaces. GET preserves scoped filters. */
 export function ViewSelector({
   pathname,
@@ -33,24 +65,16 @@ export function ViewSelector({
             value={value}
           />
         ))}
-      <label className="grid gap-1 text-xs font-medium">
-        {label}
-        <select
-          name={field}
-          defaultValue={
-            options.some((option) => option.value === value)
-              ? value
-              : defaultValue
-          }
-          className="border-input bg-background h-9 max-w-full rounded-lg border px-3 text-sm"
-        >
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <ViewField
+        field={field}
+        label={label}
+        options={options}
+        defaultValue={
+          options.some((option) => option.value === value)
+            ? value
+            : defaultValue
+        }
+      />
       <button
         type="submit"
         className="border-input h-9 rounded-lg border px-3 text-sm font-medium"

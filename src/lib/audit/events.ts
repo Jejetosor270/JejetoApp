@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import type { AuditAction, AuditEntityType } from "@/domain/audit/constants";
+import { auditEntityIdSchema } from "@/domain/audit/history";
 import { getDatabase } from "@/lib/db";
 
 interface AuditEventInput {
@@ -53,15 +54,18 @@ export interface AuditFilters {
   dateFrom?: Date | undefined;
   dateTo?: Date | undefined;
   entityType?: AuditEntityType | undefined;
+  entityId?: string | undefined;
   page: number;
   pageSize: number;
 }
 
 export async function listAuditEvents(filters: AuditFilters) {
+  const entityId = auditEntityIdSchema.optional().parse(filters.entityId);
   const where = {
     ...(filters.action ? { action: filters.action } : {}),
     ...(filters.actorEmail ? { actorEmail: filters.actorEmail } : {}),
     ...(filters.entityType ? { entityType: filters.entityType } : {}),
+    ...(entityId ? { entityId } : {}),
     ...(filters.dateFrom || filters.dateTo
       ? {
           occurredAt: {

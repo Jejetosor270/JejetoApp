@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { mountForm, clickText, enter, control } from "@/test/dom-form";
 import type { ClientBillingView } from "@/lib/billing/billing";
@@ -64,6 +64,11 @@ it("marks a term paid from its exact remaining balance and preserves a rejected 
   expect(paid).toHaveBeenCalledWith(
     expect.objectContaining({ kind: "client", id: "term", documentId: "bill" }),
   );
+  const more = [...view.container.querySelectorAll("summary")].find((summary) =>
+    summary.textContent?.includes("More actions"),
+  );
+  if (!more) throw new Error("Missing term actions disclosure");
+  await act(async () => more.click());
   await clickText("Record partial payment");
   expect(control("amount").value).toBe("");
   expect(control("installmentId").value).toBe("term");

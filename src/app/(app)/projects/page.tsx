@@ -201,7 +201,7 @@ export default async function ProjectsPage({
           className="border-input h-9 rounded-lg border px-3 text-sm font-medium"
           type="submit"
         >
-          Filter
+          Apply
         </button>
       </FilterBar>
       <ProjectManagement

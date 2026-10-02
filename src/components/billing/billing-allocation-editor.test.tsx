@@ -363,9 +363,10 @@ describe("dedicated Billing allocation editor", () => {
       await enter("allocatedAmount", "250");
       await submit();
       expect(document.querySelector('[role="dialog"]')).toBeNull();
-      expect(document.querySelector("#allocations")?.textContent).toContain(
-        "250.00",
-      );
+      expect(
+        document.querySelector('[data-workspace-section="allocations"]')
+          ?.textContent,
+      ).toContain("250.00");
       await clickText("Edit");
       const allocationsInput = document.querySelector<HTMLInputElement>(
         'input[name="allocations"]',

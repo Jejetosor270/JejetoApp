@@ -14,7 +14,13 @@ function subscribe(callback: () => void) {
 }
 
 /** Local navigation keeps every editor mounted and preserves existing deep links. */
-export function RelatedSections({ sections }: { sections: RecordSection[] }) {
+export function RelatedSections({
+  sections,
+  label,
+}: {
+  sections: RecordSection[];
+  label: string;
+}) {
   const search = useSearchParams();
   const id = useId();
   const hash = useSyncExternalStore(
@@ -36,10 +42,7 @@ export function RelatedSections({ sections }: { sections: RecordSection[] }) {
   }
   return (
     <div className="space-y-4">
-      <nav
-        aria-label="Project related sections"
-        className="flex flex-wrap gap-2"
-      >
+      <nav aria-label={label} className="flex flex-wrap gap-2">
         {sections.map((section) => (
           <Button
             key={section.id}

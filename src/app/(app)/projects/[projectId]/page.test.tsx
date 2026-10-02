@@ -3,6 +3,7 @@ const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   project: vi.fn(),
   financial: vi.fn(),
+  history: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({
@@ -19,6 +20,7 @@ vi.mock("@/lib/master-data/projects", () => ({ getProject: mocks.project }));
 vi.mock("@/lib/reporting/project-control", () => ({
   getProjectControl: mocks.financial,
 }));
+vi.mock("@/lib/audit/history", () => ({ getRecordHistory: mocks.history }));
 import ProjectPage from "./page";
 const params = Promise.resolve({
   projectId: "11111111-1111-4111-8111-111111111111",
@@ -33,6 +35,7 @@ it("does not start financial reads when the Project is missing or trashed", asyn
     ProjectPage({ params, searchParams: Promise.resolve({}) }),
   ).rejects.toThrow("PROJECT_NOT_FOUND");
   expect(mocks.financial).not.toHaveBeenCalled();
+  expect(mocks.history).not.toHaveBeenCalled();
 });
 it("resolves authentication before reading the Project", async () => {
   mocks.user.mockRejectedValue(new Error("Sign in required"));
@@ -41,4 +44,5 @@ it("resolves authentication before reading the Project", async () => {
   ).rejects.toThrow("Sign in required");
   expect(mocks.project).not.toHaveBeenCalled();
   expect(mocks.financial).not.toHaveBeenCalled();
+  expect(mocks.history).not.toHaveBeenCalled();
 });

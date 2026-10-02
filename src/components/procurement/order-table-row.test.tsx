@@ -178,10 +178,11 @@ describe("Purchasing click-to-edit on every column set", () => {
     const paid = document.querySelector(
       'button[aria-label="Manage Paid date for PO-001"]',
     );
-    expect(paid?.textContent).toBe("26/09/2026");
+    expect(paid?.textContent).toContain("26/09/2026");
+    expect(paid?.textContent).toContain("Paid");
     expect(
       document.querySelector(
-        'button[aria-label="Edit Payment due date for PO-001"]',
+        'button[aria-label="Edit Next payment due for PO-001"]',
       ),
     ).toBeNull();
     await button("Manage Paid date for PO-001");

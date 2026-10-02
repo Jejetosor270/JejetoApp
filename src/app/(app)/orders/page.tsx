@@ -1,7 +1,7 @@
 import { orderSortFields, orderSortLabels } from "@/config/order-list";
 import { DateInput } from "@/components/forms/date-input";
 import { CreateOrderActions } from "@/components/procurement/create-order-actions";
-import { ViewSelector } from "@/components/listing/view-selector";
+import { ViewField } from "@/components/listing/view-selector";
 import { PageHeader } from "@/components/layout/page-header";
 import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
@@ -113,19 +113,20 @@ export default async function OrdersPage({
           </>
         }
       />
-      <ViewSelector
-        pathname="/orders"
-        queryString={queryStringFromParams(params)}
-        field="view"
-        defaultValue="general"
-        options={[
-          { label: "Standard", value: "general" },
-          { label: "Cost & pricing detail", value: "financial" },
-          { label: "Supplier payment detail", value: "supplier-payment" },
-          { label: "Delivery & tracking detail", value: "delivery" },
-        ]}
-      />
-      <FilterBar>
+      <FilterBar
+        controls={
+          <ViewField
+            field="view"
+            defaultValue={view}
+            options={[
+              { label: "Standard", value: "general" },
+              { label: "Cost & pricing detail", value: "financial" },
+              { label: "Supplier payment detail", value: "supplier-payment" },
+              { label: "Delivery & tracking detail", value: "delivery" },
+            ]}
+          />
+        }
+      >
         <FilterField label="Search">
           <input
             className={filterControlClassName}
@@ -281,7 +282,7 @@ export default async function OrdersPage({
           className="border-input h-9 rounded-lg border px-3 text-sm font-medium"
           type="submit"
         >
-          Filter
+          Apply
         </button>
       </FilterBar>
 

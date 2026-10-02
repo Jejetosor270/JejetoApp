@@ -1,4 +1,6 @@
 import { projectRead } from "@/lib/reporting/project-diagnostics";
+import { getRecordHistory } from "@/lib/audit/history";
+import { RecordHistory } from "@/components/audit/record-history";
 import { editVersion, editFieldVersions } from "@/lib/edit-version";
 import { projectBudgetSnapshot } from "@/lib/master-data/project-budget";
 import { getFinancialAttention } from "@/lib/reporting/financial-attention";
@@ -92,6 +94,7 @@ export default async function ProjectPage({
     control,
     attention,
     settings,
+    history,
   ] = await Promise.all([
     listProjectFormOptions(),
     projectRead("reporting", () =>
@@ -110,6 +113,7 @@ export default async function ProjectPage({
       getFinancialAttention(30, undefined, projectId),
     ),
     getApplicationSettings(),
+    projectRead("history", () => getRecordHistory("PROJECT", projectId)),
   ]);
   if (!reporting) notFound();
   const { buildings, project } = result;
@@ -177,6 +181,7 @@ export default async function ProjectPage({
       clients={options.clients}
       currencies={options.currencies}
       workspace={{
+        history: history ? <RecordHistory history={history} /> : null,
         related: (
           <RelatedRecords
             tables={relations.filter((table) => table.id === "billing")}

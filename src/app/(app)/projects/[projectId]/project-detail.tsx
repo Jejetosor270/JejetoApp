@@ -560,6 +560,7 @@ export function ProjectDetail({
     purchasing?: ReactNode;
     payments?: ReactNode;
     client?: ReactNode;
+    history?: ReactNode;
     overview: ReactNode;
     finance: ReactNode;
     budget: ReactNode;
@@ -933,6 +934,16 @@ export function ProjectDetail({
                   group: "related" as const,
                   label: "Items (Beta)",
                   content: workspace.items,
+                },
+              ]
+            : []),
+          ...(workspace.history
+            ? [
+                {
+                  id: "history",
+                  group: "related" as const,
+                  label: "History",
+                  content: workspace.history,
                 },
               ]
             : []),

@@ -1,5 +1,31 @@
 # Development invariants
 
+## Consistent daily workflow — Phase 2
+
+- Projects, Purchasing Orders and Billing use the same Details / Related workspace
+  with selectable Related sections. Editors remain mounted across sections, preserving
+  drafts and existing section/tab/fragment links. Optional Items never creates an empty
+  default work area when its Beta module is disabled.
+- Payment terms expose one primary Mark paid action for eligible outstanding balances.
+  More actions groups partial payments, term editing and cancellation/reactivation;
+  actual payment history remains directly accessible. Paid terms offer no further
+  payment or cancellation. The issued-Invoice prerequisite and authoritative cash
+  transactions are unchanged.
+- Purchasing and Reports keep presentation selectors inside their filter form with
+  one Apply action. Billing's standard drawer keeps linked Order allocations collapsed
+  but mounted, opening them for validation errors. Lists label mixed date columns
+  Due / paid, identify paid dates, and call the open-term editor Next payment due;
+  Billing Details names the document's Invoice/Quote due date separately.
+- Financial labels distinguish Order pricing plans, allocated Billing recovery,
+  full-Project invoiced results and cash. Presentation changes never turn Order
+  sell coverage or partial allocation recovery into realized Project profit.
+- ADMIN/MANAGER can open exact-record History from Project, Order and Billing Related.
+  It reads the latest 20 existing parent-record audit events and links to Activity
+  filtered by entity type and ID. Before/after values are allowlisted safe scalar
+  fields only; old events without those snapshots show their existing summary.
+  Child-record payment history remains with payment terms rather than being guessed
+  from unrelated audit metadata. USER receives no activity data. No migration required.
+
 ## Financial trust — Phase 1
 
 - Main expected Client cash uses issued Invoices only. Quotes and To be invoiced

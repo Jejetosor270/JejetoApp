@@ -37,6 +37,9 @@ import { listOrderQuoteImports } from "@/lib/quote-intake/history";
 import { getOrderBillingReconciliation } from "@/lib/billing/billing";
 import { orderBillingDifference } from "@/domain/billing/calculations";
 import { formatEnumLabel } from "@/domain/presentation/labels";
+import { getApplicationSettings } from "@/lib/settings/application-settings";
+import { getRecordHistory } from "@/lib/audit/history";
+import { RecordHistory } from "@/components/audit/record-history";
 
 export const metadata: Metadata = { title: "Order" };
 export default async function OrderPage({
@@ -48,18 +51,20 @@ export default async function OrderPage({
 }) {
   const { orderId } = await params;
   const query = await searchParams;
-  const [user, options, order] = await Promise.all([
+  const [user, options, order, settings] = await Promise.all([
     requireUser(),
     listOrderOptions(),
     getOrder(orderId),
+    getApplicationSettings(),
   ]);
   if (!order) notFound();
-  const [billingDocuments, paymentSummary, quoteImports, relations] =
+  const [billingDocuments, paymentSummary, quoteImports, relations, history] =
     await Promise.all([
       getOrderBillingReconciliation(orderId),
       getOrderPaymentSummary(orderId),
       listOrderQuoteImports(orderId),
       getOrderRelations(orderId),
+      getRecordHistory("ORDER", orderId),
     ]);
   const cost = order.costs;
   return (
@@ -106,15 +111,8 @@ export default async function OrderPage({
         </div>
         <RecordWorkspace
           label="Order workspace"
+          relatedNavigation
           sections={[
-            {
-              id: "items",
-              group: "related",
-              label: "Items",
-              content: (
-                <RelatedItems projectId={order.project.id} orderId={order.id} />
-              ),
-            },
             {
               id: "connections",
               group: "related",
@@ -313,12 +311,16 @@ export default async function OrderPage({
                           ? `${formatRate(cost.inputVat.recoverableRate)} · ${cost.inputVat.recoverability ? formatEnumLabel(cost.inputVat.recoverability) : ""}`
                           : "—"}
                       </dd>
-                      <dt>Actual allocated gross profit</dt>
+                      <dt>Allocated billing less recorded cost</dt>
                       <dd className="financial-figure text-right">
                         {formatMoney(
                           order.billing.actualGrossProfit,
                           order.project.reportingCurrencyCode,
                         )}
+                        <span className="text-muted-foreground mt-1 block text-xs font-normal">
+                          Provisional: allocated Invoice HT less the full Order
+                          economic cost.
+                        </span>
                       </dd>
                     </dl>
                     <p className="text-muted-foreground mt-4 border-t pt-3 text-xs">
@@ -541,9 +543,10 @@ export default async function OrderPage({
             {
               id: "history",
               group: "related",
-              label: "Document history",
+              label: "History",
               content: (
-                <>
+                <div className="space-y-6">
+                  <RecordHistory history={history} />
                   <RelatedRecordTable
                     table={{
                       id: "history",
@@ -577,9 +580,24 @@ export default async function OrderPage({
                       })),
                     }}
                   />
-                </>
+                </div>
               ),
             },
+            ...(settings.itemManagementEnabled
+              ? [
+                  {
+                    id: "items",
+                    group: "related" as const,
+                    label: "Items (Beta)",
+                    content: (
+                      <RelatedItems
+                        projectId={order.project.id}
+                        orderId={order.id}
+                      />
+                    ),
+                  },
+                ]
+              : []),
           ]}
         />
       </OrderDetailShell>

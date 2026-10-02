@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useState, useTransition, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { payTermRemainingAction } from "@/app/(app)/payments/term-paid-actions";
 import { useRouter } from "next/navigation";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
@@ -13,12 +14,14 @@ import type { ClientBillingView } from "@/lib/billing/billing";
 import { businessToday } from "@/domain/payments/dates";
 
 export function TermPaymentActions(
-  props:
+  props: (
     | {
         supplier: PaymentInstallmentView;
       }
-    | { document: ClientBillingView; termId: string; remaining: string },
+    | { document: ClientBillingView; termId: string; remaining: string }
+  ) & { canPay?: boolean; children?: ReactNode },
 ) {
+  const canPay = props.canPay ?? true;
   const [mode, setMode] = useState<"paid" | "partial" | null>(null);
   const [date, setDate] = useState(businessToday());
   const [fxRate, setFxRate] = useState("");
@@ -55,20 +58,54 @@ export function TermPaymentActions(
     });
   return (
     <div className="flex flex-wrap gap-2">
-      <Button size="sm" variant="outline" disabled={pending} onClick={markPaid}>
-        {pending ? "Recording…" : "Mark paid"}
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={pending}
-        onClick={() => {
-          setError(null);
-          setMode("partial");
+      {canPay && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onClick={markPaid}
+        >
+          {pending ? "Recording…" : "Mark paid"}
+        </Button>
+      )}
+      <details
+        className="group/term-actions self-start"
+        onKeyDown={(event) => {
+          if (
+            event.key !== "Escape" ||
+            !(event.target instanceof Node) ||
+            !event.currentTarget.contains(event.target)
+          )
+            return;
+          event.preventDefault();
+          event.currentTarget.open = false;
+          event.currentTarget.querySelector("summary")?.focus();
         }}
       >
-        Record partial payment
-      </Button>
+        <summary className="focus-visible:ring-ring/50 hover:bg-accent flex h-8 cursor-pointer list-none items-center gap-1 rounded-md px-2 text-xs font-medium outline-none focus-visible:ring-2 [&::-webkit-details-marker]:hidden">
+          More actions
+          <ChevronDown
+            aria-hidden="true"
+            className="size-3 group-open/term-actions:rotate-180"
+          />
+        </summary>
+        <div className="bg-muted/40 mt-1 flex flex-wrap items-center gap-2 rounded-md border p-2">
+          {canPay && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={pending}
+              onClick={() => {
+                setError(null);
+                setMode("partial");
+              }}
+            >
+              Record partial payment
+            </Button>
+          )}
+          {props.children}
+        </div>
+      </details>
       {mode && (
         <EditorDrawer
           open
@@ -94,12 +131,14 @@ export function TermPaymentActions(
               </p>
               <Field label="Payment date">
                 <DateInput
+                  name="paymentDate"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                 />
               </Field>
               <Field label="Actual FX (foreign currency)">
                 <input
+                  name="paymentFx"
                   className={inputClassName}
                   value={fxRate}
                   onChange={(e) => setFxRate(e.target.value)}

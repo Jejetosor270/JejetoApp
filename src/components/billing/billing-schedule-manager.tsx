@@ -131,42 +131,44 @@ export function BillingScheduleManager({
               cancelled: term.isCancelled,
               today,
             });
+            const remaining = paymentAmountToRecord(
+              state.remaining,
+              document.outstanding,
+            );
             return [
               term.id,
               <div key={term.id} className="payment-term-actions">
-                {canEdit &&
-                  !document.isCancelled &&
-                  !term.isCancelled &&
-                  paymentAmountToRecord(
-                    state.remaining,
-                    document.outstanding,
-                  ) !== "0" &&
-                  document.documentType === "INVOICE" &&
-                  !["DRAFT", "TO_BE_INVOICED"].includes(document.status) && (
-                    <TermPaymentActions
-                      document={document}
-                      termId={term.id}
-                      remaining={paymentAmountToRecord(
-                        state.remaining,
-                        document.outstanding,
-                      )}
+                {canEdit && (
+                  <TermPaymentActions
+                    document={document}
+                    termId={term.id}
+                    remaining={remaining}
+                    canPay={
+                      !document.isCancelled &&
+                      !term.isCancelled &&
+                      remaining !== "0" &&
+                      document.documentType === "INVOICE" &&
+                      !["DRAFT", "TO_BE_INVOICED", "CANCELLED"].includes(
+                        document.status,
+                      )
+                    }
+                  >
+                    <BillingInstallmentEditor
+                      actionOnly
+                      actionLabel="Term details"
+                      canEdit
+                      billingDocumentId={term.billingDocumentId}
+                      installment={term}
                     />
-                  )}
-                {canEdit && (
-                  <BillingInstallmentEditor
-                    actionOnly
-                    actionLabel="Term details"
-                    canEdit
-                    billingDocumentId={term.billingDocumentId}
-                    installment={term}
-                  />
-                )}
-                {canEdit && (
-                  <TermStatusAction
-                    id={term.id}
-                    kind="client"
-                    cancelled={term.isCancelled}
-                  />
+                    {!document.isCancelled &&
+                      (term.isCancelled || remaining !== "0") && (
+                        <TermStatusAction
+                          id={term.id}
+                          kind="client"
+                          cancelled={term.isCancelled}
+                        />
+                      )}
+                  </TermPaymentActions>
                 )}
                 {history(term.receipts)}
               </div>,

@@ -21,7 +21,8 @@ import {
 import { DateInput } from "@/components/forms/date-input";
 
 import Decimal from "decimal.js";
-import Link from "next/link";
+import { RecordHistory } from "@/components/audit/record-history";
+import type { RecordHistoryData } from "@/domain/audit/history";
 import {
   RecordFields,
   RecordSummary,
@@ -200,6 +201,7 @@ function DetailValue({ label, value }: { label: string; value: string }) {
 
 export function BillingDetail({
   relatedTables = [],
+  history = null,
   canEdit,
   document,
   options,
@@ -207,6 +209,7 @@ export function BillingDetail({
   startEditing,
 }: {
   relatedTables?: RelatedTableData[];
+  history?: RecordHistoryData | null;
   canEdit: boolean;
   document: ClientBillingView;
   options: BillingDetailOptions;
@@ -226,7 +229,19 @@ export function BillingDetail({
     initialState,
   );
   const submittedDraft = useRef(draft);
+  const allocationDisclosure = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
+    if (
+      Object.keys(state.fieldErrors ?? {}).some(
+        (key) =>
+          key === "allocations" ||
+          key.startsWith("allocations.") ||
+          key === "isProjectRemainderApproved",
+      )
+    ) {
+      if (allocationDisclosure.current)
+        allocationDisclosure.current.open = true;
+    }
     if (state.status !== "success") return;
     setSaved(submittedDraft.current);
     setEditing(false);
@@ -425,7 +440,6 @@ export function BillingDetail({
       {editing ? (
         <EditorDrawer
           open={editing}
-          wide
           title="Edit Billing"
           onOpenChange={(open) => {
             setEditing(open);
@@ -568,7 +582,14 @@ export function BillingDetail({
                       value={draft.documentDate}
                     />
                   </Field>
-                  <Field error={fieldErrors.dueDate} label="Due date">
+                  <Field
+                    error={fieldErrors.dueDate}
+                    label={
+                      draft.documentType === "INVOICE"
+                        ? "Invoice due date"
+                        : "Quote due date"
+                    }
+                  >
                     <DateInput
                       className={inputClassName}
                       name="dueDate"
@@ -764,10 +785,18 @@ export function BillingDetail({
                 </Field>
               </section>
 
-              <section className="bg-card rounded-lg border p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+              <details
+                ref={allocationDisclosure}
+                className="bg-card rounded-lg border p-4"
+                onInvalidCapture={(event) => {
+                  event.currentTarget.open = true;
+                }}
+              >
+                <summary className="cursor-pointer text-sm font-semibold">
+                  Linked Orders
+                </summary>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h2 className="text-sm font-semibold">Linked Orders</h2>
                     <p className="text-muted-foreground mt-1 text-xs">
                       Attribute this Billing HT without creating additional
                       revenue.
@@ -985,7 +1014,7 @@ export function BillingDetail({
                     Approve the remainder as Project-level Billing
                   </label>
                 ) : null}
-              </section>
+              </details>
               <EditorActions>
                 <SubmitButton pending={pending}>
                   Save Billing document
@@ -1003,6 +1032,7 @@ export function BillingDetail({
       ) : null}
       <RecordWorkspace
         label="Billing workspace"
+        relatedNavigation
         sections={[
           {
             id: "connections",
@@ -1139,7 +1169,11 @@ export function BillingDetail({
                       value={formatDateOnly(saved.documentDate)}
                     />
                     <DetailValue
-                      label="Due date"
+                      label={
+                        saved.documentType === "INVOICE"
+                          ? "Invoice due date"
+                          : "Quote due date"
+                      }
                       value={formatDateOnly(saved.dueDate)}
                     />
                   </dl>
@@ -1221,7 +1255,7 @@ export function BillingDetail({
                     "Other/services HT",
                     "% of Billing",
                     "Planned sell HT",
-                    "Effective markup",
+                    "Allocated billing markup",
                   ],
                   numericColumns: [2, 3, 4, 5, 6, 7],
                   rows: saved.allocations.map((allocation) => {
@@ -1319,44 +1353,37 @@ export function BillingDetail({
           },
           {
             id: "history",
-            label: "Document history",
+            label: "History",
             group: "related",
             content: (
-              <RelatedRecordTable
-                table={{
-                  id: "history",
-                  title: "Document history",
-                  description:
-                    "Reviewed Billing imports. Source documents are not retained.",
-                  columns: [
-                    "Processed",
-                    "Action",
-                    "File name",
-                    "Provider / model",
-                    "Employee",
-                  ],
-                  rows: document.imports.map((item) => ({
-                    id: item.id,
-                    cells: [
-                      formatTimestamp(item.processedAt),
-                      formatEnumLabel(item.action),
-                      item.originalFilename,
-                      item.extractionProvider + " / " + item.extractionModel,
-                      item.processedByName ?? "Historical user",
+              <div className="space-y-6">
+                <RecordHistory history={history} />
+                <RelatedRecordTable
+                  table={{
+                    id: "history",
+                    title: "Document history",
+                    description:
+                      "Reviewed Billing imports. Source documents are not retained.",
+                    columns: [
+                      "Processed",
+                      "Action",
+                      "File name",
+                      "Provider / model",
+                      "Employee",
                     ],
-                  })),
-                }}
-                actions={
-                  canEdit ? (
-                    <Link
-                      className="text-primary text-xs underline"
-                      href="/admin/activity?entityType=BILLING_DOCUMENT"
-                    >
-                      Activity history
-                    </Link>
-                  ) : null
-                }
-              />
+                    rows: document.imports.map((item) => ({
+                      id: item.id,
+                      cells: [
+                        formatTimestamp(item.processedAt),
+                        formatEnumLabel(item.action),
+                        item.originalFilename,
+                        item.extractionProvider + " / " + item.extractionModel,
+                        item.processedByName ?? "Historical user",
+                      ],
+                    })),
+                  }}
+                />
+              </div>
             ),
           },
         ]}

@@ -71,15 +71,10 @@ export default async function BillingPage({
     <div className="space-y-6">
       <PageHeader
         title="Billing"
-        description={
-          <>
-            Quotes, Invoices, planned payments, actual receipts, and
-            Project-level Order allocation.
-          </>
-        }
+        description={<>Client Quotes, Invoices, payment terms and receipts.</>}
         actions={
           <>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <ExportLink
                 entity="billing"
                 queryString={queryStringFromParams(params)}
@@ -178,7 +173,7 @@ export default async function BillingPage({
           >
             <option value="updated">Updated</option>
             <option value="date">Document date</option>
-            <option value="dueDate">Due date</option>
+            <option value="dueDate">Due / paid</option>
             <option value="reference">Reference</option>
             <option value="project">Project</option>
             <option value="totalHt">HT</option>
@@ -202,7 +197,7 @@ export default async function BillingPage({
           className="border-input h-9 rounded-lg border px-3 text-sm font-medium"
           type="submit"
         >
-          Filter
+          Apply
         </button>
       </FilterBar>
       <BillingTable

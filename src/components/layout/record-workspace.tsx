@@ -31,6 +31,7 @@ export function RecordWorkspace({
         content:
           group === "related" && relatedNavigation ? (
             <RelatedSections
+              label={`${label} related sections`}
               sections={sections.filter(
                 (section) => section.group === "related",
               )}

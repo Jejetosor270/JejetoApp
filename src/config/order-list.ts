@@ -10,7 +10,7 @@ export const orderSortLabels = {
   status: "Delivery status",
   purchase: "Purchase HT",
   paymentStatus: "Payment status",
-  dueDate: "Payment due date",
+  dueDate: "Due / paid",
   expectedDelivery: "Expected delivery",
   economicCost: "Economic Landed Cost HT",
   sell: "Total Order Sell HT",
