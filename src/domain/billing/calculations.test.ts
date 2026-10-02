@@ -12,9 +12,18 @@ import {
   percentageFromAmount,
   orderBillingDifference,
   scheduleReconciliation,
+  suggestedAllocationAmount,
 } from "./calculations";
 
 describe("billing calculations", () => {
+  it("suggests Order Sell HT capped by available Billing, without inventing missing FX", () => {
+    expect(suggestedAllocationAmount("500.1234", "1000")).toBe("500.1234");
+    expect(suggestedAllocationAmount("500.1234", "200.0123")).toBe("200.0123");
+    expect(suggestedAllocationAmount("500", "0")).toBe("0.0000");
+    expect(suggestedAllocationAmount(null, "1000")).toBe("");
+    expect(suggestedAllocationAmount("", "1000")).toBe("");
+    expect(suggestedAllocationAmount("500", "invalid")).toBe("");
+  });
   it("adds a Project remainder to an allocation Decimal-safely", () => {
     expect(addAllocationAmount("40.1234", "59.8766")).toBe("100.0000");
   });

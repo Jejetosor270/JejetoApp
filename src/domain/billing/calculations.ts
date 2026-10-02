@@ -98,6 +98,23 @@ export function allocationReconciliation(
   };
 }
 
+/** Reviewed-form default only; the Order basis has already been converted to Billing currency. */
+export function suggestedAllocationAmount(
+  orderSellHt: string | null,
+  availableHt: string,
+): string {
+  if (orderSellHt === null) return "";
+  const normalize = (value: string) =>
+    normalizeDecimalInput(value, {
+      allowNegative: false,
+      maximumDecimalPlaces: 4,
+    });
+  const sell = normalize(orderSellHt);
+  const available = normalize(availableHt);
+  if (!sell || !available) return "";
+  return Decimal.min(sell, available).toFixed(4);
+}
+
 export function amountFromPercentage(
   baseAmount: string,
   humanPercentage: string,

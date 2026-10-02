@@ -24,6 +24,8 @@ export interface OrderDraft {
   inputVatRate: string;
   inputVatRecoverablePercent: string;
   inputVatTaxableBase: string;
+  /** Editor-only: saved/employee-entered bases must not be silently replaced. */
+  inputVatBaseIsManual?: boolean;
   inputVatTreatment: string;
   leadTimeWeeks: string;
   miscellaneous: string;
@@ -60,5 +62,19 @@ export function updateOrderDraftField<K extends keyof OrderDraft>(
   field: K,
   value: OrderDraft[K],
 ): OrderDraft {
+  if (field === "inputVatTaxableBase")
+    return { ...draft, [field]: value, inputVatBaseIsManual: true };
+  if (field === "inputVatBaseIsManual" && value === false)
+    return {
+      ...draft,
+      inputVatBaseIsManual: false,
+      inputVatTaxableBase: draft.purchaseCost,
+    };
+  if (
+    field === "purchaseCost" &&
+    !draft.inputVatBaseIsManual &&
+    typeof value === "string"
+  )
+    return { ...draft, purchaseCost: value, inputVatTaxableBase: value };
   return { ...draft, [field]: value };
 }

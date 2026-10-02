@@ -1,5 +1,18 @@
 # Development invariants
 
+## Reviewed amount autofill
+
+- The full Order editor proposes Product purchase HT as the Purchase VAT taxable
+  base and follows purchase edits until the employee edits the base. Saved bases,
+  including explicit zero, are retained; Use purchase HT explicitly resumes autofill.
+  Suggested bases do not submit VAT data while treatment remains Not recorded.
+  No VAT treatment, rate, recoverability or amount override is inferred or changed.
+- New Billing allocation drawers propose the selected Order's existing Sell HT basis
+  in Billing currency, capped at available Billing HT. Missing manual FX leaves the
+  proposal blank. Explicitly choosing another Order proposes its amount; unrelated
+  edits and failed saves preserve the draft. Existing allocations are never replaced
+  by defaults, and saving remains an explicit, validated action. No migration needed.
+
 ## Operational financial control — Phase 3
 
 - Home's shared follow-ups add an active employee owner, next follow-up date and

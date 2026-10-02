@@ -7,6 +7,7 @@ import {
   type PackageOption,
 } from "@/components/procurement/package-select";
 import { DateInput } from "@/components/forms/date-input";
+import { Button } from "@/components/ui/button";
 
 import Decimal from "decimal.js";
 import { useRouter } from "next/navigation";
@@ -301,13 +302,33 @@ function InputVatFields({
         ) : (
           <input name="inputVatRecoverablePercent" type="hidden" value="" />
         )}
-        <Money
-          error={fieldErrors.inputVatTaxableBase}
-          label={`Taxable base HT (${currency})`}
-          name="inputVatTaxableBase"
-          onValueChange={(value) => onChange("inputVatTaxableBase", value)}
-          value={draft.inputVatTaxableBase}
-        />
+        <div className="space-y-1">
+          <Money
+            error={fieldErrors.inputVatTaxableBase}
+            label={`Taxable base HT (${currency})`}
+            name={
+              draft.inputVatTreatment || draft.inputVatBaseIsManual
+                ? "inputVatTaxableBase"
+                : ""
+            }
+            onValueChange={(value) => onChange("inputVatTaxableBase", value)}
+            value={draft.inputVatTaxableBase}
+          />
+          {draft.inputVatBaseIsManual ? (
+            <Button
+              type="button"
+              variant="link"
+              className="h-auto p-0 text-xs"
+              onClick={() => onChange("inputVatBaseIsManual", false)}
+            >
+              Use purchase HT
+            </Button>
+          ) : (
+            <p className="text-muted-foreground text-xs">
+              Follows Product purchase HT until manually edited.
+            </p>
+          )}
+        </div>
         <Field error={fieldErrors.inputVatRate} label="VAT rate %">
           <PercentageInput
             className={errorClass("inputVatRate")}
@@ -446,7 +467,9 @@ export function OrderForm({
             ? "0"
             : null),
     ),
-    inputVatTaxableBase: order?.costs.inputVat?.taxableBase ?? "",
+    inputVatTaxableBase:
+      order?.costs.inputVat?.taxableBase ?? order?.costs.purchaseCost ?? "",
+    inputVatBaseIsManual: order?.costs.inputVat?.taxableBase != null,
     inputVatTreatment: order?.costs.inputVat?.treatment ?? "",
     leadTimeWeeks:
       order?.leadTimeWeeks?.toString() ??

@@ -63,6 +63,63 @@ describe("dedicated Billing allocation editor", () => {
     });
   }
 
+  it.each([
+    ["750", "500.0000", "500.0000"],
+    ["200.1234", "500.0000", "200.1234"],
+    ["750", null, ""],
+  ])(
+    "autofills a preselected Order within available HT (%s / %s)",
+    async (availableHt, sellingBasisHt, expected) => {
+      view = await mountForm(
+        <BillingAllocationEditor
+          billing={billing}
+          orders={[
+            { id: "order-id", label: "PO-001 · Supplier", sellingBasisHt },
+          ]}
+          availableHt={availableHt}
+          onSaved={vi.fn()}
+        />,
+      );
+      await clickText("Add allocation");
+      const form = document.querySelector("form");
+      if (!form) throw new Error("Missing form");
+      expect(new FormData(form).get("allocatedAmount")).toBe(expected);
+      expect(actions.save).not.toHaveBeenCalled();
+    },
+  );
+
+  it("autofills on explicit Order selection and keeps manual amounts through unrelated edits", async () => {
+    view = await mountForm(
+      <BillingAllocationEditor
+        billing={billing}
+        orders={[
+          ...orders,
+          { id: "second", label: "PO-002", sellingBasisHt: "300" },
+        ]}
+        availableHt="750"
+        onSaved={vi.fn()}
+      />,
+    );
+    await clickText("Add allocation");
+    const select = document.querySelector("select");
+    const form = document.querySelector("form");
+    if (!select || !form) throw new Error("Missing form");
+    expect(new FormData(form).get("allocatedAmount")).toBe("");
+    await act(async () => {
+      select.value = "order-id";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(new FormData(form).get("allocatedAmount")).toBe("500.0000");
+    await enter("allocatedAmount", "125");
+    await enter("allocatedAmount.freightCoverageHt", "25");
+    expect(new FormData(form).get("allocatedAmount")).toBe("125");
+    await act(async () => {
+      select.value = "second";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(new FormData(form).get("allocatedAmount")).toBe("300.0000");
+  });
+
   it("uses the shared allocation drawer from an Order without losing its freight subset", async () => {
     actions.save.mockResolvedValue({
       status: "error",

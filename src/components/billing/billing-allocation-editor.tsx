@@ -15,6 +15,7 @@ import {
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
 import type { BillingActionState } from "@/domain/billing/action-state";
+import { suggestedAllocationAmount } from "@/domain/billing/calculations";
 import { formatMoney } from "@/domain/procurement/presentation";
 
 export interface SavedBillingAllocation {
@@ -70,7 +71,14 @@ function AllocationForm({
   const [freightCoverageHt, setFreightCoverageHt] = useState(
     allocation?.freightCoverageHt ?? "0",
   );
-  const [amount, setAmount] = useState(allocation?.amount ?? "");
+  const [amount, setAmount] = useState(
+    () =>
+      allocation?.amount ??
+      suggestedAllocationAmount(
+        orders.find((order) => order.id === orderId)?.sellingBasisHt ?? null,
+        availableHt,
+      ),
+  );
   const [approveRemainder, setApproveRemainder] = useState(
     billing.isProjectRemainderApproved,
   );
@@ -120,7 +128,18 @@ function AllocationForm({
           <select
             className={inputClassName}
             value={orderId}
-            onChange={(event) => setOrderId(event.target.value)}
+            onChange={(event) => {
+              const nextOrderId = event.target.value;
+              if (nextOrderId === orderId) return;
+              setOrderId(nextOrderId);
+              setAmount(
+                suggestedAllocationAmount(
+                  orders.find((order) => order.id === nextOrderId)
+                    ?.sellingBasisHt ?? null,
+                  availableHt,
+                ),
+              );
+            }}
             disabled={Boolean(allocation)}
             required
           >
@@ -155,6 +174,12 @@ function AllocationForm({
           }
           error={state.fieldErrors?.allocatedAmount}
         />
+        {!allocation && (
+          <p className="text-muted-foreground text-xs">
+            Defaults to Order Sell HT, limited to available Billing HT. You can
+            edit the amount before saving.
+          </p>
+        )}
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
