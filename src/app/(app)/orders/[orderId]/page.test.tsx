@@ -142,10 +142,9 @@ it("labels partial allocated Billing against full cost as provisional, not actua
     (section) => section.id === "commercial",
   );
   const html = renderToStaticMarkup(commercial?.content);
-  expect(html).toContain("Allocated billing less recorded cost");
+  expect(html).toContain("Allocation less cost");
   expect(html).toContain("20.00 EUR");
-  expect(html).toContain(
-    "allocated Invoice HT less the full Order economic cost",
-  );
+  expect(html).toContain("allocated Invoice HT minus full economic cost");
+  expect(html).toMatch(/<\/dl><p[^>]*>Provisional:/);
   expect(html).not.toContain("Actual allocated gross profit");
 });

@@ -320,18 +320,18 @@ export default async function OrderPage({
                           ? `${formatRate(cost.inputVat.recoverableRate)} · ${cost.inputVat.recoverability ? formatEnumLabel(cost.inputVat.recoverability) : ""}`
                           : "—"}
                       </dd>
-                      <dt>Allocated billing less recorded cost</dt>
+                      <dt>Allocation less cost</dt>
                       <dd className="financial-figure text-right">
                         {formatMoney(
                           order.billing.actualGrossProfit,
                           order.project.reportingCurrencyCode,
                         )}
-                        <span className="text-muted-foreground mt-1 block text-xs font-normal">
-                          Provisional: allocated Invoice HT less the full Order
-                          economic cost.
-                        </span>
                       </dd>
                     </dl>
+                    <p className="text-muted-foreground mt-2 text-xs">
+                      Provisional: allocated Invoice HT minus full economic
+                      cost.
+                    </p>
                     <p className="text-muted-foreground mt-4 border-t pt-3 text-xs">
                       Purchase FX:{" "}
                       {cost.purchaseFxRate
@@ -527,6 +527,10 @@ export default async function OrderPage({
                         documents={billingDocuments ?? []}
                         invoicedAllocated={order.billing.invoicedAllocated}
                         orderId={order.id}
+                        project={{
+                          id: order.project.id,
+                          name: order.project.name,
+                        }}
                         plannedSell={order.costs.reportingSellingRevenue}
                         quotedAllocated={order.billing.quotedAllocated}
                         reportingCurrencyCode={

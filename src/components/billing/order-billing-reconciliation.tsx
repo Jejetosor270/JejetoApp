@@ -45,7 +45,9 @@ interface BillingLinkDocument {
   isProjectRemainderApproved: boolean;
   orderSellingBasisHt: string | null;
   projectRemainder: string;
+  projectId: string;
   reference: string;
+  shortDescription: string | null;
   status: string;
   totalHt: string;
 }
@@ -91,7 +93,7 @@ function RemoveBillingLink({
           onChange={(event) => setApproveRemainder(event.target.checked)}
           type="checkbox"
         />
-        Keep removed amount at Project level
+        Keep Project remainder
       </label>
       <Button disabled={pending} type="submit" variant="outline">
         Remove allocation
@@ -108,6 +110,7 @@ export function OrderBillingReconciliation({
   invoicedAllocated,
   orderId,
   plannedSell,
+  project,
   quotedAllocated,
   reportingCurrencyCode,
 }: {
@@ -117,19 +120,28 @@ export function OrderBillingReconciliation({
   invoicedAllocated: string | null;
   orderId: string;
   plannedSell: string | null;
+  project: { id: string | null; name: string };
   quotedAllocated: string | null;
   reportingCurrencyCode: string;
 }) {
   const [selectedId, setSelectedId] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
   const linked = documents.filter((document) => document.allocation);
   const available = documents.filter(
-    (document) => !document.allocation && !document.isCancelled,
+    (document) =>
+      document.projectId === project.id &&
+      !document.allocation &&
+      !document.isCancelled,
   );
-  const selected = available.find((document) => document.id === selectedId);
+  const projectDocuments = selectedProjectId === project.id ? available : [];
+  const selected = projectDocuments.find(
+    (document) => document.id === selectedId,
+  );
   const coverage = orderBillingCoverage(plannedSell, invoicedAllocated);
   function allocationEditor(document: BillingLinkDocument) {
     return (
       <BillingAllocationEditor
+        key={document.id}
         billing={document}
         availableHt={document.availableForOrderHt}
         orders={[
@@ -246,24 +258,50 @@ export function OrderBillingReconciliation({
           </p>
         ) : null}
       </div>
-      {canEdit && available.length ? (
-        <div className="mt-4 rounded-md border p-3">
-          <Field label="Link an existing Project Billing document">
+      {canEdit && project.id ? (
+        <div className="mt-4 grid min-w-0 gap-4 rounded-md border p-3">
+          <Field label="Project">
             <select
-              className={inputClassName}
+              className={`${inputClassName} min-w-0`}
+              onChange={(event) => {
+                setSelectedProjectId(event.target.value);
+                setSelectedId("");
+              }}
+              value={selectedProjectId}
+            >
+              <option value="">Choose Project</option>
+              <option value={project.id}>{project.name}</option>
+            </select>
+          </Field>
+          <Field label="Billing document">
+            <select
+              className={`${inputClassName} min-w-0`}
+              disabled={!selectedProjectId || projectDocuments.length === 0}
               onChange={(event) => setSelectedId(event.target.value)}
               value={selectedId}
             >
               <option value="">Choose Billing document</option>
-              {available.map((document) => (
+              {projectDocuments.map((document) => (
                 <option key={document.id} value={document.id}>
-                  {document.reference} · {document.documentType} ·{" "}
-                  {formatMoney(document.totalHt, document.currencyCode)}
+                  {document.reference}
+                  {document.shortDescription
+                    ? ` · ${document.shortDescription}`
+                    : ""}{" "}
+                  · {formatMoney(document.totalHt, document.currencyCode)}
                 </option>
               ))}
             </select>
           </Field>
-          {selected ? allocationEditor(selected) : null}
+          {selectedProjectId && projectDocuments.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              No unlinked Billing documents.
+            </p>
+          ) : null}
+          {selected ? (
+            <div className="flex justify-end pt-1">
+              {allocationEditor(selected)}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>

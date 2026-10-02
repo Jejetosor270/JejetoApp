@@ -63,6 +63,113 @@ describe("dedicated Billing allocation editor", () => {
     });
   }
 
+  it("selects Project before Billing, shows descriptions and resets the allocation choice", async () => {
+    const candidate = {
+      ...billing,
+      projectId: "project-id",
+      shortDescription: "Outdoor furniture",
+      documentDate: "2026-09-01",
+      documentType: "INVOICE" as const,
+      isCancelled: false,
+      status: "UNPAID",
+      allocatedToOtherOrdersHt: "0",
+      availableForOrderHt: "1000",
+      projectRemainder: "1000",
+      orderSellingBasisHt: "500",
+      allocation: null,
+    };
+    view = await mountForm(
+      <OrderBillingReconciliation
+        canEdit
+        orderId="order-id"
+        project={{ id: "project-id", name: "Test Project" }}
+        reportingCurrencyCode="EUR"
+        plannedSell="500"
+        invoicedAllocated="0"
+        quotedAllocated="0"
+        difference={{ amount: "500", state: "UNBILLED" }}
+        documents={[
+          candidate,
+          { ...candidate, id: "other-project", projectId: "other-project" },
+          { ...candidate, id: "cancelled", isCancelled: true },
+          {
+            ...candidate,
+            id: "no-description",
+            reference: "INV-002",
+            shortDescription: null,
+          },
+        ]}
+      />,
+    );
+    const [projectSelect, billingSelect] =
+      view.container.querySelectorAll("select");
+    if (!projectSelect || !billingSelect) throw new Error("Missing selectors");
+    expect(billingSelect.disabled).toBe(true);
+    expect(billingSelect.options.length).toBe(1);
+    await act(async () => {
+      projectSelect.value = "project-id";
+      projectSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(billingSelect.disabled).toBe(false);
+    expect(Array.from(billingSelect.options, (option) => option.value)).toEqual(
+      ["", "billing-id", "no-description"],
+    );
+    expect(billingSelect.options[1]?.textContent).toContain(
+      "INV-001 · Outdoor furniture · 1 000.00 EUR",
+    );
+    expect(billingSelect.options[2]?.textContent).toContain(
+      "INV-002 · 1 000.00 EUR",
+    );
+    await act(async () => {
+      billingSelect.value = "billing-id";
+      billingSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const addButton = Array.from(
+      view.container.querySelectorAll("button"),
+    ).find((button) => button.textContent === "Add allocation");
+    expect(addButton?.parentElement?.className).toContain("pt-1");
+    expect(addButton?.closest("label")).toBeNull();
+    await clickText("Add allocation");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      "INV-001",
+    );
+    await clickText("Close");
+    await act(async () => {
+      projectSelect.value = "";
+      projectSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(billingSelect.value).toBe("");
+    expect(billingSelect.disabled).toBe(true);
+    expect(view.container.textContent).not.toContain("Add allocation");
+    expect(actions.save).not.toHaveBeenCalled();
+  });
+
+  it("shows an empty state when the Project has no unlinked Billing", async () => {
+    view = await mountForm(
+      <OrderBillingReconciliation
+        canEdit
+        orderId="order-id"
+        project={{ id: "project-id", name: "Test Project" }}
+        reportingCurrencyCode="EUR"
+        plannedSell="500"
+        invoicedAllocated="0"
+        quotedAllocated="0"
+        difference={null}
+        documents={[]}
+      />,
+    );
+    const select = view.container.querySelector("select");
+    if (!select) throw new Error("Missing Project selector");
+    await act(async () => {
+      select.value = "project-id";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(view.container.textContent).toContain(
+      "No unlinked Billing documents.",
+    );
+    expect(view.container.querySelectorAll("select")[1]?.disabled).toBe(true);
+  });
+
   it.each([
     ["750", "500.0000", "500.0000"],
     ["200.1234", "500.0000", "200.1234"],
@@ -129,6 +236,7 @@ describe("dedicated Billing allocation editor", () => {
       <OrderBillingReconciliation
         canEdit
         orderId="order-id"
+        project={{ id: "project-id", name: "Test Project" }}
         reportingCurrencyCode="EUR"
         plannedSell="500"
         invoicedAllocated="100"
@@ -137,6 +245,8 @@ describe("dedicated Billing allocation editor", () => {
         documents={[
           {
             ...billing,
+            projectId: "project-id",
+            shortDescription: null,
             documentDate: "2026-09-01",
             documentType: "INVOICE",
             isCancelled: false,

@@ -2467,7 +2467,9 @@ export async function getOrderBillingReconciliation(orderId: string) {
         reportingCurrencyCode: order.project.reportingCurrencyCode,
       }),
       projectRemainder: view.allocationReconciliation.remaining,
+      projectId: order.project.id,
       reference: view.reference,
+      shortDescription: view.shortDescription,
       status: view.status,
       totalHt: view.totalHt,
     };
