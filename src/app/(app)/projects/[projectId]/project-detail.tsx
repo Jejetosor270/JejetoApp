@@ -562,7 +562,6 @@ export function ProjectDetail({
     client?: ReactNode;
     history?: ReactNode;
     overview: ReactNode;
-    finance: ReactNode;
     budget: ReactNode;
     packages: ReactNode;
     freightExpenses: ReactNode;
@@ -585,16 +584,21 @@ export function ProjectDetail({
           {
             <DetailPageHeader
               actions={
-                canEdit ? (
-                  <Button
-                    onClick={() => setEditingProject(true)}
-                    type="button"
-                    variant="outline"
-                  >
-                    <Pencil data-icon="inline-start" />
-                    Edit project
-                  </Button>
-                ) : undefined
+                <>
+                  <EditorDrawer title="Project info" wide>
+                    <ProjectRecordDetails project={project} />
+                  </EditorDrawer>
+                  {canEdit ? (
+                    <Button
+                      onClick={() => setEditingProject(true)}
+                      type="button"
+                      variant="outline"
+                    >
+                      <Pencil data-icon="inline-start" />
+                      Edit project
+                    </Button>
+                  ) : null}
+                </>
               }
               backHref="/projects"
               backLabel="Back to Projects"
@@ -646,33 +650,6 @@ export function ProjectDetail({
             ),
           },
           {
-            id: "general",
-            group: "details",
-            label: "General & planning",
-            content: (
-              <details className="record-surface">
-                <summary className="cursor-pointer text-sm font-semibold">
-                  Project details & budget assumptions
-                </summary>
-                <div className="mt-4">
-                  <ProjectRecordDetails project={project} />
-                </div>
-              </details>
-            ),
-          },
-          {
-            id: "finance",
-            group: "details",
-            label: "Financial detail · targets, freight & VAT",
-            content: workspace.finance,
-          },
-          {
-            id: "budget",
-            group: "details",
-            label: "Purchase budget",
-            content: workspace.budget,
-          },
-          {
             id: "work",
             group: "related",
             label: "Billing",
@@ -701,6 +678,7 @@ export function ProjectDetail({
                   Open Purchasing
                 </Link>
                 {workspace.purchasing}
+                {workspace.budget}
                 <details className="record-surface">
                   <summary className="cursor-pointer text-sm font-semibold">
                     Order packages

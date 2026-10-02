@@ -1,5 +1,33 @@
 # Development invariants
 
+## Compact Project financials
+
+- Project Details now has six financial sections only: Invoiced HT, Cash TTC,
+  Orders HT, Planned HT, VAT and Freight HT. Project info stays in a header drawer;
+  budget/pricing editing remains available, and purchase-budget allocation moves
+  under Related → Purchasing. Related records, payment workflows and draft protection
+  remain unchanged. Earlier descriptions of expanded Project overview panels below
+  are superseded for presentation, not for reporting calculations elsewhere.
+- Invoiced HT compares issued Client Invoice HT with all active Order HT costs
+  plus separate Project freight HT once. Its difference is not economic profit.
+  Orders HT retains agreed Order selling prices and shows planned economic profit
+  and aggregate markup; non-deductible VAT is disclosed when it explains the gap
+  between displayed HT costs and economic profit.
+- Cash balance uses net Client receipts minus net Supplier/freight payments,
+  including actual refunds. Funding balance separately subtracts full recorded
+  Supplier payable plus separate Project freight payable TTC from net Client
+  receipts, not just outstanding balances. Recorded payable uses existing payable
+  bases; unrelated Order cost lines do not invent additional cash obligations.
+  Neither measure is a bank balance. No supplier-issued classification is inferred.
+- Planned HT includes issued and To be invoiced Client Invoices after credits,
+  excluding Quotes, Drafts and cancelled/trashed records. Target profit reverses
+  the Project's distinct category markups from category Billing HT; margin is
+  profit/revenue and markup is profit/implied cost. Coverage compares planned
+  Billing with agreed Order sell; provisional profit compares it with all recorded
+  economic costs. Future costs may be missing; this is not expected-final-profit
+  forecasting. Existing Invoice revenue, VAT and main cash-forecast eligibility
+  remain unchanged. Missing FX stays incomplete. No migration is required.
+
 ## Reviewed amount autofill
 
 - The full Order editor proposes Product purchase HT as the Purchase VAT taxable

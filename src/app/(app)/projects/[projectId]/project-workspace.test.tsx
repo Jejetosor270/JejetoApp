@@ -65,7 +65,6 @@ async function mount(canEdit = true, items = false) {
           </table>
         ),
         overview: <p>Financial summary</p>,
-        finance: <p>Targets and VAT</p>,
         budget: <p>Purchase budget</p>,
         packages: (
           <input aria-label="Package draft" defaultValue="Original package" />
@@ -143,24 +142,30 @@ it.each([
   ).toBe(section);
 });
 
-it("uses Details/Related and keeps Project fields separate from scoped work and related records", async () => {
+it("keeps Details focused on the summary and preserves Project info and scoped related work", async () => {
   await mount();
   expect(
     [...document.querySelectorAll('[role="tab"]')].map(
       (tab) => tab.textContent,
     ),
   ).toEqual(["Details", "Related"]);
-  expect(visible()?.textContent).toContain("General & dates");
-  expect(visible()?.textContent).toContain("Planning & pricing");
-  expect(visible()?.textContent).toContain("01/09/2026");
-  expect(visible()?.textContent).toContain("50 000.00 EUR");
-  expect(visible()?.textContent).toContain("15%");
-  expect(visible()?.textContent).toContain("Targets and VAT");
-  expect(visible()?.textContent).toContain("Purchase budget");
+  expect(visible()?.textContent).toContain("Financial summary");
+  expect(visible()?.textContent).not.toContain("General & dates");
+  expect(visible()?.textContent).not.toContain("Planning & pricing");
+  expect(visible()?.textContent).not.toContain("Purchase budget");
   expect(visible()?.querySelector('[aria-label="Project work"]')).toBeNull();
+  await clickText("Project info");
+  const info = document.querySelector('[role="dialog"]');
+  expect(info?.textContent).toContain("General & dates");
+  expect(info?.textContent).toContain("Planning & pricing");
+  expect(info?.textContent).toContain("01/09/2026");
+  expect(info?.textContent).toContain("50 000.00 EUR");
+  expect(info?.textContent).toContain("15%");
   expect(
     document.body.textContent?.match(/Fictional project notes/g),
   ).toHaveLength(1);
+  await clickText("Close");
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
   await clickText("Related");
   const projectId = projectEditorFixture().project.id;
   expect(
@@ -171,8 +176,13 @@ it("uses Details/Related and keeps Project fields separate from scoped work and 
   ).not.toBeNull();
   expect(visible()?.textContent).toContain("Buildings (0)");
   expect(visible()?.textContent).toContain("Freight expenses");
-  expect(visible()?.textContent).not.toContain("Targets and VAT");
   expect(visible()?.textContent).not.toContain("Items (Beta)");
+  await clickText("Purchasing");
+  const purchasing = visible()?.querySelector(
+    'section[data-workspace-section="orders"]',
+  );
+  expect(purchasing?.hasAttribute("hidden")).toBe(false);
+  expect(purchasing?.textContent).toContain("Purchase budget");
   const draft = document.querySelector<HTMLInputElement>(
     '[aria-label="Package draft"]',
   );

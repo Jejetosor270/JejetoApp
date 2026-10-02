@@ -3,14 +3,9 @@ import { getRecordHistory } from "@/lib/audit/history";
 import { RecordHistory } from "@/components/audit/record-history";
 import { editVersion, editFieldVersions } from "@/lib/edit-version";
 import { projectBudgetSnapshot } from "@/lib/master-data/project-budget";
-import { getFinancialAttention } from "@/lib/reporting/financial-attention";
-import { ProjectAttention } from "@/components/reporting/project-attention";
 import { projectFreightBudget } from "@/domain/freight/calculations";
-import { missingProjectBudgetInputs } from "@/domain/projects/budget-information";
 import { ProjectPaymentTerms } from "@/components/payments/project-payment-terms";
-import { ProjectCoverage } from "@/components/reporting/project-coverage";
 import { getProjectControl } from "@/lib/reporting/project-control";
-import { ProjectFinancialControl } from "@/components/reporting/project-control";
 import { ProjectFreightPayments } from "@/components/freight/project-freight-payments";
 import { getApplicationSettings } from "@/lib/settings/application-settings";
 import { RelatedItems } from "@/components/items/related-items";
@@ -23,10 +18,6 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { ProjectDetail } from "@/app/(app)/projects/[projectId]/project-detail";
-import {
-  ProjectFinancialDashboard,
-  FundingCoverageSummary,
-} from "@/components/reporting/project-financial-dashboard";
 import { ProjectFinancialOverview } from "@/components/reporting/project-financial-overview";
 import { isCashFlowHorizon, type CashFlowHorizon } from "@/config/reporting";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
@@ -39,14 +30,8 @@ import {
   getProjectFreightReconciliation,
   listProjectFreightExpenses,
 } from "@/lib/freight/expenses";
-import {
-  calculateProjectFinancialPerformance,
-  calculateProjectTargets,
-  calculateNetCashPosition,
-  sumComparableFinancialAmounts,
-} from "@/domain/projects/targets";
+import { sumComparableFinancialAmounts } from "@/domain/projects/targets";
 import { calculateProjectVatPosition } from "@/domain/vat/position";
-import { calculateProjectFundingCoverage } from "@/domain/billing/funding-coverage";
 
 export const metadata: Metadata = { title: "Project" };
 
@@ -92,7 +77,6 @@ export default async function ProjectPage({
     freightExpenses,
     relations,
     control,
-    attention,
     settings,
     history,
   ] = await Promise.all([
@@ -109,41 +93,11 @@ export default async function ProjectPage({
       getProjectRelations(projectId, { includeCash: false }),
     ),
     projectRead("financials", () => getProjectControl(projectId)),
-    projectRead("attention", () =>
-      getFinancialAttention(30, undefined, projectId),
-    ),
     getApplicationSettings(),
     projectRead("history", () => getRecordHistory("PROJECT", projectId)),
   ]);
   if (!reporting) notFound();
   const { buildings, project } = result;
-  const targets = calculateProjectTargets({
-    estimatedOtherCostHt: project.estimatedOtherCostHt?.toString() ?? null,
-    defaultOtherCostMarkupRate: project.defaultOtherCostMarkupRate.toString(),
-    defaultFreightMarkupRate: project.defaultFreightMarkupRate.toString(),
-    defaultProductMarkupRate: project.defaultProductMarkupRate.toString(),
-    estimatedFreightCostHt: projectFreightBudget(
-      project.estimatedPurchaseCostHt?.toString(),
-      project.freightEstimateRate?.toString(),
-    ),
-    estimatedPurchaseCostHt:
-      project.estimatedPurchaseCostHt?.toString() ?? null,
-    expectedSellHt: project.expectedSellHt?.toString() ?? null,
-    targetMarkupRate: project.targetMarkupRate?.toString() ?? null,
-    targetMode: project.targetMode,
-  });
-  const financialPerformance = calculateProjectFinancialPerformance({
-    actualInvoicedHt: billing?.invoicedComplete ? billing.invoicedHt : null,
-    actualOrderEconomicCostHt: reporting.financial.totals.economicLandedCost
-      .complete
-      ? reporting.financial.totals.economicLandedCost.value
-      : null,
-    projectFreightExpenseEconomicCostHt: freight?.projectExpenseEconomicCost
-      .complete
-      ? freight.projectExpenseEconomicCost.value
-      : null,
-    target: targets,
-  });
   const deductibleInputVat = sumComparableFinancialAmounts(
     reporting.financial.totals.recoverableInputVat.complete
       ? reporting.financial.totals.recoverableInputVat.value
@@ -155,24 +109,6 @@ export default async function ProjectPage({
   const vatPosition = calculateProjectVatPosition({
     deductibleInputVat,
     outputVat: billing?.outputVatComplete ? billing.outputVat : null,
-  });
-  const phase11CashPosition = calculateNetCashPosition(
-    billing?.complete ? billing.paidTtc : null,
-    sumComparableFinancialAmounts(
-      reporting.payments.supplier.paid.complete
-        ? reporting.payments.supplier.paid.value
-        : null,
-      reporting.freightPaid ?? (reporting.freightPaid === null ? null : "0"),
-    ),
-  );
-  const fundingCoverage = calculateProjectFundingCoverage({
-    clientBillingCoverageComplete: billing?.coverageComplete ?? false,
-    clientBillingCoverageHt: billing?.coverageHt ?? "0",
-    supplierOrders: reporting.orderRows.map((order) => ({
-      id: order.id,
-      sellingHt: order.salesRevenue,
-      status: order.status,
-    })),
   });
   return (
     <ProjectDetail
@@ -205,68 +141,10 @@ export default async function ProjectPage({
         ),
         overview: (
           <ProjectFinancialOverview
-            attention={<ProjectAttention issues={attention.issues} />}
-            missingBudgetInputs={missingProjectBudgetInputs({
-              estimatedPurchaseCostHt:
-                project.estimatedPurchaseCostHt?.toString() ?? null,
-              estimatedOtherCostHt:
-                project.estimatedOtherCostHt?.toString() ?? null,
-              freightEstimateRate:
-                project.freightEstimateRate?.toString() ?? null,
-              targetMode: project.targetMode,
-              expectedSellHt: project.expectedSellHt?.toString() ?? null,
-            })}
             data={control}
-            performance={financialPerformance}
+            vatPosition={vatPosition}
             projectId={projectId}
           />
-        ),
-        finance: (
-          <div className="space-y-5">
-            <details className="record-surface">
-              <summary className="cursor-pointer text-sm font-semibold">
-                Merchandise, freight & services breakdown
-              </summary>
-              <div className="mt-4">
-                <ProjectFinancialControl data={control} />
-              </div>
-            </details>
-            <details className="record-surface">
-              <summary className="cursor-pointer text-sm font-semibold">
-                Billing allocation coverage
-              </summary>
-              <div className="mt-4">
-                <FundingCoverageSummary
-                  coverage={fundingCoverage}
-                  currencyCode={project.reportingCurrencyCode}
-                />
-              </div>
-            </details>
-            <details className="record-surface">
-              <summary className="cursor-pointer text-sm font-semibold">
-                Freight recovery breakdown
-              </summary>
-              <div className="mt-4">
-                <ProjectCoverage
-                  data={control}
-                  projectId={projectId}
-                  showCash={false}
-                />
-              </div>
-            </details>
-            <ProjectFinancialDashboard
-              section="finance"
-              billing={billing}
-              financialPerformance={financialPerformance}
-              freight={freight}
-              fundingCoverage={fundingCoverage}
-              horizon={horizon}
-              phase11CashPosition={phase11CashPosition}
-              projectId={projectId}
-              report={reporting}
-              vatPosition={vatPosition}
-            />
-          </div>
         ),
         freightExpenses: (
           <div className="space-y-5">

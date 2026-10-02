@@ -13,6 +13,10 @@ import {
   freightReceiptHt,
   projectFreightCoverage,
 } from "@/domain/finance/project-coverage";
+import {
+  isPlannedProjectBilling,
+  projectOverview,
+} from "@/domain/finance/project-overview";
 import { getDatabase } from "@/lib/db";
 import { activeCreditsInclude } from "@/lib/credits/select";
 import { listCreditRefundCash } from "./credit-refunds";
@@ -220,11 +224,16 @@ export async function getProjectControl(projectId: string) {
     category: RecoveryCategory,
     allocated: boolean,
     quoted = false,
+    planned = false,
   ) =>
     sumKnown(
-      (quoted
-        ? project.billingDocuments.filter((doc) => doc.documentType === "QUOTE")
-        : invoices
+      (planned
+        ? project.billingDocuments.filter(isPlannedProjectBilling)
+        : quoted
+          ? project.billingDocuments.filter(
+              (doc) => doc.documentType === "QUOTE",
+            )
+          : invoices
       ).flatMap((doc) => {
         const rows = allocated
           ? doc.allocations
@@ -705,6 +714,55 @@ export async function getProjectControl(projectId: string) {
     ),
   ];
   return {
+    overview: projectOverview({
+      issuedHt: sumKnown(categories.map((category) => category.billed)),
+      orderCostHt: orderHtCost,
+      orderEconomicCost: totalOrderEconomicCost,
+      orderSellHt: sumKnown(
+        activeOrders.map((order) => order.costs.reportingSellingRevenue),
+      ),
+      freightCostHt: sumKnown(
+        project.freightExpenses.map((expense) =>
+          convert(
+            expense.costAmountHt.toString(),
+            expense.currencyCode,
+            expense.fxRateToReporting?.toString() ?? null,
+          ),
+        ),
+      ),
+      freightEconomicCost: freight?.projectExpenseEconomicCost.complete
+        ? freight.projectExpenseEconomicCost.value
+        : null,
+      clientReceivedTtc: received,
+      clientRefundedTtc: clientRefundsPaid,
+      supplierPaidTtc: supplierPaid,
+      freightPaidTtc: freightPaid,
+      supplierRefundedTtc: supplierRefundsReceived,
+      recordedPayableTtc: sumKnown([
+        ...activeOrders.map((order) =>
+          convert(
+            order.supplierPayment.totalPayable,
+            order.orderCurrencyCode,
+            order.costs.purchaseFxRate,
+          ),
+        ),
+        ...project.freightExpenses.map((expense) =>
+          convert(
+            freightPayable(
+              expense.costAmountHt.toString(),
+              expense.vatAmount?.toString() ?? null,
+              expense.vatTreatment,
+            ),
+            expense.currencyCode,
+            expense.fxRateToReporting?.toString() ?? null,
+          ),
+        ),
+      ]),
+      plannedCategories: recoveryCategories.map((category) => ({
+        billedHt: categoryRevenue(category, false, false, true),
+        markupRate: markups[category],
+      })),
+    }),
     cashOutlook,
     drilldowns,
     currency,

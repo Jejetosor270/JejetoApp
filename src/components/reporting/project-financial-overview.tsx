@@ -1,581 +1,372 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { EditProjectBudgetButton } from "@/components/projects/project-budget-context";
 import Link from "next/link";
-import {
-  ProjectFinancialDrilldowns,
-  ProjectFinancialLink,
-} from "./project-financial-drilldown";
-import { Button } from "@/components/ui/button";
+import { EditProjectBudgetButton } from "@/components/projects/project-budget-context";
 import {
   formatMoney,
   formatRate,
   formatSignedMoney,
 } from "@/domain/procurement/presentation";
-import { formatDateOnly } from "@/domain/payments/dates";
+import type { ProjectVatPosition } from "@/domain/vat/position";
 import type { ProjectControl } from "@/lib/reporting/project-control";
-import type { ProjectFinancialPerformance } from "@/domain/projects/targets";
 
-function Money({
-  value,
-  currency,
-  signed = false,
-  missing = "Incomplete",
-}: {
+interface Figure {
+  label: string;
   value: string | null;
-  currency: string;
+  href?: string;
   signed?: boolean;
-  missing?: string;
-}) {
-  return (
-    <span className="financial-figure">
-      {value === null
-        ? missing
-        : signed
-          ? formatSignedMoney(value, currency)
-          : formatMoney(value, currency)}
-    </span>
-  );
+  rate?: boolean;
+  help?: string;
+  detail?: string;
 }
 
 function Figures({
   currency,
   figures,
+  columns = 3,
 }: {
   currency: string;
-  figures: readonly {
-    label: string;
-    value: string | null;
-    href: string;
-    signed?: boolean;
-  }[];
+  figures: readonly Figure[];
+  columns?: 3 | 4;
 }) {
   return (
-    <dl className="mt-4 grid gap-4 sm:grid-cols-3">
-      {figures.map((figure) => (
-        <div key={figure.label} className="min-w-0">
-          <dt className="text-muted-foreground text-xs">{figure.label}</dt>
-          <dd className="mt-1 text-lg font-semibold tracking-tight break-words">
-            <ProjectFinancialLink
-              className="focus-visible:outline-ring rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-4"
-              href={figure.href}
-            >
-              <Money
-                value={figure.value}
-                currency={currency}
-                signed={figure.signed ?? false}
-              />
-            </ProjectFinancialLink>
-          </dd>
-        </div>
-      ))}
+    <dl
+      className={`mt-4 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 ${columns === 4 ? "xl:grid-cols-4" : "lg:grid-cols-3"}`}
+    >
+      {figures.map((figure) => {
+        const value = figure.rate
+          ? figure.value === null
+            ? "Not available"
+            : formatRate(figure.value)
+          : figure.value === null
+            ? "Incomplete"
+            : figure.signed
+              ? formatSignedMoney(figure.value, currency)
+              : formatMoney(figure.value, currency);
+        return (
+          <div key={figure.label} className="min-w-0" title={figure.help}>
+            <dt className="text-muted-foreground text-xs">{figure.label}</dt>
+            <dd className="financial-figure mt-1 overflow-x-auto text-lg font-semibold tracking-tight">
+              {figure.href ? (
+                <Link
+                  className="focus-visible:outline-ring rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-4"
+                  href={figure.href}
+                >
+                  {value}
+                </Link>
+              ) : (
+                value
+              )}
+              {figure.detail ? (
+                <span className="text-muted-foreground mt-1 block text-xs font-normal">
+                  {figure.detail}
+                </span>
+              ) : null}
+            </dd>
+          </div>
+        );
+      })}
     </dl>
+  );
+}
+
+function VatCostNote({
+  value,
+  currency,
+}: {
+  value: string | null;
+  currency: string;
+}) {
+  if (value === null || /^0(?:\.0+)?$/.test(value)) return null;
+  return (
+    <p className="text-muted-foreground mt-3 text-xs">
+      Profit deducts {formatMoney(value, currency)} non-deductible VAT.
+    </p>
   );
 }
 
 export function ProjectFinancialOverview({
   data,
-  performance,
   projectId,
-  missingBudgetInputs,
-  attention,
+  vatPosition,
 }: {
   data: Pick<
     ProjectControl,
-    "currency" | "received" | "cash" | "cashOutlook" | "excludedReceiptCount"
-  > &
-    Partial<
-      Pick<ProjectControl, "drilldowns" | "actualCashIn" | "actualCashOut">
-    >;
-  performance: ProjectFinancialPerformance;
+    "currency" | "overview" | "freightCoverage" | "excludedReceiptCount"
+  >;
   projectId: string;
-  missingBudgetInputs: readonly string[];
-  attention?: ReactNode;
+  vatPosition: ProjectVatPosition;
 }) {
-  const [days, setDays] = useState(30);
-  const outlook = data.cashOutlook;
-  const window =
-    outlook.windows.find((entry) => entry.days === days) ?? outlook.windows[1];
-  const related = `/projects/${projectId}?tab=related`;
-  const billing = `/billing?projectId=${projectId}`;
-
+  const { overview, currency, freightCoverage: freight } = data;
+  const related = (section: string) =>
+    `/projects/${projectId}?tab=related&section=${section}`;
+  const billing = related("work");
+  const purchasing = related("orders");
+  const payments = related("payment-terms");
+  const vatLabel =
+    vatPosition.status === "CREDIT"
+      ? "VAT credit"
+      : vatPosition.status === "PAYABLE"
+        ? "VAT payable"
+        : "VAT balance";
   return (
-    <ProjectFinancialDrilldowns
-      rows={data.drilldowns ?? []}
-      currency={data.currency}
-      today={outlook.today}
-      end={window?.end ?? outlook.today}
-    >
-      <div className="space-y-4">
-        <section
-          className="record-surface"
-          aria-labelledby="project-commercial-heading"
-        >
-          <h2 id="project-commercial-heading" className="text-sm font-semibold">
-            Commercial position · recorded to date
+    <div className="space-y-4">
+      <section
+        className="record-surface"
+        aria-labelledby="project-invoiced-heading"
+      >
+        <h2 id="project-invoiced-heading" className="text-sm font-semibold">
+          Invoiced HT
+        </h2>
+        <Figures
+          currency={currency}
+          figures={[
+            {
+              label: "Client invoiced HT",
+              value: overview.invoiced.clientHt,
+              href: billing,
+            },
+            {
+              label: "Recorded cost HT",
+              value: overview.invoiced.costHt,
+              help: "All active Order costs plus Project freight, including freight and other costs once.",
+            },
+            {
+              label: "Difference HT",
+              value: overview.invoiced.balanceHt,
+              signed: true,
+              help: "Issued Client Invoice HT minus recorded HT costs. This is not final profit.",
+            },
+          ]}
+        />
+      </section>
+      <section
+        className="record-surface"
+        aria-labelledby="project-cash-heading"
+      >
+        <h2 id="project-cash-heading" className="text-sm font-semibold">
+          Cash TTC
+        </h2>
+        <Figures
+          currency={currency}
+          figures={[
+            {
+              label: "Client received TTC",
+              value: overview.cash.receivedTtc,
+              href: payments,
+              help: "Recognized Client receipts, net of actual Client refunds.",
+            },
+            {
+              label: "Supplier paid TTC",
+              value: overview.cash.paidTtc,
+              help: "Supplier and Project freight payments, net of actual Supplier refunds.",
+            },
+            {
+              label: "Cash balance TTC",
+              value: overview.cash.balanceTtc,
+              signed: true,
+              help: "Client received minus Supplier paid. Tracked Project cash, not a bank balance.",
+            },
+            {
+              label: "Recorded payable TTC",
+              value: overview.funding.recordedPayableTtc,
+              help: "Full recorded Supplier and Project freight obligations after credits, including amounts already paid. Not only outstanding balances.",
+            },
+            {
+              label: "Funding balance TTC",
+              value: overview.funding.balanceTtc,
+              signed: true,
+              help: "Net Client receipts minus full recorded payable. Not actual cash balance.",
+            },
+          ]}
+        />
+        {data.excludedReceiptCount > 0 ? (
+          <p className="text-warning-foreground mt-3 text-xs" role="status">
+            Some receipts need review.{" "}
+            <Link className="underline" href={billing}>
+              Open Billing
+            </Link>
+          </p>
+        ) : null}
+      </section>
+      <section
+        className="record-surface"
+        aria-labelledby="project-orders-heading"
+      >
+        <h2 id="project-orders-heading" className="text-sm font-semibold">
+          Orders HT
+        </h2>
+        <Figures
+          currency={currency}
+          columns={4}
+          figures={[
+            {
+              label: "Order cost HT",
+              value: overview.orders.costHt,
+              href: purchasing,
+              help: "Active Orders: purchase, freight, customs and other costs. Separate Project freight is included in Recorded cost, not counted again here.",
+            },
+            {
+              label: "Order sell HT",
+              value: overview.orders.sellHt,
+              href: purchasing,
+              help: "Agreed Order selling prices, retaining individual markups and direct prices.",
+            },
+            {
+              label: "Planned profit",
+              value: overview.orders.profitHt,
+              signed: true,
+              help: "Order selling prices minus Order economic cost. Not Client invoiced revenue.",
+            },
+            {
+              label: "Markup",
+              value: overview.orders.markupRate,
+              rate: true,
+              help: "Order profit divided by aggregated economic cost, not an average of Order percentages.",
+            },
+          ]}
+        />
+        <VatCostNote
+          value={overview.orders.nonDeductibleVat}
+          currency={currency}
+        />
+      </section>
+      <section
+        className="record-surface"
+        aria-labelledby="project-planned-heading"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="project-planned-heading" className="text-sm font-semibold">
+            Planned HT
           </h2>
-          <Figures
-            currency={data.currency}
-            figures={[
-              {
-                label: "Invoiced revenue HT",
-                value: performance.actual.sellHt,
-                href: "#financial:billed",
-              },
-              {
-                label: "Recorded economic cost",
-                value: performance.actual.costHt,
-                href: "#financial:cost",
-              },
-              {
-                label: "Billing less cost",
-                value: performance.actual.grossProfitHt,
-                href: "#financial:commercial",
-                signed: true,
-              },
-            ]}
-          />
-          <p className="text-muted-foreground mt-3 text-xs">
-            Whole Project, allocated and unallocated. Issued Invoice revenue
-            excludes VAT; recorded Order and Project-freight costs include
-            non-deductible VAT. This is a billing/cost position, not final
-            profit.
-          </p>
-        </section>
-        <section
-          className="record-surface"
-          aria-labelledby="project-cash-heading"
-        >
-          <h2 id="project-cash-heading" className="text-sm font-semibold">
-            Cash · actual to date
-          </h2>
-          <Figures
-            currency={data.currency}
-            figures={[
-              {
-                label: "Money in TTC · receipts & Supplier refunds",
-                value:
-                  data.actualCashIn === undefined
-                    ? data.received
-                    : data.actualCashIn,
-                href: "#financial:received",
-              },
-              {
-                label: "Money out TTC · payments & Client refunds",
-                value:
-                  data.actualCashOut === undefined
-                    ? data.cash.paid
-                    : data.actualCashOut,
-                href: "#financial:paid",
-              },
-              {
-                label: "Net Project cash TTC",
-                value: data.cash.net,
-                href: "#financial:cash",
-                signed: true,
-              },
-            ]}
-          />
-          <p className="text-muted-foreground mt-3 text-xs">
-            Recorded cash in less cash out, including actual refunds. Not a bank
-            balance or available funds.
-          </p>
-          {data.cash.net === null && (
-            <p role="status" className="text-warning-foreground mt-2 text-xs">
-              Actual cash is incomplete: review payment FX.
-            </p>
-          )}
-          {data.excludedReceiptCount > 0 && (
-            <p role="status" className="text-warning-foreground mt-2 text-xs">
-              {data.excludedReceiptCount} historical receipts without active
-              Invoice context are excluded.{" "}
-              <Link
-                className="underline"
-                href={`/receipts?projectId=${projectId}`}
-              >
-                Review receipts
-              </Link>
-            </p>
-          )}
-        </section>
-        <section
-          className="record-surface"
-          aria-labelledby="project-outstanding-heading"
-        >
-          <h2
-            id="project-outstanding-heading"
-            className="text-sm font-semibold"
-          >
-            Outstanding commitments · all dates
-          </h2>
-          <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-            {[
-              {
-                label: "Outstanding money in TTC",
-                value: outlook.outstandingIn,
-                overdue: outlook.overdueIn,
-                href: "#financial:incoming",
-                overdueHref: "#financial:overdueIn",
-              },
-              {
-                label: "Outstanding money out TTC",
-                value: outlook.outstandingOut,
-                overdue: outlook.overdueOut,
-                href: "#financial:outgoing",
-                overdueHref: "#financial:overdueOut",
-              },
-            ].map((row) => (
-              <div key={row.label}>
-                <dt className="text-muted-foreground text-xs">{row.label}</dt>
-                <dd className="mt-1 text-lg font-semibold">
-                  <ProjectFinancialLink
-                    className="hover:underline"
-                    href={row.href}
-                  >
-                    <Money value={row.value} currency={data.currency} />
-                  </ProjectFinancialLink>
-                </dd>
-                <dd className="text-muted-foreground mt-1 text-xs">
-                  Of which overdue:{" "}
-                  <ProjectFinancialLink
-                    className="underline"
-                    href={row.overdueHref}
-                  >
-                    <Money value={row.overdue} currency={data.currency} />
-                  </ProjectFinancialLink>
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <p className="text-muted-foreground mt-3 text-xs">
-            Includes issued Invoices, Supplier/freight commitments and refunds
-            owed, including later or undated balances. Missing dates or expected
-            FX remain incomplete.
-          </p>
-          <p className="mt-3 border-t pt-3 text-xs">
-            Planned client receipts TTC · all dates:{" "}
-            <ProjectFinancialLink
-              className="underline"
-              href="#financial:planned"
-            >
-              <Money value={outlook.plannedTotal} currency={data.currency} />
-            </ProjectFinancialLink>
-            . Quotes and To be invoiced documents are separate from issued
-            receivables.
-          </p>
-        </section>
-        {attention}
-        <section
-          className="record-surface"
-          aria-labelledby="project-outlook-heading"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="project-outlook-heading" className="text-sm font-semibold">
-              Upcoming cash
-            </h2>
-            <div
-              className="flex flex-wrap gap-1"
-              role="group"
-              aria-label="Cash outlook period"
-            >
-              {outlook.windows.map((entry) => (
-                <Button
-                  key={entry.days}
-                  type="button"
-                  size="sm"
-                  variant={days === entry.days ? "secondary" : "ghost"}
-                  aria-pressed={days === entry.days}
-                  onClick={() => setDays(entry.days)}
-                >
-                  Next {entry.days} days
-                </Button>
-              ))}
-            </div>
-          </div>
-          {window && (
-            <>
-              <p className="text-muted-foreground mt-1 text-xs">
-                {formatDateOnly(outlook.today)}–{formatDateOnly(window.end)} ·
-                unpaid issued Invoices and recorded Supplier/freight
-                commitments.
-              </p>
-              <Figures
-                currency={data.currency}
-                figures={[
-                  {
-                    label: "Client payments due TTC",
-                    value: window.expectedIn,
-                    href: "#financial:upcomingIn",
-                  },
-                  {
-                    label: "Supplier & freight payments due TTC",
-                    value: window.expectedOut,
-                    href: "#financial:upcomingOut",
-                  },
-                  {
-                    label: "Projected net Project cash TTC",
-                    value: window.projectedCash,
-                    href: "#financial:forecast",
-                    signed: true,
-                  },
-                ]}
-              />
-              <p className="text-muted-foreground mt-3 text-xs">
-                Current net cash + payments due in − payments due out. Planned
-                receipts are excluded.
-              </p>
-              {(outlook.overdueCount > 0 ||
-                outlook.undatedCount > 0 ||
-                outlook.missingFxCount > 0 ||
-                outlook.reviewCount > 0) && (
-                <div
-                  role="status"
-                  className="text-warning-foreground mt-3 space-y-1 border-t pt-3 text-xs"
-                >
-                  <p>
-                    Projection incomplete. Review overdue amounts, dates, linked
-                    documents or missing financial/FX information in{" "}
-                    <Link href={related} className="underline">
-                      Related payment terms
-                    </Link>
-                    .
-                  </p>
-                  {outlook.reviewCount > 0 && (
-                    <p>
-                      Cash expectations needing review: {outlook.reviewCount}.
-                      Check for different currencies or a payment term linked to
-                      multiple Invoices.{" "}
-                      <ProjectFinancialLink
-                        className="underline"
-                        href="#financial:incoming"
-                      >
-                        Review source records
-                      </ProjectFinancialLink>
-                      .
-                    </p>
-                  )}
-                  {outlook.overdueCount > 0 && (
-                    <p>
-                      Overdue — client:{" "}
-                      <Money
-                        value={outlook.overdueIn}
-                        currency={data.currency}
-                      />
-                      ; Supplier/freight:{" "}
-                      <Money
-                        value={outlook.overdueOut}
-                        currency={data.currency}
-                      />
-                      . Excluded from future dates until rescheduled.
-                    </p>
-                  )}
-                  {outlook.undatedCount > 0 && (
-                    <p>
-                      <ProjectFinancialLink
-                        className="underline"
-                        href="#financial:undated"
-                      >
-                        Review undated / unscheduled
-                      </ProjectFinancialLink>{" "}
-                      — money in:{" "}
-                      <Money
-                        value={outlook.undatedIn}
-                        currency={data.currency}
-                      />
-                      ; money out:{" "}
-                      <Money
-                        value={outlook.undatedOut}
-                        currency={data.currency}
-                      />
-                      .
-                    </p>
-                  )}
-                </div>
-              )}
-              <details className="mt-3 border-t pt-3 text-xs">
-                <summary className="cursor-pointer font-medium">
-                  Planned receipts · separate from cash forecast
-                </summary>
-                {outlook.plannedReviewCount > 0 && (
-                  <p role="status" className="text-warning-foreground mt-3">
-                    Planned receipts needing source-data review:{" "}
-                    {outlook.plannedReviewCount}. Check currencies and linked
-                    Invoice terms. These plans do not affect the primary cash
-                    projection.{" "}
-                    <ProjectFinancialLink
-                      className="underline"
-                      href="#financial:planned"
-                    >
-                      Review planned records
-                    </ProjectFinancialLink>
-                    .
-                  </p>
-                )}
-                <dl className="mt-3 grid gap-3 sm:grid-cols-3">
-                  {[
-                    [
-                      "Within selected period",
-                      window.plannedIn,
-                      "plannedUpcoming",
-                    ],
-                    [
-                      "Past planned dates",
-                      outlook.plannedOverdue,
-                      "plannedOverdue",
-                    ],
-                    [
-                      "Undated / unscheduled",
-                      outlook.plannedUndated,
-                      "plannedUndated",
-                    ],
-                  ].map(([label, value, key]) => (
-                    <div key={label}>
-                      <dt className="text-muted-foreground">{label}</dt>
-                      <dd className="mt-1 font-medium">
-                        <ProjectFinancialLink
-                          className="underline"
-                          href={"#financial:" + key}
-                        >
-                          <Money
-                            value={value ?? null}
-                            currency={data.currency}
-                          />
-                        </ProjectFinancialLink>
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-                <p className="text-muted-foreground mt-2">
-                  Quotes and To be invoiced documents, TTC; matched Quote terms
-                  count once. These are plans, not issued receivables.{" "}
-                  <Link className="underline" href={billing}>
-                    Open Billing
-                  </Link>
-                </p>
-              </details>
-            </>
-          )}
-        </section>
-        <section
-          className="record-surface"
-          aria-labelledby="project-profit-heading"
-        >
-          <h2 id="project-profit-heading" className="text-sm font-semibold">
-            Budget & recorded position
-          </h2>
-          <div className="mt-2">
-            <EditProjectBudgetButton />
-          </div>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Compare recorded amounts with the full-Project approved budget.
-            Recorded costs include non-deductible VAT; budgeted costs are HT.
-          </p>
-          {missingBudgetInputs.length > 0 && (
-            <div role="status" className="text-warning-foreground mt-3 text-xs">
-              <p>
-                Budget incomplete — missing: {missingBudgetInputs.join("; ")}.
-              </p>
-              <p className="mt-1">
-                Enter zero only when a zero budget has been approved.
-              </p>
-            </div>
-          )}
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="text-muted-foreground border-b">
-                <tr>
-                  <th className="py-2 pr-3 font-medium">Measure</th>
-                  <th className="px-3 py-2 text-right font-medium">
-                    Recorded to date
-                  </th>
-                  <th className="py-2 pl-3 text-right font-medium">
-                    Approved full-Project budget
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {(
-                  [
-                    [
-                      "Invoiced revenue / budgeted sell HT",
-                      "sellHt",
-                      "#financial:billed",
-                    ],
-                    [
-                      "Recorded economic cost / budgeted cost HT",
-                      "costHt",
-                      "#financial:cost",
-                    ],
-                    [
-                      "Billing less cost / budgeted profit",
-                      "grossProfitHt",
-                      "#financial:commercial",
-                    ],
-                  ] as const
-                ).map(([label, key, href]) => (
-                  <tr key={key}>
-                    <th className="py-3 pr-3 font-medium">
-                      <ProjectFinancialLink
-                        className="hover:underline"
-                        href={href}
-                      >
-                        {label}
-                      </ProjectFinancialLink>
-                    </th>
-                    <td className="px-3 py-3 text-right font-semibold">
-                      <Money
-                        value={performance.actual[key]}
-                        currency={data.currency}
-                        signed={key === "grossProfitHt"}
-                      />
-                    </td>
-                    <td className="py-3 pl-3 text-right">
-                      <Money
-                        value={performance.target[key]}
-                        currency={data.currency}
-                        signed={key === "grossProfitHt"}
-                        missing="Not available"
-                      />
-                    </td>
-                  </tr>
-                ))}
-                <tr>
-                  <th className="py-3 pr-3 font-medium">
-                    Markup · recorded / budget
-                  </th>
-                  <td className="financial-figure px-3 py-3 text-right font-semibold">
-                    {formatRate(performance.actual.markupRate)}
-                  </td>
-                  <td className="financial-figure py-3 pl-3 text-right">
-                    {performance.target.costHt === null
-                      ? "Not available"
-                      : formatRate(performance.target.markupRate)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p className="text-muted-foreground mt-2 text-xs">
-            Recorded position = issued Invoice revenue less recorded Order and
-            Project-freight economic costs. Not final profit: future costs may
-            be missing. The approved budget covers the full Project, not a live
-            completion forecast.
-          </p>
-          <details className="mt-3 border-t pt-3 text-xs">
-            <summary className="cursor-pointer font-medium">
-              Margin & calculation basis
-            </summary>
-            <p className="text-muted-foreground mt-2">
-              Recorded markup = billing less cost ÷ recorded cost. Recorded
-              margin = billing less cost ÷ invoiced revenue. Recorded margin:{" "}
-              {formatRate(performance.actual.marginRate)}; budget margin:{" "}
-              {formatRate(performance.target.marginRate)}. Rates use aggregated
-              monetary values, not averages.
-            </p>
-          </details>
-        </section>
-      </div>
-    </ProjectFinancialDrilldowns>
+          <EditProjectBudgetButton />
+        </div>
+        <Figures
+          currency={currency}
+          figures={[
+            {
+              label: "Planned billing HT",
+              value: overview.planned.billingHt,
+              href: billing,
+              help: "Issued and To be invoiced Client Invoices, net of credits. Excludes Quotes, Drafts and cancelled records.",
+            },
+            {
+              label: "Target profit",
+              value: overview.planned.targetProfitHt,
+              detail:
+                overview.planned.targetMarginRate === null
+                  ? "Margin not available"
+                  : `${formatRate(overview.planned.targetMarginRate)} margin`,
+              help: "Profit within planned Billing, calculated from each category's Project markup.",
+            },
+            {
+              label: "Target markup",
+              value: overview.planned.targetMarkupRate,
+              rate: true,
+              help: "Combined target profit divided by implied cost, using the Project category markups. The profit's margin is its share of planned Billing.",
+            },
+            {
+              label: "Coverage gap HT",
+              value: overview.planned.coverageHt,
+              signed: true,
+              help: "Planned Billing minus agreed Order selling totals. Positive is a surplus; negative is a shortfall.",
+            },
+            {
+              label: "Provisional profit",
+              value: overview.planned.profitHt,
+              signed: true,
+              help: "Planned Billing minus all recorded economic costs, including Project freight. Future costs may still be missing.",
+            },
+            {
+              label: "Provisional markup",
+              value: overview.planned.markupRate,
+              rate: true,
+              help: "Provisional profit divided by recorded economic cost. This is not a final-profit forecast.",
+            },
+          ]}
+        />
+        <p className="text-muted-foreground mt-3 text-xs">
+          Includes To be invoiced. Future costs may be missing.
+        </p>
+        <VatCostNote
+          value={overview.planned.nonDeductibleVat}
+          currency={currency}
+        />
+      </section>
+      <section
+        id="finance"
+        className="record-surface"
+        aria-labelledby="project-vat-heading"
+      >
+        <h2 id="project-vat-heading" className="text-sm font-semibold">
+          VAT
+        </h2>
+        <Figures
+          currency={currency}
+          figures={[
+            {
+              label: "Output VAT",
+              value: vatPosition.outputVat,
+              href: billing,
+            },
+            {
+              label: "Deductible VAT",
+              value: vatPosition.deductibleInputVat,
+              href: purchasing,
+            },
+            {
+              label: vatLabel,
+              value: vatPosition.positionAmount,
+              help: "Issued Client Invoice output VAT minus deductible Order and Project freight input VAT, after credits. Management view, not a tax return.",
+            },
+          ]}
+        />
+      </section>
+      <section
+        className="record-surface"
+        aria-labelledby="project-freight-heading"
+      >
+        <h2 id="project-freight-heading" className="text-sm font-semibold">
+          Freight HT
+        </h2>
+        <Figures
+          currency={currency}
+          figures={[
+            {
+              label: "Freight cost HT",
+              value: freight.supplierHt,
+            },
+            {
+              label: "Freight target HT",
+              value: freight.supplierSellHt,
+              help: "Order freight plus Project freight HT, with the Project freight markup.",
+            },
+            {
+              label: "Client invoiced HT",
+              value: freight.clientInvoicedHt,
+              href: billing,
+            },
+            {
+              label: "Client received HT",
+              value: freight.clientPaidHt,
+              href: payments,
+              help: "Proportional freight share of actual receipts, not a separately recorded freight payment.",
+            },
+            {
+              label: "Invoiced coverage HT",
+              value: freight.invoicedCoverageHt,
+              signed: true,
+              help: "Client freight invoiced minus freight target.",
+            },
+            {
+              label: "Paid coverage HT",
+              value: freight.paidCoverageHt,
+              signed: true,
+              help: "Client freight received share minus freight target.",
+            },
+          ]}
+        />
+      </section>
+    </div>
   );
 }

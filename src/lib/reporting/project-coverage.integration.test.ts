@@ -172,6 +172,17 @@ it("keeps credited paid invoices as undated refund obligations until actual refu
   expect(supplierSettled.actualCashIn).toBe("140.0000");
   expect(supplierSettled.actualCashOut).toBe("124.0000");
   expect(supplierSettled.cashOutlook.windows[0]?.projectedCash).toBe("16.0000");
+  expect(supplierSettled.overview).toMatchObject({
+    invoiced: { clientHt: "80.0000", costHt: "80.0000", balanceHt: "0.0000" },
+    cash: { receivedTtc: "96.0000", paidTtc: "80.0000", balanceTtc: "16.0000" },
+    funding: { recordedPayableTtc: "80.0000", balanceTtc: "16.0000" },
+    orders: { costHt: "80.0000", sellHt: "150.0000", profitHt: "70.0000" },
+    planned: {
+      billingHt: "80.0000",
+      coverageHt: "-70.0000",
+      profitHt: "0.0000",
+    },
+  });
   const cash = await getProjectReportingSnapshot(project.id, {
     horizon: "30d",
   });
@@ -359,6 +370,8 @@ it("separates issued and planned receipts, deduplicates matched terms, and prese
   });
   await createBill("OUT-D", "INVOICE", "DRAFT");
   const result = await getProjectControl(project.id);
+  expect(result.overview.invoiced.clientHt).toBe("100.0000");
+  expect(result.overview.planned.billingHt).toBe("200.0000");
   expect(result.cashOutlook.windows[0]).toMatchObject({
     expectedIn: "70.0000",
     plannedIn: "100.0000",
@@ -412,6 +425,155 @@ it("separates issued and planned receipts, deduplicates matched terms, and prese
   expect(
     (await getProjectControl(project.id)).cashOutlook.windows[0]?.plannedIn,
   ).toBe("0.0000");
+  expect((await getProjectControl(project.id)).overview.planned.billingHt).toBe(
+    "200.0000",
+  );
+});
+
+it("builds the compact overview from full costs, agreed sell and full payable without changing cash expectations", async () => {
+  const db = memory.raw;
+  const project = await db.project.create({
+    data: {
+      code: "OVERVIEW",
+      name: "Overview",
+      reportingCurrencyCode: "EUR",
+      defaultProductMarkupRate: "0.2",
+      defaultFreightMarkupRate: "0.1",
+      defaultOtherCostMarkupRate: "0.3",
+    },
+  });
+  await db.procurementOrder.create({
+    data: {
+      projectId: project.id,
+      orderNumber: "OVERVIEW-ORDER",
+      packageName: "Full costs",
+      orderCurrencyCode: "EUR",
+      sellingCurrencyCode: "EUR",
+      pricingMode: "DIRECT_SELLING_PRICE",
+      sellingPriceAmount: "180",
+      costLines: {
+        create: [
+          { category: "SUPPLIER_PURCHASE", originalAmount: "100" },
+          { category: "FREIGHT", originalAmount: "10" },
+          { category: "CUSTOMS_DUTIES", originalAmount: "5" },
+          { category: "MISCELLANEOUS", originalAmount: "5" },
+        ],
+      },
+      vatEntries: {
+        create: {
+          direction: "INPUT",
+          treatment: "DOMESTIC",
+          taxableBaseAmount: "100",
+          vatRate: "0.2",
+          vatAmount: "20",
+          recoverability: "PARTIALLY_RECOVERABLE",
+          recoverableRate: "0.5",
+        },
+      },
+      paymentInstallments: {
+        create: {
+          direction: "SUPPLIER_PAYMENT",
+          sequence: 1,
+          label: "Supplier",
+          basis: "FIXED_AMOUNT",
+          scheduledAmount: "120",
+          currencyCode: "EUR",
+          settlements: {
+            create: {
+              amount: "50",
+              settledAt: dateOnlyToDate(businessToday()),
+            },
+          },
+        },
+      },
+    },
+  });
+  await db.projectFreightExpense.create({
+    data: {
+      projectId: project.id,
+      description: "Separate freight",
+      expenseDate: dateOnlyToDate(businessToday()),
+      currencyCode: "EUR",
+      costAmountHt: "20",
+      vatAmount: "4",
+      vatTreatment: "DOMESTIC",
+      recoverability: "NON_RECOVERABLE",
+      recoverableRate: "0",
+      payments: {
+        create: { amount: "5", paidAt: dateOnlyToDate(businessToday()) },
+      },
+    },
+  });
+  for (const [
+    reference,
+    workflowStatus,
+    totalHt,
+    freightCoverageHt,
+    otherCoverageHt,
+  ] of [
+    ["OVERVIEW-ISSUED", "INVOICED", "240", "22", "26"],
+    ["OVERVIEW-PLANNED", "TO_BE_INVOICED", "120", "11", "13"],
+    ["OVERVIEW-DRAFT", "DRAFT", "1000", "0", "0"],
+    ["OVERVIEW-CANCELLED", "CANCELLED", "1000", "0", "0"],
+  ] as const) {
+    await db.clientBillingDocument.create({
+      data: {
+        projectId: project.id,
+        reference,
+        documentType: "INVOICE",
+        workflowStatus,
+        totalHt,
+        totalTtc: totalHt,
+        freightCoverageHt,
+        otherCoverageHt,
+        currencyCode: "EUR",
+        documentDate: dateOnlyToDate(businessToday()),
+        ...(workflowStatus === "INVOICED"
+          ? {
+              receipts: {
+                create: {
+                  amount: "120",
+                  receivedAt: dateOnlyToDate(businessToday()),
+                },
+              },
+            }
+          : {}),
+      },
+    });
+  }
+  const result = await getProjectControl(project.id);
+  expect(result.overview).toMatchObject({
+    invoiced: {
+      clientHt: "240.0000",
+      costHt: "140.0000",
+      balanceHt: "100.0000",
+    },
+    cash: {
+      receivedTtc: "120.0000",
+      paidTtc: "55.0000",
+      balanceTtc: "65.0000",
+    },
+    funding: { recordedPayableTtc: "144.0000", balanceTtc: "-24.0000" },
+    orders: {
+      costHt: "120.0000",
+      sellHt: "180.0000",
+      profitHt: "50.0000",
+      markupRate: "0.384615",
+      nonDeductibleVat: "10.0000",
+    },
+    planned: {
+      billingHt: "360.0000",
+      targetProfitHt: "60.0000",
+      targetMarginRate: "0.166667",
+      targetMarkupRate: "0.200000",
+      orderSellHt: "180.0000",
+      coverageHt: "180.0000",
+      profitHt: "206.0000",
+      markupRate: "1.337662",
+      nonDeductibleVat: "14.0000",
+    },
+  });
+  expect(result.overview.cash.balanceTtc).toBe(result.cash.net);
 });
 
 it("requires explicit Other budget, honors approved direct sell, and reconciles freight VAT outside HT", async () => {
