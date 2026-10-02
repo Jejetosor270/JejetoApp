@@ -8,6 +8,192 @@ export interface ModelMetadata {
   >;
 }
 export const modelMap: Record<string, ModelMetadata> = {
+  FinancialCredit: {
+    table: "financial_credits",
+    trash: false,
+    relations: {
+      billingDocument: {
+        model: "ClientBillingDocument",
+        many: false,
+        optional: true,
+        fields: ["billingDocumentId"],
+      },
+      order: {
+        model: "ProcurementOrder",
+        many: false,
+        optional: true,
+        fields: ["orderId"],
+      },
+      supplierVatEntry: {
+        model: "ProcurementOrderVatEntry",
+        many: false,
+        optional: true,
+        fields: ["supplierVatEntryId"],
+      },
+      currency: {
+        model: "Currency",
+        many: false,
+        optional: false,
+        fields: ["currencyCode"],
+      },
+      reportingCurrency: {
+        model: "Currency",
+        many: false,
+        optional: false,
+        fields: ["reportingCurrencyCode"],
+      },
+      createdBy: {
+        model: "User",
+        many: false,
+        optional: true,
+        fields: ["createdById"],
+      },
+      updatedBy: {
+        model: "User",
+        many: false,
+        optional: true,
+        fields: ["updatedById"],
+      },
+      allocations: {
+        model: "FinancialCreditAllocation",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      refunds: {
+        model: "FinancialCreditRefund",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+    },
+  },
+  FinancialCreditAllocation: {
+    table: "financial_credit_allocations",
+    trash: false,
+    relations: {
+      credit: {
+        model: "FinancialCredit",
+        many: false,
+        optional: false,
+        fields: ["creditId"],
+      },
+      order: {
+        model: "ProcurementOrder",
+        many: false,
+        optional: false,
+        fields: ["orderId"],
+      },
+    },
+  },
+  FinancialCreditRefund: {
+    table: "financial_credit_refunds",
+    trash: false,
+    relations: {
+      credit: {
+        model: "FinancialCredit",
+        many: false,
+        optional: false,
+        fields: ["creditId"],
+      },
+      createdBy: {
+        model: "User",
+        many: false,
+        optional: true,
+        fields: ["createdById"],
+      },
+      updatedBy: {
+        model: "User",
+        many: false,
+        optional: true,
+        fields: ["updatedById"],
+      },
+    },
+  },
+  FinancialFollowUp: {
+    table: "financial_follow_ups",
+    trash: false,
+    relations: {
+      assignee: {
+        model: "User",
+        many: false,
+        optional: true,
+        fields: ["assigneeId"],
+      },
+      createdBy: {
+        model: "User",
+        many: false,
+        optional: true,
+        fields: ["createdById"],
+      },
+      updatedBy: {
+        model: "User",
+        many: false,
+        optional: true,
+        fields: ["updatedById"],
+      },
+    },
+  },
+  BankStatementImport: {
+    table: "bank_statement_imports",
+    trash: false,
+    relations: {
+      currency: {
+        model: "Currency",
+        many: false,
+        optional: false,
+        fields: ["currencyCode"],
+      },
+      createdBy: {
+        model: "User",
+        many: false,
+        optional: true,
+        fields: ["createdById"],
+      },
+      lines: {
+        model: "BankStatementLine",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+    },
+  },
+  BankStatementLine: {
+    table: "bank_statement_lines",
+    trash: false,
+    relations: {
+      statementImport: {
+        model: "BankStatementImport",
+        many: false,
+        optional: false,
+        fields: ["importId"],
+      },
+      matches: {
+        model: "BankReconciliationMatch",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+    },
+  },
+  BankReconciliationMatch: {
+    table: "bank_reconciliation_matches",
+    trash: false,
+    relations: {
+      line: {
+        model: "BankStatementLine",
+        many: false,
+        optional: false,
+        fields: ["lineId"],
+      },
+      createdBy: {
+        model: "User",
+        many: false,
+        optional: true,
+        fields: ["createdById"],
+      },
+    },
+  },
   FinancialAttentionSnooze: {
     table: "financial_attention_snoozes",
     trash: false,
@@ -24,6 +210,60 @@ export const modelMap: Record<string, ModelMetadata> = {
     table: "users",
     trash: false,
     relations: {
+      createdFinancialCredits: {
+        model: "FinancialCredit",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      updatedFinancialCredits: {
+        model: "FinancialCredit",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      createdCreditRefunds: {
+        model: "FinancialCreditRefund",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      updatedCreditRefunds: {
+        model: "FinancialCreditRefund",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      assignedFinancialFollowUps: {
+        model: "FinancialFollowUp",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      createdFinancialFollowUps: {
+        model: "FinancialFollowUp",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      updatedFinancialFollowUps: {
+        model: "FinancialFollowUp",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      bankStatementImports: {
+        model: "BankStatementImport",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      bankReconciliationMatches: {
+        model: "BankReconciliationMatch",
+        many: true,
+        optional: false,
+        fields: [],
+      },
       financialAttentionSnoozes: {
         model: "FinancialAttentionSnooze",
         many: true,
@@ -336,6 +576,24 @@ export const modelMap: Record<string, ModelMetadata> = {
     table: "currencies",
     trash: false,
     relations: {
+      financialCredits: {
+        model: "FinancialCredit",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      reportingFinancialCredits: {
+        model: "FinancialCredit",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      bankStatementImports: {
+        model: "BankStatementImport",
+        many: true,
+        optional: false,
+        fields: [],
+      },
       detachedProcurementOrder: {
         model: "ProcurementOrder",
         many: true,
@@ -684,6 +942,18 @@ export const modelMap: Record<string, ModelMetadata> = {
     table: "procurement_orders",
     trash: true,
     relations: {
+      credits: {
+        model: "FinancialCredit",
+        many: true,
+        optional: false,
+        fields: [],
+      },
+      creditAllocations: {
+        model: "FinancialCreditAllocation",
+        many: true,
+        optional: false,
+        fields: [],
+      },
       orderPackage: {
         model: "OrderPackage",
         many: false,
@@ -906,6 +1176,12 @@ export const modelMap: Record<string, ModelMetadata> = {
     table: "procurement_order_vat_entries",
     trash: false,
     relations: {
+      credits: {
+        model: "FinancialCredit",
+        many: true,
+        optional: false,
+        fields: [],
+      },
       order: {
         model: "ProcurementOrder",
         many: false,
@@ -1062,6 +1338,12 @@ export const modelMap: Record<string, ModelMetadata> = {
     table: "client_billing_documents",
     trash: true,
     relations: {
+      credits: {
+        model: "FinancialCredit",
+        many: true,
+        optional: false,
+        fields: [],
+      },
       client: {
         model: "Client",
         many: false,

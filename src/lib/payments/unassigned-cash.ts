@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
+import { assertCreditSafeMutation } from "@/lib/credits/mutation-guards";
 
 export class UnassignedCashError extends Error {}
 
@@ -24,6 +25,11 @@ export async function unassignCashInTransaction(
   ids: string[],
 ) {
   for (const id of [...new Set(ids)]) {
+    await assertCreditSafeMutation(
+      tx,
+      kind === "payment" ? "PaymentSettlement" : "ClientReceipt",
+      [id],
+    );
     const payment =
       kind === "payment"
         ? await tx.paymentSettlement.findUnique({

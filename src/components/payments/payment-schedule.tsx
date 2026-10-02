@@ -3,7 +3,10 @@ import { RelatedRecordTable } from "@/components/layout/related-records";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
-import { paymentTermState } from "@/domain/payments/terms";
+import {
+  paymentAmountToRecord,
+  paymentTermState,
+} from "@/domain/payments/terms";
 import type { DirectionScheduleSummary } from "@/lib/payments/payments";
 import type { RelatedTableData } from "@/lib/related-records/types";
 import {
@@ -67,6 +70,10 @@ export function PaymentSchedule({
         cancelled: term.isCancelled,
         today,
       });
+      const remaining = paymentAmountToRecord(
+        state.remaining,
+        term.outstandingAmount,
+      );
       return {
         id: term.id,
         editValue: term.label,
@@ -75,8 +82,10 @@ export function PaymentSchedule({
           term.dueDate ? formatDateOnly(term.dueDate) : "Date needed",
           formatMoney(term.scheduledAmount, term.currencyCode),
           formatMoney(state.paid, term.currencyCode),
-          formatMoney(state.remaining, term.currencyCode),
-          state.label,
+          formatMoney(remaining, term.currencyCode),
+          state.remaining !== "0" && remaining === "0"
+            ? "No balance due"
+            : state.label,
           term.percentageRate
             ? formatRate(term.percentageRate)
             : "Fixed amount",
@@ -151,13 +160,17 @@ export function PaymentSchedule({
               cancelled: term.isCancelled,
               today,
             });
+            const remaining = paymentAmountToRecord(
+              state.remaining,
+              term.outstandingAmount,
+            );
             return [
               term.id,
               <div key={term.id} className="payment-term-actions">
                 {canEdit && (
                   <TermPaymentActions
-                    supplier={term}
-                    canPay={supplier && state.remaining !== "0"}
+                    supplier={{ ...term, outstandingAmount: remaining }}
+                    canPay={supplier && !term.isCancelled && remaining !== "0"}
                   >
                     <EditorDrawer title="Term details">
                       <InstallmentForm

@@ -68,8 +68,13 @@ export function BillingScheduleManager({
           term.dueDate ? formatDateOnly(term.dueDate) : "Date needed",
           formatMoney(term.scheduledAmount, term.currencyCode),
           formatMoney(state.paid, term.currencyCode),
-          formatMoney(state.remaining, term.currencyCode),
-          state.label,
+          formatMoney(
+            term.creditOutstandingAmount ?? state.remaining,
+            term.currencyCode,
+          ),
+          state.remaining !== "0" && term.creditOutstandingAmount === "0"
+            ? "No balance due"
+            : state.label,
           term.percentageRate
             ? formatRate(term.percentageRate)
             : "Fixed amount",
@@ -132,7 +137,7 @@ export function BillingScheduleManager({
               today,
             });
             const remaining = paymentAmountToRecord(
-              state.remaining,
+              term.creditOutstandingAmount ?? state.remaining,
               document.outstanding,
             );
             return [

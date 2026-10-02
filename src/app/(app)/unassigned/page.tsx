@@ -23,6 +23,9 @@ import {
   queryStringFromParams,
 } from "@/domain/listing/validation";
 import { Pagination } from "@/components/listing/pagination";
+import { freightPaymentBalance } from "@/domain/finance/project-control";
+import { dateToDateOnly, formatDateOnly } from "@/domain/payments/dates";
+import { formatMoney } from "@/domain/procurement/presentation";
 
 export const metadata = { title: "Unassigned records" };
 export default async function UnassignedPage({
@@ -50,6 +53,7 @@ export default async function UnassignedPage({
     rooms,
     packages,
     items,
+    freight,
     counts,
   ] = await Promise.all([
     db.project.findMany({
@@ -97,6 +101,21 @@ export default async function UnassignedPage({
       select: { id: true, name: true, itemReference: true },
       ...page,
     }),
+    db.projectFreightExpense.findMany({
+      where: { projectId: null },
+      select: {
+        id: true,
+        reference: true,
+        description: true,
+        expenseDate: true,
+        currencyCode: true,
+        costAmountHt: true,
+        vatAmount: true,
+        vatTreatment: true,
+        payments: { select: { amount: true } },
+      },
+      ...page,
+    }),
     Promise.all([
       db.project.count({ where: { clientId: null } }),
       db.procurementOrder.count({
@@ -111,6 +130,7 @@ export default async function UnassignedPage({
       db.room.count({ where: { buildingId: null } }),
       db.orderPackage.count({ where: { projectId: null } }),
       db.item.count({ where: { projectId: null } }),
+      db.projectFreightExpense.count({ where: { projectId: null } }),
     ]),
   ]);
   const allTables = [
@@ -149,6 +169,41 @@ export default async function UnassignedPage({
         href: `/items/${row.id}`,
         cells: [row.name, row.itemReference ?? "—"],
       })),
+    ),
+    table(
+      "freight",
+      "Freight expenses",
+      [
+        "Reference",
+        "Description",
+        "Expense date",
+        "Original cost HT",
+        "Paid TTC",
+        "Remaining TTC",
+      ],
+      freight.map((row) => {
+        const balance = freightPaymentBalance(
+          row.costAmountHt.toString(),
+          row.vatAmount?.toString() ?? null,
+          row.vatTreatment,
+          row.payments.map((payment) => payment.amount.toString()),
+        );
+        return {
+          id: row.id,
+          cells: [
+            row.reference ?? "Not set",
+            row.description,
+            formatDateOnly(dateToDateOnly(row.expenseDate)),
+            formatMoney(row.costAmountHt.toString(), row.currencyCode),
+            formatMoney(balance.paid, row.currencyCode),
+            balance.outstanding === null
+              ? "Incomplete"
+              : formatMoney(balance.outstanding, row.currencyCode),
+          ],
+        };
+      }),
+      "Read-only retained expenses without a Project. Amounts stay in the original currency and are excluded from Project totals.",
+      [3, 4, 5],
     ),
   ];
   const tables = allTables.filter(

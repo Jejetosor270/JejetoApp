@@ -34,6 +34,8 @@ export interface AttentionTerm {
 }
 export interface AttentionDocument {
   reviewReason?: string | null;
+  creditAdjusted?: boolean;
+  refundDue?: string | undefined;
   id: string;
   side: "supplier" | "client" | "freight";
   projectId: string;
@@ -107,6 +109,33 @@ function createIssueAdder(issues: AttentionIssue[]) {
 
 type AddIssue = ReturnType<typeof createIssueAdder>;
 
+/** Refunds have no promised dates; never borrow an invoice or payment due date. */
+export function refundDueIssue(doc: AttentionDocument): AttentionIssue | null {
+  if (
+    !doc.issued ||
+    !doc.creditAdjusted ||
+    doc.reviewReason ||
+    !new Decimal(doc.refundDue ?? "0").greaterThan(0)
+  )
+    return null;
+  return {
+    key: `refund-due-${doc.side}:${doc.id}`,
+    priority: "Action needed",
+    title:
+      doc.side === "client" ? "Client refund due" : "Supplier refund expected",
+    detail:
+      "A credit left cash to refund. No refund date is scheduled; review Credits & refunds before relying on expected cash.",
+    projectId: doc.projectId,
+    projectName: doc.projectName,
+    reference: doc.reference,
+    href: `${doc.href.split("#")[0]}#credits`,
+    amount: new Decimal(doc.refundDue ?? "0").toFixed(4),
+    currency: doc.currency,
+    basis: "TTC",
+    date: null,
+  };
+}
+
 function checkInvoiceIssuing(
   doc: AttentionDocument,
   today: string,
@@ -150,7 +179,10 @@ function paymentSchedule(doc: AttentionDocument) {
   const remaining =
     doc.totalTtc === null
       ? null
-      : installmentOutstanding(doc.totalTtc, doc.paid);
+      : installmentOutstanding(
+          doc.totalTtc,
+          doc.creditAdjusted ? Decimal.min(doc.totalTtc, doc.paid) : doc.paid,
+        );
   const comparable = terms.every((term) => term.currency === doc.currency);
   const scheduledRemaining = comparable
     ? sum(
@@ -160,13 +192,18 @@ function paymentSchedule(doc: AttentionDocument) {
       )
     : new Decimal(0);
   const mismatch =
-    remaining !== null && comparable && !remaining.equals(scheduledRemaining);
+    remaining !== null &&
+    comparable &&
+    (doc.creditAdjusted
+      ? scheduledRemaining.lessThan(remaining)
+      : !remaining.equals(scheduledRemaining));
   const hasBalance =
     remaining === null ||
     remaining.greaterThan(0) ||
-    terms.some((term) =>
-      installmentOutstanding(term.scheduled, term.paid).greaterThan(0),
-    );
+    (!doc.creditAdjusted &&
+      terms.some((term) =>
+        installmentOutstanding(term.scheduled, term.paid).greaterThan(0),
+      ));
 
   return {
     terms,
@@ -358,7 +395,9 @@ function checkPaymentTerms(
     schedule.comparable && doc.totalTtc !== null
       ? cappedCashTerms(
           doc.totalTtc,
-          doc.paid,
+          doc.creditAdjusted
+            ? Decimal.min(doc.totalTtc, doc.paid).toString()
+            : doc.paid,
           schedule.terms.map((term) => ({
             source: term,
             amount: term.scheduled,
@@ -520,6 +559,8 @@ export function buildFinancialAttention(
       continue;
     }
     checkDocumentFx(doc, add);
+    const refund = refundDueIssue(doc);
+    if (refund) issues.push(refund);
     const schedule = paymentSchedule(doc);
     checkScheduleInformation(doc, schedule, add);
     checkDocumentDue(doc, schedule, today, end, add);
@@ -528,6 +569,7 @@ export function buildFinancialAttention(
       outgoing: new Decimal(0),
       complete: true,
     };
+    if (refund) position.complete = false;
     checkPaymentTerms(doc, schedule, today, end, add, position);
     cash.set(doc.projectId, position);
     collectDuplicateCandidate(doc, duplicates);

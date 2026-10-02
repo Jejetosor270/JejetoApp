@@ -5,6 +5,7 @@ import { cashWindowEnd } from "@/domain/payments/dates";
 import { sumKnown, difference } from "./project-control";
 
 export interface CashOutlookDocument {
+  creditAdjusted?: boolean;
   reviewReason?: string | null;
   source?: { label: string; href: string };
   kind: "issued" | "planned" | "payment";
@@ -62,7 +63,9 @@ export function projectCashOutlook(
     }
     const schedule = cappedCashTerms(
       document.total,
-      document.paid,
+      document.creditAdjusted
+        ? Decimal.min(document.total, document.paid).toString()
+        : document.paid,
       document.terms,
     );
     const convert = (amount: Decimal, fx: string | null) =>

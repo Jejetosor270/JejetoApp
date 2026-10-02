@@ -7,8 +7,11 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 vi.mock("@/lib/auth/current-user", () => ({ requireUser: mocks.user }));
-vi.mock("@/lib/reporting/financial-attention", () => ({
-  getFinancialAttention: mocks.snapshot,
+vi.mock("@/lib/reporting/attention-workspace", () => ({
+  getAttentionWorkspace: mocks.snapshot,
+}));
+vi.mock("@/lib/reporting/attention-follow-ups", () => ({
+  saveAttentionFollowUp: vi.fn(),
 }));
 vi.mock("@/lib/db", () => ({
   getDatabase: () => ({

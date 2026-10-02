@@ -36,19 +36,18 @@ export function ActualCashReport({
     <section className="bg-card overflow-hidden rounded-lg border">
       {report.supplierScoped && (
         <p className="border-b p-4 text-xs">
-          Supplier-scoped cash out only. Client receipts are not attributed to
-          individual Suppliers.
+          Supplier payments and refunds only. Client receipts are not attributed
+          to individual Suppliers.
         </p>
       )}
       <header className="grid gap-3 border-b p-4 sm:grid-cols-3">
         {[
-          ...(report.supplierScoped
-            ? []
-            : [["Total Cash In", report.totals.cashIn]]),
+          [
+            report.supplierScoped ? "Supplier Refunds In" : "Total Cash In",
+            report.totals.cashIn,
+          ],
           ["Total Cash Out", report.totals.cashOut],
-          ...(report.supplierScoped
-            ? []
-            : [["Net Cash Flow", report.totals.net]]),
+          ["Net Cash Flow", report.totals.net],
         ].map(([label, value]) => (
           <div key={label}>
             <p className="text-muted-foreground text-xs">{label}</p>
@@ -130,8 +129,7 @@ export function ActualCashReport({
                   className="text-muted-foreground px-3 py-12 text-center text-sm"
                   colSpan={8}
                 >
-                  No actual receipts or supplier settlements match these
-                  filters.
+                  No actual receipts, payments or refunds match these filters.
                 </td>
               </tr>
             ) : null}

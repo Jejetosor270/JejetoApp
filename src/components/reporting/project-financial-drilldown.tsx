@@ -26,27 +26,27 @@ const views: Record<
     period: "all",
   },
   received: {
-    title: "Actual client receipts TTC",
+    title: "Actual money in TTC · receipts & Supplier refunds",
     kinds: ["received"],
     period: "all",
   },
   paid: {
-    title: "Actual Supplier & freight payments TTC",
+    title: "Actual money out TTC · payments & Client refunds",
     kinds: ["paid"],
     period: "all",
   },
   cash: {
-    title: "Actual Project cash · receipts less payments",
+    title: "Actual Project cash · money in less money out",
     kinds: ["received", "paid"],
     period: "all",
   },
   incoming: {
-    title: "Client outstanding TTC · all dates",
+    title: "Outstanding money in TTC · invoices & Supplier refunds",
     kinds: ["issued"],
     period: "all",
   },
   outgoing: {
-    title: "Supplier & freight outstanding TTC · all dates",
+    title: "Outstanding money out TTC · payments & Client refunds",
     kinds: ["payment"],
     period: "all",
   },
@@ -111,8 +111,8 @@ const labels: Record<ProjectFinancialRow["kind"], string> = {
   cost: "Economic cost",
   received: "Cash in TTC",
   paid: "Cash out TTC",
-  issued: "Client outstanding TTC",
-  payment: "Supplier/freight outstanding TTC",
+  issued: "Outstanding money in TTC",
+  payment: "Outstanding money out TTC",
   planned: "Planned receipt TTC",
 };
 const DrilldownContext = createContext<((key: string) => void) | null>(null);

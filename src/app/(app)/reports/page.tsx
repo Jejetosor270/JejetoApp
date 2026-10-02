@@ -1,4 +1,6 @@
 import { DateInput } from "@/components/forms/date-input";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { FilterBar } from "@/components/listing/filter-bar";
 import type { Metadata } from "next";
@@ -324,6 +326,11 @@ export default async function ReportsPage({
     <div className="space-y-6">
       <PageHeader
         title="Reports"
+        actions={
+          <Button variant="outline" asChild>
+            <Link href="/reports/reconciliation">Bank reconciliation</Link>
+          </Button>
+        }
         description={
           <>
             Read-only Project financial, cash-flow, and payment reporting

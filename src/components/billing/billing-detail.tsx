@@ -22,6 +22,8 @@ import { DateInput } from "@/components/forms/date-input";
 
 import Decimal from "decimal.js";
 import { RecordHistory } from "@/components/audit/record-history";
+import { CreditPanel } from "@/components/credits/credit-panel";
+import type { CreditWorkspace } from "@/lib/credits/service";
 import type { RecordHistoryData } from "@/domain/audit/history";
 import {
   RecordFields,
@@ -202,6 +204,7 @@ function DetailValue({ label, value }: { label: string; value: string }) {
 export function BillingDetail({
   relatedTables = [],
   history = null,
+  credits = null,
   canEdit,
   document,
   options,
@@ -210,6 +213,7 @@ export function BillingDetail({
 }: {
   relatedTables?: RelatedTableData[];
   history?: RecordHistoryData | null;
+  credits?: CreditWorkspace | null;
   canEdit: boolean;
   document: ClientBillingView;
   options: BillingDetailOptions;
@@ -1192,6 +1196,12 @@ export function BillingDetail({
                 </article>
               </>
             ),
+          },
+          {
+            id: "credits",
+            group: "related",
+            label: "Credits & refunds",
+            content: <CreditPanel workspace={credits} canEdit={canEdit} />,
           },
           {
             id: "schedule",

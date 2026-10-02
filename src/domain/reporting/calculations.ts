@@ -16,6 +16,7 @@ import {
   dateToDateOnly,
 } from "@/domain/payments/dates";
 import { calculateInputVatRecovery } from "@/domain/vat/recoverability";
+import type { SupplierCreditSummary } from "@/domain/finance/supplier-credit-reporting";
 
 const ZERO = new Decimal(0);
 const DAY_MILLISECONDS = 86_400_000;
@@ -26,6 +27,7 @@ export interface AggregateAmount {
 }
 
 export interface ReportingOrderInput {
+  supplierCredits?: SupplierCreditSummary;
   clientReceivable: {
     outputVatAmount: string | null;
     sellingRevenue: string | null;
@@ -210,9 +212,16 @@ function orderSellingAmount(
 export function calculateReportingOrder(
   input: ReportingOrderInput,
 ): ReportingOrderResult {
-  const economicLandedCost = orderCostAmount(
-    input,
-    input.cost.economicLandedCost,
+  const subtractCredit = (
+    amount: Decimal | null,
+    reduction: string | null | undefined,
+  ) =>
+    amount === null || reduction === null
+      ? null
+      : amount.minus(reduction ?? "0");
+  const economicLandedCost = subtractCredit(
+    orderCostAmount(input, input.cost.economicLandedCost),
+    input.supplierCredits?.reportingEconomic,
   );
   const salesRevenue = orderSellingAmount(input, input.totalSellingRevenue);
   const inputVat = input.inputVat
@@ -232,15 +241,18 @@ export function calculateReportingOrder(
       )
     : ZERO;
   const supplierPayable = input.supplierPayable.supplierPurchase
-    ? converted(
-        supplierPayableBase({
-          inputVatAmount: input.supplierPayable.inputVatAmount,
-          inputVatTreatment: input.supplierPayable.inputVatTreatment,
-          supplierPurchase: input.supplierPayable.supplierPurchase,
-        }),
-        input.orderCurrencyCode,
-        input.reportingCurrencyCode,
-        input.purchaseFxRate,
+    ? subtractCredit(
+        converted(
+          supplierPayableBase({
+            inputVatAmount: input.supplierPayable.inputVatAmount,
+            inputVatTreatment: input.supplierPayable.inputVatTreatment,
+            supplierPurchase: input.supplierPayable.supplierPurchase,
+          }),
+          input.orderCurrencyCode,
+          input.reportingCurrencyCode,
+          input.purchaseFxRate,
+        ),
+        input.supplierCredits?.reportingPayable,
       )
     : null;
   const clientReceivable = input.clientReceivable.sellingRevenue
@@ -282,17 +294,40 @@ export function calculateReportingOrder(
     grossMarginRate: metrics?.grossMarginRate ?? null,
     grossProfit: metrics?.grossProfit ?? null,
     id: input.id,
-    inputVat,
-    landedCost: orderCostAmount(input, input.cost.landedCost),
+    inputVat: subtractCredit(inputVat, input.supplierCredits?.reportingVat),
+    landedCost: subtractCredit(
+      orderCostAmount(input, input.cost.landedCost),
+      input.supplierCredits?.reportingPurchaseHt,
+    ),
     markupRate: metrics?.markupRate ?? null,
     miscellaneous: orderCostAmount(input, input.cost.miscellaneous),
     nonRecoverableInputVat:
-      inputVat === null ? null : (inputRecovery?.nonDeductibleVat ?? ZERO),
+      inputVat === null
+        ? null
+        : subtractCredit(
+            inputRecovery?.nonDeductibleVat ?? ZERO,
+            input.supplierCredits
+              ? input.supplierCredits.reportingVat === null ||
+                input.supplierCredits.reportingDeductibleVat === null
+                ? null
+                : new Decimal(input.supplierCredits.reportingVat)
+                    .minus(input.supplierCredits.reportingDeductibleVat)
+                    .toString()
+              : undefined,
+          ),
     outputVat,
     packageSellingPrice: orderSellingAmount(input, input.packageSellingPrice),
-    purchaseCost: orderCostAmount(input, input.cost.purchaseCost),
+    purchaseCost: subtractCredit(
+      orderCostAmount(input, input.cost.purchaseCost),
+      input.supplierCredits?.reportingPurchaseHt,
+    ),
     recoverableInputVat:
-      inputVat === null ? null : (inputRecovery?.deductibleVat ?? ZERO),
+      inputVat === null
+        ? null
+        : subtractCredit(
+            inputRecovery?.deductibleVat ?? ZERO,
+            input.supplierCredits?.reportingDeductibleVat,
+          ),
     rechargedFreight:
       input.freightTreatment === "RECHARGED_SEPARATELY"
         ? orderSellingAmount(input, input.freightResaleAmount)

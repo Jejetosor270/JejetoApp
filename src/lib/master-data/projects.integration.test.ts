@@ -6,6 +6,7 @@ import { writeAuditEvent } from "@/lib/audit/events";
 
 const databaseMocks = vi.hoisted(() => {
   const transaction = {
+    financialCredit: { count: vi.fn() },
     building: { create: vi.fn(), update: vi.fn() },
     project: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
   };
@@ -65,6 +66,7 @@ function currentBudget() {
 describe("project and building writes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    databaseMocks.transaction.financialCredit.count.mockResolvedValue(0);
   });
 
   it("updates only budget/pricing fields, derives freight and target with Decimal and audits the actor", async () => {

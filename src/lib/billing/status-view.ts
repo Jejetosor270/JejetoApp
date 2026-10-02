@@ -3,6 +3,8 @@ import { businessToday, dateToDateOnly } from "@/domain/payments/dates";
 import { earliestUnpaidTermDate } from "@/domain/payments/terms";
 import Decimal from "decimal.js";
 import type { Prisma } from "@/generated/prisma/client";
+import { activeCreditsInclude } from "@/lib/credits/select";
+import { getClientCreditPosition } from "@/domain/billing/credits";
 
 const term = {
   dueDate: true,
@@ -11,6 +13,7 @@ const term = {
   receipts: { select: { id: true, amount: true } },
 } as const;
 export const billingStatusSelect = {
+  credits: activeCreditsInclude,
   workflowStatus: true,
   documentType: true,
   isCancelled: true,
@@ -27,31 +30,25 @@ export function billingRecordStatus(
   }>,
   today = businessToday(),
 ) {
-  const receipts = [
-    ...new Map(
-      [...record.receipts, ...(record.matchedInstallment?.receipts ?? [])].map(
-        (r) => [r.id, r],
-      ),
-    ).values(),
-  ];
   const terms = record.matchedInstallment
     ? [record.matchedInstallment]
     : record.paymentInstallments;
+  const position = getClientCreditPosition(record);
   return billingStatus({
     ...record,
-    totalTtc: record.totalTtc.toString(),
-    paid: receipts
-      .reduce((sum, r) => sum.plus(r.amount), new Decimal(0))
-      .toString(),
+    totalTtc: position.netDue,
+    paid: position.netPaid,
     today,
-    dueDate: earliestUnpaidTermDate(
-      terms.map((t) => ({
-        dueDate: dateToDateOnly(t.dueDate),
-        isCancelled: t.isCancelled,
-        scheduledAmount: t.scheduledAmount.toString(),
-        payments: t.receipts.map((r) => ({ amount: r.amount.toString() })),
-      })),
-      dateToDateOnly(record.dueDate),
-    ),
+    dueDate: new Decimal(position.outstanding).isZero()
+      ? null
+      : earliestUnpaidTermDate(
+          terms.map((t) => ({
+            dueDate: dateToDateOnly(t.dueDate),
+            isCancelled: t.isCancelled,
+            scheduledAmount: t.scheduledAmount.toString(),
+            payments: t.receipts.map((r) => ({ amount: r.amount.toString() })),
+          })),
+          dateToDateOnly(record.dueDate),
+        ),
   });
 }

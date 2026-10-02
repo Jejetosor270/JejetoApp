@@ -1,4 +1,5 @@
 import "server-only";
+import { assertCreditSafeMutation } from "@/lib/credits/mutation-guards";
 import { projectFreightBudget } from "@/domain/freight/calculations";
 
 import {
@@ -307,6 +308,8 @@ export async function updateProject(
         ) {
           throw new ProjectReportingCurrencyLockedError();
         }
+        if (current.reportingCurrencyCode !== fields.reportingCurrencyCode)
+          await assertCreditSafeMutation(transaction, "Project", [id]);
         const project = await transaction.project.update({
           where: { id },
           data: { ...projectData(fields), updatedById: actorId },

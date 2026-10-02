@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   order: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/credits/service", () => ({
+  getCreditWorkspace: vi.fn().mockResolvedValue(null),
+}));
 vi.mock("@/lib/auth/current-user", () => ({
   requireUser: async () => ({ role: "MANAGER" }),
   canEditMasterData: () => true,
@@ -122,6 +125,7 @@ it.each([false, true])(
       "connections",
       "payments",
       "billing",
+      "credits",
       "history",
       ...(enabled ? ["items"] : []),
     ]);

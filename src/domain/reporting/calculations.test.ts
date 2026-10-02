@@ -12,6 +12,7 @@ import {
   type ReportingInstallmentInput,
   type ReportingOrderInput,
 } from "./calculations";
+import { summarizeSupplierCredits } from "@/domain/finance/supplier-credit-reporting";
 
 function order(
   id: string,
@@ -90,6 +91,41 @@ function installment(
     ...overrides,
   };
 }
+
+it("reduces reporting cost and deductible VAT at credit FX without repricing the sale", () => {
+  const input = order("credited", {
+    purchaseCost: "100",
+    economicCost: "110",
+    inputVat: "20",
+    inputVatRecoverability: "PARTIALLY_RECOVERABLE",
+    inputVatRecoverableRate: "0.5",
+    sales: "200",
+  });
+  input.orderCurrencyCode = "USD";
+  input.purchaseFxRate = "0.9";
+  input.supplierCredits = summarizeSupplierCredits(
+    [
+      {
+        isCancelled: false,
+        totalHt: "20",
+        vatAmount: "4",
+        supplierRecoverableRate: "0.5",
+        currencyCode: "USD",
+        reportingCurrencyCode: "EUR",
+        fxRateToReporting: "0.8",
+        refunds: [],
+      },
+    ],
+    "EUR",
+  );
+  const result = calculateProjectFinancialSummary([input]);
+  expect(result.totals.economicLandedCost.value.toString()).toBe("81.4");
+  expect(result.totals.purchaseCost.value.toString()).toBe("74");
+  expect(result.totals.inputVat.value.toString()).toBe("14.8");
+  expect(result.totals.recoverableInputVat.value.toString()).toBe("7.4");
+  expect(result.totals.salesRevenue.value.toString()).toBe("200");
+  expect(result.grossProfit?.toString()).toBe("118.6");
+});
 
 describe("project financial reporting", () => {
   it("calculates margin from aggregate values instead of averaging order rates", () => {

@@ -51,6 +51,12 @@ import {
   type PaymentInstallmentView,
 } from "@/lib/payments/payments";
 import { listOrders, type OrderSummary } from "@/lib/procurement/orders";
+import {
+  listCreditRefundCash,
+  listClientRefundObligations,
+  type CreditRefundCash,
+} from "./credit-refunds";
+import { cappedCashTerms } from "@/domain/payments/cash-expectations";
 
 export interface ReportingRangeInput {
   end?: string | undefined;
@@ -183,6 +189,7 @@ export interface OverdueReportingItem {
 }
 
 export interface ProjectReportingSnapshot {
+  refundNet?: string | null;
   freightPaid?: string | null;
   cashFlow: SerializedCashFlow;
   cashPosition: string | null;
@@ -270,15 +277,26 @@ function reportingRange(input: ReportingRangeInput) {
 
 function orderInput(order: OrderSummary): ReportingOrderInput {
   return {
+    ...(order.credits ? { supplierCredits: order.credits } : {}),
     clientReceivable: {
       outputVatAmount: order.costs.outputVat?.amount ?? null,
       sellingRevenue: order.totalSellingRevenue,
     },
     cost: {
       customsDuties: order.costs.customsDuties,
-      economicLandedCost: order.costs.economicLandedCost,
+      economicLandedCost:
+        order.costs.economicLandedCost === null
+          ? null
+          : new Decimal(order.costs.economicLandedCost)
+              .plus(order.credits?.economic ?? "0")
+              .toString(),
       freight: order.costs.freight,
-      landedCost: order.costs.landedCost,
+      landedCost:
+        order.costs.landedCost === null
+          ? null
+          : new Decimal(order.costs.landedCost)
+              .plus(order.credits?.purchaseHt ?? "0")
+              .toString(),
       miscellaneous: order.costs.miscellaneous,
       purchaseCost: order.costs.purchaseCost,
     },
@@ -408,6 +426,7 @@ function serializedDirection(
 }
 
 function serializedCashFlow(input: {
+  undatedRefundCount?: number;
   clientReceipts: readonly ReportingReceiptInput[];
   end: string;
   installments: readonly ReportingInstallmentInput[];
@@ -473,9 +492,12 @@ function serializedCashFlow(input: {
     };
   });
   const totals = summarizeMonthlyCashFlow(rows);
-  const undatedReviews = input.installments.filter(
-    (item) => item.reviewRequired && !item.isCancelled && item.dueDate === null,
-  ).length;
+  const undatedReviews =
+    (input.undatedRefundCount ?? 0) +
+    input.installments.filter(
+      (item) =>
+        item.reviewRequired && !item.isCancelled && item.dueDate === null,
+    ).length;
   return {
     chart: cashFlowChartScale(rows),
     end: input.end,
@@ -583,7 +605,56 @@ function plannedClientTerm(item: ClientCashInstallment) {
   return item.cashKind === "planned" || item.documentType === "QUOTE";
 }
 
+/** Credits cap expected cash only; original schedules and actual cash stay intact. */
+export function capSupplierTermsForCredits(
+  installments: readonly PaymentInstallmentView[],
+  orders: readonly OrderSummary[],
+) {
+  const caps = new Map<string, string>();
+  for (const order of orders) {
+    if (!order.credits?.count || order.supplierPayment.totalPayable === null)
+      continue;
+    const terms = installments
+      .filter((term) => term.orderId === order.id)
+      .toSorted(
+        (a, b) =>
+          (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") ||
+          a.id.localeCompare(b.id),
+      );
+    const capped = cappedCashTerms(
+      order.supplierPayment.totalPayable,
+      Decimal.min(
+        order.supplierPayment.totalPayable,
+        order.supplierPayment.netPaid ?? order.supplierPayment.paid,
+      ).toString(),
+      terms.map((term) => ({
+        source: term,
+        amount: term.scheduledAmount,
+        paid: term.paidAmount,
+        cancelled: term.isCancelled,
+        due: term.dueDate,
+      })),
+    );
+    for (const { term, amount } of capped.terms)
+      caps.set(term.source.id, amount.toString());
+  }
+  return installments.map((term) => {
+    const outstanding = caps.get(term.id);
+    return outstanding === undefined
+      ? term
+      : {
+          ...term,
+          outstandingAmount: outstanding,
+          status: new Decimal(outstanding).isZero()
+            ? ("PAID" as const)
+            : term.status,
+        };
+  });
+}
+
 function projectSnapshot(input: {
+  clientRefundDueCount?: number;
+  refunds?: readonly CreditRefundCash[];
   freightPayments?: readonly ReportingReceiptInput[];
   freightCommitments?: readonly ReportingInstallmentInput[];
   clientInstallments: readonly ClientCashInstallment[];
@@ -609,7 +680,11 @@ function projectSnapshot(input: {
       ),
     );
   const freightPaid = cashSum(input.freightPayments ?? []);
-  const installments = input.installments.map(installmentInput);
+  const creditCapped = capSupplierTermsForCredits(
+    input.installments,
+    input.orders,
+  );
+  const installments = creditCapped.map(installmentInput);
   const cashFlowInstallments = [
     ...(input.freightCommitments ?? []),
     ...installments,
@@ -617,6 +692,13 @@ function projectSnapshot(input: {
       .filter((item) => !plannedClientTerm(item))
       .map(clientInstallmentInput),
   ];
+  const undatedRefundCount =
+    (input.clientRefundDueCount ?? 0) +
+    input.orders.filter(
+      (order) =>
+        (order.credits?.count ?? 0) > 0 &&
+        new Decimal(order.supplierPayment.refundDue ?? "0").greaterThan(0),
+    ).length;
   const planned = serializedCashFlow({
     clientReceipts: [],
     installments: input.clientInstallments
@@ -686,11 +768,17 @@ function projectSnapshot(input: {
     };
   });
   return {
+    refundNet: difference(
+      cashSum((input.refunds ?? []).filter((row) => !row.isOutflow)),
+      cashSum((input.refunds ?? []).filter((row) => row.isOutflow)),
+    ),
     cashFlow: {
       ...serializedCashFlow({
+        undatedRefundCount,
         clientReceipts: [
           ...input.clientReceipts,
           ...(input.freightPayments ?? []),
+          ...(input.refunds ?? []),
         ],
         end: input.range.end,
         installments: cashFlowInstallments,
@@ -710,18 +798,22 @@ function projectSnapshot(input: {
     },
     freightPaid,
     cashPosition: difference(
-      cashSum(input.clientReceipts),
+      sumKnown([
+        cashSum(input.clientReceipts),
+        cashSum((input.refunds ?? []).filter((row) => !row.isOutflow)),
+      ]),
       sumKnown([
         supplier.paid.missingIds.length === 0
           ? supplier.paid.value.toString()
           : null,
         freightPaid,
+        cashSum((input.refunds ?? []).filter((row) => row.isOutflow)),
       ]),
     ),
     financial: serializedFinancial(financial),
     orderRows,
     overdueItems: [
-      ...overdueItems(input.installments, input.reportingCurrencyCode),
+      ...overdueItems(creditCapped, input.reportingCurrencyCode),
       ...overdueClientItems(
         input.clientInstallments,
         input.reportingCurrencyCode,
@@ -748,6 +840,8 @@ export async function getProjectReportingSnapshot(
     receipts,
     freightPayments,
     freightCommitments,
+    refunds,
+    clientRefundObligations,
   ] = await Promise.all([
     database.project.findUnique({
       where: { id: projectId },
@@ -771,9 +865,13 @@ export async function getProjectReportingSnapshot(
     }),
     listFreightCash([projectId]),
     listFreightCommitments([projectId]),
+    listCreditRefundCash([projectId]),
+    listClientRefundObligations([projectId]),
   ]);
   if (!project) return null;
   return projectSnapshot({
+    clientRefundDueCount: clientRefundObligations.length,
+    refunds,
     freightPayments,
     freightCommitments,
     clientInstallments,
@@ -859,6 +957,12 @@ export async function getPortfolioReportingSnapshot(
     [...projectIds],
     filters.supplierId,
   );
+  const refunds = await listCreditRefundCash([...projectIds], {
+    supplierId: filters.supplierId,
+  });
+  const clientRefundObligations = await listClientRefundObligations([
+    ...projectIds,
+  ]);
   const scopedReceipts = receiptRecords.map((receipt) => ({
     amount: receipt.amount.toString(),
     currencyCode: receipt.billingDocument.currencyCode,
@@ -872,6 +976,10 @@ export async function getPortfolioReportingSnapshot(
     projects.map((project) => [
       project.id,
       projectSnapshot({
+        clientRefundDueCount: clientRefundObligations.filter(
+          (row) => row.projectId === project.id,
+        ).length,
+        refunds: refunds.filter((row) => row.projectId === project.id),
         freightPayments: freightPayments.filter(
           (row) => row.projectId === project.id,
         ),
@@ -940,6 +1048,10 @@ export async function getPortfolioReportingSnapshot(
         : "FUNDING_GAP"
     : null;
   const companySnapshot = projectSnapshot({
+    clientRefundDueCount: clientRefundObligations.filter((row) =>
+      companyProjectIds.has(row.projectId),
+    ).length,
+    refunds: refunds.filter((row) => companyProjectIds.has(row.projectId)),
     freightPayments: freightPayments.filter(
       (row) => row.projectId !== null && companyProjectIds.has(row.projectId),
     ),
@@ -985,12 +1097,15 @@ export async function getPortfolioReportingSnapshot(
   const companyCashPosition =
     companyBilling.complete &&
     companySnapshot.payments.supplier.paid.complete &&
-    companySnapshot.freightPaid !== null
-      ? companyBilling.paidTtc.minus(
-          new Decimal(companySnapshot.payments.supplier.paid.value).plus(
-            companySnapshot.freightPaid ?? "0",
-          ),
-        )
+    companySnapshot.freightPaid !== null &&
+    companySnapshot.refundNet !== null
+      ? companyBilling.paidTtc
+          .minus(
+            new Decimal(companySnapshot.payments.supplier.paid.value).plus(
+              companySnapshot.freightPaid ?? "0",
+            ),
+          )
+          .plus(companySnapshot.refundNet ?? "0")
       : null;
   return {
     activeProjectCount: projects.filter(
@@ -1043,12 +1158,15 @@ export async function getPortfolioReportingSnapshot(
       const cashPosition =
         clientBilling.complete &&
         snapshot.payments.supplier.paid.complete &&
-        snapshot.freightPaid !== null
-          ? new Decimal(clientBilling.paidTtc).minus(
-              new Decimal(snapshot.payments.supplier.paid.value).plus(
-                snapshot.freightPaid ?? "0",
-              ),
-            )
+        snapshot.freightPaid !== null &&
+        snapshot.refundNet !== null
+          ? new Decimal(clientBilling.paidTtc)
+              .minus(
+                new Decimal(snapshot.payments.supplier.paid.value).plus(
+                  snapshot.freightPaid ?? "0",
+                ),
+              )
+              .plus(snapshot.refundNet ?? "0")
           : null;
       return {
         cashPosition: cashPosition?.toString() ?? null,

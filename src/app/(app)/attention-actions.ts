@@ -2,7 +2,8 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/current-user";
 import { getDatabase } from "@/lib/db";
-import { getFinancialAttention } from "@/lib/reporting/financial-attention";
+import { getAttentionWorkspace } from "@/lib/reporting/attention-workspace";
+import { saveAttentionFollowUp } from "@/lib/reporting/attention-follow-ups";
 import {
   attentionSnoozeSchema,
   validSnoozeDate,
@@ -25,13 +26,13 @@ export async function snoozeAttention(input: unknown) {
       message: "Choose a return date between tomorrow and one year from today.",
     };
   try {
-    const snapshot = await getFinancialAttention(data.horizon);
+    const snapshot = await getAttentionWorkspace(data.horizon);
     const issue = snapshot.issues.find((row) => row.key === data.key);
     if (!issue || issue.fingerprint !== data.fingerprint)
       return {
         ok: false,
         message:
-          "This issue has changed or been resolved. Refresh Home before snoozing it.",
+          "This issue changed or is outside the current view. Refresh Home before snoozing it.",
       };
     await getDatabase().financialAttentionSnooze.upsert({
       where: { userId_issueKey: { userId: user.id, issueKey: data.key } },
@@ -57,6 +58,12 @@ export async function snoozeAttention(input: unknown) {
         "Could not save the snooze. Your entries are retained; please try again.",
     };
   }
+}
+
+export async function updateAttentionFollowUp(input: unknown) {
+  const result = await saveAttentionFollowUp(input);
+  if (result.ok) revalidatePath("/");
+  return result;
 }
 
 export async function unsnoozeAttention(input: unknown) {

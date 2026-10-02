@@ -4,6 +4,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
 import { modelMap } from "./model-map";
+import { assertCreditSafeMutation } from "@/lib/credits/mutation-guards";
 
 export class TrashError extends Error {}
 const targets = Object.entries(modelMap).filter(([, value]) => value.trash);
@@ -79,6 +80,9 @@ export async function trashInTransaction(
       if (next.size) pending.set(child, next);
     }
   }
+  // Credits retain immutable originals and cannot be orphaned by a parent cascade.
+  for (const [kind, records] of visited)
+    await assertCreditSafeMutation(tx, kind, [...records], true);
   const referenceFields: Record<string, string> = {
     Client: "displayName",
     Supplier: "displayName",

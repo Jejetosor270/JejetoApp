@@ -91,8 +91,8 @@ export function CashFlowPanel({
         <p className="text-destructive mt-3 text-xs">
           Incomplete data: {cashFlow.totals.missingExpectedCount} expected and{" "}
           {cashFlow.totals.missingActualCount} actual cash amount(s) are not
-          included in converted totals. Review missing FX or inconsistent
-          Billing/payment-term links.
+          included in converted totals. Review missing FX, undated refunds or
+          inconsistent Billing/payment-term links.
         </p>
       ) : null}
       {cashFlow.planned ? (

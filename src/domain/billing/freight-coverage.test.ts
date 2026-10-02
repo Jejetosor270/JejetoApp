@@ -5,6 +5,29 @@ import {
   freightDifference,
 } from "./freight-reporting";
 describe("Billing freight coverage", () => {
+  it.each(["0.9", null])(
+    "subtracts freight credit at its own FX %s without negative conversion inputs",
+    (fxRate) => {
+      const row = {
+        currencyCode: "USD",
+        isCancelled: false,
+        documentType: "INVOICE",
+        workflowStatus: "INVOICED",
+      };
+      expect(
+        summarizeFreightCoverage(
+          [
+            { ...row, freightCoverageHt: "100", fxRate: "0.8" },
+            { ...row, freightCoverageHt: "20", fxRate, creditAdjustment: true },
+          ],
+          "EUR",
+        ),
+      ).toEqual({
+        invoicedFreightHt: fxRate === null ? null : "62.0000",
+        quotedFreightHt: "0.0000",
+      });
+    },
+  );
   it("splits freight within HT without adding revenue", () => {
     expect(
       freightCoverageBreakdown("10000", "1000", [

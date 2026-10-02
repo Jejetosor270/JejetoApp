@@ -6,6 +6,7 @@ vi.mock("@/lib/db", () => ({ getDatabase: () => state.db }));
 import { prismaMemoryDatabase } from "@/test/prisma-memory-database";
 import { getProjectControl } from "./project-control";
 import { getProjectReportingSnapshot } from "./reports";
+import { getFinancialAttention } from "./financial-attention";
 import { listClientCashInstallments } from "@/lib/billing/reporting";
 import { getProcurementCalendarEvents } from "@/lib/payments/payments";
 import { businessToday, dateOnlyToDate } from "@/domain/payments/dates";
@@ -22,6 +23,167 @@ beforeAll(async () => {
 }, 30000);
 afterAll(async () => {
   await memory.close();
+});
+
+it("keeps credited paid invoices as undated refund obligations until actual refunds settle", async () => {
+  const db = memory.raw;
+  const today = businessToday();
+  const project = await db.project.create({
+    data: {
+      code: "CREDIT-CASH",
+      name: "Credit cash",
+      reportingCurrencyCode: "EUR",
+      status: "ACTIVE",
+    },
+  });
+  const bill = await db.clientBillingDocument.create({
+    data: {
+      projectId: project.id,
+      documentType: "INVOICE",
+      workflowStatus: "INVOICED",
+      reference: "CREDIT-INV",
+      documentDate: dateOnlyToDate(today),
+      currencyCode: "EUR",
+      totalHt: "100",
+      vatAmount: "20",
+      totalTtc: "120",
+      receipts: {
+        create: { amount: "120", receivedAt: dateOnlyToDate(today) },
+      },
+    },
+  });
+  const credit = await db.financialCredit.create({
+    data: {
+      side: "CLIENT",
+      billingDocumentId: bill.id,
+      reference: "CN-1",
+      reason: "Returned charge",
+      creditDate: dateOnlyToDate(today),
+      totalHt: "20",
+      vatAmount: "4",
+      currencyCode: "EUR",
+      reportingCurrencyCode: "EUR",
+    },
+  });
+  const open = await getProjectControl(project.id);
+  expect(open.cashOutlook.undatedOut).toBe("24.0000");
+  expect(open.cashOutlook.windows[0]?.projectedCash).toBeNull();
+  expect(open.actualCashIn).toBe("120.0000");
+  expect(open.actualCashOut).toBe("0.0000");
+  const monthly = await getProjectReportingSnapshot(project.id, {
+    horizon: "30d",
+  });
+  expect(monthly?.cashFlow.totals.expectedComplete).toBe(false);
+  expect(monthly?.cashFlow.totals.missingExpectedCount).toBe(1);
+  expect(
+    (await getFinancialAttention(7, today, project.id)).issues.find(
+      (issue) => issue.key === `refund-due-client:${bill.id}`,
+    ),
+  ).toMatchObject({ amount: "24.0000", date: null });
+  await db.financialCreditRefund.create({
+    data: {
+      creditId: credit.id,
+      amount: "24",
+      refundDate: dateOnlyToDate(today),
+    },
+  });
+  const settled = await getProjectControl(project.id);
+  expect(settled.actualCashIn).toBe("120.0000");
+  expect(settled.actualCashOut).toBe("24.0000");
+  expect(settled.cashOutlook.undatedCount).toBe(0);
+  expect(settled.cashOutlook.windows[0]?.projectedCash).toBe("96.0000");
+  const actual = await getProjectReportingSnapshot(project.id, {
+    horizon: "30d",
+  });
+  expect(actual?.cashFlow.totals).toMatchObject({
+    actualIn: "120",
+    actualOut: "24",
+    actualNet: "96",
+    expectedComplete: true,
+  });
+  expect(
+    await db.clientReceipt.count({ where: { billingDocumentId: bill.id } }),
+  ).toBe(1);
+  const supplier = await db.supplier.create({
+    data: {
+      legalName: "Refund Supplier",
+      displayName: "Refund Supplier",
+      defaultCurrencyCode: "EUR",
+    },
+  });
+  const order = await db.procurementOrder.create({
+    data: {
+      orderNumber: "CREDIT-SUP",
+      packageName: "Supplier return",
+      projectId: project.id,
+      supplierId: supplier.id,
+      orderCurrencyCode: "EUR",
+      sellingCurrencyCode: "EUR",
+      status: "ORDERED",
+      pricingMode: "DIRECT_SELLING_PRICE",
+      sellingPriceAmount: "150",
+      costLines: {
+        create: { category: "SUPPLIER_PURCHASE", originalAmount: "100" },
+      },
+      paymentInstallments: {
+        create: {
+          direction: "SUPPLIER_PAYMENT",
+          sequence: 1,
+          label: "Paid term",
+          basis: "FIXED_AMOUNT",
+          scheduledAmount: "100",
+          currencyCode: "EUR",
+          settlements: {
+            create: { amount: "100", settledAt: dateOnlyToDate(today) },
+          },
+        },
+      },
+    },
+  });
+  const supplierCredit = await db.financialCredit.create({
+    data: {
+      side: "SUPPLIER",
+      orderId: order.id,
+      reference: "SUP-CN",
+      reason: "Return",
+      creditDate: dateOnlyToDate(today),
+      totalHt: "20",
+      vatAmount: "0",
+      currencyCode: "EUR",
+      reportingCurrencyCode: "EUR",
+    },
+  });
+  const supplierOpen = await getProjectControl(project.id);
+  expect(supplierOpen.cashOutlook.undatedIn).toBe("20.0000");
+  expect(supplierOpen.cashOutlook.windows[0]?.projectedCash).toBeNull();
+  expect(
+    (await getFinancialAttention(7, today, project.id)).issues.find(
+      (issue) => issue.key === `refund-due-supplier:${order.id}`,
+    ),
+  ).toMatchObject({ amount: "20.0000", date: null });
+  await db.financialCreditRefund.create({
+    data: {
+      creditId: supplierCredit.id,
+      amount: "20",
+      refundDate: dateOnlyToDate(today),
+    },
+  });
+  const supplierSettled = await getProjectControl(project.id);
+  expect(supplierSettled.actualCashIn).toBe("140.0000");
+  expect(supplierSettled.actualCashOut).toBe("124.0000");
+  expect(supplierSettled.cashOutlook.windows[0]?.projectedCash).toBe("16.0000");
+  const cash = await getProjectReportingSnapshot(project.id, {
+    horizon: "30d",
+  });
+  expect(cash?.cashFlow.totals).toMatchObject({
+    actualIn: "140",
+    actualOut: "124",
+    actualNet: "16",
+    expectedComplete: true,
+  });
+  expect(
+    supplierSettled.drilldowns.filter((row) => row.label.includes("refund")),
+  ).toHaveLength(2);
 });
 
 it("keeps foreign and multiply matched terms visible but financially incomplete across surfaces", async () => {

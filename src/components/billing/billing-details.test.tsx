@@ -10,6 +10,9 @@ import { BillingDetail } from "./billing-detail";
 import { BillingTable } from "./billing-table";
 
 vi.mock("@/app/(app)/cell-actions", () => ({ saveTableCellAction: vi.fn() }));
+vi.mock("@/components/credits/credit-panel", () => ({
+  CreditPanel: () => null,
+}));
 vi.mock("@/app/(app)/settings/trash/actions", () => ({
   trashSelectedAction: vi.fn(),
 }));
@@ -380,7 +383,8 @@ it.each([
   expect(
     document.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
   ).toBe("Related");
-  expect(nav?.querySelectorAll("button")).toHaveLength(4);
+  expect(nav?.querySelectorAll("button")).toHaveLength(5);
+  expect(nav?.textContent).toContain("Credits");
 });
 
 it("keeps Billing terms and related actions mounted while changing work areas", async () => {

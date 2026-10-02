@@ -6,9 +6,18 @@ import { NavigationTabs } from "@/components/layout/navigation-tabs";
 import { PageHeader } from "@/components/layout/page-header";
 import { Pagination } from "@/components/listing/pagination";
 import { FinancialAttentionTable } from "@/components/reporting/financial-attention-table";
-import { requireUser } from "@/lib/auth/current-user";
+import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { getDatabase } from "@/lib/db";
-import { getFinancialAttention } from "@/lib/reporting/financial-attention";
+import { getAttentionWorkspace } from "@/lib/reporting/attention-workspace";
+import {
+  attentionFollowUpKey,
+  attentionWorkspaceQuery,
+  isAttentionDataQuality,
+  matchesAttentionOwner,
+  type AttentionOwnerFilter,
+  type AttentionScope,
+} from "@/domain/finance/attention-follow-up";
+import { Field, inputClassName } from "@/components/master-data/form-ui";
 import {
   attentionHorizons,
   type AttentionHorizon,
@@ -31,13 +40,61 @@ export default async function DashboardPage({
   const horizon: AttentionHorizon =
     query.horizon === "7" ? 7 : query.horizon === "90" ? 90 : 30;
   const snoozed = query.attention === "snoozed";
+  const owner: AttentionOwnerFilter =
+    query.owner === "mine"
+      ? "mine"
+      : query.owner === "unassigned"
+        ? "unassigned"
+        : "all";
+  const scope: AttentionScope =
+    query.scope === "data-quality" ? "data-quality" : "all";
+  const canEdit = canEditMasterData(user.role);
   const today = businessToday();
-  const [snapshot, preferences] = await Promise.all([
-    getFinancialAttention(horizon, today),
+  const [snapshot, preferences, employees] = await Promise.all([
+    getAttentionWorkspace(horizon, today),
     getDatabase().financialAttentionSnooze.findMany({
       where: { userId: user.id, until: { gt: dateOnlyToDate(today) } },
     }),
+    canEdit
+      ? getDatabase().user.findMany({
+          where: { isActive: true },
+          select: { id: true, name: true },
+          orderBy: [{ name: "asc" }, { id: "asc" }],
+        })
+      : Promise.resolve([]),
   ]);
+  const followUps = await getDatabase().financialFollowUp.findMany({
+    where: {
+      issueKey: {
+        in: snapshot.issues.flatMap((issue) => {
+          const key = attentionFollowUpKey(issue.key);
+          return key ? [key] : [];
+        }),
+      },
+    },
+    select: {
+      issueKey: true,
+      version: true,
+      assigneeId: true,
+      assignee: { select: { name: true } },
+      nextFollowUpDate: true,
+      note: true,
+    },
+  });
+  const followUpMap = new Map(
+    followUps.map((row) => [
+      row.issueKey,
+      {
+        version: row.version,
+        assigneeId: row.assigneeId,
+        assigneeName: row.assignee?.name ?? null,
+        nextFollowUpDate: row.nextFollowUpDate
+          ? dateToDateOnly(row.nextFollowUpDate)
+          : null,
+        note: row.note,
+      },
+    ]),
+  );
   const snoozes = new Map(
     preferences.map((row) => [
       row.issueKey,
@@ -50,11 +107,19 @@ export default async function DashboardPage({
   );
   const all = snapshot.issues.map((issue) => ({
     ...issue,
+    followUp: followUpMap.get(attentionFollowUpKey(issue.key) ?? "") ?? null,
     snooze: isAttentionSnoozed(issue, snoozes.get(issue.key), today)
       ? (snoozes.get(issue.key) ?? null)
       : null,
   }));
-  const filtered = all.filter((issue) => snoozed === (issue.snooze !== null));
+  const scoped = all.filter(
+    (issue) =>
+      (scope === "all" || isAttentionDataQuality(issue)) &&
+      matchesAttentionOwner(issue.followUp, owner, user.id),
+  );
+  const filtered = scoped.filter(
+    (issue) => snoozed === (issue.snooze !== null),
+  );
   const pageSize =
     query.pageSize === "50" ? 50 : query.pageSize === "100" ? 100 : 25;
   const requestedPage =
@@ -66,12 +131,19 @@ export default async function DashboardPage({
     Math.max(1, Math.ceil(filtered.length / pageSize)),
   );
   const href = (days: number, state = snoozed ? "snoozed" : "active") =>
-    "/?horizon=" + days + "&attention=" + state;
+    "/?" +
+    attentionWorkspaceQuery({
+      horizon: days,
+      snoozed: state === "snoozed",
+      owner,
+      scope,
+      pageSize,
+    });
   return (
     <div className="space-y-6">
       <PageHeader
         title="Home"
-        description="Financial attention across non-archived Projects."
+        description="Financial attention, shared follow-ups and data quality."
         actions={
           <Button asChild variant="outline">
             <Link href="/reports">Open Reports</Link>
@@ -108,21 +180,55 @@ export default async function DashboardPage({
         <p className="text-muted-foreground text-xs">
           Overdue and incomplete-data issues always appear. Future due dates
           follow the selected horizon. Amounts retain their own currency and
-          HT/TTC basis; no combined money total. Unassigned records and archived
-          Projects are outside this view.
+          HT/TTC basis; no combined money total. Data quality also highlights
+          unassigned financial records and archived Projects with open balances.
+          A filter hiding an issue does not mean it is resolved.
         </p>
+        <form className="flex flex-wrap items-end gap-3" action="/">
+          <input type="hidden" name="horizon" value={horizon} />
+          <input
+            type="hidden"
+            name="attention"
+            value={snoozed ? "snoozed" : "active"}
+          />
+          <input type="hidden" name="pageSize" value={pageSize} />
+          <Field label="Scope">
+            <select
+              name="scope"
+              defaultValue={scope}
+              className={inputClassName}
+            >
+              <option value="all">All attention</option>
+              <option value="data-quality">Data quality</option>
+            </select>
+          </Field>
+          <Field label="Owner">
+            <select
+              name="owner"
+              defaultValue={owner}
+              className={inputClassName}
+            >
+              <option value="all">All owners</option>
+              <option value="mine">Mine</option>
+              <option value="unassigned">Unassigned</option>
+            </select>
+          </Field>
+          <Button type="submit" variant="outline" size="sm">
+            Apply
+          </Button>
+        </form>
         <NavigationTabs
           label="Attention visibility"
           tabs={[
             {
               id: "active",
-              label: `Needs attention (${all.filter((row) => !row.snooze).length})`,
+              label: `Needs attention (${scoped.filter((row) => !row.snooze).length})`,
               href: href(horizon, "active"),
               active: !snoozed,
             },
             {
               id: "snoozed",
-              label: `Snoozed by me (${all.filter((row) => row.snooze).length})`,
+              label: `Snoozed by me (${scoped.filter((row) => row.snooze).length})`,
               href: href(horizon, "snoozed"),
               active: snoozed,
             },
@@ -134,18 +240,21 @@ export default async function DashboardPage({
             today={today}
             horizon={horizon}
             snoozed={snoozed}
+            canEdit={canEdit}
+            employees={employees}
           />
           <Pagination
             page={page}
             pageSize={pageSize}
             total={filtered.length}
             pathname="/"
-            queryString={
-              "horizon=" +
-              horizon +
-              "&attention=" +
-              (snoozed ? "snoozed" : "active")
-            }
+            queryString={attentionWorkspaceQuery({
+              horizon,
+              snoozed,
+              owner,
+              scope,
+              pageSize,
+            })}
           />
         </div>
       </section>

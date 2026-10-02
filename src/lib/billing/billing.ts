@@ -1,11 +1,18 @@
 import { billingRecordStatus } from "./status-view";
 import { changeBillingStatusInTransaction } from "./status";
 import { billingIsIssued } from "@/domain/billing/status";
+import { activeCreditsInclude } from "@/lib/credits/select";
+import {
+  getClientCreditPosition,
+  activeBillingCredits,
+  billingCreditTotals,
+} from "@/domain/billing/credits";
+import { cappedCashTerms } from "@/domain/payments/cash-expectations";
+import { summarizeClientBillingRecords as summarizeBillingReportingRecords } from "./reporting";
 import { sortBillingRows, type billingSorts } from "@/domain/billing/listing";
 import {
   completedPaymentDate,
   earliestUnpaidTermDate,
-  overdueTermAmount,
 } from "@/domain/payments/terms";
 import { retainedCurrency } from "@/lib/related-records/context";
 import { freightCoverageBreakdown } from "@/domain/billing/freight-coverage";
@@ -50,7 +57,6 @@ import type {
 } from "@/domain/billing/validation";
 import { reportingAmount } from "@/domain/finance/calculations";
 import {
-  installmentOutstanding,
   reconcileSchedule,
   scheduledAmountFromPercentage,
 } from "@/domain/payments/calculations";
@@ -72,7 +78,87 @@ import {
 export class ClientBillingValidationError extends Error {}
 export class ClientBillingNotFoundError extends Error {}
 
+async function assertNoActiveBillingCredits(
+  transaction: Prisma.TransactionClient,
+  id: string,
+) {
+  const document = await transaction.clientBillingDocument.findUnique({
+    where: { id },
+    select: {
+      credits: { where: { isCancelled: false }, select: { id: true } },
+    },
+  });
+  if (document?.credits?.length)
+    throw new ClientBillingValidationError(
+      "Cancel active credits and refunds before changing the original Invoice amounts, identity or allocations.",
+    );
+}
+
+/** Corrections must not invalidate refunds, including receipts owned by a matched Quote. */
+async function validateCreditedReceiptCorrection(
+  transaction: Prisma.TransactionClient,
+  documentId: string,
+  installmentId: string | null,
+  receiptId: string,
+  nextAmount: string,
+) {
+  const documents = await transaction.clientBillingDocument.findMany({
+    where: {
+      credits: { some: { isCancelled: false } },
+      OR: [
+        { id: documentId },
+        ...(installmentId ? [{ matchedInstallmentId: installmentId }] : []),
+      ],
+    },
+    include: {
+      credits: activeCreditsInclude,
+      receipts: { select: { id: true, amount: true } },
+      matchedInstallment: {
+        include: { receipts: { select: { id: true, amount: true } } },
+      },
+    },
+  });
+  for (const document of documents) {
+    const receipts = [
+      ...new Map(
+        [
+          ...document.receipts,
+          ...(document.matchedInstallment?.receipts ?? []),
+        ].map((receipt) => [receipt.id, receipt]),
+      ).values(),
+    ];
+    const currentPaid = receipts.reduce(
+      (sum, receipt) => sum.plus(receipt.amount),
+      new Decimal(0),
+    );
+    const nextPaid = receipts.reduce(
+      (sum, receipt) =>
+        sum.plus(receipt.id === receiptId ? nextAmount : receipt.amount),
+      new Decimal(0),
+    );
+    try {
+      const position = getClientCreditPosition(document, [nextPaid.toFixed(4)]);
+      if (
+        nextPaid.greaterThan(currentPaid) &&
+        nextPaid.greaterThan(
+          new Decimal(position.netDue).plus(position.refundedTtc),
+        )
+      )
+        throw new RangeError(
+          "The correction would exceed the Invoice balance after credits.",
+        );
+    } catch (error) {
+      throw new ClientBillingValidationError(
+        error instanceof Error
+          ? error.message
+          : "Correct the credit refunds before changing this receipt.",
+      );
+    }
+  }
+}
+
 const billingInclude = {
+  credits: activeCreditsInclude,
   allocations: {
     include: {
       order: {
@@ -127,6 +213,7 @@ function receiptRecords(record: BillingRecord) {
 function billingView(record: BillingRecord, today = businessToday()) {
   const receipts = receiptRecords(record);
   const status = billingRecordStatus(record, today);
+  const creditPosition = getClientCreditPosition(record);
   const visibleInstallments = record.matchedInstallment
     ? [record.matchedInstallment]
     : record.paymentInstallments;
@@ -147,7 +234,27 @@ function billingView(record: BillingRecord, today = businessToday()) {
     paidAmounts: receipts.map((receipt) => receipt.amount.toString()),
     today,
     totalTtc: record.totalTtc.toString(),
+    creditedTtc: creditPosition.creditedTtc,
+    refundedTtc: creditPosition.refundedTtc,
   });
+  const creditedTerms = cappedCashTerms(
+    creditPosition.netDue,
+    activeBillingCredits(record).length
+      ? Decimal.min(creditPosition.netDue, creditPosition.netPaid).toString()
+      : creditPosition.netPaid,
+    visibleInstallments.map((term) => ({
+      id: term.id,
+      amount: term.scheduledAmount.toString(),
+      paid: term.receipts
+        .reduce((sum, receipt) => sum.plus(receipt.amount), new Decimal(0))
+        .toFixed(4),
+      due: dateToDateOnly(term.dueDate ?? record.dueDate),
+      cancelled: term.isCancelled,
+    })),
+  );
+  const termBalances = new Map(
+    creditedTerms.terms.map(({ term, amount }) => [term.id, amount.toString()]),
+  );
   const reconciliation = allocationReconciliation(
     record.totalHt.toString(),
     record.allocations.map((allocation) =>
@@ -155,6 +262,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
     ),
   );
   return {
+    ...(activeBillingCredits(record).length ? { creditPosition } : {}),
     allocations: record.allocations.map((allocation) => ({
       freightCoverageHt: allocation.freightCoverageHt?.toString() ?? "0",
       otherCoverageHt: allocation.otherCoverageHt?.toString() ?? "0",
@@ -220,6 +328,11 @@ function billingView(record: BillingRecord, today = businessToday()) {
       reference: receipt.reference,
     })),
     paymentInstallments: visibleInstallments.map((installment) => ({
+      ...(activeBillingCredits(record).length
+        ? {
+            creditOutstandingAmount: termBalances.get(installment.id) ?? "0",
+          }
+        : {}),
       basis: installment.basis,
       billingDocumentId: installment.billingDocumentId ?? "",
       billingReference: installment.billingDocument?.reference ?? "Unassigned",
@@ -649,6 +762,7 @@ export async function confirmClientBillingDocument(
             "The selected billing document cannot be updated in this Client/Project flow.",
           );
         }
+        await assertNoActiveBillingCredits(transaction, existing.id);
       }
       const document =
         input.action === "UPDATE" && existing
@@ -825,6 +939,7 @@ export async function recordClientReceiptInTransaction(
   const document = await transaction.clientBillingDocument.findUnique({
     where: { id: input.billingDocumentId },
     include: {
+      credits: activeCreditsInclude,
       matchedInstallment: {
         include: { receipts: { select: { amount: true, id: true } } },
       },
@@ -867,7 +982,11 @@ export async function recordClientReceiptInTransaction(
       ].map((receipt) => [receipt.id, receipt]),
     ).values(),
   ].reduce((sum, receipt) => sum.plus(receipt.amount), new Decimal(0));
-  if (paid.plus(input.amount).greaterThan(document.totalTtc))
+  if (
+    new Decimal(input.amount).greaterThan(
+      getClientCreditPosition(document, [paid.toFixed(4)]).outstanding,
+    )
+  )
     throw new ClientBillingValidationError(
       "The receipt would exceed the Billing document outstanding balance.",
     );
@@ -948,6 +1067,7 @@ export async function updateClientReceipt(
         where: { id: input.id },
         select: {
           billingDocumentId: true,
+          installmentId: true,
         },
       });
       if (!current) throw new ClientBillingNotFoundError();
@@ -955,6 +1075,13 @@ export async function updateClientReceipt(
         throw new ClientBillingValidationError(
           "This receipt belongs to another Billing document.",
         );
+      await validateCreditedReceiptCorrection(
+        transaction,
+        current.billingDocumentId,
+        current.installmentId,
+        input.id,
+        input.amount,
+      );
 
       const document = await transaction.clientBillingDocument.findUnique({
         where: { id: input.billingDocumentId },
@@ -1106,6 +1233,13 @@ export async function deleteClientReceipt(
       throw new ClientBillingValidationError(
         "This receipt belongs to another Billing document.",
       );
+    await validateCreditedReceiptCorrection(
+      transaction,
+      receipt.billingDocumentId,
+      receipt.installmentId,
+      receipt.id,
+      "0",
+    );
     await trashInTransaction(transaction, actorId, "ClientReceipt", [
       receipt.id,
     ]);
@@ -1133,6 +1267,7 @@ export async function updateClientBillingInline(
     const existing = await transaction.clientBillingDocument.findUnique({
       where: { id: input.id },
       select: {
+        credits: { where: { isCancelled: false }, select: { id: true } },
         isCancelled: true,
         documentType: true,
         _count: { select: { receipts: true } },
@@ -1145,6 +1280,10 @@ export async function updateClientBillingInline(
       },
     });
     if (!existing) throw new ClientBillingNotFoundError();
+    if (input.isCancelled && existing.credits?.length)
+      throw new ClientBillingValidationError(
+        "Cancel active credits and refunds before cancelling this Invoice.",
+      );
     const receiptCount =
       existing._count.receipts +
       (existing.matchedInstallment?._count.receipts ?? 0) +
@@ -1200,7 +1339,12 @@ export async function updateClientBillingInstallment(
       where: { id: input.id },
       include: {
         billingDocument: {
-          select: { id: true, reference: true, totalTtc: true },
+          select: {
+            id: true,
+            reference: true,
+            totalTtc: true,
+            credits: activeCreditsInclude,
+          },
         },
         matchedInvoices: { select: { id: true } },
         receipts: { select: { amount: true } },
@@ -1247,12 +1391,17 @@ export async function updateClientBillingInstallment(
       },
     );
     if (
+      !amount.equals(current.scheduledAmount) &&
       new Decimal(otherScheduled._sum.scheduledAmount?.toString() ?? "0")
         .plus(amount)
-        .greaterThan(current.billingDocument.totalTtc)
+        .greaterThan(
+          new Decimal(current.billingDocument.totalTtc).minus(
+            billingCreditTotals(current.billingDocument).creditedTtc,
+          ),
+        )
     )
       throw new ClientBillingValidationError(
-        "The Client payment schedule cannot exceed the Billing TTC.",
+        "The Client payment schedule cannot exceed the Billing TTC after credits.",
       );
 
     const installment = await transaction.clientPaymentInstallment.update({
@@ -1315,6 +1464,7 @@ export async function createClientBillingInstallment(
       const document = await transaction.clientBillingDocument.findUnique({
         where: { id: input.billingDocumentId },
         include: {
+          credits: activeCreditsInclude,
           paymentInstallments: {
             where: { isCancelled: false },
             select: { scheduledAmount: true, sequence: true },
@@ -1333,9 +1483,17 @@ export async function createClientBillingInstallment(
         (total, installment) => total.plus(installment.scheduledAmount),
         new Decimal(0),
       );
-      if (scheduled.plus(amount).greaterThan(document.totalTtc))
+      if (
+        scheduled
+          .plus(amount)
+          .greaterThan(
+            new Decimal(document.totalTtc).minus(
+              billingCreditTotals(document).creditedTtc,
+            ),
+          )
+      )
         throw new ClientBillingValidationError(
-          "The Client payment schedule cannot exceed the Billing TTC.",
+          "The Client payment schedule cannot exceed the Billing TTC after credits.",
         );
       const sequence = await nextInstallmentSequence(transaction, document.id);
       const installment = await transaction.clientPaymentInstallment.create({
@@ -1556,6 +1714,13 @@ async function reconcileBillingAllocationsInTransaction(
           (item.percentageRate ?? null))
     );
   });
+  if (
+    removed.length ||
+    added.length ||
+    changed.length ||
+    document.isProjectRemainderApproved !== input.isProjectRemainderApproved
+  )
+    await assertNoActiveBillingCredits(transaction, document.id);
   if (removed.length)
     await transaction.clientBillingAllocation.deleteMany({
       where: { id: { in: removed.map((item) => item.id) } },
@@ -1848,6 +2013,7 @@ export async function updateClientBillingDocumentInTransaction(
   const existing = await transaction.clientBillingDocument.findUnique({
     where: { id: input.id },
     select: {
+      credits: { where: { isCancelled: false }, select: { id: true } },
       allocations: true,
       documentType: true,
       receipts: { select: { id: true, amount: true } },
@@ -1871,6 +2037,10 @@ export async function updateClientBillingDocumentInTransaction(
     },
   });
   if (!existing) throw new ClientBillingNotFoundError();
+  if (existing.credits?.length)
+    throw new ClientBillingValidationError(
+      "Cancel active credits and refunds before changing the original Invoice amounts, identity or allocations.",
+    );
   const [project, currency] = await Promise.all([
     transaction.project.findFirst({
       where: { clientId: input.clientId, id: input.projectId },
@@ -2060,235 +2230,12 @@ function converted(
   });
 }
 
-function earlierDate(current: string | null, candidate: string): string {
-  return current === null || candidate < current ? candidate : current;
-}
-
 function summarizeClientBillingRecords(
   records: readonly BillingRecord[],
   reportingCurrencyCode: string,
 ) {
-  let quoted = new Decimal(0);
-  let invoiced = new Decimal(0);
-  let invoicedTtc = new Decimal(0);
-  let outputVat = new Decimal(0);
-  let coverage = new Decimal(0);
-  let invoiceOutstanding = new Decimal(0);
-  let paid = new Decimal(0);
-  let overdue = new Decimal(0);
-  let upcomingScheduled = new Decimal(0);
-  let nextDueDate: string | null = null;
-  let scheduleComplete = true;
-  const today = businessToday();
-  const missingIds = new Set<string>();
-  const invoiceMissingIds = new Set<string>();
-  const outputVatMissingIds = new Set<string>();
-  const coverageMissingIds = new Set<string>();
-  const uniqueReceipts = new Map<
-    string,
-    ReturnType<typeof receiptRecords>[number] & { currencyCode: string }
-  >();
-  const uniqueInstallments = new Map<
-    string,
-    BillingRecord["paymentInstallments"][number]
-  >();
-  for (const record of records) {
-    if (
-      record.isCancelled ||
-      (record.documentType === "INVOICE" &&
-        !isRecognizedClientReceivable(record))
-    )
-      continue;
-    const convertedHt = converted(
-      record.totalHt.toString(),
-      record.currencyCode,
-      reportingCurrencyCode,
-      record.fxRateToReporting?.toString() ?? null,
-    );
-    if (convertedHt === null) {
-      missingIds.add(record.id);
-      if (record.documentType === ClientBillingDocumentType.INVOICE)
-        invoiceMissingIds.add(record.id);
-    } else if (record.documentType === ClientBillingDocumentType.QUOTE)
-      quoted = quoted.plus(convertedHt);
-    else invoiced = invoiced.plus(convertedHt);
-    if (record.documentType === ClientBillingDocumentType.INVOICE) {
-      const allocatedHt = record.allocations
-        .filter((allocation) => allocation.order.status !== "CANCELLED")
-        .reduce(
-          (total, allocation) => total.plus(allocation.allocatedAmount),
-          new Decimal(0),
-        );
-      const remainingHt = allocationReconciliation(
-        record.totalHt.toString(),
-        record.allocations.map((allocation) =>
-          allocation.allocatedAmount.toString(),
-        ),
-      ).remaining;
-      const coverageOriginal = record.isProjectRemainderApproved
-        ? allocatedHt.plus(remainingHt)
-        : allocatedHt;
-      if (!coverageOriginal.isZero()) {
-        const convertedCoverage = converted(
-          coverageOriginal.toString(),
-          record.currencyCode,
-          reportingCurrencyCode,
-          record.fxRateToReporting?.toString() ?? null,
-        );
-        if (convertedCoverage === null) coverageMissingIds.add(record.id);
-        else coverage = coverage.plus(convertedCoverage);
-      }
-      const convertedTtc = converted(
-        record.totalTtc.toString(),
-        record.currencyCode,
-        reportingCurrencyCode,
-        record.fxRateToReporting?.toString() ?? null,
-      );
-      if (convertedTtc === null) missingIds.add(record.id);
-      else invoicedTtc = invoicedTtc.plus(convertedTtc);
-      const convertedVat = converted(
-        record.vatAmount.toString(),
-        record.currencyCode,
-        reportingCurrencyCode,
-        record.fxRateToReporting?.toString() ?? null,
-      );
-      if (convertedVat === null) {
-        missingIds.add(record.id);
-        outputVatMissingIds.add(record.id);
-      } else outputVat = outputVat.plus(convertedVat);
-    }
-    for (const receipt of receiptRecords(record)) {
-      uniqueReceipts.set(receipt.id, {
-        ...receipt,
-        currencyCode: record.currencyCode,
-      });
-    }
-    const visibleInstallments = record.matchedInstallment
-      ? [record.matchedInstallment]
-      : record.paymentInstallments;
-    for (const installment of visibleInstallments) {
-      uniqueInstallments.set(installment.id, installment);
-    }
-    if (
-      isRecognizedClientReceivable({
-        documentType: record.documentType,
-        workflowStatus: record.workflowStatus,
-        isCancelled: record.isCancelled,
-      })
-    ) {
-      const view = calculateClientBillingAmounts({
-        documentType: record.documentType,
-        dueDate: earliestUnpaidTermDate(
-          visibleInstallments.map((term) => ({
-            dueDate: dateToDateOnly(term.dueDate),
-            isCancelled: term.isCancelled,
-            scheduledAmount: term.scheduledAmount.toString(),
-            payments: term.receipts.map((payment) => ({
-              amount: payment.amount.toString(),
-            })),
-          })),
-          dateToDateOnly(record.dueDate),
-        ),
-        isCancelled: record.isCancelled,
-        paidAmounts: receiptRecords(record).map((receipt) =>
-          receipt.amount.toString(),
-        ),
-        today,
-        totalTtc: record.totalTtc.toString(),
-      });
-      const outstanding = converted(
-        view.outstanding,
-        record.currencyCode,
-        reportingCurrencyCode,
-        record.fxRateToReporting?.toString() ?? null,
-      );
-      if (outstanding === null) missingIds.add(record.id);
-      else {
-        invoiceOutstanding = invoiceOutstanding.plus(outstanding);
-        const overdueValue = converted(
-          overdueTermAmount({
-            terms: visibleInstallments.map((term) => ({
-              dueDate: dateToDateOnly(term.dueDate),
-              isCancelled: term.isCancelled,
-              scheduledAmount: term.scheduledAmount.toString(),
-              payments: term.receipts.map((payment) => ({
-                amount: payment.amount.toString(),
-              })),
-            })),
-            outstanding: view.outstanding,
-            fallbackDate: dateToDateOnly(record.dueDate),
-            today,
-          }),
-          record.currencyCode,
-          reportingCurrencyCode,
-          record.fxRateToReporting?.toString() ?? null,
-        );
-        if (overdueValue === null) missingIds.add(record.id);
-        else overdue = overdue.plus(overdueValue);
-      }
-    }
-  }
-  for (const receipt of uniqueReceipts.values()) {
-    const convertedReceipt = converted(
-      receipt.amount.toString(),
-      receipt.currencyCode,
-      reportingCurrencyCode,
-      receipt.fxRateToReporting?.toString() ?? null,
-    );
-    if (convertedReceipt === null) missingIds.add(receipt.id);
-    else paid = paid.plus(convertedReceipt);
-  }
-  for (const installment of uniqueInstallments.values()) {
-    if (installment.isCancelled) continue;
-    const received = installment.receipts.reduce(
-      (total, receipt) => total.plus(receipt.amount),
-      new Decimal(0),
-    );
-    const outstanding = installmentOutstanding(
-      installment.scheduledAmount,
-      received,
-    );
-    const dueDate = dateToDateOnly(installment.dueDate);
-    if (!dueDate || outstanding.isZero() || dueDate < today) continue;
-    nextDueDate = earlierDate(nextDueDate, dueDate);
-    const convertedOutstanding = converted(
-      outstanding.toString(),
-      installment.currencyCode,
-      reportingCurrencyCode,
-      installment.expectedFxRateToReporting?.toString() ?? null,
-    );
-    if (convertedOutstanding === null) scheduleComplete = false;
-    else upcomingScheduled = upcomingScheduled.plus(convertedOutstanding);
-  }
-  return {
-    complete: missingIds.size === 0,
-    coverageComplete: coverageMissingIds.size === 0,
-    coverageHt: coverage.toFixed(4),
-    coverageMissingIds: [...coverageMissingIds],
-    invoiceMissingIds: [...invoiceMissingIds],
-    invoicedComplete: invoiceMissingIds.size === 0,
-    invoicedHt: invoiced.toFixed(4),
-    invoicedTtc: invoicedTtc.toFixed(4),
-    missingIds: [...missingIds],
-    nextDueDate,
-    outstandingTtc: invoiceOutstanding.toFixed(4),
-    overdueTtc: overdue.toFixed(4),
-    outputVat: outputVat.toFixed(4),
-    outputVatComplete: outputVatMissingIds.size === 0,
-    outputVatMissingIds: [...outputVatMissingIds],
-    paidTtc: paid.toFixed(4),
-    quotedHt: quoted.toFixed(4),
-    reportingCurrencyCode,
-    scheduleComplete,
-    upcomingScheduledTtc: scheduleComplete
-      ? upcomingScheduled.toFixed(4)
-      : null,
-  };
+  return summarizeBillingReportingRecords(records, reportingCurrencyCode);
 }
-
-export type ClientBillingSummary = ReturnType<
-  typeof summarizeClientBillingRecords
->;
 
 export async function getProjectClientBillingSummary(projectId: string) {
   const project = await getDatabase().project.findUnique({
@@ -2367,12 +2314,17 @@ export async function getPortfolioClientBillingSummary() {
     outstandingTtc: summary.outstandingTtc,
     overdueTtc: summary.overdueTtc,
     paidTtc: summary.paidTtc,
+    refundedTtc: summary.refundedTtc,
+    netPaidTtc: summary.netPaidTtc,
   };
 }
 
 export async function getOrderBillingAllocations(orderIds: readonly string[]) {
   if (!orderIds.length)
-    return new Map<string, { invoiced: string; quoted: string }>();
+    return new Map<
+      string,
+      { invoiced: string | null; quoted: string | null; complete: boolean }
+    >();
   const allocations = await getDatabase().clientBillingAllocation.findMany({
     where: {
       orderId: { in: [...orderIds] },
@@ -2382,6 +2334,7 @@ export async function getOrderBillingAllocations(orderIds: readonly string[]) {
       allocatedAmount: true,
       billingDocument: {
         select: {
+          credits: activeCreditsInclude,
           currencyCode: true,
           detachedReportingCurrencyCode: true,
           documentType: true,
@@ -2394,7 +2347,15 @@ export async function getOrderBillingAllocations(orderIds: readonly string[]) {
       orderId: true,
     },
   });
-  const result = new Map<string, { invoiced: Decimal; quoted: Decimal }>();
+  const result = new Map<
+    string,
+    {
+      invoiced: Decimal;
+      quoted: Decimal;
+      invoicedComplete: boolean;
+      quotedComplete: boolean;
+    }
+  >();
   for (const allocation of allocations) {
     const document = allocation.billingDocument;
     if (document.documentType === "INVOICE" && !billingIsIssued(document))
@@ -2408,20 +2369,46 @@ export async function getOrderBillingAllocations(orderIds: readonly string[]) {
       ),
       document.fxRateToReporting?.toString() ?? null,
     );
-    if (amount === null) continue;
     const current = result.get(allocation.orderId) ?? {
       invoiced: new Decimal(0),
       quoted: new Decimal(0),
+      invoicedComplete: true,
+      quotedComplete: true,
     };
-    if (document.documentType === ClientBillingDocumentType.INVOICE)
-      current.invoiced = current.invoiced.plus(amount);
+    if (document.documentType === ClientBillingDocumentType.INVOICE) {
+      if (amount === null) current.invoicedComplete = false;
+      else current.invoiced = current.invoiced.plus(amount);
+    } else if (amount === null) current.quotedComplete = false;
     else current.quoted = current.quoted.plus(amount);
+    if (document.documentType === ClientBillingDocumentType.INVOICE)
+      for (const credit of document.credits ?? []) {
+        const originalReduction = credit.allocations
+          .filter((row) => row.orderId === allocation.orderId)
+          .reduce((sum, row) => sum.plus(row.amountHt), new Decimal(0));
+        if (originalReduction.isZero()) continue;
+        const reduction = converted(
+          originalReduction.toFixed(4),
+          credit.currencyCode,
+          retainedCurrency(
+            document.project?.reportingCurrencyCode,
+            document.detachedReportingCurrencyCode,
+          ),
+          credit.fxRateToReporting?.toString() ?? null,
+        );
+        if (reduction !== null)
+          current.invoiced = current.invoiced.minus(reduction);
+        else current.invoicedComplete = false;
+      }
     result.set(allocation.orderId, current);
   }
   return new Map(
     [...result].map(([id, value]) => [
       id,
-      { invoiced: value.invoiced.toFixed(4), quoted: value.quoted.toFixed(4) },
+      {
+        invoiced: value.invoicedComplete ? value.invoiced.toFixed(4) : null,
+        quoted: value.quotedComplete ? value.quoted.toFixed(4) : null,
+        complete: value.invoicedComplete && value.quotedComplete,
+      },
     ]),
   );
 }
@@ -2521,6 +2508,7 @@ export async function updateBillingFreightCoverage(
       const document = await transaction.clientBillingDocument.findUnique({
         where: { id: input.billingDocumentId },
         select: {
+          credits: { where: { isCancelled: false }, select: { id: true } },
           id: true,
           reference: true,
           totalHt: true,
@@ -2530,6 +2518,10 @@ export async function updateBillingFreightCoverage(
         },
       });
       if (!document) throw new ClientBillingNotFoundError();
+      if (document.credits?.length)
+        throw new ClientBillingValidationError(
+          "Cancel active credits and refunds before changing the original Invoice freight amount.",
+        );
       validateFreight(
         document.totalHt.toString(),
         input.freightCoverageHt,

@@ -225,6 +225,192 @@ it("scopes Project attention without leaking another Project's issues", async ()
   ).toEqual([]);
 });
 
+it("reviews only archived issued balances, preserving original currency and matched-term uncertainty", async () => {
+  const db = memory.raw;
+  await db.currency.upsert({
+    where: { code: "USD" },
+    create: { code: "USD", name: "US Dollar" },
+    update: {},
+  });
+  const project = await db.project.create({
+    data: {
+      code: "ARCHIVE-REVIEW",
+      name: "Archived review",
+      reportingCurrencyCode: "EUR",
+      status: "ARCHIVED",
+    },
+  });
+  const client = await db.client.create({
+    data: {
+      legalName: "Archive Client",
+      displayName: "Archive Client",
+      defaultCurrencyCode: "EUR",
+    },
+  });
+  const base = {
+    projectId: project.id,
+    clientId: client.id,
+    currencyCode: "EUR",
+    documentDate: new Date("2026-09-01"),
+    totalHt: "100",
+    vatAmount: "20",
+    totalTtc: "120",
+    documentType: "INVOICE" as const,
+  };
+  const issued = await db.clientBillingDocument.create({
+    data: { ...base, reference: "ARCHIVE-ISSUED" },
+  });
+  await db.clientReceipt.create({
+    data: {
+      billingDocumentId: issued.id,
+      amount: "20",
+      receivedAt: new Date("2026-09-02"),
+    },
+  });
+  const paid = await db.clientBillingDocument.create({
+    data: { ...base, reference: "ARCHIVE-PAID" },
+  });
+  await db.clientPaymentInstallment.create({
+    data: {
+      billingDocumentId: paid.id,
+      sequence: 1,
+      label: "Unassigned receipt covers this term",
+      basis: "FIXED_AMOUNT",
+      scheduledAmount: "120",
+      currencyCode: "EUR",
+    },
+  });
+  await db.clientReceipt.create({
+    data: {
+      billingDocumentId: paid.id,
+      amount: "120",
+      receivedAt: new Date("2026-09-02"),
+    },
+  });
+  const foreign = await db.clientBillingDocument.create({
+    data: { ...base, reference: "ARCHIVE-USD", currencyCode: "USD" },
+  });
+  await db.clientBillingDocument.createMany({
+    data: [
+      { ...base, reference: "ARCHIVE-DRAFT", workflowStatus: "DRAFT" },
+      {
+        ...base,
+        reference: "ARCHIVE-PLANNED",
+        workflowStatus: "TO_BE_INVOICED",
+      },
+      { ...base, reference: "ARCHIVE-QUOTE", documentType: "QUOTE" },
+      { ...base, reference: "ARCHIVE-CANCELLED", isCancelled: true },
+      { ...base, reference: "ARCHIVE-TRASHED", trashedAt: new Date() },
+    ],
+  });
+  const quote = await db.clientBillingDocument.create({
+    data: {
+      ...base,
+      reference: "ARCHIVE-MATCH-SOURCE",
+      documentType: "QUOTE",
+      currencyCode: "USD",
+    },
+  });
+  const term = await db.clientPaymentInstallment.create({
+    data: {
+      billingDocumentId: quote.id,
+      sequence: 1,
+      label: "Foreign source",
+      basis: "FIXED_AMOUNT",
+      scheduledAmount: "120",
+      currencyCode: "USD",
+    },
+  });
+  const mismatch = await db.clientBillingDocument.create({
+    data: {
+      ...base,
+      reference: "ARCHIVE-MATCH-REVIEW",
+      matchedInstallmentId: term.id,
+    },
+  });
+  const supplier = await db.supplier.create({
+    data: {
+      legalName: "Archive Supplier",
+      displayName: "Archive Supplier",
+      defaultCurrencyCode: "EUR",
+    },
+  });
+  await db.procurementOrder.create({
+    data: {
+      orderNumber: "ARCHIVE-SUPPLIER-MIXED",
+      packageName: "Mixed terms",
+      projectId: project.id,
+      supplierId: supplier.id,
+      orderCurrencyCode: "EUR",
+      sellingCurrencyCode: "EUR",
+      status: "ORDERED",
+      pricingMode: "PROJECT_MARKUP",
+      costLines: {
+        create: { category: "SUPPLIER_PURCHASE", originalAmount: "100" },
+      },
+      paymentInstallments: {
+        create: {
+          direction: "SUPPLIER_PAYMENT",
+          sequence: 1,
+          label: "Foreign term",
+          basis: "FIXED_AMOUNT",
+          scheduledAmount: "200",
+          currencyCode: "USD",
+          settlements: {
+            create: { amount: "140", settledAt: new Date("2026-09-01") },
+          },
+        },
+      },
+    },
+  });
+  const result = await getFinancialAttention(
+    30,
+    "2026-10-02",
+    project.id,
+    "archived",
+  );
+  expect(result.projects.map((row) => row.id)).toEqual([project.id]);
+  expect(
+    result.issues.find((row) => row.reference === issued.reference),
+  ).toMatchObject({ amount: "100.0000", currency: "EUR", priority: "Review" });
+  expect(
+    result.issues.find((row) => row.reference === foreign.reference),
+  ).toMatchObject({
+    amount: "120.0000",
+    currency: "USD",
+    priority: "Incomplete",
+  });
+  expect(
+    result.issues.find((row) => row.reference === mismatch.reference),
+  ).toMatchObject({ amount: null, priority: "Incomplete" });
+  expect(
+    result.issues.find((row) => row.reference === "ARCHIVE-SUPPLIER-MIXED"),
+  ).toMatchObject({ amount: null, priority: "Incomplete" });
+  expect(
+    result.issues.some((row) =>
+      [
+        "ARCHIVE-DRAFT",
+        "ARCHIVE-PLANNED",
+        "ARCHIVE-QUOTE",
+        "ARCHIVE-CANCELLED",
+        "ARCHIVE-TRASHED",
+        "ARCHIVE-PAID",
+      ].includes(row.reference),
+    ),
+  ).toBe(false);
+  expect(
+    (await getFinancialAttention(30, "2026-10-02", project.id)).issues,
+  ).toEqual([]);
+  await db.project.update({
+    where: { id: project.id },
+    data: { trashedAt: new Date() },
+  });
+  expect(
+    (await getFinancialAttention(30, "2026-10-02", project.id, "archived"))
+      .issues,
+  ).toEqual([]);
+});
+
 it("keeps snoozes per employee and does not delete business records when an employee is removed", async () => {
   const db = memory.raw;
   const a = await db.user.create({

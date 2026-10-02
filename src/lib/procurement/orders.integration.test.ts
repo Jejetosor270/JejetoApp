@@ -42,6 +42,7 @@ function sellingOrder(
   project: NonNullable<Parameters<typeof summarizeOrder>[0]["project"]>;
 } {
   return {
+    credits: [],
     trashedAt: null,
     shortDescription: null,
     paymentStatusOverride: null,
@@ -133,6 +134,109 @@ function sellingOrder(
     ],
   };
 }
+
+it.each([
+  PricingMode.PROJECT_MARKUP,
+  PricingMode.ORDER_MARKUP,
+  PricingMode.DIRECT_SELLING_PRICE,
+  PricingMode.TARGET_MARGIN,
+])(
+  "nets Supplier credits without repricing the %s client sale or replacing editable source values",
+  (mode) => {
+    const source = sellingOrder("0", VatTreatment.DOMESTIC);
+    const vat = source.vatEntries[0];
+    if (!vat) throw new Error("Missing test VAT source");
+    source.orderCurrencyCode = "USD";
+    source.purchaseFxRateToReporting = new Decimal("0.9");
+    source.pricingMode = mode;
+    source.sellingPriceAmount = new Decimal("200");
+    source.targetMarginRate = new Decimal("0.3");
+    source.productMarkupOverrideRate = new Decimal("0.5");
+    source.freightMarkupOverrideRate = new Decimal("0");
+    source.otherCostMarkupOverrideRate = new Decimal("0");
+    source.project.defaultProductMarkupRate = new Decimal("0.5");
+    source.freightResaleAmount = new Decimal("0");
+    source.costLines = [
+      {
+        category: ProcurementCostCategory.SUPPLIER_PURCHASE,
+        originalAmount: new Decimal("100"),
+        id: "cost",
+        orderId: source.id,
+        description: null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        createdById: null,
+        updatedById: null,
+      },
+    ];
+    source.vatEntries = [
+      {
+        ...vat,
+        direction: VatDirection.INPUT,
+        taxableBaseAmount: new Decimal("100"),
+        vatAmount: new Decimal("20"),
+        vatRate: new Decimal("0.2"),
+        recoverability: VatRecoverability.PARTIALLY_RECOVERABLE,
+        recoverableRate: new Decimal("0.5"),
+      },
+    ];
+    const original = summarizeOrder(source);
+    source.credits = [
+      {
+        id: "credit",
+        side: "SUPPLIER",
+        billingDocumentId: null,
+        orderId: source.id,
+        supplierVatEntryId: vat.id,
+        reference: "CR-1",
+        creditDate: timestamp,
+        reason: "Price correction",
+        totalHt: new Decimal("20"),
+        vatAmount: new Decimal("4"),
+        freightCoverageHt: new Decimal("0"),
+        otherCoverageHt: new Decimal("0"),
+        currencyCode: "USD",
+        reportingCurrencyCode: "EUR",
+        fxRateToReporting: new Decimal("0.8"),
+        supplierRecoverableRate: new Decimal("0.5"),
+        isCancelled: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        createdById: null,
+        updatedById: null,
+        allocations: [],
+        refunds: [],
+      },
+    ];
+    const net = summarizeOrder(source);
+    expect(net.totalSellingRevenue).toBe(original.totalSellingRevenue);
+    expect(net.componentPricing).toEqual(original.componentPricing);
+    expect(net.costs.purchaseCost).toBe("100");
+    expect(net.costs.inputVat?.amount).toBe("20");
+    expect(net.costs.economicLandedCost).toBe("88");
+    expect(net.costs.reportingEconomicLandedCost).toBe("81.4");
+    expect(net.costs.reportingLandedCost).toBe("74");
+    expect(net.supplierPayment.totalPayable).toBe("96");
+    expect(net.supplierPayment.outstanding).toBe("96");
+    expect(net.supplierPayment.paid).toBe("0");
+    expect(net.costs.grossProfit).toBe(
+      new Decimal(original.costs.grossProfit ?? "0").plus("17.6").toString(),
+    );
+    const credit = source.credits[0];
+    if (!credit) throw new Error("Missing test credit");
+    credit.totalHt = new Decimal("100");
+    credit.vatAmount = new Decimal("20");
+    const creditedInFull = summarizeOrder(source);
+    expect(creditedInFull.supplierPayment.outstanding).toBe("0");
+    expect(creditedInFull.supplierPayment.status).not.toBe("PAID");
+    expect(creditedInFull.supplierPayment.paidAt).toBeNull();
+    credit.fxRateToReporting = null;
+    const missing = summarizeOrder(source);
+    expect(missing.costs.reportingEconomicLandedCost).toBeNull();
+    expect(missing.costs.grossProfit).toBeNull();
+    expect(missing.totalSellingRevenue).toBe(original.totalSellingRevenue);
+  },
+);
 
 describe("single order cost write", () => {
   beforeEach(() => {
@@ -414,6 +518,7 @@ describe("single order cost write", () => {
           allocatedAmount: new Decimal("30000"),
           basis: "FIXED_AMOUNT",
           billingDocument: {
+            credits: [],
             currencyCode: "EUR",
             documentType: "INVOICE",
             workflowStatus: "INVOICED",
@@ -435,6 +540,7 @@ describe("single order cost write", () => {
           allocatedAmount: new Decimal("70000"),
           basis: "FIXED_AMOUNT",
           billingDocument: {
+            credits: [],
             currencyCode: "EUR",
             documentType: "INVOICE",
             workflowStatus: "INVOICED",
@@ -486,6 +592,7 @@ describe("single order cost write", () => {
           allocatedAmount: new Decimal("100000"),
           basis: "FIXED_AMOUNT",
           billingDocument: {
+            credits: [],
             currencyCode: "USD",
             documentType: "INVOICE",
             workflowStatus: "INVOICED",

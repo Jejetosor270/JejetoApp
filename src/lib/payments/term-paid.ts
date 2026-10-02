@@ -9,6 +9,7 @@ import { businessToday } from "@/domain/payments/dates";
 import { PaymentValidationError } from "./errors";
 import { settlementSchema } from "@/domain/payments/validation";
 import { clientReceiptSchema } from "@/domain/billing/validation";
+import { creditPaymentLimit } from "@/lib/credits/mutation-guards";
 
 /** Reads and settles the current balance atomically; retries never duplicate cash. */
 export async function payTermRemaining(
@@ -30,12 +31,16 @@ export async function payTermRemaining(
         });
         if (term.direction !== "SUPPLIER_PAYMENT")
           throw new PaymentValidationError("Select a Supplier payment term.");
-        const remaining = new Decimal(term.scheduledAmount).minus(
+        let remaining = new Decimal(term.scheduledAmount).minus(
           term.settlements.reduce(
             (sum, row) => sum.plus(row.amount),
             new Decimal(0),
           ),
         );
+        if (term.orderId) {
+          const limit = await creditPaymentLimit(tx, "SUPPLIER", term.orderId);
+          if (limit !== null) remaining = Decimal.min(remaining, limit);
+        }
         if (remaining.lte(0)) return;
         if (
           term.currencyCode !==
@@ -68,12 +73,14 @@ export async function payTermRemaining(
           where: { id: input.id },
           include: { receipts: true },
         });
-        const remaining = new Decimal(term.scheduledAmount).minus(
+        let remaining = new Decimal(term.scheduledAmount).minus(
           term.receipts.reduce(
             (sum, row) => sum.plus(row.amount),
             new Decimal(0),
           ),
         );
+        const limit = await creditPaymentLimit(tx, "CLIENT", input.documentId);
+        if (limit !== null) remaining = Decimal.min(remaining, limit);
         if (remaining.lte(0)) return;
         // Receipt validation checks Invoice ownership, currency/FX, cancellation and limits.
         await recordClientReceiptInTransaction(

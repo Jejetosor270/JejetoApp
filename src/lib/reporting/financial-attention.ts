@@ -1,14 +1,19 @@
 import "server-only";
+import { archivedBalanceIssues } from "@/domain/finance/attention-data-quality";
 import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
 import { getDatabase } from "@/lib/db";
+import { activeCreditsInclude } from "@/lib/credits/select";
 import { listOrders, listProjectOrders } from "@/lib/procurement/orders";
 import {
   listPaymentInstallments,
   listProjectSupplierInstallments,
 } from "@/lib/payments/payments";
 import { freightExpenseEconomicCost } from "@/lib/freight/expenses";
-import { freightPaymentBalance } from "@/domain/finance/project-control";
+import {
+  difference,
+  freightPaymentBalance,
+} from "@/domain/finance/project-control";
 import { reportingAmount } from "@/domain/finance/calculations";
 import {
   calculateProjectTargets,
@@ -18,6 +23,7 @@ import {
 import { projectFreightBudget } from "@/domain/freight/calculations";
 import { billingIsIssued } from "@/domain/billing/status";
 import { billingCashContexts } from "@/domain/billing/cash-expectations";
+import { getClientCreditPosition } from "@/domain/billing/credits";
 import { businessToday, dateToDateOnly } from "@/domain/payments/dates";
 import {
   buildFinancialAttention,
@@ -47,11 +53,12 @@ export async function getFinancialAttention(
   horizon: AttentionHorizon,
   today = businessToday(),
   projectId?: string,
+  projectScope: "active" | "archived" = "active",
 ) {
   const db = getDatabase();
   const projects = await db.project.findMany({
     where: {
-      status: { not: "ARCHIVED" },
+      status: projectScope === "archived" ? "ARCHIVED" : { not: "ARCHIVED" },
       ...(projectId ? { id: projectId } : {}),
     },
     orderBy: [{ name: "asc" }, { id: "asc" }],
@@ -77,6 +84,7 @@ export async function getFinancialAttention(
             workflowStatus: { not: "CANCELLED" },
           },
           include: {
+            credits: activeCreditsInclude,
             receipts: { select: receiptSelect },
             paymentInstallments: {
               include: termInclude,
@@ -114,11 +122,13 @@ export async function getFinancialAttention(
       currency: order.orderCurrencyCode,
       totalHt: order.costs.purchaseCost,
       totalTtc: order.supplierPayment.totalPayable,
-      paid: order.supplierPayment.paid,
+      paid: order.supplierPayment.netPaid ?? order.supplierPayment.paid,
+      creditAdjusted: (order.credits?.count ?? 0) > 0,
+      refundDue: order.supplierPayment.refundDue,
       issued: true,
       toInvoice: false,
       fxMissing: order.costs.missingFx.length > 0,
-      actualFxMissing: false,
+      actualFxMissing: order.credits?.reportingRefunded === null,
       terms: (orderTerms.get(order.id) ?? []).map((term) => ({
         id: term.id,
         dueDate: term.dueDate,
@@ -166,22 +176,51 @@ export async function getFinancialAttention(
       dueDate: dateToDateOnly(bill.dueDate),
       currency: bill.currencyCode,
       totalHt: bill.totalHt.toString(),
-      totalTtc: bill.totalTtc.toString(),
+      totalTtc: context.total,
       paid: context.paid,
+      creditAdjusted: bill.credits.length > 0,
+      refundDue: context.reviewReason
+        ? undefined
+        : getClientCreditPosition(
+            bill,
+            receipts.map((receipt) => receipt.amount.toString()),
+          ).refundDue,
       issued: billingIsIssued(bill),
       toInvoice: bill.workflowStatus === "TO_BE_INVOICED",
-      fxMissing: missingFx(
-        bill.currencyCode,
-        project.reportingCurrencyCode,
-        bill.fxRateToReporting,
-      ),
-      actualFxMissing: receipts.some((receipt) =>
+      fxMissing:
         missingFx(
           bill.currencyCode,
           project.reportingCurrencyCode,
-          receipt.fxRateToReporting,
+          bill.fxRateToReporting,
+        ) ||
+        bill.credits.some(
+          (credit) =>
+            credit.reportingCurrencyCode !== project.reportingCurrencyCode ||
+            missingFx(
+              credit.currencyCode,
+              project.reportingCurrencyCode,
+              credit.fxRateToReporting,
+            ),
         ),
-      ),
+      actualFxMissing:
+        bill.credits.some((credit) =>
+          credit.refunds.some(
+            (refund) =>
+              credit.reportingCurrencyCode !== project.reportingCurrencyCode ||
+              missingFx(
+                credit.currencyCode,
+                project.reportingCurrencyCode,
+                refund.fxRateToReporting,
+              ),
+          ),
+        ) ||
+        receipts.some((receipt) =>
+          missingFx(
+            bill.currencyCode,
+            project.reportingCurrencyCode,
+            receipt.fxRateToReporting,
+          ),
+        ),
       terms: (bill.matchedInstallment
         ? [bill.matchedInstallment]
         : bill.paymentInstallments
@@ -260,6 +299,19 @@ export async function getFinancialAttention(
       ],
     });
   }
+  if (projectScope === "archived")
+    return {
+      projects: projects.map(({ id, name, code, status }) => ({
+        id,
+        name,
+        code,
+        status,
+      })),
+      issues: archivedBalanceIssues(documents).map((issue) => ({
+        ...issue,
+        fingerprint: attentionFingerprint(issue),
+      })),
+    };
   const metrics = projects.map((project) => {
     const convert = (
       amount: string,
@@ -296,13 +348,27 @@ export async function getFinancialAttention(
         .filter(
           (bill) => bill.projectId === project.id && billingIsIssued(bill),
         )
-        .map((bill) =>
+        .flatMap((bill) => [
           convert(
             bill.totalHt.toString(),
             bill.currencyCode,
             bill.fxRateToReporting,
           ),
-        ),
+          ...(bill.credits ?? [])
+            .filter((credit) => !credit.isCancelled)
+            .map((credit) =>
+              credit.reportingCurrencyCode !== project.reportingCurrencyCode
+                ? null
+                : difference(
+                    "0",
+                    convert(
+                      credit.totalHt.toString(),
+                      credit.currencyCode,
+                      credit.fxRateToReporting,
+                    ),
+                  ),
+            ),
+        ]),
     );
     const target = calculateProjectTargets({
       targetMode: project.targetMode,

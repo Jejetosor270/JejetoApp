@@ -151,6 +151,15 @@ enum ClientDocumentImportAction {
 }
 
 model User {
+  createdFinancialCredits FinancialCredit[] @relation("CreditCreatedBy")
+  updatedFinancialCredits FinancialCredit[] @relation("CreditUpdatedBy")
+  createdCreditRefunds FinancialCreditRefund[] @relation("CreditRefundCreatedBy")
+  updatedCreditRefunds FinancialCreditRefund[] @relation("CreditRefundUpdatedBy")
+  assignedFinancialFollowUps FinancialFollowUp[] @relation("FollowUpAssignee")
+  createdFinancialFollowUps FinancialFollowUp[] @relation("FollowUpCreatedBy")
+  updatedFinancialFollowUps FinancialFollowUp[] @relation("FollowUpUpdatedBy")
+  bankStatementImports BankStatementImport[] @relation("BankImportCreatedBy")
+  bankReconciliationMatches BankReconciliationMatch[] @relation("BankMatchCreatedBy")
   financialAttentionSnoozes FinancialAttentionSnooze[]
   createdFreightPayments FreightExpensePayment[] @relation("FreightPaymentCreatedBy")
   updatedFreightPayments FreightExpensePayment[] @relation("FreightPaymentUpdatedBy")
@@ -241,7 +250,89 @@ model FinancialAttentionSnooze {
   @@map("financial_attention_snoozes")
 }
 
+// Shared coordination metadata, never financial resolution or a second issue authority.
+model FinancialFollowUp {
+  id String @id @default(uuid()) @db.Uuid
+  issueKey String @unique @db.VarChar(120)
+  assigneeId String? @db.Uuid
+  nextFollowUpDate DateTime? @db.Date
+  note String @default("") @db.VarChar(1000)
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdById String? @db.Uuid
+  updatedById String? @db.Uuid
+  assignee User? @relation("FollowUpAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy User? @relation("FollowUpCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("FollowUpUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([assigneeId, nextFollowUpDate])
+  @@index([createdById])
+  @@index([updatedById])
+  @@map("financial_follow_ups")
+}
+
+model BankStatementImport {
+  id String @id @default(uuid()) @db.Uuid
+  accountLabel String @db.VarChar(120)
+  accountKey String @db.VarChar(120)
+  currencyCode String @db.Char(3)
+  fingerprint String @db.Char(64)
+  createdAt DateTime @default(now())
+  createdById String? @db.Uuid
+  currency Currency @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
+  createdBy User? @relation("BankImportCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  lines BankStatementLine[]
+
+  @@unique([accountKey, currencyCode, fingerprint])
+  @@index([currencyCode])
+  @@index([createdById])
+  @@map("bank_statement_imports")
+}
+
+model BankStatementLine {
+  id String @id @default(uuid()) @db.Uuid
+  importId String @db.Uuid
+  rowNumber Int
+  bookedAt DateTime @db.Date
+  direction PaymentDirection
+  amount Decimal @db.Decimal(19, 4)
+  reference String? @db.VarChar(240)
+  description String? @db.VarChar(500)
+  bankTransactionId String? @db.VarChar(240)
+  updatedAt DateTime @updatedAt
+  statementImport BankStatementImport @relation(fields: [importId], references: [id], onDelete: Restrict)
+  matches BankReconciliationMatch[]
+
+  @@unique([importId, rowNumber])
+  @@index([bookedAt])
+  @@map("bank_statement_lines")
+}
+
+// Cash records can transfer to UnassignedCashRecord. Immutable kind/ID + fingerprint
+// keeps reconciliation evidence without preventing that transfer; missing/changed
+// sources require review and are never represented as a current confirmed match.
+model BankReconciliationMatch {
+  id String @id @default(uuid()) @db.Uuid
+  lineId String @db.Uuid
+  cashKind String @db.VarChar(30)
+  cashRecordId String @db.Uuid
+  cashFingerprint String @db.Char(64)
+  createdAt DateTime @default(now())
+  createdById String? @db.Uuid
+  line BankStatementLine @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  createdBy User? @relation("BankMatchCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([cashKind, cashRecordId])
+  @@index([lineId])
+  @@index([createdById])
+  @@map("bank_reconciliation_matches")
+}
+
 model Currency {
+  financialCredits FinancialCredit[] @relation("CreditCurrency")
+  reportingFinancialCredits FinancialCredit[] @relation("CreditReportingCurrency")
+  bankStatementImports BankStatementImport[]
   detachedProcurementOrder ProcurementOrder[] @relation("ProcurementOrderDetachedCurrency")
   detachedProjectFreightExpense ProjectFreightExpense[] @relation("ProjectFreightExpenseDetachedCurrency")
   detachedPaymentInstallment PaymentInstallment[] @relation("PaymentInstallmentDetachedCurrency")
@@ -436,6 +527,8 @@ model Building {
 }
 
 model ProcurementOrder {
+  credits FinancialCredit[]
+  creditAllocations FinancialCreditAllocation[]
   shortDescription String? @db.VarChar(240)
   paymentStatusOverride String? @db.VarChar(24)
   trashedAt DateTime?
@@ -616,6 +709,7 @@ model ProcurementOrderCostLine {
 }
 
 model ProcurementOrderVatEntry {
+  credits FinancialCredit[]
   id                  String             @id @default(uuid()) @db.Uuid
   orderId             String             @db.Uuid
   direction           VatDirection
@@ -772,6 +866,7 @@ model ApplicationSetting {
 }
 
 model ClientBillingDocument {
+  credits FinancialCredit[]
   shortDescription String? @db.VarChar(240)
   workflowStatus String @default("INVOICED") @db.VarChar(24)
   paymentStatusOverride String? @db.VarChar(24)
@@ -826,6 +921,88 @@ model ClientBillingDocument {
   detachedReportingCurrencyCode String? @db.Char(3)
   detachedReportingCurrency Currency? @relation("ClientBillingDocumentDetachedCurrency", fields: [detachedReportingCurrencyCode], references: [code], onDelete: Restrict)
 
+}
+
+// Reviewed credit adjustments retain their original source. Cancellation is audited;
+// credits and refunds never overwrite an Invoice, Order, receipt or settlement.
+model FinancialCredit {
+  id String @id @default(uuid()) @db.Uuid
+  side String @db.VarChar(8)
+  billingDocumentId String? @db.Uuid
+  orderId String? @db.Uuid
+  supplierVatEntryId String? @db.Uuid
+  reference String @db.VarChar(120)
+  creditDate DateTime @db.Date
+  reason String @db.VarChar(4000)
+  totalHt Decimal @db.Decimal(19,4)
+  vatAmount Decimal @db.Decimal(19,4)
+  freightCoverageHt Decimal @default(0) @db.Decimal(19,4)
+  otherCoverageHt Decimal @default(0) @db.Decimal(19,4)
+  currencyCode String @db.Char(3)
+  reportingCurrencyCode String @db.Char(3)
+  fxRateToReporting Decimal? @db.Decimal(20,10)
+  supplierRecoverableRate Decimal? @db.Decimal(9,6)
+  isCancelled Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdById String? @db.Uuid
+  updatedById String? @db.Uuid
+  billingDocument ClientBillingDocument? @relation(fields:[billingDocumentId], references:[id], onDelete:Restrict)
+  order ProcurementOrder? @relation(fields:[orderId], references:[id], onDelete:Restrict)
+  supplierVatEntry ProcurementOrderVatEntry? @relation(fields:[supplierVatEntryId], references:[id], onDelete:SetNull)
+  currency Currency @relation("CreditCurrency",fields:[currencyCode],references:[code],onDelete:Restrict)
+  reportingCurrency Currency @relation("CreditReportingCurrency",fields:[reportingCurrencyCode],references:[code],onDelete:Restrict)
+  createdBy User? @relation("CreditCreatedBy",fields:[createdById],references:[id],onDelete:SetNull)
+  updatedBy User? @relation("CreditUpdatedBy",fields:[updatedById],references:[id],onDelete:SetNull)
+  allocations FinancialCreditAllocation[]
+  refunds FinancialCreditRefund[]
+  @@unique([billingDocumentId,reference])
+  @@unique([orderId,reference])
+  @@index([billingDocumentId,isCancelled])
+  @@index([orderId,isCancelled])
+  @@index([supplierVatEntryId])
+  @@index([currencyCode])
+  @@index([reportingCurrencyCode])
+  @@index([createdById])
+  @@index([updatedById])
+  @@map("financial_credits")
+}
+
+model FinancialCreditAllocation {
+  id String @id @default(uuid()) @db.Uuid
+  creditId String @db.Uuid
+  orderId String @db.Uuid
+  amountHt Decimal @db.Decimal(19,4)
+  freightCoverageHt Decimal @default(0) @db.Decimal(19,4)
+  otherCoverageHt Decimal @default(0) @db.Decimal(19,4)
+  credit FinancialCredit @relation(fields:[creditId],references:[id],onDelete:Restrict)
+  order ProcurementOrder @relation(fields:[orderId],references:[id],onDelete:Restrict)
+  @@unique([creditId,orderId])
+  @@index([orderId])
+  @@map("financial_credit_allocations")
+}
+
+model FinancialCreditRefund {
+  id String @id @default(uuid()) @db.Uuid
+  creditId String @db.Uuid
+  amount Decimal @db.Decimal(19,4)
+  refundDate DateTime @db.Date
+  fxRateToReporting Decimal? @db.Decimal(20,10)
+  reference String? @db.VarChar(120)
+  notes String? @db.VarChar(4000)
+  isCancelled Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdById String? @db.Uuid
+  updatedById String? @db.Uuid
+  credit FinancialCredit @relation(fields:[creditId],references:[id],onDelete:Restrict)
+  createdBy User? @relation("CreditRefundCreatedBy",fields:[createdById],references:[id],onDelete:SetNull)
+  updatedBy User? @relation("CreditRefundUpdatedBy",fields:[updatedById],references:[id],onDelete:SetNull)
+  @@index([creditId,isCancelled])
+  @@index([refundDate])
+  @@index([createdById])
+  @@index([updatedById])
+  @@map("financial_credit_refunds")
 }
 
 model ClientPaymentInstallment {

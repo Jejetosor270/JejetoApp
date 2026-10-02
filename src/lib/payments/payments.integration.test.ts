@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const transaction = vi.hoisted(() => ({
+  financialCredit: { count: vi.fn().mockResolvedValue(0) },
   paymentInstallment: {
     create: vi.fn(),
     count: vi.fn(),

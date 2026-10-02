@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { billingIsIssued } from "./status";
+import { getClientCreditPosition, type BillingCredit } from "./credits";
 
 type Money = { toString(): string };
 interface Receipt {
@@ -26,6 +27,7 @@ interface BillingCashDocument {
   receipts: readonly Receipt[];
   paymentInstallments: readonly Term[];
   matchedInstallment: Term | null;
+  credits?: readonly BillingCredit[];
 }
 
 export function uniqueReceiptTotal(receipts: readonly Receipt[]) {
@@ -86,6 +88,9 @@ export function billingCashContexts<T extends BillingCashDocument>(
             ? (document.matchedInstallment?.receipts ?? [])
             : []),
         ];
+    const creditPosition = getClientCreditPosition(document, [
+      uniqueReceiptTotal(receipts),
+    ]);
     return {
       document,
       reviewReason,
@@ -95,14 +100,14 @@ export function billingCashContexts<T extends BillingCashDocument>(
           : ("planned" as const),
       total: Decimal.max(
         0,
-        new Decimal(document.totalTtc.toString()).minus(
+        new Decimal(creditPosition.netDue).minus(
           (reviewReason ? [] : transferred).reduce(
             (sum, term) => sum.plus(term.scheduledAmount.toString()),
             new Decimal(0),
           ),
         ),
       ).toFixed(4),
-      paid: uniqueReceiptTotal(receipts),
+      paid: creditPosition.netPaid,
       terms: reviewReason
         ? originalTerms
         : originalTerms.filter((term) => !transferredIds.has(term.id)),

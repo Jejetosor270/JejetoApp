@@ -85,7 +85,9 @@ export function ProjectFinancialOverview({
     ProjectControl,
     "currency" | "received" | "cash" | "cashOutlook" | "excludedReceiptCount"
   > &
-    Partial<Pick<ProjectControl, "drilldowns">>;
+    Partial<
+      Pick<ProjectControl, "drilldowns" | "actualCashIn" | "actualCashOut">
+    >;
   performance: ProjectFinancialPerformance;
   projectId: string;
   missingBudgetInputs: readonly string[];
@@ -152,13 +154,19 @@ export function ProjectFinancialOverview({
             currency={data.currency}
             figures={[
               {
-                label: "Client payments received TTC",
-                value: data.received,
+                label: "Money in TTC · receipts & Supplier refunds",
+                value:
+                  data.actualCashIn === undefined
+                    ? data.received
+                    : data.actualCashIn,
                 href: "#financial:received",
               },
               {
-                label: "Supplier & freight payments made TTC",
-                value: data.cash.paid,
+                label: "Money out TTC · payments & Client refunds",
+                value:
+                  data.actualCashOut === undefined
+                    ? data.cash.paid
+                    : data.actualCashOut,
                 href: "#financial:paid",
               },
               {
@@ -170,8 +178,8 @@ export function ProjectFinancialOverview({
             ]}
           />
           <p className="text-muted-foreground mt-3 text-xs">
-            Recorded receipts less recorded payments. Not a bank balance or
-            available funds.
+            Recorded cash in less cash out, including actual refunds. Not a bank
+            balance or available funds.
           </p>
           {data.cash.net === null && (
             <p role="status" className="text-warning-foreground mt-2 text-xs">
@@ -204,14 +212,14 @@ export function ProjectFinancialOverview({
           <dl className="mt-4 grid gap-4 sm:grid-cols-2">
             {[
               {
-                label: "Client outstanding TTC",
+                label: "Outstanding money in TTC",
                 value: outlook.outstandingIn,
                 overdue: outlook.overdueIn,
                 href: "#financial:incoming",
                 overdueHref: "#financial:overdueIn",
               },
               {
-                label: "Supplier & freight outstanding TTC",
+                label: "Outstanding money out TTC",
                 value: outlook.outstandingOut,
                 overdue: outlook.overdueOut,
                 href: "#financial:outgoing",
@@ -241,8 +249,9 @@ export function ProjectFinancialOverview({
             ))}
           </dl>
           <p className="text-muted-foreground mt-3 text-xs">
-            Includes later, undated and unscheduled balances. Expected payment
-            FX applies; missing amounts or FX remain incomplete.
+            Includes issued Invoices, Supplier/freight commitments and refunds
+            owed, including later or undated balances. Missing dates or expected
+            FX remain incomplete.
           </p>
           <p className="mt-3 border-t pt-3 text-xs">
             Planned client receipts TTC · all dates:{" "}
@@ -369,12 +378,12 @@ export function ProjectFinancialOverview({
                       >
                         Review undated / unscheduled
                       </ProjectFinancialLink>{" "}
-                      — client:{" "}
+                      — money in:{" "}
                       <Money
                         value={outlook.undatedIn}
                         currency={data.currency}
                       />
-                      ; Supplier/freight:{" "}
+                      ; money out:{" "}
                       <Money
                         value={outlook.undatedOut}
                         currency={data.currency}

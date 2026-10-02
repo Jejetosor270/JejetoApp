@@ -16,6 +16,7 @@ const transaction = vi.hoisted(() => ({
   },
   clientBillingDocument: {
     create: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     findUnique: vi.fn(),
     update: vi.fn(),
   },
@@ -1091,6 +1092,7 @@ describe("Billing persistence", () => {
       },
       billingDocumentId: "document-1",
       id: installmentId,
+      scheduledAmount: new Decimal("30000"),
       matchedInvoices: [],
       receipts: [],
     });

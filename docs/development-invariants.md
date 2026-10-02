@@ -1,5 +1,67 @@
 # Development invariants
 
+## Operational financial control — Phase 3
+
+- Home's shared follow-ups add an active employee owner, next follow-up date and
+  note. ADMIN/MANAGER saves are audited and version-checked; failed saves retain
+  drafts. USER can read. Ownership survives balance and horizon changes; personal
+  snoozes remain separate. Possible duplicate groups have no shared owner because
+  their group identity can change. A hidden/disappearing issue is not marked resolved.
+- The same attention list offers All/Mine/Unassigned and Data quality filters.
+  Data quality also exposes unassigned financial records and archived Projects with
+  open issued-document balances. These original-currency review rows never enter
+  active-Project totals or forecasts. Direct receipts can settle an Invoice without
+  settling each term; the authoritative document balance decides closure. Ambiguous
+  or unlike-currency balances remain incomplete rather than fabricated totals.
+- Reports → Bank reconciliation accepts reviewed UTF-8 CSV rows with explicit column,
+  date and decimal-format mapping, account label and one currency. Only normalized
+  reviewed lines persist; the source CSV is not uploaded or stored. Matching links a
+  bank line to existing Supplier payments, recognized Client Invoice receipts,
+  Project freight payments or recorded credit refunds, never creates cash, changes
+  schedules or supplies FX. Client refunds are money out; Supplier refunds are money in.
+  Same-currency/direction amounts must sum exactly using Decimal. A cash record may
+  belong to only one bank match; grouped matches are supported, splitting one cash
+  record across bank lines is not. Imports and match/unmatch operations are audited.
+- Identical imports for the same normalized account label/currency are idempotent;
+  overlapping bank rows are review warnings, not auto-matches. A changed, removed,
+  trashed, unassigned or no-longer-recognized cash source makes its match Needs review.
+  Reconciliation identity links deliberately survive source removal without preventing
+  existing Trash/unassignment behavior. They are evidence, never financial authority.
+- Migration `20261002000000_financial_followups_reconciliation` adds only follow-up
+  and bank-import/line/match tables. It is prepared, not applied, and must be deployed
+  separately before this version's Home or reconciliation workspace is used.
+- Billing and Purchasing Related expose Credits & refunds. ADMIN/MANAGER records
+  reviewed credits and actual refunds; USER can read. Credits retain the original
+  Invoice/Order, payment terms and cash history. Every mutation is audited,
+  transactionally authorized and checked against the original editor version.
+- Supplier credits reduce product purchase cost and explicitly linked payable input
+  VAT, preserving recoverability and the agreed Client selling price in every pricing
+  mode. Ambiguous multiple input-VAT entries require review rather than averaging.
+  This slice does not model credits against separate freight expenses or freight costs.
+- Client credits reduce Invoice HT/VAT and only explicitly selected linked Order
+  allocations. Category reductions are bounded by remaining Invoice and allocation
+  merchandise/freight/other balances; unassigned credit remains at Project level.
+  Original commercial FX and reporting currency are snapshotted, never invented.
+- A credit reduces net payable/receivable, not actual cash. A fully credited unpaid
+  record is not falsely marked Paid. Already-paid documents can have refund due;
+  actual refunds are separate dated transactions with independent actual FX.
+  Project/portfolio revenue, costs, VAT and cash include credits/refunds once. Missing
+  FX remains incomplete. Undated refund obligations/receivables remain visible in
+  attention and make cash forecasts incomplete rather than being assigned a fake date.
+- While credits are active, incompatible source financial/currency/linkage changes
+  and cash corrections are guarded. Correct actual refunds first, then cancel the
+  credit if the original needs financial correction. Credit/refund cancellation
+  preserves history. Records and ancestors linked to any credit history cannot yet
+  be moved to Trash; ordinary unrelated Trash remains unchanged. Unassignment is
+  blocked while related credits are active. Mixed-currency/ambiguous payment sources
+  block credit/refund creation.
+- Migration `20261002010000_financial_credits_refunds` adds normalized credit,
+  allocation and refund tables, restrictive source relationships, immutable snapshots
+  and validation checks, and permits refund reconciliation matches. It is prepared,
+  not applied. Both Phase 3 migrations are required before deploying this version;
+  apply them separately with the existing deployment workflow, never during build.
+- Optional expected-final-profit forecasting remains deferred.
+
 ## Consistent daily workflow — Phase 2
 
 - Projects, Purchasing Orders and Billing use the same Details / Related workspace
@@ -76,8 +138,9 @@
   zero is an approved value, never a replacement for missing information. Allocation coverage,
   category/freight breakdowns, VAT, purchase-budget allocation and planning fields remain in
   collapsed sections; Details/Related, editing and underlying records are unchanged.
-- Actual cash remains recognized Client Invoice receipts less Supplier and Project-freight payments,
-  using actual FX. It is net tracked Project cash, not a bank balance or freely available funds.
+- Actual cash is recognized Client Invoice receipts plus Supplier refunds, less Supplier
+  and Project-freight payments and Client refunds, using each transaction's actual FX.
+  It is net tracked Project cash, not a bank balance or freely available funds.
 - The Project overview offers 7/30/90-day cash windows (30 by default), from today through day N−1.
   Financial attention uses the same inclusive end date through the shared cashWindowEnd helper;
   overdue amounts remain visible separately from the Project's future window.
@@ -610,7 +673,7 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 
 ## Financial attention list
 
-- Home presents one derived, paginated attention list across non-archived Projects. Next 7/30/90 days controls upcoming events; overdue and incomplete-data issues remain visible regardless of horizon. Unassigned records are outside this view.
+- Home presents one derived, paginated attention list. Active-Project financial checks use non-archived Projects; additional data-quality rows expose unassigned records and archived obligations without adding them to active totals. Next 7/30/90 days controls upcoming events; overdue and incomplete-data issues remain visible regardless of horizon.
 - Checks cover Supplier and Client outstanding terms, issue-invoice reminders, missing dates/FX, incomplete schedules, provisional invoiced markup below target, possible duplicate invoices and scheduled cash shortfalls. Duplicate detection is advisory, using party, side, currency, invoice date and TTC amount; it never merges records.
 - Actual cash, remaining terms, matched Quote/Invoice receipts and profitability reuse authoritative financial helpers. Cash outlook excludes opening bank balances and becomes incomplete when required dates, schedules or FX are missing. Unlike currencies are never combined without valid conversion.
 - Attention actions open existing records. Personal snoozes require a reason and a future date, expire on that business date, and stop hiding an issue when its displayed financial details or urgency change. Snoozing never changes financial records or hides issues from other employees.

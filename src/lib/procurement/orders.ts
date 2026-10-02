@@ -25,8 +25,8 @@ import {
 } from "@/generated/prisma/client";
 import {
   amountIncludingVat,
-  crossCurrencyFinancialMetrics,
   economicLandedCost,
+  financialMetrics,
   landedCost,
   reportingAmount,
   sellingPriceFromTargetMargin,
@@ -58,6 +58,13 @@ import { writeAuditEvent } from "@/lib/audit/events";
 import { paginationSkip, type PageInput } from "@/domain/listing/validation";
 import { supplierPayableBase } from "@/domain/payments/calculations";
 import { completedPaymentDate } from "@/domain/payments/terms";
+import { activeCreditsInclude } from "@/lib/credits/select";
+import { assertNoActiveCredits } from "@/lib/credits/guards";
+import { creditCashPosition } from "@/domain/credits/calculations";
+import {
+  summarizeSupplierCredits,
+  type SupplierCreditSummary,
+} from "@/domain/finance/supplier-credit-reporting";
 import {
   inputVatRecoverabilityApplies,
   recoverabilityFromRate,
@@ -68,6 +75,7 @@ import {
 import { ProcurementNotFoundError, ProcurementRelationError } from "./errors";
 
 export const orderInclude = {
+  credits: activeCreditsInclude,
   orderPackage: { select: { id: true, name: true, isActive: true } },
   buildings: {
     include: {
@@ -110,6 +118,7 @@ export const orderInclude = {
           workflowStatus: true,
           isCancelled: true,
           fxRateToReporting: true,
+          credits: activeCreditsInclude,
         },
       },
     },
@@ -201,6 +210,7 @@ export interface OrderCostSummary {
   sellingFxRate: string | null;
 }
 export interface OrderSummary {
+  credits?: SupplierCreditSummary;
   carrierCode?: string | null;
   carrierOtherName?: string | null;
   trackingReference?: string | null;
@@ -281,6 +291,10 @@ export interface OrderSummary {
   supplierQuoteReference: string | null;
   paymentStatusOverride?: string | null;
   supplierPayment: {
+    netPaid?: string;
+    refunded?: string;
+    refundDue?: string;
+    originalPayable?: string | null;
     paidAt: string | null;
     nextDueDate: string | null;
     outstanding: string | null;
@@ -676,6 +690,10 @@ function componentPricing(order: OrderRecord) {
 
 export function summarizeOrder(record: RawOrderRecord): OrderSummary {
   const order = orderContext(record);
+  const credits = summarizeSupplierCredits(
+    order.credits ?? [],
+    order.project.reportingCurrencyCode,
+  );
   const landed = currentLandedCost(order);
   const input = vatEntry(order, VatDirection.INPUT);
   const output = vatEntry(order, VatDirection.OUTPUT);
@@ -778,29 +796,28 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
         reportingCurrencyCode: order.project.reportingCurrencyCode,
       })
     : null;
+  // Pricing above always uses original costs. Credits reduce cost, never client sell.
+  const netEconomic = economic?.minus(credits.economic) ?? null;
+  const netLanded = landed?.minus(credits.purchaseHt) ?? null;
+  const netReportingEconomic =
+    reportingEconomic && credits.reportingEconomic !== null
+      ? reportingEconomic.minus(credits.reportingEconomic)
+      : null;
+  const netReportingLanded =
+    reportingLanded && credits.reportingPurchaseHt !== null
+      ? reportingLanded.minus(credits.reportingPurchaseHt)
+      : null;
   const metrics =
-    economic && totalRevenue
-      ? crossCurrencyFinancialMetrics({
-          economicLandedCost: economic,
-          purchaseCurrencyCode: order.orderCurrencyCode,
-          purchaseFxRateToReporting: fxRate(
-            order.orderCurrencyCode,
-            order.project.reportingCurrencyCode,
-            order.purchaseFxRateToReporting,
-          ),
-          reportingCurrencyCode: order.project.reportingCurrencyCode,
-          sellingCurrencyCode: order.sellingCurrencyCode,
-          sellingFxRateToReporting: fxRate(
-            order.sellingCurrencyCode,
-            order.project.reportingCurrencyCode,
-            order.sellingFxRateToReporting,
-          ),
-          sellingRevenue: totalRevenue,
+    netReportingEconomic !== null && reportingRevenue !== null
+      ? financialMetrics({
+          landedCost: netReportingEconomic,
+          sellingPrice: reportingRevenue,
         })
       : null;
   const missingFx: string[] = [];
   if (landed && reportingLanded === null) missingFx.push("purchase FX");
   if (totalRevenue && reportingRevenue === null) missingFx.push("selling FX");
+  if (credits.reportingEconomic === null) missingFx.push("credit FX");
   let quotedAllocated = new Decimal(0);
   let invoicedAllocated = new Decimal(0);
   let billingConversionComplete = true;
@@ -818,31 +835,50 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
       billingConversionComplete = false;
       continue;
     }
-    if (document.documentType === "INVOICE")
+    if (document.documentType === "INVOICE") {
       invoicedAllocated = invoicedAllocated.plus(convertedAllocation);
-    else quotedAllocated = quotedAllocated.plus(convertedAllocation);
+      for (const credit of document.credits ?? []) {
+        if (credit.isCancelled) continue;
+        for (const reduction of credit.allocations.filter(
+          (row) => row.orderId === order.id,
+        )) {
+          const value =
+            credit.reportingCurrencyCode === order.project.reportingCurrencyCode
+              ? reportingAmount({
+                  originalAmount: reduction.amountHt.toString(),
+                  originalCurrencyCode: credit.currencyCode,
+                  reportingCurrencyCode: order.project.reportingCurrencyCode,
+                  fxRateToReporting:
+                    credit.fxRateToReporting?.toString() ?? null,
+                })
+              : null;
+          if (value === null) billingConversionComplete = false;
+          else invoicedAllocated = invoicedAllocated.minus(value);
+        }
+      }
+    } else quotedAllocated = quotedAllocated.plus(convertedAllocation);
   }
   const actualMetrics =
     billingConversionComplete &&
-    reportingEconomic &&
+    netReportingEconomic &&
     invoicedAllocated.greaterThan(0)
       ? {
-          grossProfit: invoicedAllocated.minus(reportingEconomic),
+          grossProfit: invoicedAllocated.minus(netReportingEconomic),
           marginRate: invoicedAllocated
-            .minus(reportingEconomic)
+            .minus(netReportingEconomic)
             .dividedBy(invoicedAllocated),
-          markupRate: reportingEconomic.isZero()
+          markupRate: netReportingEconomic.isZero()
             ? null
             : invoicedAllocated
-                .minus(reportingEconomic)
-                .dividedBy(reportingEconomic),
+                .minus(netReportingEconomic)
+                .dividedBy(netReportingEconomic),
         }
       : null;
   const supplierPurchase = costAmount(
     order,
     ProcurementCostCategory.SUPPLIER_PURCHASE,
   );
-  const supplierPayable = supplierPurchase
+  const originalPayable = supplierPurchase
     ? supplierPayableBase({
         inputVatAmount: input?.vatAmount.toString() ?? null,
         inputVatTreatment: input?.treatment ?? null,
@@ -863,8 +899,19 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
       ),
     new Decimal(0),
   );
-  const outstandingSupplier = supplierPayable
-    ? Decimal.max(supplierPayable.minus(paidSupplier), 0)
+  const cashPosition = originalPayable
+    ? creditCashPosition({
+        originalTtc: originalPayable.toString(),
+        creditedTtc: credits.payable,
+        paidTtc: paidSupplier.toString(),
+        refundedTtc: credits.refunded,
+      })
+    : null;
+  const supplierPayable = cashPosition
+    ? new Decimal(cashPosition.netDue)
+    : null;
+  const outstandingSupplier = cashPosition
+    ? new Decimal(cashPosition.outstanding)
     : null;
   const nextSupplierDue = order.paymentInstallments
     .toSorted(
@@ -883,20 +930,24 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
           .lessThan(installment.scheduledAmount),
     );
   const today = businessToday();
-  const supplierPaymentStatus =
-    supplierPayable && paidSupplier.greaterThanOrEqualTo(supplierPayable)
+  const supplierPaymentStatus = outstandingSupplier?.isZero()
+    ? paidSupplier.greaterThan(0)
       ? "PAID"
-      : nextSupplierDue?.dueDate &&
-          dateToDateOnly(nextSupplierDue.dueDate) < today
-        ? "OVERDUE"
-        : paidSupplier.greaterThan(0)
-          ? "PARTIALLY_PAID"
-          : nextSupplierDue && !nextSupplierDue.dueDate
-            ? "DATE_NEEDED"
-            : order.paymentInstallments.length
-              ? "SCHEDULED"
-              : "NOT_SCHEDULED";
+      : order.paymentInstallments.length
+        ? "SCHEDULED"
+        : "NOT_SCHEDULED"
+    : nextSupplierDue?.dueDate &&
+        dateToDateOnly(nextSupplierDue.dueDate) < today
+      ? "OVERDUE"
+      : paidSupplier.greaterThan(0)
+        ? "PARTIALLY_PAID"
+        : nextSupplierDue && !nextSupplierDue.dueDate
+          ? "DATE_NEEDED"
+          : order.paymentInstallments.length
+            ? "SCHEDULED"
+            : "NOT_SCHEDULED";
   return {
+    credits,
     carrierCode: order.carrierCode,
     carrierOtherName: order.carrierOtherName,
     trackingReference: order.trackingReference,
@@ -999,6 +1050,10 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
     supplierQuoteReference: order.supplierQuoteReference,
     paymentStatusOverride: order.paymentStatusOverride,
     supplierPayment: {
+      originalPayable: originalPayable?.toString() ?? null,
+      netPaid: cashPosition?.netPaid ?? paidSupplier.toString(),
+      refunded: credits.refunded,
+      refundDue: cashPosition?.refundDue ?? "0",
       paidAt: completedPaymentDate(
         order.status !== "CANCELLED" && supplierPaymentStatus === "PAID",
         order.paymentInstallments.flatMap((installment) =>
@@ -1026,7 +1081,7 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
     costs: {
       conversionComplete: missingFx.length === 0,
       customsDuties: costAmount(order, ProcurementCostCategory.CUSTOMS_DUTIES),
-      economicLandedCost: economic?.toString() ?? null,
+      economicLandedCost: netEconomic?.toString() ?? null,
       freight: costAmount(order, ProcurementCostCategory.FREIGHT),
       grossMarginRate: metrics?.grossMarginRate?.toString() ?? null,
       grossProfit: metrics?.grossProfit.toString() ?? null,
@@ -1036,7 +1091,7 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
         order.project.reportingCurrencyCode,
         order.purchaseFxRateToReporting,
       ),
-      landedCost: landed?.toString() ?? null,
+      landedCost: netLanded?.toString() ?? null,
       markupRate: metrics?.markupRate?.toString() ?? null,
       miscellaneous: costAmount(order, ProcurementCostCategory.MISCELLANEOUS),
       missingFx,
@@ -1054,8 +1109,8 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
         ProcurementCostCategory.SUPPLIER_PURCHASE,
       ),
       purchaseFxRate: order.purchaseFxRateToReporting?.toString() ?? null,
-      reportingEconomicLandedCost: reportingEconomic?.toString() ?? null,
-      reportingLandedCost: reportingLanded?.toString() ?? null,
+      reportingEconomicLandedCost: netReportingEconomic?.toString() ?? null,
+      reportingLandedCost: netReportingLanded?.toString() ?? null,
       reportingSellingRevenue: reportingRevenue?.toString() ?? null,
       sellingFxRate: order.sellingFxRateToReporting?.toString() ?? null,
     },
@@ -1767,6 +1822,11 @@ export async function updateOrderInline(
 ) {
   try {
     return await getDatabase().$transaction(async (transaction) => {
+      if (input.status === "CANCELLED")
+        await assertNoActiveCredits(transaction, {
+          side: "SUPPLIER",
+          sourceId: input.id,
+        });
       const order = await transaction.procurementOrder.update({
         where: { id: input.id },
         data: {
@@ -1854,6 +1914,7 @@ async function updateOrderRecord(
   project: ProjectPricingContext,
 ): Promise<void> {
   const { id, ...fields } = input;
+  await assertNoActiveCredits(transaction, { side: "SUPPLIER", sourceId: id });
   if (input.expectedVersion) {
     const snapshot = await transaction.procurementOrder.findUniqueOrThrow({
       where: { id },

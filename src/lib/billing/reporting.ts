@@ -23,8 +23,11 @@ import { derivePaymentStatus } from "@/domain/payments/calculations";
 import { businessToday, dateToDateOnly } from "@/domain/payments/dates";
 import { ClientBillingDocumentType, Prisma } from "@/generated/prisma/client";
 import { getDatabase } from "@/lib/db";
+import { activeCreditsInclude } from "@/lib/credits/select";
+import { getClientCreditPosition } from "@/domain/billing/credits";
 
 const billingReportingInclude = {
+  credits: activeCreditsInclude,
   allocations: {
     include: { order: { select: { status: true } } },
   },
@@ -40,6 +43,8 @@ const billingReportingInclude = {
 type BillingReportingRecord = Prisma.ClientBillingDocumentGetPayload<{
   include: typeof billingReportingInclude;
 }>;
+const activeRecordCredits = (record: BillingReportingRecord) =>
+  (record.credits ?? []).filter((credit) => !credit.isCancelled);
 
 function receiptRecords(record: BillingReportingRecord) {
   const matched =
@@ -79,6 +84,7 @@ function createBillingSummaryState() {
   const coverage = new Decimal(0);
   const invoiceOutstanding = new Decimal(0);
   const paid = new Decimal(0);
+  const refunded = new Decimal(0);
   const overdue = new Decimal(0);
   const upcomingScheduled = new Decimal(0);
   const nextDueDate = null as string | null;
@@ -96,6 +102,10 @@ function createBillingSummaryState() {
     string,
     { amount: string; due: string | null; currency: string; fx: string | null }
   >();
+  const uniqueRefunds = new Map<
+    string,
+    { amount: string; currency: string; fx: string | null }
+  >();
 
   return {
     quoted,
@@ -105,6 +115,7 @@ function createBillingSummaryState() {
     coverage,
     invoiceOutstanding,
     paid,
+    refunded,
     overdue,
     upcomingScheduled,
     nextDueDate,
@@ -116,6 +127,7 @@ function createBillingSummaryState() {
     coverageMissingIds,
     uniqueReceipts,
     uniqueInstallments,
+    uniqueRefunds,
   };
 }
 
@@ -142,6 +154,19 @@ function addDocumentRevenue(
   } else {
     state.invoiced = state.invoiced.plus(convertedHt);
   }
+  if (record.documentType === ClientBillingDocumentType.INVOICE)
+    for (const credit of activeRecordCredits(record)) {
+      const reduction = converted(
+        credit.totalHt.toString(),
+        credit.currencyCode,
+        reportingCurrencyCode,
+        credit.fxRateToReporting?.toString() ?? null,
+      );
+      if (reduction === null) {
+        state.missingIds.add(credit.id);
+        state.invoiceMissingIds.add(credit.id);
+      } else state.invoiced = state.invoiced.minus(reduction);
+    }
 }
 
 function addInvoiceCoverage(
@@ -175,6 +200,36 @@ function addInvoiceCoverage(
     if (convertedCoverage === null) state.coverageMissingIds.add(record.id);
     else state.coverage = state.coverage.plus(convertedCoverage);
   }
+  for (const credit of activeRecordCredits(record)) {
+    const activeOrderIds = new Set(
+      record.allocations
+        .filter((allocation) => allocation.order.status !== "CANCELLED")
+        .map((allocation) => allocation.orderId),
+    );
+    const allocated = credit.allocations.reduce(
+      (sum, allocation) => sum.plus(allocation.amountHt),
+      new Decimal(0),
+    );
+    const activeAllocated = credit.allocations
+      .filter((allocation) => activeOrderIds.has(allocation.orderId))
+      .reduce(
+        (sum, allocation) => sum.plus(allocation.amountHt),
+        new Decimal(0),
+      );
+    const amount = activeAllocated.plus(
+      record.isProjectRemainderApproved
+        ? new Decimal(credit.totalHt).minus(allocated)
+        : 0,
+    );
+    const reduction = converted(
+      amount.toFixed(4),
+      credit.currencyCode,
+      reportingCurrencyCode,
+      credit.fxRateToReporting?.toString() ?? null,
+    );
+    if (reduction === null) state.coverageMissingIds.add(credit.id);
+    else state.coverage = state.coverage.minus(reduction);
+  }
 }
 
 function addInvoiceTotals(
@@ -203,6 +258,27 @@ function addInvoiceTotals(
     state.missingIds.add(record.id);
     state.outputVatMissingIds.add(record.id);
   } else state.outputVat = state.outputVat.plus(convertedVat);
+  for (const credit of activeRecordCredits(record)) {
+    const rate = credit.fxRateToReporting?.toString() ?? null;
+    const ttc = converted(
+      new Decimal(credit.totalHt).plus(credit.vatAmount).toFixed(4),
+      credit.currencyCode,
+      reportingCurrencyCode,
+      rate,
+    );
+    const vat = converted(
+      credit.vatAmount.toString(),
+      credit.currencyCode,
+      reportingCurrencyCode,
+      rate,
+    );
+    if (ttc === null) state.missingIds.add(credit.id);
+    else state.invoicedTtc = state.invoicedTtc.minus(ttc);
+    if (vat === null) {
+      state.missingIds.add(credit.id);
+      state.outputVatMissingIds.add(credit.id);
+    } else state.outputVat = state.outputVat.minus(vat);
+  }
 }
 
 function collectBillingCash(
@@ -210,6 +286,16 @@ function collectBillingCash(
   record: BillingReportingRecord,
   reviewRequired: boolean,
 ) {
+  const creditPosition = getClientCreditPosition(record, [
+    uniqueReceiptTotal(receiptRecords(record)),
+  ]);
+  for (const credit of activeRecordCredits(record))
+    for (const refund of credit.refunds.filter((row) => !row.isCancelled))
+      state.uniqueRefunds.set(refund.id, {
+        amount: refund.amount.toString(),
+        currency: credit.currencyCode,
+        fx: refund.fxRateToReporting?.toString() ?? null,
+      });
   for (const receipt of record.documentType ===
   ClientBillingDocumentType.INVOICE
     ? receiptRecords(record)
@@ -229,8 +315,10 @@ function collectBillingCash(
     }
   } else if (isRecognizedClientReceivable(record)) {
     const schedule = cappedCashTerms(
-      record.totalTtc.toString(),
-      uniqueReceiptTotal(receiptRecords(record)),
+      creditPosition.netDue,
+      activeRecordCredits(record).length
+        ? Decimal.min(creditPosition.netDue, creditPosition.netPaid).toString()
+        : creditPosition.netPaid,
       visibleInstallments.map((term) => ({
         id: term.id,
         amount: term.scheduledAmount.toString(),
@@ -277,6 +365,7 @@ function addReceivableBalance(
     ),
     today: state.today,
     totalTtc: record.totalTtc.toString(),
+    ...getClientCreditPosition(record),
   });
   const outstanding = converted(
     view.outstanding,
@@ -317,6 +406,16 @@ function addActualReceipts(
     );
     if (convertedReceipt === null) state.missingIds.add(receipt.id);
     else state.paid = state.paid.plus(convertedReceipt);
+  }
+  for (const [id, refund] of state.uniqueRefunds) {
+    const amount = converted(
+      refund.amount,
+      refund.currency,
+      reportingCurrencyCode,
+      refund.fx,
+    );
+    if (amount === null) state.missingIds.add(id);
+    else state.refunded = state.refunded.plus(amount);
   }
 }
 
@@ -379,6 +478,7 @@ export function summarizeClientBillingRecords(
     coverage,
     invoiceOutstanding,
     paid,
+    refunded,
     overdue,
     upcomingScheduled,
     nextDueDate,
@@ -405,6 +505,8 @@ export function summarizeClientBillingRecords(
     outputVatComplete: outputVatMissingIds.size === 0,
     outputVatMissingIds: [...outputVatMissingIds],
     paidTtc: paid.toFixed(4),
+    refundedTtc: refunded.toFixed(4),
+    netPaidTtc: paid.minus(refunded).toFixed(4),
     quotedHt: quoted.toFixed(4),
     reportingCurrencyCode,
     scheduleComplete,
@@ -534,6 +636,7 @@ export async function listClientCashInstallments(
     },
     orderBy: { documentType: "desc" },
     select: {
+      credits: activeCreditsInclude,
       client: { select: { id: true, displayName: true } },
       documentType: true,
       currencyCode: true,
@@ -590,7 +693,13 @@ export async function listClientCashInstallments(
             amount: new Decimal(term.amount),
           })),
         }
-      : cappedCashTerms(context.total, context.paid, terms);
+      : cappedCashTerms(
+          context.total,
+          document.credits?.some((credit) => !credit.isCancelled)
+            ? Decimal.min(context.total, context.paid).toString()
+            : context.paid,
+          terms,
+        );
     for (const { term, amount: outstanding } of schedule.terms) {
       const installment = term.source;
       const received = new Decimal(term.paid);

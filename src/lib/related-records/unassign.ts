@@ -7,6 +7,7 @@ import { retainedCurrency } from "./context";
 import type { AssignmentRelation } from "./types";
 import { unassignCashInTransaction } from "@/lib/payments/unassigned-cash";
 import type { AuditEntityType } from "@/domain/audit/constants";
+import { assertCreditSafeMutation } from "@/lib/credits/mutation-guards";
 
 export class AssignmentError extends Error {}
 type Context = {
@@ -37,6 +38,18 @@ export async function removeAssignments(
         const parent = context.ownerId ? selectedId : context.parentId;
         const where = { id };
         const updatedById = actorId;
+        const creditModel = context.relation.startsWith("supplier-installment-")
+          ? "PaymentInstallment"
+          : context.relation.startsWith("client-installment-")
+            ? "ClientPaymentInstallment"
+            : context.relation.startsWith("order-")
+              ? "ProcurementOrder"
+              : context.relation.startsWith("billing-")
+                ? "ClientBillingDocument"
+                : context.relation === "project-client"
+                  ? "Project"
+                  : null;
+        if (creditModel) await assertCreditSafeMutation(tx, creditModel, [id]);
         switch (context.relation) {
           case "project-client": {
             const row = await tx.project.findUniqueOrThrow({ where });

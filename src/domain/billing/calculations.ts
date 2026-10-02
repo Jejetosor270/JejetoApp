@@ -4,6 +4,7 @@ import Decimal from "decimal.js";
 import { derivePaymentStatus } from "@/domain/payments/calculations";
 import { normalizeDecimalInput } from "@/domain/validation/numeric";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
+import { creditCashPosition } from "@/domain/credits/calculations";
 
 export interface ClientBillingAmounts {
   outstanding: string;
@@ -33,13 +34,21 @@ export function calculateClientBillingAmounts(input: {
   paidAmounts: readonly string[];
   today: string;
   totalTtc: string;
+  creditedTtc?: string;
+  refundedTtc?: string;
 }): ClientBillingAmounts {
-  const total = new Decimal(input.totalTtc);
   const paid = input.paidAmounts.reduce(
     (sum, amount) => sum.plus(amount),
     new Decimal(0),
   );
-  const outstanding = Decimal.max(total.minus(paid), 0);
+  const creditPosition = creditCashPosition({
+    originalTtc: input.totalTtc,
+    creditedTtc: input.creditedTtc ?? "0",
+    refundedTtc: input.refundedTtc ?? "0",
+    paidTtc: paid.toString(),
+  });
+  const total = new Decimal(creditPosition.netDue);
+  const outstanding = new Decimal(creditPosition.outstanding);
   if (input.isCancelled) {
     return {
       outstanding: "0.0000",
@@ -50,20 +59,22 @@ export function calculateClientBillingAmounts(input: {
   const derived = derivePaymentStatus({
     dueDate: input.dueDate ?? "9999-12-31",
     isCancelled: false,
-    paidAmount: paid,
+    paidAmount: creditPosition.netPaid,
     scheduledAmount: total,
     today: input.today,
   });
   const status =
-    derived === "PAID"
-      ? "PAID"
-      : derived === "PARTIALLY_PAID"
-        ? "PARTIALLY_PAID"
-        : derived === "OVERDUE"
-          ? "OVERDUE"
-          : input.documentType === "INVOICE"
-            ? "INVOICED"
-            : "QUOTED";
+    total.isZero() && new Decimal(input.creditedTtc ?? "0").greaterThan(0)
+      ? "INVOICED"
+      : derived === "PAID"
+        ? "PAID"
+        : derived === "PARTIALLY_PAID"
+          ? "PARTIALLY_PAID"
+          : derived === "OVERDUE"
+            ? "OVERDUE"
+            : input.documentType === "INVOICE"
+              ? "INVOICED"
+              : "QUOTED";
   return {
     outstanding: outstanding.toFixed(4),
     paid: paid.toFixed(4),

@@ -14,6 +14,9 @@ import {
   projectFreightCoverage,
 } from "@/domain/finance/project-coverage";
 import { getDatabase } from "@/lib/db";
+import { activeCreditsInclude } from "@/lib/credits/select";
+import { listCreditRefundCash } from "./credit-refunds";
+import { capSupplierTermsForCredits } from "./reports";
 import { recognizedReceiptWhere } from "@/lib/billing/receipt-eligibility";
 import { listProjectOrders } from "@/lib/procurement/orders";
 import { listProjectSupplierInstallments } from "@/lib/payments/payments";
@@ -24,6 +27,7 @@ import {
 import { getProjectClientBillingSummary } from "@/lib/billing/reporting";
 import { reportingAmount } from "@/domain/finance/calculations";
 import { billingCashContexts } from "@/domain/billing/cash-expectations";
+import { getClientCreditPosition } from "@/domain/billing/credits";
 import {
   cashFunding,
   categoryPosition,
@@ -51,6 +55,7 @@ export async function getProjectControl(projectId: string) {
     billing,
     actualReceipts,
     excludedReceiptCount,
+    refunds,
   ] = await Promise.all([
     db.project.findUniqueOrThrow({
       where: { id: projectId },
@@ -58,6 +63,7 @@ export async function getProjectControl(projectId: string) {
         billingDocuments: {
           where: { isCancelled: false },
           include: {
+            credits: activeCreditsInclude,
             allocations: { include: { order: { select: { status: true } } } },
             receipts: { select: { id: true, amount: true } },
             paymentInstallments: {
@@ -113,6 +119,7 @@ export async function getProjectControl(projectId: string) {
     db.clientReceipt.count({
       where: { billingDocument: { projectId }, NOT: recognizedReceiptWhere },
     }),
+    listCreditRefundCash([projectId]),
   ]);
   const currency = project.reportingCurrencyCode;
   const convert = (
@@ -143,17 +150,39 @@ export async function getProjectControl(projectId: string) {
       ),
     ),
   );
+  const supplierRefundsReceived = sumKnown(
+    refunds.filter((row) => !row.isOutflow).map((row) => row.reportingAmount),
+  );
+  const clientRefundsPaid = sumKnown(
+    refunds.filter((row) => row.isOutflow).map((row) => row.reportingAmount),
+  );
   const billedTtc = sumKnown(
-    invoices.map((doc) =>
+    invoices.flatMap((doc) => [
       convert(
         doc.totalTtc.toString(),
         doc.currencyCode,
         doc.fxRateToReporting?.toString() ?? null,
       ),
-    ),
+      ...(doc.credits ?? [])
+        .filter((credit) => !credit.isCancelled)
+        .map((credit) =>
+          credit.reportingCurrencyCode !== currency
+            ? null
+            : difference(
+                "0",
+                convert(
+                  new Decimal(credit.totalHt.toString())
+                    .plus(credit.vatAmount.toString())
+                    .toString(),
+                  credit.currencyCode,
+                  credit.fxRateToReporting?.toString() ?? null,
+                ),
+              ),
+        ),
+    ]),
   );
-  const clientFreightPaidHt = sumKnown(
-    actualReceipts.map((receipt) => {
+  const clientFreightPaidHt = sumKnown([
+    ...actualReceipts.map((receipt) => {
       const owner = receipt.billingDocument;
       const matches = receipt.installment?.matchedInvoices ?? [];
       // Prefer the owning active Invoice; a matched Quote receipt is counted once.
@@ -174,7 +203,19 @@ export async function getProjectControl(projectId: string) {
         receipt.fxRateToReporting?.toString() ?? null,
       );
     }),
-  );
+    ...refunds
+      .filter((row) => row.isOutflow)
+      .map((row) => {
+        const freight = freightReceiptHt(
+          row.amount,
+          row.creditTotalTtc,
+          row.creditFreightHt,
+        );
+        return freight === null
+          ? null
+          : difference("0", convert(freight, row.currencyCode, row.fxRate));
+      }),
+  ]);
   const categoryRevenue = (
     category: RecoveryCategory,
     allocated: boolean,
@@ -202,20 +243,66 @@ export async function getProjectControl(projectId: string) {
                 doc.otherCoverageHt.toString(),
               ),
             ];
-        return rows.map((row) =>
+        const original = rows.map((row) =>
           convert(
             row[category],
             doc.currencyCode,
             doc.fxRateToReporting?.toString() ?? null,
           ),
         );
+        if (quoted) return original;
+        return [
+          ...original,
+          ...(doc.credits ?? [])
+            .filter((credit) => !credit.isCancelled)
+            .flatMap((credit) => {
+              const portions = allocated
+                ? credit.allocations
+                    .filter((allocation) =>
+                      doc.allocations.some(
+                        (source) =>
+                          source.orderId === allocation.orderId &&
+                          source.order.status !== "CANCELLED",
+                      ),
+                    )
+                    .map((allocation) =>
+                      revenueParts(
+                        allocation.amountHt.toString(),
+                        allocation.freightCoverageHt.toString(),
+                        allocation.otherCoverageHt.toString(),
+                      ),
+                    )
+                : [
+                    revenueParts(
+                      credit.totalHt.toString(),
+                      credit.freightCoverageHt.toString(),
+                      credit.otherCoverageHt.toString(),
+                    ),
+                  ];
+              return portions.map((part) =>
+                credit.reportingCurrencyCode !== currency
+                  ? null
+                  : difference(
+                      "0",
+                      convert(
+                        part[category],
+                        credit.currencyCode,
+                        credit.fxRateToReporting?.toString() ?? null,
+                      ),
+                    ),
+              );
+            }),
+        ];
       }),
     );
   const purchases = activeOrders.map((order) =>
-    convert(
-      order.costs.purchaseCost,
-      order.orderCurrencyCode,
-      order.costs.purchaseFxRate,
+    difference(
+      convert(
+        order.costs.purchaseCost,
+        order.orderCurrencyCode,
+        order.costs.purchaseFxRate,
+      ),
+      order.credits?.reportingPurchaseHt ?? (order.credits ? null : "0"),
     ),
   );
   const otherCosts = activeOrders.map((order) =>
@@ -351,7 +438,8 @@ export async function getProjectControl(projectId: string) {
       ),
     ),
   );
-  const commitments = installments
+  const cappedInstallments = capSupplierTermsForCredits(installments, orders);
+  const commitments = cappedInstallments
     .filter((row) => !row.isCancelled)
     .map((row) => ({
       dueDate: row.dueDate,
@@ -386,6 +474,12 @@ export async function getProjectControl(projectId: string) {
     });
   }
   const horizonEnd = cashWindowEnd(businessToday(), 30);
+  const actualCashIn = sumKnown([received, supplierRefundsReceived]);
+  const actualCashOut = sumKnown([
+    supplierPaid,
+    freightPaid,
+    clientRefundsPaid,
+  ]);
   const totalOrderEconomicCost = sumKnown(
     activeOrders.map((order) => order.costs.reportingEconomicLandedCost),
   );
@@ -406,7 +500,8 @@ export async function getProjectControl(projectId: string) {
     kind: "payment",
     currency: order.orderCurrencyCode,
     total: order.supplierPayment.totalPayable,
-    paid: order.supplierPayment.paid,
+    paid: order.supplierPayment.netPaid ?? order.supplierPayment.paid,
+    creditAdjusted: (order.credits?.count ?? 0) > 0,
     fx: order.costs.purchaseFxRate,
     terms: installments
       .filter((term) => term.orderId === order.id)
@@ -418,6 +513,23 @@ export async function getProjectControl(projectId: string) {
         cancelled: term.isCancelled,
       })),
   }));
+  for (const order of activeOrders) {
+    if (!order.credits?.count) continue;
+    const refundDue = order.supplierPayment.refundDue ?? "0";
+    if (new Decimal(refundDue).greaterThan(0))
+      outlookDocuments.push({
+        source: {
+          label: `Supplier refund · ${order.orderNumber}`,
+          href: `/orders/${order.id}?tab=related#credits`,
+        },
+        kind: "issued",
+        currency: order.orderCurrencyCode,
+        total: refundDue,
+        paid: "0",
+        fx: null,
+        terms: [],
+      });
+  }
   for (const context of billingCashContexts(project.billingDocuments)) {
     const { document: doc, terms } = context;
     outlookDocuments.push({
@@ -427,6 +539,7 @@ export async function getProjectControl(projectId: string) {
       currency: doc.currencyCode,
       total: context.total,
       paid: context.paid,
+      creditAdjusted: (doc.credits?.length ?? 0) > 0,
       fx: doc.fxRateToReporting?.toString() ?? null,
       terms: terms.map((term) => ({
         amount: term.scheduledAmount.toString(),
@@ -436,6 +549,26 @@ export async function getProjectControl(projectId: string) {
         cancelled: term.isCancelled,
       })),
     });
+    if (
+      context.kind === "issued" &&
+      !context.reviewReason &&
+      doc.credits.length > 0
+    ) {
+      const refundDue = getClientCreditPosition(doc).refundDue;
+      if (new Decimal(refundDue).greaterThan(0))
+        outlookDocuments.push({
+          source: {
+            label: `Client refund · ${doc.reference}`,
+            href: `/billing/${doc.id}?tab=related#credits`,
+          },
+          kind: "payment",
+          currency: doc.currencyCode,
+          total: refundDue,
+          paid: "0",
+          fx: null,
+          terms: [],
+        });
+    }
   }
   for (const expense of project.freightExpenses) {
     const total = freightPayable(
@@ -470,7 +603,7 @@ export async function getProjectControl(projectId: string) {
     outlookDocuments,
     currency,
     businessToday(),
-    difference(received, sumKnown([supplierPaid, freightPaid])),
+    difference(actualCashIn, actualCashOut),
   );
   const drilldowns: ProjectFinancialRow[] = [
     ...invoices.map((doc) => ({
@@ -478,11 +611,27 @@ export async function getProjectControl(projectId: string) {
       label: doc.reference,
       href: `/billing/${doc.id}`,
       due: null,
-      amount: convert(
-        doc.totalHt.toString(),
-        doc.currencyCode,
-        doc.fxRateToReporting?.toString() ?? null,
-      ),
+      amount: sumKnown([
+        convert(
+          doc.totalHt.toString(),
+          doc.currencyCode,
+          doc.fxRateToReporting?.toString() ?? null,
+        ),
+        ...(doc.credits ?? [])
+          .filter((credit) => !credit.isCancelled)
+          .map((credit) =>
+            credit.reportingCurrencyCode !== currency
+              ? null
+              : difference(
+                  "0",
+                  convert(
+                    credit.totalHt.toString(),
+                    credit.currencyCode,
+                    credit.fxRateToReporting?.toString() ?? null,
+                  ),
+                ),
+          ),
+      ]),
     })),
     ...activeOrders.map((order) => ({
       kind: "cost" as const,
@@ -535,6 +684,13 @@ export async function getProjectControl(projectId: string) {
         ),
       })),
     ),
+    ...refunds.map((refund) => ({
+      kind: refund.isOutflow ? ("paid" as const) : ("received" as const),
+      label: refund.label,
+      href: refund.href,
+      due: refund.receivedAt,
+      amount: refund.reportingAmount,
+    })),
     ...cashOutlook.entries.flatMap((entry) =>
       entry.source
         ? [
@@ -601,10 +757,14 @@ export async function getProjectControl(projectId: string) {
     excludedReceiptCount,
     billedTtc,
     received,
+    supplierRefundsReceived,
+    clientRefundsPaid,
+    actualCashIn,
+    actualCashOut,
     outstandingTtc: billing?.complete ? billing.outstandingTtc : null,
     cash: cashFunding({
-      received,
-      supplierPaid,
+      received: actualCashIn,
+      supplierPaid: sumKnown([supplierPaid, clientRefundsPaid]),
       freightPaid,
       commitments: commitments.map((row) => ({
         ...row,

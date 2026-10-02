@@ -11,6 +11,9 @@ import { clickText, enter, mountForm } from "@/test/dom-form";
 import type { ClientBillingView } from "@/lib/billing/billing";
 
 const actions = vi.hoisted(() => ({ save: vi.fn(), refresh: vi.fn() }));
+vi.mock("@/components/credits/credit-panel", () => ({
+  CreditPanel: () => null,
+}));
 vi.mock("@/app/(app)/billing/actions", () => ({
   updateBillingFreightCoverageAction: actions.save,
   updateOrderBillingLinkAction: actions.save,

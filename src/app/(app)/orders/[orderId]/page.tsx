@@ -40,6 +40,8 @@ import { formatEnumLabel } from "@/domain/presentation/labels";
 import { getApplicationSettings } from "@/lib/settings/application-settings";
 import { getRecordHistory } from "@/lib/audit/history";
 import { RecordHistory } from "@/components/audit/record-history";
+import { CreditPanel } from "@/components/credits/credit-panel";
+import { getCreditWorkspace } from "@/lib/credits/service";
 
 export const metadata: Metadata = { title: "Order" };
 export default async function OrderPage({
@@ -58,14 +60,21 @@ export default async function OrderPage({
     getApplicationSettings(),
   ]);
   if (!order) notFound();
-  const [billingDocuments, paymentSummary, quoteImports, relations, history] =
-    await Promise.all([
-      getOrderBillingReconciliation(orderId),
-      getOrderPaymentSummary(orderId),
-      listOrderQuoteImports(orderId),
-      getOrderRelations(orderId),
-      getRecordHistory("ORDER", orderId),
-    ]);
+  const [
+    billingDocuments,
+    paymentSummary,
+    quoteImports,
+    relations,
+    history,
+    credits,
+  ] = await Promise.all([
+    getOrderBillingReconciliation(orderId),
+    getOrderPaymentSummary(orderId),
+    listOrderQuoteImports(orderId),
+    getOrderRelations(orderId),
+    getRecordHistory("ORDER", orderId),
+    getCreditWorkspace({ side: "SUPPLIER", sourceId: orderId }),
+  ]);
   const cost = order.costs;
   return (
     <div className="space-y-6">
@@ -538,6 +547,17 @@ export default async function OrderPage({
                   <OrderBudgetComparison order={order} />
                   <OrderFreightCoverage order={order} />
                 </>
+              ),
+            },
+            {
+              id: "credits",
+              group: "related",
+              label: "Credits & refunds",
+              content: (
+                <CreditPanel
+                  workspace={credits}
+                  canEdit={canEditMasterData(user.role)}
+                />
               ),
             },
             {

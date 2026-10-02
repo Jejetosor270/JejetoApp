@@ -7,6 +7,11 @@ import { clientReceiptSchema } from "@/domain/billing/validation";
 import { Prisma } from "@/generated/prisma/client";
 import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
+import { activeCreditsInclude } from "@/lib/credits/select";
+import {
+  getClientCreditPosition,
+  activeBillingCredits,
+} from "@/domain/billing/credits";
 import {
   ClientBillingValidationError,
   recordClientReceiptInTransaction,
@@ -34,6 +39,7 @@ export async function changeBillingStatusInTransaction(
   const doc = await tx.clientBillingDocument.findUniqueOrThrow({
     where: { id: input.id },
     include: {
+      credits: activeCreditsInclude,
       project: { select: { reportingCurrencyCode: true } },
       receipts: true,
       paymentInstallments: {
@@ -51,10 +57,15 @@ export async function changeBillingStatusInTransaction(
     ).values(),
   ];
   const paid = receipts.reduce((sum, r) => sum.plus(r.amount), new Decimal(0));
-  const remaining = Decimal.max(
-    new Decimal(doc.totalTtc.toString()).minus(paid),
-    0,
-  );
+  const position = getClientCreditPosition(doc);
+  const remaining = new Decimal(position.outstanding);
+  if (
+    ["DRAFT", "TO_BE_INVOICED", "CANCELLED"].includes(input.value) &&
+    activeBillingCredits(doc).length
+  )
+    throw new ClientBillingValidationError(
+      "Cancel active credits and refunds before changing the Invoice issue/cancellation state.",
+    );
   if (
     doc.documentType === "QUOTE" &&
     ["INVOICED", "PAID", "PARTIALLY_PAID", "OVERDUE"].includes(input.value)

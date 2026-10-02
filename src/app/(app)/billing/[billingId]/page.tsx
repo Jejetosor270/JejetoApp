@@ -11,6 +11,7 @@ import {
 } from "@/lib/billing/billing";
 import { listProjectOrders } from "@/lib/procurement/orders";
 import { getRecordHistory } from "@/lib/audit/history";
+import { getCreditWorkspace } from "@/lib/credits/service";
 
 export const metadata: Metadata = { title: "Billing document" };
 
@@ -30,13 +31,15 @@ export default async function BillingDetailPage({
   if (!z.uuid().safeParse(billingId).success) notFound();
   const document = await getClientBillingDocument(billingId);
   if (!document) notFound();
-  const [orders, relations, history] = await Promise.all([
+  const [orders, relations, history, credits] = await Promise.all([
     listProjectOrders(document.projectId),
     getBillingRelations(billingId),
     getRecordHistory("BILLING_DOCUMENT", billingId),
+    getCreditWorkspace({ side: "CLIENT", sourceId: billingId }),
   ]);
   return (
     <BillingDetail
+      credits={credits}
       history={history}
       relatedTables={relations}
       canEdit={canEditMasterData(user.role)}

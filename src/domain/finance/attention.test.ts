@@ -59,6 +59,50 @@ const build = (rows: AttentionDocument[], horizon: 7 | 30 | 90 = 7) =>
   buildFinancialAttention(rows, [project], today, horizon);
 
 describe("financial attention", () => {
+  it.each(["supplier", "client"] as const)(
+    "keeps %s refund obligations all-date and does not call credited terms corrupt",
+    (side) => {
+      const issues = build([
+        {
+          ...doc,
+          side,
+          totalTtc: "60",
+          paid: "100",
+          creditAdjusted: true,
+          refundDue: "40",
+          terms: [{ ...term, scheduled: "100", paid: "100" }],
+        },
+      ]);
+      expect(
+        issues.find((issue) => issue.key === `refund-due-${side}:doc`),
+      ).toMatchObject({
+        amount: "40.0000",
+        currency: "EUR",
+        date: null,
+        href: "/orders/doc#credits",
+        priority: "Action needed",
+      });
+      expect(issues.some((issue) => issue.key === "schedule:doc")).toBe(false);
+      expect(
+        issues.some((issue) => issue.key === "cash-incomplete:project"),
+      ).toBe(true);
+    },
+  );
+  it("caps retained original terms after a credit without a false mismatch", () => {
+    const issues = build([
+      {
+        ...doc,
+        totalTtc: "60",
+        paid: "0",
+        creditAdjusted: true,
+        terms: [{ ...term, scheduled: "100", paid: "0" }],
+      },
+    ]);
+    expect(issues.find((issue) => issue.key === "term-due:term")?.amount).toBe(
+      "60.0000",
+    );
+    expect(issues.some((issue) => issue.key === "schedule:doc")).toBe(false);
+  });
   it("caps Client term reminders by the Invoice balance after unassigned receipts", () => {
     const issues = build([
       {

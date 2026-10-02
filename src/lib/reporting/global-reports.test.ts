@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const database = vi.hoisted(() => ({
+  financialCreditRefund: { findMany: vi.fn().mockResolvedValue([]) },
   freightExpensePayment: { findMany: vi.fn().mockResolvedValue([]) },
   clientReceipt: { findMany: vi.fn() },
   paymentSettlement: { findMany: vi.fn() },
@@ -21,6 +22,66 @@ describe("Phase 11.12 global reporting", () => {
     vi.clearAllMocks();
     database.project.findMany.mockResolvedValue([{ id: "project-1" }]);
     database.paymentSettlement.findMany.mockResolvedValue([]);
+    database.financialCreditRefund.findMany.mockResolvedValue([]);
+  });
+
+  it("includes Supplier refunds in scoped cash in at actual refund FX, never unrelated Client receipts", async () => {
+    database.financialCreditRefund.findMany.mockResolvedValue([
+      {
+        id: "refund",
+        amount: "20",
+        refundDate: new Date("2026-09-03"),
+        fxRateToReporting: "0.8",
+        reference: "REFUND",
+        credit: {
+          side: "SUPPLIER",
+          reference: "CR",
+          currencyCode: "USD",
+          reportingCurrencyCode: "EUR",
+          totalHt: "20",
+          vatAmount: "0",
+          freightCoverageHt: "0",
+          order: {
+            id: "order",
+            orderNumber: "PO",
+            supplier: { displayName: "Supplier" },
+            project: {
+              id: "project-1",
+              name: "Project",
+              reportingCurrencyCode: "EUR",
+            },
+          },
+          billingDocument: null,
+        },
+      },
+    ]);
+    const report = await getActualCashReport({ supplierId: "supplier-1" });
+    expect(report.totals).toEqual({ cashIn: "16", cashOut: "0", net: "16" });
+    expect(database.clientReceipt.findMany).not.toHaveBeenCalled();
+    expect(report.rows[0]).toMatchObject({
+      direction: "CLIENT_RECEIPT",
+      href: "/orders/order?tab=related#credits",
+      projectReportingAmount: "16",
+      billingOrOrderReference: "Supplier refund · CR · PO",
+    });
+    expect(database.financialCreditRefund.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          credit: expect.objectContaining({
+            OR: [
+              {
+                side: "SUPPLIER",
+                order: {
+                  projectId: { in: ["project-1"] },
+                  status: { not: "CANCELLED" },
+                  supplierId: "supplier-1",
+                },
+              },
+            ],
+          }),
+        }),
+      }),
+    );
   });
 
   it("reports the same Billing-level receipt as actual Cash In", async () => {

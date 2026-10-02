@@ -1,6 +1,9 @@
 import { expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ history: vi.fn() }));
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/credits/service", () => ({
+  getCreditWorkspace: vi.fn().mockResolvedValue(null),
+}));
 vi.mock("@/lib/auth/current-user", () => ({
   requireUser: async () => ({ role: "MANAGER" }),
   canEditMasterData: () => true,

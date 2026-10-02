@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   audit: vi.fn(),
   refresh: vi.fn(),
   tx: {
+    financialCredit: { count: vi.fn() },
     paymentInstallment: { findUnique: vi.fn() },
     paymentSettlement: { create: vi.fn() },
     clientBillingDocument: { findUnique: vi.fn() },
@@ -63,6 +64,7 @@ function form(type = "SUPPLIER", overrides: Record<string, string> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.auth.mockResolvedValue({ id: "actor", role: "MANAGER" });
+  mocks.tx.financialCredit.count.mockResolvedValue(0);
   mocks.tx.paymentInstallment.findUnique.mockResolvedValue({
     id: installmentId,
     orderId,

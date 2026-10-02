@@ -27,6 +27,10 @@ const categories = recoveryCategories.map((category) => ({
   }),
 }));
 const data: ProjectControl = {
+  supplierRefundsReceived: "0",
+  clientRefundsPaid: "0",
+  actualCashIn: "180",
+  actualCashOut: "120",
   drilldowns: [],
   cashOutlook: projectCashOutlook([], "EUR", "2026-09-01", "60"),
   directTarget: false,

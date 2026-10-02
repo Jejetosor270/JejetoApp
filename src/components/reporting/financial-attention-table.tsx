@@ -27,23 +27,36 @@ import {
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { DateInput } from "@/components/forms/date-input";
 import { Field, inputClassName } from "@/components/master-data/form-ui";
+import {
+  attentionFollowUpKey,
+  type AttentionFollowUp,
+} from "@/domain/finance/attention-follow-up";
+import { AttentionFollowUpEditor } from "./attention-follow-up-editor";
 
 export type AttentionRow = AttentionIssue & {
   fingerprint: string;
   snooze: { until: string; reason: string } | null;
+  followUp?: AttentionFollowUp | null;
 };
 export function FinancialAttentionTable({
   rows,
   today,
   horizon,
   snoozed,
+  canEdit = false,
+  employees = [],
 }: {
   rows: AttentionRow[];
   today: string;
   horizon: AttentionHorizon;
   snoozed: boolean;
+  canEdit?: boolean;
+  employees?: readonly { id: string; name: string }[];
 }) {
   const [editing, setEditing] = useState<AttentionRow | null>(null);
+  const [followUpEditing, setFollowUpEditing] = useState<AttentionRow | null>(
+    null,
+  );
   const [until, setUntil] = useState("");
   const [reason, setReason] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -82,6 +95,7 @@ export function FinancialAttentionTable({
                 "Project / Record",
                 "Amount",
                 "Date",
+                "Follow-up",
                 "Action",
               ].map((label) => (
                 <th
@@ -144,6 +158,38 @@ export function FinancialAttentionTable({
                 </td>
                 <td className="px-4 py-3 align-top whitespace-nowrap">
                   {row.date ? formatDateOnly(row.date) : "—"}
+                </td>
+                <td className="px-4 py-3 align-top">
+                  <p>{row.followUp?.assigneeName ?? "Unassigned"}</p>
+                  {row.followUp?.nextFollowUpDate && (
+                    <p className="mt-1 text-xs">
+                      {formatDateOnly(row.followUp.nextFollowUpDate)}
+                      {row.followUp.nextFollowUpDate < today
+                        ? " · Follow-up overdue"
+                        : ""}
+                    </p>
+                  )}
+                  {row.followUp?.note && (
+                    <p className="text-muted-foreground mt-1 max-w-xs text-xs break-words">
+                      {row.followUp.note}
+                    </p>
+                  )}
+                  {canEdit && attentionFollowUpKey(row.key) && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="mt-1"
+                      onClick={() => setFollowUpEditing(row)}
+                    >
+                      Follow up
+                    </Button>
+                  )}
+                  {!attentionFollowUpKey(row.key) && (
+                    <p className="text-muted-foreground mt-1 max-w-xs text-xs">
+                      Review source records; changing duplicate groups cannot be
+                      assigned.
+                    </p>
+                  )}
                 </td>
                 <td className="px-4 py-3 align-top">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -265,6 +311,14 @@ export function FinancialAttentionTable({
             </Button>
           </form>
         </EditorDrawer>
+      )}
+      {followUpEditing && (
+        <AttentionFollowUpEditor
+          row={followUpEditing}
+          horizon={horizon}
+          employees={employees}
+          onClose={() => setFollowUpEditing(null)}
+        />
       )}
     </>
   );

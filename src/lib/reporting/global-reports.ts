@@ -13,6 +13,8 @@ import {
   type Prisma,
 } from "@/generated/prisma/client";
 import { getDatabase } from "@/lib/db";
+import { listCreditRefundCash } from "./credit-refunds";
+import { activeCreditsInclude } from "@/lib/credits/select";
 import { getProjectFreightReconciliation } from "@/lib/freight/expenses";
 import {
   getProjectReportingSnapshot,
@@ -157,6 +159,33 @@ export async function getActualCashReport(filters: ActualCashFilters) {
       })
     : [];
   const rows: ActualCashRow[] = [
+    ...(await listCreditRefundCash(projectIds, filters))
+      .filter(
+        (refund) =>
+          !filters.direction ||
+          filters.direction ===
+            (refund.isOutflow
+              ? PaymentDirection.SUPPLIER_PAYMENT
+              : PaymentDirection.CLIENT_RECEIPT),
+      )
+      .map((refund) => ({
+        id: refund.id,
+        amount: refund.amount,
+        billingOrOrderId: refund.sourceId,
+        billingOrOrderReference: `${refund.label} · ${refund.sourceReference}`,
+        currencyCode: refund.currencyCode,
+        date: refund.receivedAt,
+        direction: refund.isOutflow
+          ? PaymentDirection.SUPPLIER_PAYMENT
+          : PaymentDirection.CLIENT_RECEIPT,
+        partyName: refund.partyName,
+        projectId: refund.projectId,
+        projectName: refund.projectName,
+        projectReportingAmount: refund.reportingAmount,
+        projectReportingCurrencyCode: refund.reportingCurrencyCode,
+        reference: refund.reference,
+        href: refund.href,
+      })),
     ...freightPayments.flatMap((payment) => {
       const expense = payment.expense;
       if (!expense.project) return [];
@@ -307,6 +336,7 @@ export async function getGlobalVatReport(filters: ReportingFilters) {
             fxRateToReporting: true,
             id: true,
             vatAmount: true,
+            credits: activeCreditsInclude,
           },
         }),
         getProjectReportingSnapshot(project.id, { horizon: "12m" }),
@@ -331,6 +361,26 @@ export async function getGlobalVatReport(filters: ReportingFilters) {
           break;
         }
         outputVat = new Decimal(outputVat).plus(converted).toString();
+        for (const credit of document.credits ?? []) {
+          if (credit.isCancelled) continue;
+          const reduction = new Decimal(credit.vatAmount.toString()).isZero()
+            ? new Decimal(0)
+            : credit.reportingCurrencyCode !== project.reportingCurrencyCode
+              ? null
+              : reportingAmount({
+                  originalAmount: credit.vatAmount.toString(),
+                  originalCurrencyCode: credit.currencyCode,
+                  reportingCurrencyCode: project.reportingCurrencyCode,
+                  fxRateToReporting:
+                    credit.fxRateToReporting?.toString() ?? null,
+                });
+          if (reduction === null) {
+            outputVat = null;
+            break;
+          }
+          outputVat = new Decimal(outputVat).minus(reduction).toString();
+        }
+        if (outputVat === null) break;
       }
       return {
         id: project.id,

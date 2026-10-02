@@ -9,6 +9,7 @@ export function summarizeFreightCoverage(
     documentType: string;
     isCancelled: boolean;
     workflowStatus?: string;
+    creditAdjustment?: boolean;
   }[],
   reportingCurrency: string,
 ) {
@@ -31,7 +32,10 @@ export function summarizeFreightCoverage(
     });
     if (record.documentType === "INVOICE") {
       if (amount === null) actualComplete = false;
-      else actual = actual.plus(amount);
+      else
+        actual = record.creditAdjustment
+          ? actual.minus(amount)
+          : actual.plus(amount);
     } else {
       if (amount === null) plannedComplete = false;
       else planned = planned.plus(amount);
