@@ -310,7 +310,11 @@ export function ProjectFreightExpenses({
           </thead>
           <tbody className="divide-y">
             {expenses.map((expense) => (
-              <tr key={expense.id}>
+              <tr
+                key={expense.id}
+                id={`freight-${expense.id}`}
+                className="scroll-mt-6"
+              >
                 <td className="px-3 py-2">{expense.expenseDate}</td>
                 <td className="px-3 py-2">{expense.description}</td>
                 <td className="px-3 py-2">

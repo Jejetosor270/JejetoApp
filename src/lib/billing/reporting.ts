@@ -169,12 +169,19 @@ function addDocumentRevenue(
     }
 }
 
-function addInvoiceCoverage(
-  state: BillingSummaryState,
+/** The same eligible signed contributions power the Projects list and record drilldowns. */
+export function invoiceCoverageContributions(
   record: BillingReportingRecord,
   reportingCurrencyCode: string,
-  fxRate: string | null,
+  fxRate = record.fxRateToReporting?.toString() ?? null,
 ) {
+  const rows: {
+    id: string;
+    label: string;
+    href: string;
+    amount: string | null;
+    note: string;
+  }[] = [];
   const allocatedHt = record.allocations
     .filter((allocation) => allocation.order.status !== "CANCELLED")
     .reduce(
@@ -197,8 +204,13 @@ function addInvoiceCoverage(
       reportingCurrencyCode,
       fxRate,
     );
-    if (convertedCoverage === null) state.coverageMissingIds.add(record.id);
-    else state.coverage = state.coverage.plus(convertedCoverage);
+    rows.push({
+      id: record.id,
+      label: record.reference,
+      href: `/billing/${record.id}?tab=related#allocations`,
+      amount: convertedCoverage?.toString() ?? null,
+      note: "Issued Invoice allocations to active Orders plus any explicitly approved Project remainder.",
+    });
   }
   for (const credit of activeRecordCredits(record)) {
     const activeOrderIds = new Set(
@@ -221,14 +233,39 @@ function addInvoiceCoverage(
         ? new Decimal(credit.totalHt).minus(allocated)
         : 0,
     );
-    const reduction = converted(
-      amount.toFixed(4),
-      credit.currencyCode,
-      reportingCurrencyCode,
-      credit.fxRateToReporting?.toString() ?? null,
-    );
-    if (reduction === null) state.coverageMissingIds.add(credit.id);
-    else state.coverage = state.coverage.minus(reduction);
+    const reduction =
+      credit.reportingCurrencyCode !== reportingCurrencyCode
+        ? null
+        : converted(
+            amount.toFixed(4),
+            credit.currencyCode,
+            reportingCurrencyCode,
+            credit.fxRateToReporting?.toString() ?? null,
+          );
+    rows.push({
+      id: credit.id,
+      label: `${record.reference} · ${credit.reference}`,
+      href: `/billing/${record.id}?tab=related#credits`,
+      amount: reduction?.negated().toString() ?? null,
+      note: "Credit reduction of active Order allocations and any approved Project remainder.",
+    });
+  }
+  return rows;
+}
+
+function addInvoiceCoverage(
+  state: BillingSummaryState,
+  record: BillingReportingRecord,
+  reportingCurrencyCode: string,
+  fxRate: string | null,
+) {
+  for (const row of invoiceCoverageContributions(
+    record,
+    reportingCurrencyCode,
+    fxRate,
+  )) {
+    if (row.amount === null) state.coverageMissingIds.add(row.id);
+    else state.coverage = state.coverage.plus(row.amount);
   }
 }
 

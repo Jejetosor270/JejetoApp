@@ -1,372 +1,402 @@
 "use client";
 
 import Link from "next/link";
+import { useState, type ReactNode } from "react";
+import {
+  ArrowUpRight,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+} from "lucide-react";
 import { EditProjectBudgetButton } from "@/components/projects/project-budget-context";
 import {
   formatMoney,
   formatRate,
   formatSignedMoney,
 } from "@/domain/procurement/presentation";
-import type { ProjectVatPosition } from "@/domain/vat/position";
+import {
+  amountTone,
+  billingProgress,
+  comparisonWidths,
+} from "@/domain/finance/project-visuals";
+import type {
+  ProjectDashboard,
+  ProjectMetricKey,
+} from "@/domain/finance/project-dashboard";
 import type { ProjectControl } from "@/lib/reporting/project-control";
+import { ProjectMetricDrawer } from "./project-metric-drawer";
 
-interface Figure {
-  label: string;
-  value: string | null;
-  href?: string;
-  signed?: boolean;
-  rate?: boolean;
-  help?: string;
-  detail?: string;
-}
+export const projectMetricLabels: Record<ProjectMetricKey, string> = {
+  cost: "Recorded cost",
+  sell: "Order sell HT",
+  profit: "Pricing profit",
+  planned: "Billing plan HT",
+  invoiced: "Invoiced HT",
+  toInvoice: "To invoice HT",
+  coverage: "Order coverage HT",
+  received: "Client received TTC",
+  paid: "Supplier paid TTC",
+  cash: "Net cash TTC",
+  toCollect: "To collect TTC",
+  toPay: "To pay TTC",
+  expectedCost: "Budgeted cost",
+  expectedProfit: "Expected profit",
+  freightCost: "Freight cost HT",
+  freightTarget: "Freight target HT",
+  freightInvoiced: "Freight invoiced HT",
+  freightReceived: "Freight received HT",
+  freightInvoicedGap: "Invoiced coverage HT",
+  freightPaidGap: "Paid coverage HT",
+  vatOutput: "Output VAT",
+  vatInput: "Deductible VAT",
+  vatBalance: "VAT balance",
+};
+const signedMetrics = new Set<ProjectMetricKey>([
+  "profit",
+  "cash",
+  "coverage",
+  "expectedProfit",
+  "freightInvoicedGap",
+  "freightPaidGap",
+]);
+const resultColors = {
+  positive: "text-positive",
+  negative: "text-destructive",
+  neutral: "text-foreground",
+  unknown: "text-warning",
+};
 
-function Figures({
-  currency,
-  figures,
-  columns = 3,
+function Panel({
+  title,
+  description,
+  children,
 }: {
-  currency: string;
-  figures: readonly Figure[];
-  columns?: 3 | 4;
+  title: string;
+  description: string;
+  children: ReactNode;
 }) {
   return (
-    <dl
-      className={`mt-4 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 ${columns === 4 ? "xl:grid-cols-4" : "lg:grid-cols-3"}`}
-    >
-      {figures.map((figure) => {
-        const value = figure.rate
-          ? figure.value === null
-            ? "Not available"
-            : formatRate(figure.value)
-          : figure.value === null
-            ? "Incomplete"
-            : figure.signed
-              ? formatSignedMoney(figure.value, currency)
-              : formatMoney(figure.value, currency);
-        return (
-          <div key={figure.label} className="min-w-0" title={figure.help}>
-            <dt className="text-muted-foreground text-xs">{figure.label}</dt>
-            <dd className="financial-figure mt-1 overflow-x-auto text-lg font-semibold tracking-tight">
-              {figure.href ? (
-                <Link
-                  className="focus-visible:outline-ring rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-4"
-                  href={figure.href}
-                >
-                  {value}
-                </Link>
-              ) : (
-                value
-              )}
-              {figure.detail ? (
-                <span className="text-muted-foreground mt-1 block text-xs font-normal">
-                  {figure.detail}
-                </span>
-              ) : null}
-            </dd>
-          </div>
-        );
-      })}
-    </dl>
-  );
-}
-
-function VatCostNote({
-  value,
-  currency,
-}: {
-  value: string | null;
-  currency: string;
-}) {
-  if (value === null || /^0(?:\.0+)?$/.test(value)) return null;
-  return (
-    <p className="text-muted-foreground mt-3 text-xs">
-      Profit deducts {formatMoney(value, currency)} non-deductible VAT.
-    </p>
+    <section className="record-surface flex min-w-0 flex-col">
+      <h2 className="text-sm font-semibold">{title}</h2>
+      <p className="text-muted-foreground mt-1 text-xs">{description}</p>
+      {children}
+    </section>
   );
 }
 
 export function ProjectFinancialOverview({
   data,
   projectId,
-  vatPosition,
 }: {
-  data: Pick<
-    ProjectControl,
-    "currency" | "overview" | "freightCoverage" | "excludedReceiptCount"
-  >;
+  data: Pick<ProjectControl, "currency" | "dashboard">;
   projectId: string;
-  vatPosition: ProjectVatPosition;
 }) {
-  const { overview, currency, freightCoverage: freight } = data;
+  const { dashboard, currency } = data;
+  const { metrics } = dashboard;
+  const [selected, setSelected] = useState<ProjectMetricKey | null>(null);
+  const progress = billingProgress(
+    metrics.invoiced.value,
+    metrics.planned.value,
+  );
   const related = (section: string) =>
     `/projects/${projectId}?tab=related&section=${section}`;
-  const billing = related("work");
-  const purchasing = related("orders");
-  const payments = related("payment-terms");
+  function money(key: ProjectMetricKey) {
+    const value = metrics[key].value;
+    if (value === null)
+      return key === "expectedCost" || key === "expectedProfit"
+        ? "Estimate needed"
+        : "Needs review";
+    return signedMetrics.has(key)
+      ? formatSignedMoney(value, currency)
+      : formatMoney(value, currency);
+  }
+  function metric(
+    key: ProjectMetricKey,
+    prominent = false,
+    label = projectMetricLabels[key],
+  ) {
+    return (
+      <button
+        type="button"
+        onClick={() => setSelected(key)}
+        aria-label={`View ${label}`}
+        className="group min-w-0 text-left"
+      >
+        <span className="text-muted-foreground flex items-center gap-1 text-xs">
+          {label}
+          <ChevronRight
+            aria-hidden="true"
+            className="size-3 shrink-0 opacity-50 group-hover:opacity-100"
+          />
+        </span>
+        <span
+          className={`financial-figure mt-1 block font-semibold tracking-tight break-words ${prominent ? "text-2xl" : "text-base"} ${signedMetrics.has(key) ? resultColors[amountTone(metrics[key].value)] : ""}`}
+        >
+          {money(key)}
+        </span>
+      </button>
+    );
+  }
+  function bars(keys: readonly [ProjectMetricKey, ProjectMetricKey]) {
+    const widths = comparisonWidths(keys.map((key) => metrics[key].value));
+    return (
+      <div className="mt-5 space-y-4">
+        {keys.map((key, index) => (
+          <div key={key}>
+            <button
+              type="button"
+              onClick={() => setSelected(key)}
+              aria-label={`View ${projectMetricLabels[key]}`}
+              className="group flex w-full flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-left"
+            >
+              <span className="text-muted-foreground text-xs">
+                {projectMetricLabels[key]}
+              </span>
+              <span className="financial-figure text-sm font-medium group-hover:underline">
+                {money(key)}
+              </span>
+            </button>
+            <div
+              className="bg-muted mt-2 h-2 overflow-hidden rounded-sm"
+              aria-hidden="true"
+            >
+              {widths[index] !== null && (
+                <div
+                  className={`h-full rounded-sm ${amountTone(metrics[key].value) === "negative" ? "bg-destructive" : index === 0 ? "bg-foreground/35" : "bg-primary"}`}
+                  style={{ width: `${widths[index]}%` }}
+                />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
   const vatLabel =
-    vatPosition.status === "CREDIT"
+    amountTone(metrics.vatBalance.value) === "negative"
       ? "VAT credit"
-      : vatPosition.status === "PAYABLE"
-        ? "VAT payable"
-        : "VAT balance";
+      : "VAT balance";
   return (
     <div className="space-y-4">
-      <section
-        className="record-surface"
-        aria-labelledby="project-invoiced-heading"
-      >
-        <h2 id="project-invoiced-heading" className="text-sm font-semibold">
-          Invoiced HT
-        </h2>
-        <Figures
-          currency={currency}
-          figures={[
-            {
-              label: "Client invoiced HT",
-              value: overview.invoiced.clientHt,
-              href: billing,
-            },
-            {
-              label: "Recorded cost HT",
-              value: overview.invoiced.costHt,
-              help: "All active Order costs plus Project freight, including freight and other costs once.",
-            },
-            {
-              label: "Difference HT",
-              value: overview.invoiced.balanceHt,
-              signed: true,
-              help: "Issued Client Invoice HT minus recorded HT costs. This is not final profit.",
-            },
-          ]}
-        />
-      </section>
-      <section
-        className="record-surface"
-        aria-labelledby="project-cash-heading"
-      >
-        <h2 id="project-cash-heading" className="text-sm font-semibold">
-          Cash TTC
-        </h2>
-        <Figures
-          currency={currency}
-          figures={[
-            {
-              label: "Client received TTC",
-              value: overview.cash.receivedTtc,
-              href: payments,
-              help: "Recognized Client receipts, net of actual Client refunds.",
-            },
-            {
-              label: "Supplier paid TTC",
-              value: overview.cash.paidTtc,
-              help: "Supplier and Project freight payments, net of actual Supplier refunds.",
-            },
-            {
-              label: "Cash balance TTC",
-              value: overview.cash.balanceTtc,
-              signed: true,
-              help: "Client received minus Supplier paid. Tracked Project cash, not a bank balance.",
-            },
-            {
-              label: "Recorded payable TTC",
-              value: overview.funding.recordedPayableTtc,
-              help: "Full recorded Supplier and Project freight obligations after credits, including amounts already paid. Not only outstanding balances.",
-            },
-            {
-              label: "Funding balance TTC",
-              value: overview.funding.balanceTtc,
-              signed: true,
-              help: "Net Client receipts minus full recorded payable. Not actual cash balance.",
-            },
-          ]}
-        />
-        {data.excludedReceiptCount > 0 ? (
-          <p className="text-warning-foreground mt-3 text-xs" role="status">
-            Some receipts need review.{" "}
-            <Link className="underline" href={billing}>
-              Open Billing
-            </Link>
+      <div className="grid items-stretch gap-4 xl:grid-cols-3">
+        <Panel
+          title="Costs & profit"
+          description="Recorded pricing · not final profit"
+        >
+          <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
+            {metric("profit", true)}
+            <div className="text-right">
+              <span className="text-muted-foreground text-xs">Markup</span>
+              <p className="financial-figure text-lg font-semibold">
+                {dashboard.markupRate === null
+                  ? "Not available"
+                  : formatRate(dashboard.markupRate)}
+              </p>
+            </div>
+          </div>
+          {bars(["cost", "sell"])}
+          <p className="text-muted-foreground mt-3 text-xs">
+            Freight, other costs and non-deductible VAT included.
           </p>
-        ) : null}
-      </section>
-      <section
-        className="record-surface"
-        aria-labelledby="project-orders-heading"
-      >
-        <h2 id="project-orders-heading" className="text-sm font-semibold">
-          Orders HT
-        </h2>
-        <Figures
+          <details className="group mt-5 border-t pt-4">
+            <summary className="flex list-none items-center justify-between gap-3 text-sm font-medium">
+              Budget estimate
+              <ChevronDown
+                aria-hidden="true"
+                className="size-4 shrink-0 group-open:rotate-180"
+              />
+            </summary>
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              {metric("expectedCost")}
+              {metric("expectedProfit")}
+              <div>
+                <span className="text-muted-foreground text-xs">
+                  Expected markup
+                </span>
+                <p className="financial-figure mt-1 text-base font-semibold">
+                  {dashboard.expectedMarkupRate === null
+                    ? "Estimate needed"
+                    : formatRate(dashboard.expectedMarkupRate)}
+                </p>
+              </div>
+            </div>
+            <p className="text-muted-foreground mt-3 text-xs">
+              Full Billing plan less full approved budget, not costs entered so
+              far. This is an estimate.
+            </p>
+            <div className="mt-3">
+              <EditProjectBudgetButton />
+            </div>
+          </details>
+          <Link
+            href={related("orders")}
+            className="text-primary mt-auto flex items-center gap-1 pt-5 text-xs font-medium"
+          >
+            Open Purchasing
+            <ArrowUpRight aria-hidden="true" className="size-3.5" />
+          </Link>
+        </Panel>
+        <Panel title="Client Billing" description="Issued and planned · HT">
+          <div className="mt-5">{metric("toInvoice", true)}</div>
+          <div
+            className="bg-muted mt-5 flex h-3 overflow-hidden rounded-sm"
+            aria-hidden="true"
+          >
+            {progress !== null && (
+              <div
+                className="bg-primary h-full"
+                style={{ width: `${progress}%` }}
+              />
+            )}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            {metric("invoiced")}
+            {metric("planned")}
+          </div>
+          <p className="text-muted-foreground mt-3 text-xs">
+            {progress !== null
+              ? "Blue is issued. The remainder is not yet invoiced."
+              : metrics.planned.value === null
+                ? "Review missing Billing amounts or FX."
+                : "No positive Billing plan recorded."}
+          </p>
+          <div className="mt-5 border-t pt-4">{metric("coverage")}</div>
+          <p className="text-muted-foreground mt-2 text-xs">
+            Eligible issued allocations and approved remainder, less Order
+            selling prices.
+          </p>
+          <Link
+            href={related("work")}
+            className="text-primary mt-auto flex items-center gap-1 pt-5 text-xs font-medium"
+          >
+            Open Billing
+            <ArrowUpRight aria-hidden="true" className="size-3.5" />
+          </Link>
+        </Panel>
+        <Panel title="Cash" description="Recorded payments · TTC">
+          <div className="mt-5">{metric("cash", true)}</div>
+          {bars(["received", "paid"])}
+          <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-4">
+            {metric("toCollect")}
+            {metric("toPay")}
+          </div>
+          <p className="text-muted-foreground mt-3 text-xs">
+            Net of actual refunds. Tracked cash, not a bank balance.
+          </p>
+          <Link
+            href={related("payment-terms")}
+            className="text-primary mt-auto flex items-center gap-1 pt-5 text-xs font-medium"
+          >
+            Open payment terms
+            <ArrowUpRight aria-hidden="true" className="size-3.5" />
+          </Link>
+        </Panel>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <details className="record-surface group min-w-0" id="finance">
+          <summary className="flex list-none flex-wrap items-center justify-between gap-3">
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              VAT
+              <ChevronDown
+                aria-hidden="true"
+                className="size-4 group-open:rotate-180"
+              />
+            </span>
+            <span className="financial-figure text-sm font-semibold">
+              {vatLabel} · {money("vatBalance")}
+            </span>
+          </summary>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {metric("vatOutput")}
+            {metric("vatInput")}
+            {metric("vatBalance", false, vatLabel)}
+          </div>
+          <p className="text-muted-foreground mt-4 text-xs">
+            Issued output VAT less deductible input VAT. Management view, not a
+            tax return.
+          </p>
+        </details>
+        <details className="record-surface group min-w-0">
+          <summary className="flex list-none flex-wrap items-center justify-between gap-3">
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              Freight
+              <ChevronDown
+                aria-hidden="true"
+                className="size-4 group-open:rotate-180"
+              />
+            </span>
+            <span
+              className={`financial-figure text-sm font-semibold ${resultColors[amountTone(metrics.freightInvoicedGap.value)]}`}
+            >
+              Invoiced coverage · {money("freightInvoicedGap")}
+            </span>
+          </summary>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {(
+              [
+                "freightCost",
+                "freightTarget",
+                "freightInvoiced",
+                "freightReceived",
+                "freightInvoicedGap",
+                "freightPaidGap",
+              ] as const
+            ).map((key) => (
+              <div key={key}>{metric(key)}</div>
+            ))}
+          </div>
+          <p className="text-muted-foreground mt-4 text-xs">
+            Received freight is a proportional share of actual receipts, after
+            credits and refunds.
+          </p>
+        </details>
+      </div>
+      <ProjectReviewAlerts dashboard={dashboard} />
+      {selected && (
+        <ProjectMetricDrawer
+          title={projectMetricLabels[selected]}
+          metric={metrics[selected]}
           currency={currency}
-          columns={4}
-          figures={[
-            {
-              label: "Order cost HT",
-              value: overview.orders.costHt,
-              href: purchasing,
-              help: "Active Orders: purchase, freight, customs and other costs. Separate Project freight is included in Recorded cost, not counted again here.",
-            },
-            {
-              label: "Order sell HT",
-              value: overview.orders.sellHt,
-              href: purchasing,
-              help: "Agreed Order selling prices, retaining individual markups and direct prices.",
-            },
-            {
-              label: "Planned profit",
-              value: overview.orders.profitHt,
-              signed: true,
-              help: "Order selling prices minus Order economic cost. Not Client invoiced revenue.",
-            },
-            {
-              label: "Markup",
-              value: overview.orders.markupRate,
-              rate: true,
-              help: "Order profit divided by aggregated economic cost, not an average of Order percentages.",
-            },
-          ]}
+          onClose={() => setSelected(null)}
         />
-        <VatCostNote
-          value={overview.orders.nonDeductibleVat}
-          currency={currency}
-        />
-      </section>
-      <section
-        className="record-surface"
-        aria-labelledby="project-planned-heading"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="project-planned-heading" className="text-sm font-semibold">
-            Planned HT
-          </h2>
-          <EditProjectBudgetButton />
-        </div>
-        <Figures
-          currency={currency}
-          figures={[
-            {
-              label: "Planned billing HT",
-              value: overview.planned.billingHt,
-              href: billing,
-              help: "Issued and To be invoiced Client Invoices, net of credits. Excludes Quotes, Drafts and cancelled records.",
-            },
-            {
-              label: "Target profit",
-              value: overview.planned.targetProfitHt,
-              detail:
-                overview.planned.targetMarginRate === null
-                  ? "Margin not available"
-                  : `${formatRate(overview.planned.targetMarginRate)} margin`,
-              help: "Profit within planned Billing, calculated from each category's Project markup.",
-            },
-            {
-              label: "Target markup",
-              value: overview.planned.targetMarkupRate,
-              rate: true,
-              help: "Combined target profit divided by implied cost, using the Project category markups. The profit's margin is its share of planned Billing.",
-            },
-            {
-              label: "Coverage gap HT",
-              value: overview.planned.coverageHt,
-              signed: true,
-              help: "Planned Billing minus agreed Order selling totals. Positive is a surplus; negative is a shortfall.",
-            },
-            {
-              label: "Provisional profit",
-              value: overview.planned.profitHt,
-              signed: true,
-              help: "Planned Billing minus all recorded economic costs, including Project freight. Future costs may still be missing.",
-            },
-            {
-              label: "Provisional markup",
-              value: overview.planned.markupRate,
-              rate: true,
-              help: "Provisional profit divided by recorded economic cost. This is not a final-profit forecast.",
-            },
-          ]}
-        />
-        <p className="text-muted-foreground mt-3 text-xs">
-          Includes To be invoiced. Future costs may be missing.
-        </p>
-        <VatCostNote
-          value={overview.planned.nonDeductibleVat}
-          currency={currency}
-        />
-      </section>
-      <section
-        id="finance"
-        className="record-surface"
-        aria-labelledby="project-vat-heading"
-      >
-        <h2 id="project-vat-heading" className="text-sm font-semibold">
-          VAT
-        </h2>
-        <Figures
-          currency={currency}
-          figures={[
-            {
-              label: "Output VAT",
-              value: vatPosition.outputVat,
-              href: billing,
-            },
-            {
-              label: "Deductible VAT",
-              value: vatPosition.deductibleInputVat,
-              href: purchasing,
-            },
-            {
-              label: vatLabel,
-              value: vatPosition.positionAmount,
-              help: "Issued Client Invoice output VAT minus deductible Order and Project freight input VAT, after credits. Management view, not a tax return.",
-            },
-          ]}
-        />
-      </section>
-      <section
-        className="record-surface"
-        aria-labelledby="project-freight-heading"
-      >
-        <h2 id="project-freight-heading" className="text-sm font-semibold">
-          Freight HT
-        </h2>
-        <Figures
-          currency={currency}
-          figures={[
-            {
-              label: "Freight cost HT",
-              value: freight.supplierHt,
-            },
-            {
-              label: "Freight target HT",
-              value: freight.supplierSellHt,
-              help: "Order freight plus Project freight HT, with the Project freight markup.",
-            },
-            {
-              label: "Client invoiced HT",
-              value: freight.clientInvoicedHt,
-              href: billing,
-            },
-            {
-              label: "Client received HT",
-              value: freight.clientPaidHt,
-              href: payments,
-              help: "Proportional freight share of actual receipts, not a separately recorded freight payment.",
-            },
-            {
-              label: "Invoiced coverage HT",
-              value: freight.invoicedCoverageHt,
-              signed: true,
-              help: "Client freight invoiced minus freight target.",
-            },
-            {
-              label: "Paid coverage HT",
-              value: freight.paidCoverageHt,
-              signed: true,
-              help: "Client freight received share minus freight target.",
-            },
-          ]}
-        />
-      </section>
+      )}
     </div>
+  );
+}
+
+function ProjectReviewAlerts({ dashboard }: { dashboard: ProjectDashboard }) {
+  if (dashboard.alerts.length === 0) return null;
+  const row = (alert: ProjectDashboard["alerts"][number], index: number) => (
+    <li key={`${alert.href}:${index}`} className="flex items-start gap-2 py-2">
+      <CircleAlert
+        aria-hidden="true"
+        className="text-warning mt-0.5 size-4 shrink-0"
+      />
+      <div className="min-w-0">
+        <Link
+          href={alert.href}
+          className="text-sm font-medium underline underline-offset-4"
+        >
+          {alert.label}
+        </Link>
+        <p className="text-muted-foreground mt-1 text-xs">{alert.note}</p>
+      </div>
+    </li>
+  );
+  return (
+    <section aria-label="Needs attention" className="record-surface">
+      <h2 className="text-sm font-semibold">Needs attention</h2>
+      <ul className="mt-2 divide-y">{dashboard.alerts.slice(0, 3).map(row)}</ul>
+      {dashboard.alerts.length > 3 && (
+        <details className="mt-2 border-t pt-3">
+          <summary className="text-xs font-medium">
+            More checks ({dashboard.alerts.length - 3})
+          </summary>
+          <ul className="mt-2 divide-y">
+            {dashboard.alerts.slice(3).map(row)}
+          </ul>
+        </details>
+      )}
+    </section>
   );
 }

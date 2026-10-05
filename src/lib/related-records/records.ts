@@ -7,10 +7,11 @@ import { formatMoney } from "@/domain/procurement/presentation";
 import { z } from "zod";
 import { getDatabase } from "@/lib/db";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
+import { listProjectOrders } from "@/lib/procurement/orders";
+import { listProjectBillingDocuments } from "@/lib/billing/billing";
 import {
   projectSelect,
   partySelect,
-  orderSelect,
   billingSelect,
   paymentSelect,
   receiptSelect,
@@ -18,7 +19,8 @@ import {
   clientInstallmentSelect,
   projectsTable,
   partiesTable,
-  ordersTable,
+  projectOrdersTable,
+  projectBillingsTable,
   billingsTable,
   paymentsTable,
   receiptsTable,
@@ -48,16 +50,8 @@ async function getProjectRelationsInternal(
       where: { id: projectId },
       select: { client: { select: partySelect } },
     }),
-    db.procurementOrder.findMany({
-      where: { projectId },
-      select: orderSelect,
-      orderBy: [{ orderNumber: "asc" }, { id: "asc" }],
-    }),
-    db.clientBillingDocument.findMany({
-      where: { projectId },
-      select: billingSelect,
-      orderBy: [{ documentDate: "desc" }, { id: "asc" }],
-    }),
+    listProjectOrders(projectId),
+    listProjectBillingDocuments(projectId),
     includeCash
       ? db.paymentInstallment.findMany({
           where: { order: { projectId }, direction: "SUPPLIER_PAYMENT" },
@@ -94,8 +88,8 @@ async function getProjectRelationsInternal(
   ]);
   return [
     partiesTable("clients", project?.client ? [project.client] : []),
-    ordersTable(orders),
-    billingsTable(billing),
+    projectOrdersTable(orders),
+    projectBillingsTable(billing),
     ...(includeCash
       ? [
           paymentsTable(payments),

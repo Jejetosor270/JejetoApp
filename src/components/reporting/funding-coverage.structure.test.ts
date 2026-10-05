@@ -17,7 +17,7 @@ const portfolio = readFileSync(
 describe("Billing less Order sell presentation", () => {
   it("replaces the Project list freight percentage with markup and coverage", () => {
     expect(projects).toContain(">Target Markup<");
-    expect(projects).toMatch(/>\s*Billing less Order sell\s*</);
+    expect(projects).toMatch(/>\s*Order coverage HT\s*</);
     expect(projects).not.toContain(">Expected freight allowance %<");
     expect(projects).toContain("defaultProductMarkupRate");
     expect(projects).toContain("formatSignedMoney");

@@ -14,6 +14,7 @@ import {
 import type { ProjectControl } from "@/lib/reporting/project-control";
 import { projectCashOutlook } from "@/domain/finance/project-cash-outlook";
 import { projectOverview } from "@/domain/finance/project-overview";
+import { projectDashboard } from "@/domain/finance/project-dashboard";
 
 const categories = recoveryCategories.map((category) => ({
   category,
@@ -28,6 +29,29 @@ const categories = recoveryCategories.map((category) => ({
   }),
 }));
 const data: ProjectControl = {
+  dashboard: projectDashboard({
+    cost: [],
+    sell: [],
+    invoiced: [],
+    toInvoice: [],
+    eligibleCoverage: [],
+    receipts: [],
+    supplierPayments: [],
+    freightPayments: [],
+    clientRefunds: [],
+    supplierRefunds: [],
+    toCollect: [],
+    toPay: [],
+    budget: [],
+    nonDeductibleVat: [],
+    freightCost: [],
+    freightInvoiced: [],
+    freightReceived: [],
+    vatOutput: [],
+    vatInput: [],
+    freightMarkupRate: "0.15",
+    alerts: [],
+  }),
   overview: projectOverview({
     issuedHt: "300",
     orderCostHt: "210",

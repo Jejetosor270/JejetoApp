@@ -255,6 +255,11 @@ export function RelatedRecordTable({
                     ) : (
                       value
                     )}
+                    {index === 0 && row.secondaryText ? (
+                      <p className="text-muted-foreground mt-0.5 max-w-64 text-xs font-normal whitespace-normal">
+                        {row.secondaryText}
+                      </p>
+                    ) : null}
                   </td>
                 ))}
                 {rowActions || table.editKind ? (

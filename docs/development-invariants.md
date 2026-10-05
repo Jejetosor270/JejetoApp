@@ -1,32 +1,40 @@
 # Development invariants
 
-## Compact Project financials
+## Decision-focused Project financials
 
-- Project Details now has six financial sections only: Invoiced HT, Cash TTC,
-  Orders HT, Planned HT, VAT and Freight HT. Project info stays in a header drawer;
-  budget/pricing editing remains available, and purchase-budget allocation moves
-  under Related → Purchasing. Related records, payment workflows and draft protection
-  remain unchanged. Earlier descriptions of expanded Project overview panels below
-  are superseded for presentation, not for reporting calculations elsewhere.
-- Invoiced HT compares issued Client Invoice HT with all active Order HT costs
-  plus separate Project freight HT once. Its difference is not economic profit.
-  Orders HT retains agreed Order selling prices and shows planned economic profit
-  and aggregate markup; non-deductible VAT is disclosed when it explains the gap
-  between displayed HT costs and economic profit.
-- Cash balance uses net Client receipts minus net Supplier/freight payments,
-  including actual refunds. Funding balance separately subtracts full recorded
-  Supplier payable plus separate Project freight payable TTC from net Client
-  receipts, not just outstanding balances. Recorded payable uses existing payable
-  bases; unrelated Order cost lines do not invent additional cash obligations.
-  Neither measure is a bank balance. No supplier-issued classification is inferred.
-- Planned HT includes issued and To be invoiced Client Invoices after credits,
-  excluding Quotes, Drafts and cancelled/trashed records. Target profit reverses
-  the Project's distinct category markups from category Billing HT; margin is
-  profit/revenue and markup is profit/implied cost. Coverage compares planned
-  Billing with agreed Order sell; provisional profit compares it with all recorded
-  economic costs. Future costs may be missing; this is not expected-final-profit
-  forecasting. Existing Invoice revenue, VAT and main cash-forecast eligibility
-  remain unchanged. Missing FX stays incomplete. No migration is required.
+- Project Details prioritizes Costs & profit, Client Billing and Cash, with visual
+  comparisons and collapsed VAT/Freight breakdowns. Short labels use shared UI and
+  numeric formatting. Every monetary figure opens its signed source contributions;
+  missing amounts identify records to review rather than becoming zero. Project info,
+  budget editing, Details/Related navigation and draft protection remain available.
+- Recorded cost includes active Order and separate Project freight economic cost once,
+  including non-deductible VAT. Pricing profit is agreed Order sell less those costs;
+  it is a recorded pricing position, not final or earned Project profit. Project-only
+  expenses do not invent additional selling prices. Markup uses aggregate profit/cost.
+- Billing plan is issued plus To be invoiced net Invoice HT; To invoice contains only
+  the latter. Quotes, Drafts, cancelled and trashed documents remain excluded. Order
+  coverage HT uses the SAME eligible issued allocations and approved Project remainder
+  minus active Order sell as the Projects list. Planned invoices never fund that metric.
+- Expected profit, under Budget estimate, uses full planned Billing less the complete
+  approved full-Project HT budget and known non-deductible VAT. Recorded HT costs are
+  not added again. Missing category budgets (including Other/services) keep the estimate
+  incomplete; zero must be explicit. This is a budget-based estimate, not cost-to-complete
+  forecasting. An exceeded budget or plan below the approved selling target is flagged.
+- Net cash remains net Client receipts less net Supplier/freight payments, including
+  actual refunds and each cash record's independent FX. To collect uses authoritative
+  issued Invoice outstanding; To pay includes remaining Supplier/freight obligations
+  and Client refunds due. Neither is a bank balance. Extra Order freight/customs/other
+  cost lines outside the Supplier payable base are flagged, not fabricated as liabilities.
+- Freight cash attribution groups recognized cash by issued Invoice, including an
+  explicitly matched Quote once. Net freight and TTC account for active credits;
+  attributable net cash is capped by the net Invoice freight portion. Contributions
+  retain each receipt/refund's actual FX. Actual refunds remain separate cash records;
+  credits alone never create cash. Missing contributing FX remains incomplete.
+- Project Related tables show authoritative cost/sell, payment status, descriptions,
+  dates and remaining cash. Collapsed payment groups expose their balance, due date and
+  planned/issued status. No source values, payment terms or historical data are rewritten.
+  No schema change or migration is required. Earlier expanded overview descriptions below
+  are historical and superseded for this presentation.
 
 ## Reviewed amount autofill
 

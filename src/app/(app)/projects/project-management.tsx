@@ -477,8 +477,11 @@ export function ProjectManagement({
                 />
                 <th className="px-4 py-3">Expected completion</th>
                 <th className="px-4 py-3">Target Markup</th>
-                <th className="px-4 py-3 text-right">
-                  Billing less Order sell
+                <th
+                  className="px-4 py-3 text-right"
+                  title="Eligible issued Invoice allocations and approved Project remainder, less active Order sell HT."
+                >
+                  Order coverage HT
                 </th>
                 {canEdit ? (
                   <th className="px-4 py-3 text-right">Edit</th>

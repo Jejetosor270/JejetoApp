@@ -1,4 +1,5 @@
 import { billingRecordStatus } from "./status-view";
+import { cache } from "react";
 import { changeBillingStatusInTransaction } from "./status";
 import { billingIsIssued } from "@/domain/billing/status";
 import { activeCreditsInclude } from "@/lib/credits/select";
@@ -476,14 +477,16 @@ export async function getClientBillingDocument(documentId: string) {
 }
 
 /** Load Project terms in one relation batch, not a concurrent detail query per Invoice. */
-export async function listProjectBillingDocuments(projectId: string) {
-  const records = await getDatabase().clientBillingDocument.findMany({
-    where: { projectId },
-    include: billingInclude,
-    orderBy: [{ documentDate: "desc" }, { id: "asc" }],
-  });
-  return records.map((record) => billingView(record));
-}
+export const listProjectBillingDocuments = cache(
+  async function listProjectBillingDocuments(projectId: string) {
+    const records = await getDatabase().clientBillingDocument.findMany({
+      where: { projectId },
+      include: billingInclude,
+      orderBy: [{ documentDate: "desc" }, { id: "asc" }],
+    });
+    return records.map((record) => billingView(record));
+  },
+);
 
 export async function listClientBillingOptions() {
   const database = getDatabase();

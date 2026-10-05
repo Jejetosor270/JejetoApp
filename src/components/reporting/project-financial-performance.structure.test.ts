@@ -10,6 +10,11 @@ const projectPage = readFileSync(
   "src/app/(app)/projects/[projectId]/page.tsx",
   "utf8",
 );
+const overview = readFileSync(
+  "src/components/reporting/project-financial-overview.tsx",
+  "utf8",
+);
+const adapter = readFileSync("src/lib/reporting/project-dashboard.ts", "utf8");
 
 describe("Project financial performance presentation", () => {
   it("omits the redundant full-Project target versus actual panel", () => {
@@ -25,13 +30,13 @@ describe("Project financial performance presentation", () => {
     expect(dashboard).toContain("VAT payable to State");
     expect(dashboard).toContain("VAT credit / deductible");
     expect(dashboard).not.toContain("report.financial.totals.outputVat");
-    expect(projectPage).toContain("billing?.outputVatComplete");
-    expect(projectPage).toContain(
-      "reporting.financial.totals.recoverableInputVat",
-    );
-    expect(projectPage).toContain(
-      "freight?.projectExpenseDeductibleInputVat.complete",
-    );
+    expect(adapter).toContain('vatOutput: billingRows(invoices, "vatAmount")');
+    expect(adapter).toContain("calculateInputVatRecovery");
+    expect(adapter).toContain("reportingDeductibleVat");
+    expect(adapter).toContain("Deductible Project freight input VAT.");
+    expect(overview).toContain('metric("vatInput")');
+    expect(overview).toContain('metric("vatOutput")');
+    expect(overview).toContain('"VAT credit"');
   });
 
   it("keeps cash and freight reconciliation separate", () => {
@@ -40,7 +45,11 @@ describe("Project financial performance presentation", () => {
     expect(projectPage).not.toContain("<ProjectFinancialControl");
     expect(projectPage).not.toContain("<ProjectFinancialDashboard");
     expect(projectPage).toContain("<ProjectFinancialOverview");
-    expect(projectPage).toContain("vatPosition={vatPosition}");
+    expect(projectPage).toContain("dashboard: control.dashboard");
+    expect(overview).toContain('<Panel title="Cash"');
+    expect(overview).toContain('metric("cash", true)');
+    expect(overview).toContain('"freightInvoicedGap"');
+    expect(projectPage).not.toContain("getProjectReportingSnapshot");
     expect(projectPage).not.toContain('section="overview"');
     expect(dashboard).toContain("Client collection");
     expect(dashboard).toContain("Cash timing does not change");

@@ -1,14 +1,62 @@
 import { formatEnumLabel } from "@/domain/presentation/labels";
+import Decimal from "decimal.js";
 import { billingIsIssued } from "@/domain/billing/status";
+import { recordPaymentStatusLabel } from "@/domain/payments/record-status";
+import { formatMoney } from "@/domain/procurement/presentation";
 import { getDatabase } from "@/lib/db";
 import { requireUser } from "@/lib/auth/current-user";
 import { getProjectPaymentSummaries } from "@/lib/payments/payments";
 import { listProjectBillingDocuments } from "@/lib/billing/billing";
 import { projectRead } from "@/lib/reporting/project-diagnostics";
-import { businessToday } from "@/domain/payments/dates";
+import { businessToday, formatDateOnly } from "@/domain/payments/dates";
 import { PaymentSchedule } from "./payment-schedule";
 import { BillingScheduleManager } from "@/components/billing/billing-schedule-manager";
 import { RelatedCashCreate } from "./related-cash-create";
+
+function PaymentTermsSummary({
+  title,
+  status,
+  amount,
+  currency,
+  dueDate,
+  cancelled,
+  planned = false,
+}: {
+  title: string;
+  status: string;
+  amount: string | null;
+  currency: string;
+  dueDate: string | null;
+  cancelled: boolean;
+  planned?: boolean;
+}) {
+  const settled = amount !== null && new Decimal(amount).lte(0);
+  const due =
+    cancelled || settled
+      ? "Not applicable"
+      : dueDate
+        ? formatDateOnly(dueDate)
+        : "Date needed";
+  return (
+    <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+      <span className="inline-flex flex-col gap-1 align-top">
+        <span>{title}</span>
+        <span className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs font-normal">
+          <span>{status}</span>
+          <span className="tabular-nums">
+            {planned ? "Planned remainder TTC" : "Remaining TTC"}:{" "}
+            {cancelled
+              ? "Not applicable"
+              : formatMoney(amount, currency, "Incomplete")}
+          </span>
+          <span>
+            {planned ? "Planned due" : "Next due"}: {due}
+          </span>
+        </span>
+      </span>
+    </summary>
+  );
+}
 
 export async function ProjectPaymentTerms({
   projectId,
@@ -63,10 +111,22 @@ export async function ProjectPaymentTerms({
       )}
       {supplier.map(({ order, summary }) => (
         <details className="bg-card rounded-lg border" key={order.id}>
-          <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
-            Purchasing · {order.orderNumber} · {summary.installments.length}{" "}
-            terms
-          </summary>
+          <PaymentTermsSummary
+            title={`Purchasing · ${order.orderNumber} · ${summary.installments.length} ${summary.installments.length === 1 ? "term" : "terms"}`}
+            status={recordPaymentStatusLabel(
+              order.supplierPayment.status,
+              null,
+              order.status === "CANCELLED",
+            )}
+            amount={
+              summary.reconciliationComplete
+                ? order.supplierPayment.outstanding
+                : null
+            }
+            currency={order.orderCurrencyCode}
+            dueDate={order.supplierPayment.nextDueDate}
+            cancelled={order.status === "CANCELLED"}
+          />
           <div className="border-t p-4">
             <PaymentSchedule
               canEdit={canEdit && order.status !== "CANCELLED"}
@@ -84,10 +144,20 @@ export async function ProjectPaymentTerms({
         (document) =>
           document && (
             <details className="bg-card rounded-lg border" key={document.id}>
-              <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
-                Billing · {document.reference} ·{" "}
-                {formatEnumLabel(document.documentType)}
-              </summary>
+              <PaymentTermsSummary
+                title={`Billing · ${document.reference} · ${document.documentType === "QUOTE" ? "Quote plan" : billingIsIssued(document) ? "Invoice" : "Invoice plan"}`}
+                status={formatEnumLabel(document.status)}
+                amount={document.outstanding}
+                currency={document.currencyCode}
+                dueDate={document.dueDate}
+                cancelled={
+                  document.isCancelled || document.status === "CANCELLED"
+                }
+                planned={
+                  document.documentType === "QUOTE" ||
+                  !billingIsIssued(document)
+                }
+              />
               <div className="border-t p-4">
                 <BillingScheduleManager
                   canEdit={canEdit}

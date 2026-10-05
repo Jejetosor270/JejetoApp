@@ -50,6 +50,7 @@ const credit = {
   freightCoverageHt: new Decimal(0),
   otherCoverageHt: new Decimal(0),
   currencyCode: "USD",
+  reportingCurrencyCode: "EUR",
   fxRateToReporting: new Decimal(3),
   refunds: [
     {
@@ -193,6 +194,20 @@ describe("Billing credits and independent FX", () => {
     expect(result.missingIds).toEqual(
       expect.arrayContaining(["credit", "refund"]),
     );
+  });
+  it("does not reuse a credit FX snapshot for a different reporting currency", () => {
+    const record = {
+      ...document(),
+      credits: [{ ...credit, reportingCurrencyCode: "USD" }],
+    };
+    const result = summarizeClientBillingRecords(
+      [record] as unknown as Parameters<
+        typeof summarizeClientBillingRecords
+      >[0],
+      "EUR",
+    );
+    expect(result.coverageComplete).toBe(false);
+    expect(result.coverageMissingIds).toEqual(["credit"]);
   });
   it("rejects a receipt above credit-adjusted remaining before any cash write", async () => {
     mocks.find.mockResolvedValue({

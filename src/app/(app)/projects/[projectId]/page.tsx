@@ -19,19 +19,11 @@ import { notFound, redirect } from "next/navigation";
 
 import { ProjectDetail } from "@/app/(app)/projects/[projectId]/project-detail";
 import { ProjectFinancialOverview } from "@/components/reporting/project-financial-overview";
-import { isCashFlowHorizon, type CashFlowHorizon } from "@/config/reporting";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listProjectFormOptions } from "@/lib/master-data/lookups";
 import { getProject } from "@/lib/master-data/projects";
-import { getProjectReportingSnapshot } from "@/lib/reporting/reports";
-import { getProjectClientBillingSummary } from "@/lib/billing/reporting";
 import { ProjectFreightExpenses } from "@/components/freight/project-freight-expenses";
-import {
-  getProjectFreightReconciliation,
-  listProjectFreightExpenses,
-} from "@/lib/freight/expenses";
-import { sumComparableFinancialAmounts } from "@/domain/projects/targets";
-import { calculateProjectVatPosition } from "@/domain/vat/position";
+import { listProjectFreightExpenses } from "@/lib/freight/expenses";
 
 export const metadata: Metadata = { title: "Project" };
 
@@ -62,54 +54,23 @@ export default async function ProjectPage({
     }
     redirect(legacyDestination + "?" + destinationQuery);
   }
-  const requestedHorizon = query.horizon ?? "";
-  const horizon: CashFlowHorizon = isCashFlowHorizon(requestedHorizon)
-    ? requestedHorizon
-    : "12m";
   const user = await requireUser();
   const result = await projectRead("record", () => getProject(projectId));
   if (!result) notFound();
-  const [
-    options,
-    reporting,
-    billing,
-    freight,
-    freightExpenses,
-    relations,
-    control,
-    settings,
-    history,
-  ] = await Promise.all([
-    listProjectFormOptions(),
-    projectRead("reporting", () =>
-      getProjectReportingSnapshot(projectId, { horizon }),
-    ),
-    projectRead("billing", () => getProjectClientBillingSummary(projectId)),
-    projectRead("freight", () => getProjectFreightReconciliation(projectId)),
-    projectRead("freight expenses", () =>
-      listProjectFreightExpenses(projectId),
-    ),
-    projectRead("relations", () =>
-      getProjectRelations(projectId, { includeCash: false }),
-    ),
-    projectRead("financials", () => getProjectControl(projectId)),
-    getApplicationSettings(),
-    projectRead("history", () => getRecordHistory("PROJECT", projectId)),
-  ]);
-  if (!reporting) notFound();
+  const [options, freightExpenses, relations, control, settings, history] =
+    await Promise.all([
+      listProjectFormOptions(),
+      projectRead("freight expenses", () =>
+        listProjectFreightExpenses(projectId),
+      ),
+      projectRead("relations", () =>
+        getProjectRelations(projectId, { includeCash: false }),
+      ),
+      projectRead("financials", () => getProjectControl(projectId)),
+      getApplicationSettings(),
+      projectRead("history", () => getRecordHistory("PROJECT", projectId)),
+    ]);
   const { buildings, project } = result;
-  const deductibleInputVat = sumComparableFinancialAmounts(
-    reporting.financial.totals.recoverableInputVat.complete
-      ? reporting.financial.totals.recoverableInputVat.value
-      : null,
-    freight?.projectExpenseDeductibleInputVat.complete
-      ? freight.projectExpenseDeductibleInputVat.value
-      : null,
-  );
-  const vatPosition = calculateProjectVatPosition({
-    deductibleInputVat,
-    outputVat: billing?.outputVatComplete ? billing.outputVat : null,
-  });
   return (
     <ProjectDetail
       buildings={buildings}
@@ -141,8 +102,7 @@ export default async function ProjectPage({
         ),
         overview: (
           <ProjectFinancialOverview
-            data={control}
-            vatPosition={vatPosition}
+            data={{ currency: control.currency, dashboard: control.dashboard }}
             projectId={projectId}
           />
         ),

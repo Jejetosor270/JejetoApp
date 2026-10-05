@@ -8,6 +8,10 @@ import type { Prisma } from "@/generated/prisma/client";
 import { dateToDateOnly, formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney } from "@/domain/procurement/presentation";
 import { formatEnumLabel } from "@/domain/presentation/labels";
+import { billingIsIssued } from "@/domain/billing/status";
+import { recordPaymentStatusLabel } from "@/domain/payments/record-status";
+import type { OrderSummary } from "@/lib/procurement/orders";
+import type { ClientBillingView } from "@/lib/billing/billing";
 import { relatedHref, type RelatedRow, type RelatedTableData } from "./types";
 
 export const projectSelect = {
@@ -193,6 +197,104 @@ export function billingsTable(rows: (Billing | null | undefined)[]) {
     })),
     "Client commercial documents. Open Billing to see its allocations, installments and receipts.",
     [3, 4],
+  );
+}
+
+export function projectOrdersTable(rows: OrderSummary[]) {
+  return table(
+    "orders",
+    "Orders",
+    [
+      "Order",
+      "Package",
+      "Supplier",
+      "Landed cost HT",
+      "Sell HT",
+      "Remaining TTC",
+      "Payment status",
+    ],
+    rows
+      .toSorted(
+        (left, right) =>
+          left.orderNumber.localeCompare(right.orderNumber) ||
+          left.id.localeCompare(right.id),
+      )
+      .map((order) => ({
+        id: order.id,
+        href: relatedHref("order", order.id),
+        secondaryText: order.shortDescription ?? null,
+        cells: [
+          order.orderNumber,
+          order.orderPackage?.name ?? order.packageName,
+          order.supplier.displayName,
+          formatMoney(order.costs.landedCost, order.orderCurrencyCode),
+          formatMoney(order.totalSellingRevenue, order.sellingCurrencyCode),
+          order.status === "CANCELLED"
+            ? "Not applicable"
+            : formatMoney(
+                order.supplierPayment.outstanding,
+                order.orderCurrencyCode,
+                "Incomplete",
+              ),
+          recordPaymentStatusLabel(
+            order.supplierPayment.status,
+            null,
+            order.status === "CANCELLED",
+          ),
+        ],
+      })),
+    "Order cost and agreed sell exclude VAT. Remaining TTC is the Supplier payable balance.",
+    [3, 4, 5],
+  );
+}
+
+export function projectBillingsTable(rows: ClientBillingView[]) {
+  return table(
+    "billing",
+    "Billing",
+    [
+      "Reference",
+      "Type",
+      "Invoice date",
+      "Due date",
+      "Invoiced HT",
+      "Received TTC",
+      "Remaining TTC",
+      "Status",
+    ],
+    rows.map((document) => {
+      const issued =
+        document.documentType === "INVOICE" && billingIsIssued(document);
+      return {
+        id: document.id,
+        href: relatedHref("billing", document.id),
+        secondaryText: document.shortDescription,
+        cells: [
+          document.reference,
+          formatEnumLabel(document.documentType),
+          document.documentType === "INVOICE"
+            ? formatDateOnly(document.documentDate)
+            : "Not applicable",
+          document.isCancelled || document.status === "PAID"
+            ? "Not applicable"
+            : document.dueDate
+              ? formatDateOnly(document.dueDate)
+              : "Date needed",
+          issued
+            ? formatMoney(document.totalHt, document.currencyCode)
+            : "Not invoiced",
+          issued
+            ? formatMoney(document.paid, document.currencyCode)
+            : "Not collectible",
+          issued
+            ? formatMoney(document.outstanding, document.currencyCode)
+            : "Not collectible",
+          formatEnumLabel(document.status),
+        ],
+      };
+    }),
+    "Issued Invoices show document HT and collection balances TTC. Quotes and unissued documents remain plans.",
+    [4, 5, 6],
   );
 }
 export function supplierInstallmentsTable(rows: SupplierInstallment[]) {

@@ -2,6 +2,8 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 const mock = vi.hoisted(() => ({
   user: vi.fn(),
+  projectOrders: vi.fn(),
+  projectBilling: vi.fn(),
   db: {
     project: { findUnique: vi.fn() },
     procurementOrder: { findMany: vi.fn(), findUnique: vi.fn() },
@@ -14,6 +16,12 @@ const mock = vi.hoisted(() => ({
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ getDatabase: () => mock.db }));
+vi.mock("@/lib/procurement/orders", () => ({
+  listProjectOrders: mock.projectOrders,
+}));
+vi.mock("@/lib/billing/billing", () => ({
+  listProjectBillingDocuments: mock.projectBilling,
+}));
 vi.mock("@/lib/auth/current-user", () => ({
   canEditMasterData: (role: string) => role === "ADMIN" || role === "MANAGER",
   requireUser: mock.user,
@@ -36,6 +44,8 @@ const party = { id, displayName: "Party", isActive: true };
 beforeEach(() => {
   vi.resetAllMocks();
   mock.user.mockResolvedValue({ id, role: "USER" });
+  mock.projectOrders.mockResolvedValue([]);
+  mock.projectBilling.mockResolvedValue([]);
   for (const model of Object.values(mock.db))
     if ("findMany" in model) model.findMany.mockResolvedValue([]);
 });
@@ -52,9 +62,8 @@ it("scopes Project tables to its Orders, Billing, installments and actual cash w
     "supplier-installments",
     "client-installments",
   ]);
-  expect(mock.db.procurementOrder.findMany).toHaveBeenCalledWith(
-    expect.objectContaining({ where: { projectId: id } }),
-  );
+  expect(mock.projectOrders).toHaveBeenCalledWith(id);
+  expect(mock.projectBilling).toHaveBeenCalledWith(id);
   expect(mock.db.paymentSettlement.findMany).toHaveBeenCalledWith(
     expect.objectContaining({
       where: {
@@ -91,8 +100,101 @@ it("loads only the Project workspace tables and preserves edit/unassign controls
     mock.db.clientReceipt,
   ])
     expect(model.findMany).not.toHaveBeenCalled();
-  expect(mock.db.procurementOrder.findMany).toHaveBeenCalledTimes(1);
-  expect(mock.db.clientBillingDocument.findMany).toHaveBeenCalledTimes(1);
+  expect(mock.projectOrders).toHaveBeenCalledTimes(1);
+  expect(mock.projectBilling).toHaveBeenCalledTimes(1);
+});
+
+it("uses authoritative landed cost, sell and Supplier balances in Project Purchasing", async () => {
+  mock.user.mockResolvedValue({ id, role: "MANAGER" });
+  mock.projectOrders.mockResolvedValue([
+    {
+      id,
+      orderNumber: "PO-1",
+      packageName: "Old package",
+      orderPackage: { name: "Reviewed package" },
+      shortDescription: "Lighting package",
+      supplier: party,
+      status: "CONFIRMED",
+      orderCurrencyCode: "USD",
+      sellingCurrencyCode: "EUR",
+      costs: { purchaseCost: "100", landedCost: "140" },
+      totalSellingRevenue: "180",
+      supplierPayment: { outstanding: "65", status: "PARTIALLY_PAID" },
+    },
+  ]);
+  const result = (await getProjectRelations(id, { includeCash: false })).find(
+    (table) => table.id === "orders",
+  );
+  expect(result).toMatchObject({
+    editKind: "order",
+    removal: { relation: "order-project", parentId: id },
+    numericColumns: [3, 4, 5],
+  });
+  expect(result?.rows[0]).toMatchObject({
+    href: `/orders/${id}?tab=related`,
+    secondaryText: "Lighting package",
+    cells: [
+      "PO-1",
+      "Reviewed package",
+      "Party",
+      "140.00 USD",
+      "180.00 EUR",
+      "65.00 USD",
+      "Partially Paid",
+    ],
+  });
+});
+
+it("keeps Project Billing descriptions, explicit missing dates and plans outside collectible balances", async () => {
+  const invoice = {
+    id,
+    reference: "INV-1",
+    shortDescription: "Furniture deposit",
+    documentType: "INVOICE",
+    documentDate: "2026-10-01",
+    dueDate: null,
+    currencyCode: "EUR",
+    totalHt: "100",
+    totalTtc: "120",
+    paid: "20",
+    outstanding: "100",
+    workflowStatus: "INVOICED",
+    status: "PARTIALLY_PAID",
+    isCancelled: false,
+  };
+  mock.projectBilling.mockResolvedValue([
+    invoice,
+    { ...invoice, id: "draft", workflowStatus: "DRAFT", status: "DRAFT" },
+    {
+      ...invoice,
+      id: "quote",
+      documentType: "QUOTE",
+      status: "TO_BE_INVOICED",
+    },
+  ]);
+  const result = (await getProjectRelations(id, { includeCash: false })).find(
+    (table) => table.id === "billing",
+  );
+  expect(result?.rows[0]).toMatchObject({
+    secondaryText: "Furniture deposit",
+    cells: [
+      "INV-1",
+      "Invoice",
+      "01/10/2026",
+      "Date needed",
+      "100.00 EUR",
+      "20.00 EUR",
+      "100.00 EUR",
+      "Partially Paid",
+    ],
+  });
+  for (const row of result?.rows.slice(1) ?? []) {
+    expect(row.cells.slice(4, 7)).toEqual([
+      "Not invoiced",
+      "Not collectible",
+      "Not collectible",
+    ]);
+  }
 });
 
 it("never places linked Billing receipts or Client installments on Orders", async () => {

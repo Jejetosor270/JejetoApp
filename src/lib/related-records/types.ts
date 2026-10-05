@@ -2,6 +2,7 @@ export interface RelatedRow {
   id: string;
   href?: string;
   editValue?: string;
+  secondaryText?: string | null;
   editFields?: {
     column: number;
     name: "date" | "amount" | "freight";

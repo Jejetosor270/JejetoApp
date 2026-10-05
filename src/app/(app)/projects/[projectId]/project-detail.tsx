@@ -585,7 +585,11 @@ export function ProjectDetail({
             <DetailPageHeader
               actions={
                 <>
-                  <EditorDrawer title="Project info" wide>
+                  <EditorDrawer
+                    title="Project info"
+                    description="Project information and planning values."
+                    wide
+                  >
                     <ProjectRecordDetails project={project} />
                   </EditorDrawer>
                   {canEdit ? (

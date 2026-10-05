@@ -10,9 +10,14 @@ import { calculateProjectTargets } from "@/domain/projects/targets";
 import { projectFreightBudget } from "@/domain/freight/calculations";
 import {
   financialCategoryTotals,
-  freightReceiptHt,
   projectFreightCoverage,
 } from "@/domain/finance/project-coverage";
+import { summarizeFreightReceipts } from "@/domain/finance/freight-receipts";
+import type { ProjectMetricRow } from "@/domain/finance/project-dashboard";
+import {
+  buildProjectDashboard,
+  projectDashboardInclude,
+} from "./project-dashboard";
 import {
   isPlannedProjectBilling,
   projectOverview,
@@ -28,7 +33,10 @@ import {
   freightExpenseEconomicCost,
   getProjectFreightReconciliation,
 } from "@/lib/freight/expenses";
-import { getProjectClientBillingSummary } from "@/lib/billing/reporting";
+import {
+  getProjectClientBillingSummary,
+  invoiceCoverageContributions,
+} from "@/lib/billing/reporting";
 import { reportingAmount } from "@/domain/finance/calculations";
 import { billingCashContexts } from "@/domain/billing/cash-expectations";
 import { getClientCreditPosition } from "@/domain/billing/credits";
@@ -58,28 +66,12 @@ export async function getProjectControl(projectId: string) {
     freight,
     billing,
     actualReceipts,
-    excludedReceiptCount,
+    excludedReceipts,
     refunds,
   ] = await Promise.all([
     db.project.findUniqueOrThrow({
       where: { id: projectId },
-      include: {
-        billingDocuments: {
-          where: { isCancelled: false },
-          include: {
-            credits: activeCreditsInclude,
-            allocations: { include: { order: { select: { status: true } } } },
-            receipts: { select: { id: true, amount: true } },
-            paymentInstallments: {
-              include: { receipts: { select: { id: true, amount: true } } },
-            },
-            matchedInstallment: {
-              include: { receipts: { select: { id: true, amount: true } } },
-            },
-          },
-        },
-        freightExpenses: { include: { payments: true } },
-      },
+      include: projectDashboardInclude,
     }),
     listProjectOrders(projectId),
     listProjectSupplierInstallments(projectId),
@@ -90,6 +82,8 @@ export async function getProjectControl(projectId: string) {
       include: {
         billingDocument: {
           select: {
+            id: true,
+            credits: activeCreditsInclude,
             reference: true,
             currencyCode: true,
             documentType: true,
@@ -111,6 +105,9 @@ export async function getProjectControl(projectId: string) {
                 projectId,
               },
               select: {
+                id: true,
+                reference: true,
+                credits: activeCreditsInclude,
                 currencyCode: true,
                 totalTtc: true,
                 freightCoverageHt: true,
@@ -120,8 +117,9 @@ export async function getProjectControl(projectId: string) {
         },
       },
     }),
-    db.clientReceipt.count({
+    db.clientReceipt.findMany({
       where: { billingDocument: { projectId }, NOT: recognizedReceiptWhere },
+      select: { id: true, billingDocument: { select: { reference: true } } },
     }),
     listCreditRefundCash([projectId]),
   ]);
@@ -185,41 +183,94 @@ export async function getProjectControl(projectId: string) {
         ),
     ]),
   );
-  const clientFreightPaidHt = sumKnown([
-    ...actualReceipts.map((receipt) => {
-      const owner = receipt.billingDocument;
-      const matches = receipt.installment?.matchedInvoices ?? [];
-      // Prefer the owning active Invoice; a matched Quote receipt is counted once.
-      const invoice =
-        owner.documentType === "INVOICE" && billingIsIssued(owner)
-          ? owner
-          : matches.length === 1
-            ? matches[0]
-            : undefined;
-      if (!invoice || invoice.currencyCode !== owner.currencyCode) return null;
-      return convert(
-        freightReceiptHt(
-          receipt.amount.toString(),
-          invoice.totalTtc.toString(),
-          invoice.freightCoverageHt.toString(),
-        ),
-        owner.currencyCode,
-        receipt.fxRateToReporting?.toString() ?? null,
-      );
-    }),
-    ...refunds
-      .filter((row) => row.isOutflow)
-      .map((row) => {
-        const freight = freightReceiptHt(
-          row.amount,
-          row.creditTotalTtc,
-          row.creditFreightHt,
-        );
-        return freight === null
-          ? null
-          : difference("0", convert(freight, row.currencyCode, row.fxRate));
-      }),
-  ]);
+  const freightReceiptRows: ProjectMetricRow[] = [];
+  type FreightInvoice = Pick<
+    (typeof project.billingDocuments)[number],
+    | "id"
+    | "reference"
+    | "totalTtc"
+    | "freightCoverageHt"
+    | "currencyCode"
+    | "credits"
+  >;
+  const freightGroups = new Map<
+    string,
+    { invoice: FreightInvoice; receipts: typeof actualReceipts }
+  >(invoices.map((invoice) => [invoice.id, { invoice, receipts: [] }]));
+  for (const receipt of actualReceipts) {
+    const owner = receipt.billingDocument;
+    const matches = receipt.installment?.matchedInvoices ?? [];
+    // Prefer the owning active Invoice; a matched Quote receipt is counted once.
+    const invoice =
+      owner.documentType === "INVOICE" && billingIsIssued(owner)
+        ? owner
+        : matches.length === 1
+          ? matches[0]
+          : undefined;
+    if (!invoice || invoice.currencyCode !== owner.currencyCode) {
+      freightReceiptRows.push({
+        label: owner.reference,
+        href: `/receipts/${receipt.id}`,
+        amount: null,
+        note: "Invoice attribution is missing, ambiguous or in a different currency.",
+      });
+      continue;
+    }
+    const group = freightGroups.get(invoice.id);
+    if (group) group.receipts.push(receipt);
+    else freightGroups.set(invoice.id, { invoice, receipts: [receipt] });
+  }
+  for (const [invoiceId, group] of freightGroups) {
+    const invoiceRefunds = refunds.filter(
+      (refund) => refund.isOutflow && refund.sourceId === invoiceId,
+    );
+    const attribution = summarizeFreightReceipts({
+      totalTtc: group.invoice.totalTtc.toString(),
+      freightCoverageHt: group.invoice.freightCoverageHt.toString(),
+      currencyCode: group.invoice.currencyCode,
+      reportingCurrencyCode: currency,
+      credits: (group.invoice.credits ?? []).map((credit) => ({
+        totalHt: credit.totalHt.toString(),
+        vatAmount: credit.vatAmount.toString(),
+        freightCoverageHt: credit.freightCoverageHt.toString(),
+        currencyCode: credit.currencyCode,
+        isCancelled: credit.isCancelled,
+      })),
+      receipts: group.receipts.map((receipt) => ({
+        id: receipt.id,
+        amount: receipt.amount.toString(),
+        currencyCode: receipt.billingDocument.currencyCode,
+        fxRateToReporting: receipt.fxRateToReporting?.toString() ?? null,
+      })),
+      refunds: invoiceRefunds.map((refund) => ({
+        id: refund.id,
+        amount: refund.amount,
+        currencyCode: refund.currencyCode,
+        fxRateToReporting: refund.fxRate,
+        reportingCurrencyCode: refund.reportingCurrencyCode,
+      })),
+    });
+    freightReceiptRows.push(
+      ...attribution.contributions.map((row) => ({
+        label: `${group.invoice.reference}${row.isRefund ? " · actual refund" : " · receipt"}`,
+        href: row.isRefund
+          ? `/billing/${invoiceId}?tab=related#credits`
+          : `/receipts/${row.id}`,
+        amount:
+          row.isRefund &&
+          row.amountHt !== null &&
+          !new Decimal(row.amountHt).isZero() &&
+          invoiceRefunds.find((refund) => refund.id === row.id)
+            ?.reportingAmount === null
+            ? null
+            : row.reportingAmountHt,
+        note: "Net Invoice freight attribution after credits, using this transaction's actual FX.",
+      })),
+    );
+  }
+  const clientFreightPaidHt = sumKnown(
+    freightReceiptRows.map((row) => row.amount),
+  );
   const categoryRevenue = (
     category: RecoveryCategory,
     allocated: boolean,
@@ -714,6 +765,19 @@ export async function getProjectControl(projectId: string) {
     ),
   ];
   return {
+    dashboard: buildProjectDashboard({
+      project,
+      orders,
+      installments,
+      receipts: actualReceipts,
+      refunds,
+      cashOutlook,
+      eligibleCoverage: invoices.flatMap((invoice) =>
+        invoiceCoverageContributions(invoice, currency),
+      ),
+      freightReceived: freightReceiptRows,
+      excludedReceipts,
+    }),
     overview: projectOverview({
       issuedHt: sumKnown(categories.map((category) => category.billed)),
       orderCostHt: orderHtCost,
@@ -812,7 +876,7 @@ export async function getProjectControl(projectId: string) {
     horizonEnd,
     orderNonDeductibleVat: difference(totalOrderEconomicCost, orderHtCost),
     freightAllowance: freight?.expectedFreightAllowanceHt ?? null,
-    excludedReceiptCount,
+    excludedReceiptCount: excludedReceipts.length,
     billedTtc,
     received,
     supplierRefundsReceived,

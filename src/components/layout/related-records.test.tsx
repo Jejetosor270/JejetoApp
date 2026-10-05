@@ -80,6 +80,27 @@ it("pages through all related records without changing other section state", asy
   expect(push).not.toHaveBeenCalled();
 });
 
+it("renders an optional short description beneath the linked reference", async () => {
+  view = await mountForm(
+    <RelatedRecordTable
+      table={{
+        ...table,
+        rows: [
+          {
+            id: "billing",
+            href: "/billing/billing?tab=related",
+            secondaryText: "Furniture deposit",
+            cells: ["INV-1", "120.00 EUR"],
+          },
+        ],
+      }}
+    />,
+  );
+  const cell = document.querySelector("tbody td");
+  expect(cell?.querySelector("a")?.textContent).toBe("INV-1");
+  expect(cell?.querySelector("p")?.textContent).toBe("Furniture deposit");
+});
+
 it("keeps actions independent of row navigation", async () => {
   view = await mountForm(
     <RelatedRecordTable
