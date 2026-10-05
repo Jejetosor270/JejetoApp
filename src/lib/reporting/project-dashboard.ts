@@ -11,7 +11,7 @@ import {
   type ProjectDashboardAlert,
   type ProjectMetricRow,
 } from "@/domain/finance/project-dashboard";
-import { difference } from "@/domain/finance/project-control";
+import { difference, sumKnown } from "@/domain/finance/project-control";
 import { reportingAmount } from "@/domain/finance/calculations";
 import { projectFreightBudget } from "@/domain/freight/calculations";
 import { calculateInputVatRecovery } from "@/domain/vat/recoverability";
@@ -21,6 +21,7 @@ import { isPlannedProjectBilling } from "@/domain/finance/project-overview";
 import { billingCashContexts } from "@/domain/billing/cash-expectations";
 import { getClientCreditPosition } from "@/domain/billing/credits";
 import { calculateProjectTargets } from "@/domain/projects/targets";
+import { invoiceCoverageContributions } from "@/lib/billing/reporting";
 
 export const projectDashboardInclude = {
   billingDocuments: {
@@ -54,7 +55,6 @@ export function buildProjectDashboard(input: {
   receipts: DashboardReceipt[];
   refunds: CreditRefundCash[];
   cashOutlook: ProjectCashOutlook;
-  eligibleCoverage: ProjectMetricRow[];
   freightReceived: ProjectMetricRow[];
   excludedReceipts: { id: string; billingDocument: { reference: string } }[];
 }) {
@@ -280,6 +280,29 @@ export function buildProjectDashboard(input: {
     },
   ];
   const alerts: ProjectDashboardAlert[] = [
+    ...invoices.flatMap((invoice) => {
+      const invoiced = sumKnown(
+        billingRows([invoice], "totalHt").map((row) => row.amount),
+      );
+      const allocatedOrApproved = sumKnown(
+        invoiceCoverageContributions(invoice, currency).map(
+          (row) => row.amount,
+        ),
+      );
+      if (
+        invoiced === null ||
+        allocatedOrApproved === null ||
+        !new Decimal(invoiced).greaterThan(allocatedOrApproved)
+      )
+        return [];
+      return [
+        {
+          label: "Review allocations",
+          href: `/billing/${invoice.id}?tab=related#allocations`,
+          note: `${invoice.reference}: some issued HT is not allocated to active Orders or approved at Project level. This does not reduce Order coverage.`,
+        },
+      ];
+    }),
     ...input.excludedReceipts.map((receipt) => ({
       label: "Excluded receipt",
       href: `/receipts/${receipt.id}`,
@@ -336,7 +359,6 @@ export function buildProjectDashboard(input: {
     ),
     invoiced: billingRows(invoices, "totalHt"),
     toInvoice: billingRows(pending, "totalHt"),
-    eligibleCoverage: input.eligibleCoverage,
     receipts: input.receipts.map((receipt) => ({
       label: receipt.billingDocument.reference,
       href: `/receipts/${receipt.id}`,

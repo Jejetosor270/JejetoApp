@@ -21,6 +21,8 @@ describe("Billing less Order sell presentation", () => {
     expect(projects).not.toContain(">Expected freight allowance %<");
     expect(projects).toContain("defaultProductMarkupRate");
     expect(projects).toContain("formatSignedMoney");
+    expect(projects).toContain("project.invoiceCoverageHt");
+    expect(projects).not.toContain("project.fundingCoverage");
   });
 
   it("shows one signed Project detail metric with its interpretation", () => {

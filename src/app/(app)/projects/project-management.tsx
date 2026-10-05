@@ -43,7 +43,6 @@ import {
   rateToPercentInput,
 } from "@/domain/procurement/presentation";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
-import type { ProjectFundingCoverage } from "@/domain/billing/funding-coverage";
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatEnumLabel } from "@/domain/presentation/labels";
 
@@ -76,7 +75,7 @@ interface ProjectView {
   expectedCompletionDate: string | null;
   freightEstimateNotes: string | null;
   freightEstimateRate: string | null;
-  fundingCoverage: ProjectFundingCoverage;
+  invoiceCoverageHt: string | null;
   id: string;
   name: string;
   notes: string | null;
@@ -374,9 +373,9 @@ function ProjectInlineRow({
         )}
       </td>
       <td className="financial-figure px-4 py-3 text-right">
-        {project.fundingCoverage.complete ? (
+        {project.invoiceCoverageHt !== null ? (
           formatSignedMoney(
-            project.fundingCoverage.fundingCoverageHt,
+            project.invoiceCoverageHt,
             project.reportingCurrencyCode,
           )
         ) : (

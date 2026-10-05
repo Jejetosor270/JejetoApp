@@ -27,7 +27,7 @@ import { formatEnumLabel } from "@/domain/presentation/labels";
 import { canEditMasterData, requireUser } from "@/lib/auth/current-user";
 import { listProjectFormOptions } from "@/lib/master-data/lookups";
 import { listProjects } from "@/lib/master-data/projects";
-import { getProjectsFundingCoverage } from "@/lib/reporting/funding-coverage";
+import { getProjectsInvoiceCoverage } from "@/lib/reporting/funding-coverage";
 
 export const metadata: Metadata = { title: "Projects" };
 
@@ -67,7 +67,7 @@ export default async function ProjectsPage({
       ...pageInput,
     }),
   ]);
-  const fundingCoverage = await getProjectsFundingCoverage(result.items);
+  const invoiceCoverage = await getProjectsInvoiceCoverage(result.items);
   return (
     <div className="space-y-6">
       <PageHeader
@@ -231,14 +231,7 @@ export default async function ProjectsPage({
           expectedCompletionDate:
             project.expectedCompletionDate?.toISOString().slice(0, 10) ?? null,
           freightEstimateRate: project.freightEstimateRate?.toString() ?? null,
-          fundingCoverage: fundingCoverage.get(project.id) ?? {
-            clientBillingCoverageHt: null,
-            complete: false,
-            fundingCoverageHt: null,
-            missingOrderIds: [],
-            status: null,
-            supplierOrderSellHt: null,
-          },
+          invoiceCoverageHt: invoiceCoverage.get(project.id) ?? null,
           startDate: project.startDate?.toISOString().slice(0, 10) ?? null,
           targetMarkupRate: project.targetMarkupRate?.toString() ?? null,
         }))}

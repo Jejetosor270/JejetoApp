@@ -206,7 +206,7 @@ it("reconciles complete Project economics, approved budget, credits, refunds and
   ).toBe(true);
   const summary = await getProjectClientBillingSummary(project.id);
   expect(metrics.coverage.value).toBe(
-    difference(summary?.coverageHt ?? null, metrics.sell.value),
+    difference(summary?.invoicedHt ?? null, metrics.sell.value),
   );
   expect(metrics.toCollect.value).toBe(summary?.outstandingTtc);
   await db.project.update({
@@ -305,7 +305,7 @@ it("preserves issued outstanding when only term FX is missing and excludes unrec
   ).toBe(true);
 });
 
-it("uses the same eligible coverage and aggregate FX rounding as the Projects list", async () => {
+it("uses total issued Billing and aggregate FX rounding without approval", async () => {
   const db = memory.raw;
   const project = await db.project.create({
     data: {
@@ -326,13 +326,14 @@ it("uses the same eligible coverage and aggregate FX rounding as the Projects li
         fxRateToReporting: "0.3333333333",
         totalHt: "1",
         totalTtc: "1",
-        isProjectRemainderApproved: true,
+        isProjectRemainderApproved: false,
       },
     });
   const control = await getProjectControl(project.id);
   const billing = await getProjectClientBillingSummary(project.id);
   expect(control.dashboard.metrics.coverage.value).toBe("1.0000");
-  expect(control.dashboard.metrics.coverage.value).toBe(billing?.coverageHt);
+  expect(control.dashboard.metrics.coverage.value).toBe(billing?.invoicedHt);
+  expect(billing?.coverageHt).toBe("0.0000");
   expect(
     sumKnown(control.dashboard.metrics.coverage.rows.map((row) => row.amount)),
   ).toBe("1.0000");
@@ -380,4 +381,109 @@ it("keeps a complete full budget known when recorded HT has missing FX but no no
   expect(result.dashboard.metrics.cost.value).toBeNull();
   expect(result.dashboard.metrics.expectedCost.value).toBe("110.0000");
   expect(result.dashboard.metrics.expectedProfit.value).toBe("40.0000");
+});
+
+it("counts full issued Invoice HT after credits regardless of allocation or approval", async () => {
+  const db = memory.raw;
+  const today = dateOnlyToDate(businessToday());
+  const project = await db.project.create({
+    data: {
+      code: "DASH-ISSUED",
+      name: "Issued coverage",
+      reportingCurrencyCode: "EUR",
+    },
+  });
+  const order = await db.procurementOrder.create({
+    data: {
+      projectId: project.id,
+      orderNumber: "ISSUED-ORDER",
+      packageName: "Package",
+      orderCurrencyCode: "EUR",
+      sellingCurrencyCode: "EUR",
+      pricingMode: "DIRECT_SELLING_PRICE",
+      sellingPriceAmount: "80",
+      costLines: {
+        create: { category: "SUPPLIER_PURCHASE", originalAmount: "60" },
+      },
+    },
+  });
+  const invoice = await db.clientBillingDocument.create({
+    data: {
+      projectId: project.id,
+      reference: "ISSUED-100",
+      documentType: "INVOICE",
+      workflowStatus: "INVOICED",
+      documentDate: today,
+      currencyCode: "EUR",
+      totalHt: "100",
+      totalTtc: "120",
+      vatAmount: "20",
+      isProjectRemainderApproved: false,
+      credits: {
+        create: {
+          side: "CLIENT",
+          reference: "CREDIT-10",
+          reason: "Correction",
+          creditDate: today,
+          totalHt: "10",
+          vatAmount: "2",
+          currencyCode: "EUR",
+          reportingCurrencyCode: "EUR",
+        },
+      },
+    },
+  });
+  for (const [reference, documentType, workflowStatus, isCancelled] of [
+    ["NOT-ISSUED", "INVOICE", "TO_BE_INVOICED", false],
+    ["DRAFT", "INVOICE", "DRAFT", false],
+    ["QUOTE", "QUOTE", "TO_BE_INVOICED", false],
+    ["CANCELLED", "INVOICE", "INVOICED", true],
+  ] as const)
+    await db.clientBillingDocument.create({
+      data: {
+        projectId: project.id,
+        reference,
+        documentType,
+        workflowStatus,
+        isCancelled,
+        currencyCode: "EUR",
+        documentDate: today,
+        totalHt: "999",
+        totalTtc: "999",
+      },
+    });
+  const read = () => getProjectControl(project.id);
+  const initial = await read();
+  expect(initial.dashboard.metrics.coverage.value).toBe("10.0000");
+  expect(
+    initial.dashboard.metrics.coverage.rows.map((row) => row.amount),
+  ).toEqual(["100.0000", "-10.0000", "-80"]);
+  expect(initial.dashboard.alerts).toContainEqual(
+    expect.objectContaining({ label: "Review allocations" }),
+  );
+  await db.clientBillingAllocation.create({
+    data: {
+      billingDocumentId: invoice.id,
+      orderId: order.id,
+      basis: "FIXED_AMOUNT",
+      allocatedAmount: "20",
+    },
+  });
+  expect((await read()).dashboard.metrics.coverage.value).toBe("10.0000");
+  await db.clientBillingDocument.update({
+    where: { id: invoice.id },
+    data: { isProjectRemainderApproved: true },
+  });
+  const approved = await read();
+  expect(approved.dashboard.metrics.coverage.value).toBe("10.0000");
+  expect(
+    approved.dashboard.alerts.some(
+      (alert) => alert.label === "Review allocations",
+    ),
+  ).toBe(false);
+  await db.procurementOrder.update({
+    where: { id: order.id },
+    data: { status: "CANCELLED" },
+  });
+  expect((await read()).dashboard.metrics.coverage.value).toBe("90.0000");
 });

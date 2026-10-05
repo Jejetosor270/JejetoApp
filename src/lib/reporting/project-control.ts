@@ -33,10 +33,7 @@ import {
   freightExpenseEconomicCost,
   getProjectFreightReconciliation,
 } from "@/lib/freight/expenses";
-import {
-  getProjectClientBillingSummary,
-  invoiceCoverageContributions,
-} from "@/lib/billing/reporting";
+import { getProjectClientBillingSummary } from "@/lib/billing/reporting";
 import { reportingAmount } from "@/domain/finance/calculations";
 import { billingCashContexts } from "@/domain/billing/cash-expectations";
 import { getClientCreditPosition } from "@/domain/billing/credits";
@@ -772,9 +769,6 @@ export async function getProjectControl(projectId: string) {
       receipts: actualReceipts,
       refunds,
       cashOutlook,
-      eligibleCoverage: invoices.flatMap((invoice) =>
-        invoiceCoverageContributions(invoice, currency),
-      ),
       freightReceived: freightReceiptRows,
       excludedReceipts,
     }),

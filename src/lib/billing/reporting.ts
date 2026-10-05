@@ -139,12 +139,14 @@ function addDocumentRevenue(
   reportingCurrencyCode: string,
   fxRate: string | null,
 ) {
-  const convertedHt = converted(
-    record.totalHt.toString(),
-    record.currencyCode,
-    reportingCurrencyCode,
-    fxRate,
-  );
+  const convertedHt = new Decimal(record.totalHt.toString()).isZero()
+    ? new Decimal(0)
+    : converted(
+        record.totalHt.toString(),
+        record.currencyCode,
+        reportingCurrencyCode,
+        fxRate,
+      );
   if (convertedHt === null) {
     state.missingIds.add(record.id);
     if (record.documentType === ClientBillingDocumentType.INVOICE)
@@ -156,12 +158,17 @@ function addDocumentRevenue(
   }
   if (record.documentType === ClientBillingDocumentType.INVOICE)
     for (const credit of activeRecordCredits(record)) {
-      const reduction = converted(
-        credit.totalHt.toString(),
-        credit.currencyCode,
-        reportingCurrencyCode,
-        credit.fxRateToReporting?.toString() ?? null,
-      );
+      const reduction =
+        credit.reportingCurrencyCode !== reportingCurrencyCode
+          ? null
+          : new Decimal(credit.totalHt.toString()).isZero()
+            ? new Decimal(0)
+            : converted(
+                credit.totalHt.toString(),
+                credit.currencyCode,
+                reportingCurrencyCode,
+                credit.fxRateToReporting?.toString() ?? null,
+              );
       if (reduction === null) {
         state.missingIds.add(credit.id);
         state.invoiceMissingIds.add(credit.id);

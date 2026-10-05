@@ -59,7 +59,6 @@ export interface ProjectDashboardInput {
   sell: ProjectMetricRow[];
   invoiced: ProjectMetricRow[];
   toInvoice: ProjectMetricRow[];
-  eligibleCoverage: ProjectMetricRow[];
   receipts: ProjectMetricRow[];
   supplierPayments: ProjectMetricRow[];
   freightPayments: ProjectMetricRow[];
@@ -83,7 +82,6 @@ const sourceKeys = [
   "sell",
   "invoiced",
   "toInvoice",
-  "eligibleCoverage",
   "receipts",
   "supplierPayments",
   "freightPayments",
@@ -187,8 +185,8 @@ export function projectDashboard(
       "To be invoiced Client Invoice HT after credits. These amounts are planned revenue and do not create issued receivables.",
     ),
     coverage: projectMetric(
-      [...input.eligibleCoverage, ...subtractProjectRows(input.sell)],
-      "Eligible issued Invoice HT minus active Order sell HT, matching the Projects list. Eligible amounts are active Order allocations plus explicitly approved Project remainders, net of relevant credits.",
+      [...input.invoiced, ...subtractProjectRows(input.sell)],
+      "Total issued Client Invoice HT after active credits minus active Order selling HT. All issued amounts count, whether allocated or not; Project remainder approval is not required. Planned Billing, VAT and payments are excluded. Positive means billed above Order sell; negative means a billing shortfall, not a loss.",
     ),
     received: projectMetric(
       received,

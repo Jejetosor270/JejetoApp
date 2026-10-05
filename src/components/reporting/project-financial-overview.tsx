@@ -262,8 +262,8 @@ export function ProjectFinancialOverview({
           </p>
           <div className="mt-5 border-t pt-4">{metric("coverage")}</div>
           <p className="text-muted-foreground mt-2 text-xs">
-            Eligible issued allocations and approved remainder, less Order
-            selling prices.
+            Total issued Client Invoice HT less Order selling HT. Allocations do
+            not affect this figure.
           </p>
           <Link
             href={related("work")}

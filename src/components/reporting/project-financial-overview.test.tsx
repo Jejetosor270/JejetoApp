@@ -24,7 +24,6 @@ const dashboard = projectDashboard({
   sell: [row("Order sell", "180", "/orders/one")],
   invoiced: [row("Invoice issued", "120", "/billing/issued")],
   toInvoice: [row("Future invoice", "80", "/billing/planned")],
-  eligibleCoverage: [row("Approved invoice", "120", "/billing/issued")],
   receipts: [row("Receipt", "80", "/receipts/one")],
   supplierPayments: [row("Payment", "30", "/payments/one")],
   freightPayments: [],
@@ -106,6 +105,22 @@ it("issued drilldown excludes the future Invoice but the plan includes it", asyn
   const dialog = document.querySelector('[role="dialog"]');
   expect(dialog?.textContent).toContain("Invoice issued");
   expect(dialog?.textContent).not.toContain("Future invoice");
+});
+it("explains invoice coverage and shows full Invoice HT less Order sell in its drawer", async () => {
+  await mount();
+  expect(document.body.textContent).toContain(
+    "Total issued Client Invoice HT less Order selling HT",
+  );
+  expect(document.body.textContent).not.toContain(
+    "Eligible issued allocations",
+  );
+  await act(async () => button("Order coverage HT").click());
+  const dialog = document.querySelector('[role="dialog"]');
+  expect(dialog?.textContent).toContain("Invoice issued");
+  expect(dialog?.textContent).toContain("120.00 EUR");
+  expect(dialog?.textContent).toContain("-180.00 EUR");
+  expect(dialog?.textContent).not.toContain("Future invoice");
+  expect(dialog?.querySelector("tfoot")?.textContent).toContain("-60.00 EUR");
 });
 it("makes missing values actionable and never draws invented progress", async () => {
   await mount({

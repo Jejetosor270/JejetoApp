@@ -13,8 +13,11 @@
   expenses do not invent additional selling prices. Markup uses aggregate profit/cost.
 - Billing plan is issued plus To be invoiced net Invoice HT; To invoice contains only
   the latter. Quotes, Drafts, cancelled and trashed documents remain excluded. Order
-  coverage HT uses the SAME eligible issued allocations and approved Project remainder
-  minus active Order sell as the Projects list. Planned invoices never fund that metric.
+  coverage HT uses total issued Client Invoice HT after active credits minus active
+  Order sell, both on Details and the Projects list. Allocation and Project remainder
+  approval do not limit this figure. Planned invoices never fund it; allocation gaps
+  appear separately as review warnings. Existing allocation-based Funding Coverage in
+  other reports remains a distinct attribution measure, not this Project headline.
 - Expected profit, under Budget estimate, uses full planned Billing less the complete
   approved full-Project HT budget and known non-deductible VAT. Recorded HT costs are
   not added again. Missing category budgets (including Other/services) keep the estimate

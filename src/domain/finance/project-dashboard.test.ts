@@ -18,7 +18,6 @@ const input = (
   sell: [],
   invoiced: [],
   toInvoice: [],
-  eligibleCoverage: [],
   receipts: [],
   supplierPayments: [],
   freightPayments: [],
@@ -39,14 +38,13 @@ const input = (
 });
 
 describe("Project dashboard", () => {
-  it("uses signed source rows for every metric and distinguishes issued/planned/eligible Billing", () => {
+  it("uses signed source rows and counts all issued Billing after credits for coverage", () => {
     const dashboard = projectDashboard(
       input({
         cost: [row("80", "Order"), row("10", "Project freight")],
         sell: [row("120")],
         invoiced: [row("100"), row("-10", "Credit")],
         toInvoice: [row("50")],
-        eligibleCoverage: [row("60")],
         budget: [row("70"), row("10"), row("5")],
         nonDeductibleVat: [row("2")],
         freightCost: [row("10")],
@@ -60,7 +58,7 @@ describe("Project dashboard", () => {
     expect(dashboard.metrics.planned.value).toBe("140.0000");
     expect(dashboard.metrics.invoiced.value).toBe("90.0000");
     expect(dashboard.metrics.toInvoice.value).toBe("50.0000");
-    expect(dashboard.metrics.coverage.value).toBe("-60.0000");
+    expect(dashboard.metrics.coverage.value).toBe("-30.0000");
     expect(dashboard.metrics.expectedCost.value).toBe("87.0000");
     expect(dashboard.metrics.expectedProfit.value).toBe("53.0000");
     expect(dashboard.metrics.freightTarget.value).toBe("12.0000");
@@ -70,6 +68,25 @@ describe("Project dashboard", () => {
       expect(metric.value).toBe(
         sumKnown(metric.rows.map((source) => source.amount)),
       );
+  });
+
+  it("excludes planned Billing from coverage and keeps missing Invoice or Order FX incomplete", () => {
+    expect(
+      projectDashboard(
+        input({
+          invoiced: [row("150")],
+          sell: [row("120")],
+          toInvoice: [row("999")],
+        }),
+      ).metrics.coverage.value,
+    ).toBe("30.0000");
+    for (const missing of [
+      { invoiced: [row(null)], sell: [row("120")] },
+      { invoiced: [row("150")], sell: [row(null)] },
+    ])
+      expect(
+        projectDashboard(input(missing)).metrics.coverage.value,
+      ).toBeNull();
   });
 
   it("nets actual refunds on the correct cash side without changing issued revenue", () => {

@@ -34,7 +34,6 @@ const data: ProjectControl = {
     sell: [],
     invoiced: [],
     toInvoice: [],
-    eligibleCoverage: [],
     receipts: [],
     supplierPayments: [],
     freightPayments: [],
