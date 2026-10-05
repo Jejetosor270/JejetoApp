@@ -41,10 +41,16 @@ npm run dev
 - `DATABASE_URL`
 - `AUTH_SECRET`
 - `OPENAI_API_KEY` (required for supplier quote extraction; server-side only)
-- `QUOTE_EXTRACTION_MODEL` (optional server-side override; defaults to `gpt-5.6-luna`)
-- `ITEM_EXTRACTION_MODEL` (optional independent Item mapping/extraction override; defaults to `gpt-5.6-luna`)
-- `CLIENT_DOCUMENT_EXTRACTION_MODEL` (optional Client Quote/Invoice extraction override; defaults to `gpt-5.6-luna`)
+- `QUOTE_EXTRACTION_MODEL` (optional server-side override; defaults to `gpt-6-luna`)
+- `ITEM_EXTRACTION_MODEL` (optional independent Item mapping/extraction override; defaults to `gpt-6-luna`)
+- `CLIENT_DOCUMENT_EXTRACTION_MODEL` (optional Client Quote/Invoice extraction override; defaults to `gpt-6-luna`)
 - `DIRECT_URL` (recommended for migrations when the runtime URL is pooled)
+
+Settings → AI processing offers GPT-6 Luna (default) and GPT-6.1 Sol independently
+for all three workflows. Retired GPT-5.6 Terra/Luna/Sol settings and environment
+overrides resolve to Luna for new requests; historical import metadata is unchanged.
+Deploy `20261005000000_ai_processing_gpt6_models` with `npm run db:deploy` before
+saving these new model choices. Preparing the migration does not apply it.
 
 Keep environment values outside source control. Optional one-time administrator bootstrap variables are documented in `.env.example`.
 

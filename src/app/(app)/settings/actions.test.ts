@@ -39,9 +39,9 @@ describe("AI settings authorization and validation", () => {
   });
   it("uses the server actor and ignores unrelated settings submitted by the browser", async () => {
     const data = new FormData();
-    data.set("quoteExtractionModel", "gpt-5.6-terra");
-    data.set("itemExtractionModel", "gpt-5.6-luna");
-    data.set("clientDocumentExtractionModel", "gpt-5.6-sol");
+    data.set("quoteExtractionModel", "gpt-6.1-sol");
+    data.set("itemExtractionModel", "gpt-6-luna");
+    data.set("clientDocumentExtractionModel", "gpt-6.1-sol");
     data.set("actorId", "forged-actor");
     data.set("companyReportingCurrencyCode", "USD");
     expect(await updateAiProcessingSettingsAction({}, data)).toMatchObject({
@@ -50,9 +50,9 @@ describe("AI settings authorization and validation", () => {
     expect(settings.updateAiProcessingSettings).toHaveBeenCalledWith(
       "server-actor",
       {
-        quoteExtractionModel: "gpt-5.6-terra",
-        itemExtractionModel: "gpt-5.6-luna",
-        clientDocumentExtractionModel: "gpt-5.6-sol",
+        quoteExtractionModel: "gpt-6.1-sol",
+        itemExtractionModel: "gpt-6-luna",
+        clientDocumentExtractionModel: "gpt-6.1-sol",
       },
     );
   });

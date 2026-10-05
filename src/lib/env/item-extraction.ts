@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
-import { DEFAULT_ITEM_EXTRACTION_MODEL } from "@/config/item-extraction";
+import { resolveAiProcessingModel } from "@/config/ai-processing";
 
 const optionalModel = z.preprocess(
   (value) =>
@@ -17,23 +17,25 @@ const optionalModel = z.preprocess(
 );
 
 export function getItemExtractionEnvironment(modelOverride?: string) {
-  return z
+  const environment = z
     .object({
       OPENAI_API_KEY: z.string().trim().min(1),
       ITEM_EXTRACTION_MODEL: optionalModel,
     })
     .parse({
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-      ITEM_EXTRACTION_MODEL:
-        modelOverride ??
-        process.env.ITEM_EXTRACTION_MODEL ??
-        DEFAULT_ITEM_EXTRACTION_MODEL,
+      ITEM_EXTRACTION_MODEL: modelOverride ?? process.env.ITEM_EXTRACTION_MODEL,
     });
+  return {
+    ...environment,
+    ITEM_EXTRACTION_MODEL: resolveAiProcessingModel(
+      environment.ITEM_EXTRACTION_MODEL,
+    ),
+  };
 }
 
 export function getItemExtractionModel(): string {
-  return (
-    optionalModel.parse(process.env.ITEM_EXTRACTION_MODEL) ??
-    DEFAULT_ITEM_EXTRACTION_MODEL
+  return resolveAiProcessingModel(
+    optionalModel.parse(process.env.ITEM_EXTRACTION_MODEL),
   );
 }

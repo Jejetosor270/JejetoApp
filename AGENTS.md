@@ -121,7 +121,7 @@ Do not introduce a reusable product/SKU catalog, inventory, warehouse management
 - Item quantity is Decimal and unit of measure is extensible. Item financial calculations use shared Decimal-safe rules; existing Order financials remain authoritative and are never silently replaced by Item sums.
 - Commercial Item status and logistics status are separate. Logistics Locations are operational references only; do not add inventory, stock, images, or warehouse-management behavior.
 - Revised imports propose explicit updates and never auto-delete missing Items. AI output remains untrusted and employee review is required before persistence.
-- XLSX parsing is deterministic first, with at most one optional semantic mapping call. Supplier quote line extraction and optional XLSX mapping use the saved Item AI model setting, falling back to `ITEM_EXTRACTION_MODEL` and then `gpt-5.6-luna`.
+- XLSX parsing is deterministic first, with at most one optional semantic mapping call. Supplier quote line extraction and optional XLSX mapping use the saved Item AI model setting, falling back to `ITEM_EXTRACTION_MODEL` and then `gpt-6-luna`. Settings offers GPT-6 Luna and GPT-6.1 Sol; retired GPT-5.6 selections resolve to Luna without rewriting historical import metadata.
 - XLSX, PDF, and image sources are request-scoped, cleared after processing, and never stored. Persist only reviewed Items and lightweight import metadata.
 
 ## Phase 11 client billing and project financial management

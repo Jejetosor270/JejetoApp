@@ -13,15 +13,21 @@ it("preserves independent selections after a failed save and resubmits them", as
   const view = await mountForm(
     <AiProcessingForm
       models={{
-        quoteExtractionModel: "gpt-5.6-luna",
-        itemExtractionModel: "gpt-5.6-luna",
-        clientDocumentExtractionModel: "gpt-5.6-luna",
+        quoteExtractionModel: "gpt-6-luna",
+        itemExtractionModel: "gpt-6-luna",
+        clientDocumentExtractionModel: "gpt-6-luna",
       }}
     />,
   );
   try {
-    await enter("quoteExtractionModel", "gpt-5.6-terra");
-    await enter("clientDocumentExtractionModel", "gpt-5.6-sol");
+    for (const select of view.container.querySelectorAll("select")) {
+      expect(Array.from(select.options, (option) => option.value)).toEqual([
+        "gpt-6-luna",
+        "gpt-6.1-sol",
+      ]);
+    }
+    await enter("quoteExtractionModel", "gpt-6.1-sol");
+    await enter("clientDocumentExtractionModel", "gpt-6.1-sol");
     const form = view.container.querySelector("form");
     if (!form) throw new Error("Missing settings form");
     await act(async () => {
@@ -31,9 +37,9 @@ it("preserves independent selections after a failed save and resubmits them", as
     });
     expect(view.container.textContent).toContain("Unable to save.");
     expect(Object.fromEntries(new FormData(form))).toEqual({
-      quoteExtractionModel: "gpt-5.6-terra",
-      itemExtractionModel: "gpt-5.6-luna",
-      clientDocumentExtractionModel: "gpt-5.6-sol",
+      quoteExtractionModel: "gpt-6.1-sol",
+      itemExtractionModel: "gpt-6-luna",
+      clientDocumentExtractionModel: "gpt-6.1-sol",
     });
     await act(async () => {
       form.dispatchEvent(

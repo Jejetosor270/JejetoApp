@@ -2,7 +2,7 @@ import { z } from "zod";
 import { AI_PROCESSING_MODEL_IDS } from "@/config/ai-processing";
 
 const model = z.enum(AI_PROCESSING_MODEL_IDS, {
-  error: "Choose Terra, Luna, or Sol.",
+  error: "Choose GPT-6 Luna or GPT-6.1 Sol.",
 });
 
 export const aiProcessingSettingsSchema = z.object({

@@ -107,7 +107,8 @@ describe("OpenAI quote extraction provider", () => {
       store: boolean;
       text: { format: { strict: boolean; type: string } };
     };
-    expect(body.model).toBe("gpt-5.6-luna");
+    expect(body.model).toBe("gpt-6-luna");
+    expect(result.model).toBe("gpt-6-luna");
     expect(body.instructions).toContain("Proforma Invoice");
     expect(body.instructions).toContain("Facture");
     expect(body.store).toBe(false);
@@ -122,7 +123,7 @@ describe("OpenAI quote extraction provider", () => {
   });
 
   it("uses the optional server-side model override", async () => {
-    process.env.QUOTE_EXTRACTION_MODEL = "gpt-5.6-terra";
+    process.env.QUOTE_EXTRACTION_MODEL = "gpt-6.1-sol";
     const fetchMock = mockResponse(
       completedResponse(JSON.stringify(quoteExtractionFixture())),
     );
@@ -132,8 +133,8 @@ describe("OpenAI quote extraction provider", () => {
     );
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
     const body = JSON.parse(String(request?.body)) as { model: string };
-    expect(body.model).toBe("gpt-5.6-terra");
-    expect(result.model).toBe("gpt-5.6-terra");
+    expect(body.model).toBe("gpt-6.1-sol");
+    expect(result.model).toBe("gpt-6.1-sol");
   });
 
   it("also accepts the SDK-style output_text convenience field", async () => {
@@ -321,7 +322,7 @@ describe("OpenAI quote extraction provider", () => {
   });
 });
 
-it.each(["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol"])(
+it.each(["gpt-6-luna", "gpt-6.1-sol"])(
   "sends the saved supplier model %s to OpenAI",
   async (model) => {
     modelSettings.findUnique.mockResolvedValueOnce({

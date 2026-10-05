@@ -1,8 +1,9 @@
 import "server-only";
 
-import type {
-  AiProcessingCapability,
-  AiProcessingModels,
+import {
+  resolveAiProcessingModel,
+  type AiProcessingCapability,
+  type AiProcessingModels,
 } from "@/config/ai-processing";
 import type { AiProcessingSettingsInput } from "@/domain/settings/ai-processing";
 import { COMPANY_REPORTING_CURRENCY_CODE } from "@/config/reporting";
@@ -35,7 +36,9 @@ export async function getAiProcessingModel(
     where: { id: APPLICATION_SETTING_ID },
     select,
   });
-  return settings?.[capability] ?? fallbacks[capability]();
+  return resolveAiProcessingModel(
+    settings?.[capability] ?? fallbacks[capability](),
+  );
 }
 
 export async function getAiProcessingModels(): Promise<AiProcessingModels> {
@@ -44,13 +47,16 @@ export async function getAiProcessingModels(): Promise<AiProcessingModels> {
     select,
   });
   return {
-    quoteExtractionModel:
+    quoteExtractionModel: resolveAiProcessingModel(
       settings?.quoteExtractionModel ?? getQuoteExtractionModel(),
-    itemExtractionModel:
+    ),
+    itemExtractionModel: resolveAiProcessingModel(
       settings?.itemExtractionModel ?? getItemExtractionModel(),
-    clientDocumentExtractionModel:
+    ),
+    clientDocumentExtractionModel: resolveAiProcessingModel(
       settings?.clientDocumentExtractionModel ??
-      getClientDocumentExtractionModel(),
+        getClientDocumentExtractionModel(),
+    ),
   };
 }
 

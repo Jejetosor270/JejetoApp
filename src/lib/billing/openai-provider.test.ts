@@ -29,11 +29,12 @@ function providerResponse(body: unknown, ok = true) {
 
 describe("OpenAI Client document provider", () => {
   beforeEach(() => {
-    process.env.OPENAI_API_KEY = "test-key";
-    process.env.CLIENT_DOCUMENT_EXTRACTION_MODEL = "gpt-5.6-luna";
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    vi.stubEnv("CLIENT_DOCUMENT_EXTRACTION_MODEL", "");
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -50,12 +51,15 @@ describe("OpenAI Client document provider", () => {
       file,
     );
     expect(result.extraction.reference.value).toBe("INV-2026-014");
+    expect(result.model).toBe("gpt-6-luna");
     const request = JSON.parse(
       fetchMock.mock.calls[0]?.[1]?.body as string,
     ) as {
+      model: string;
       store: boolean;
       text: { format: { type: string } };
     };
+    expect(request.model).toBe("gpt-6-luna");
     expect(request.store).toBe(false);
     expect(request.text.format.type).toBe("json_schema");
   });
@@ -112,10 +116,10 @@ describe("OpenAI Client document provider", () => {
   });
 });
 
-it.each(["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol"])(
+it.each(["gpt-6-luna", "gpt-6.1-sol"])(
   "sends the saved client document model %s to OpenAI",
   async (model) => {
-    process.env.OPENAI_API_KEY = "test-key";
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
     modelSettings.findUnique.mockResolvedValueOnce({
       clientDocumentExtractionModel: model,
     });
@@ -137,6 +141,7 @@ it.each(["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol"])(
       expect(result.model).toBe(model);
     } finally {
       vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
     }
   },
 );

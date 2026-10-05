@@ -1,14 +1,24 @@
-export const AI_PROCESSING_MODEL_IDS = [
-  "gpt-5.6-terra",
-  "gpt-5.6-luna",
-  "gpt-5.6-sol",
-] as const;
+export const DEFAULT_AI_PROCESSING_MODEL = "gpt-6-luna";
+
+export const AI_PROCESSING_MODEL_IDS = ["gpt-6-luna", "gpt-6.1-sol"] as const;
 
 export const AI_PROCESSING_MODELS = [
-  { id: "gpt-5.6-terra", label: "Terra" },
-  { id: "gpt-5.6-luna", label: "Luna" },
-  { id: "gpt-5.6-sol", label: "Sol" },
+  { id: "gpt-6-luna", label: "GPT-6 Luna (default)" },
+  { id: "gpt-6.1-sol", label: "GPT-6.1 Sol" },
 ] as const;
+
+/** Retire old configuration on read; preserve historical extraction metadata. */
+export function resolveAiProcessingModel(
+  model: string | null | undefined,
+): string {
+  if (
+    !model ||
+    ["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol"].includes(model)
+  ) {
+    return DEFAULT_AI_PROCESSING_MODEL;
+  }
+  return model;
+}
 
 export const AI_PROCESSING_CAPABILITIES = [
   {

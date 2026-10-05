@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 const modelSettings = vi.hoisted(() => ({
@@ -14,8 +14,12 @@ import {
 } from "@/lib/items/extraction-provider";
 
 const previousKey = process.env.OPENAI_API_KEY;
+beforeEach(() => {
+  vi.stubEnv("ITEM_EXTRACTION_MODEL", "");
+});
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
   else process.env.OPENAI_API_KEY = previousKey;
 });
@@ -63,6 +67,7 @@ describe("OpenAI Item extraction provider", () => {
     expect(request).toHaveBeenCalledTimes(1);
     expect(result.extraction.items).toHaveLength(100);
     expect(result.extraction.items[0]?.quantity).toBe("2.5");
+    expect(result.model).toBe("gpt-6-luna");
   });
 
   it("classifies malformed, incomplete, and schema-invalid responses without live calls", async () => {
@@ -138,10 +143,11 @@ describe("OpenAI Item extraction provider", () => {
     ).suggestSpreadsheetMapping({ headers: ["How Many"], samples: [["2.5"]] });
     expect(result.suggestion.mappings[0]?.field).toBe("quantity");
     expect(request).toHaveBeenCalledTimes(1);
+    expect(result.model).toBe("gpt-6-luna");
   });
 });
 
-it.each(["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol"])(
+it.each(["gpt-6-luna", "gpt-6.1-sol"])(
   "sends the saved Item model %s to OpenAI",
   async (model) => {
     process.env.OPENAI_API_KEY = "test-key";
@@ -170,7 +176,7 @@ it.each(["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol"])(
 it("uses the Item selection for optional spreadsheet semantic mapping", async () => {
   process.env.OPENAI_API_KEY = "test-key";
   modelSettings.findUnique.mockResolvedValueOnce({
-    itemExtractionModel: "gpt-5.6-sol",
+    itemExtractionModel: "gpt-6.1-sol",
   });
   const request = vi
     .fn<typeof fetch>()
@@ -179,7 +185,7 @@ it("uses the Item selection for optional spreadsheet semantic mapping", async ()
     request,
   ).suggestSpreadsheetMapping({ headers: ["Item"], samples: [["Chair"]] });
   expect(JSON.parse(String(request.mock.calls[0]?.[1]?.body)).model).toBe(
-    "gpt-5.6-sol",
+    "gpt-6.1-sol",
   );
-  expect(result.model).toBe("gpt-5.6-sol");
+  expect(result.model).toBe("gpt-6.1-sol");
 });

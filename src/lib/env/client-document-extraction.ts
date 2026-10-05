@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
-import { DEFAULT_CLIENT_DOCUMENT_EXTRACTION_MODEL } from "@/config/client-document-extraction";
+import { resolveAiProcessingModel } from "@/config/ai-processing";
 
 const optionalModel = z.preprocess(
   (value) =>
@@ -29,15 +29,14 @@ export function getClientDocumentExtractionEnvironment(modelOverride?: string) {
     });
   return {
     ...parsed,
-    CLIENT_DOCUMENT_EXTRACTION_MODEL:
-      parsed.CLIENT_DOCUMENT_EXTRACTION_MODEL ??
-      DEFAULT_CLIENT_DOCUMENT_EXTRACTION_MODEL,
+    CLIENT_DOCUMENT_EXTRACTION_MODEL: resolveAiProcessingModel(
+      parsed.CLIENT_DOCUMENT_EXTRACTION_MODEL,
+    ),
   };
 }
 
 export function getClientDocumentExtractionModel(): string {
-  return (
-    optionalModel.parse(process.env.CLIENT_DOCUMENT_EXTRACTION_MODEL) ??
-    DEFAULT_CLIENT_DOCUMENT_EXTRACTION_MODEL
+  return resolveAiProcessingModel(
+    optionalModel.parse(process.env.CLIENT_DOCUMENT_EXTRACTION_MODEL),
   );
 }

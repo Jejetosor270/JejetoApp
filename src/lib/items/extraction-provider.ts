@@ -126,7 +126,7 @@ export class OpenAIItemExtractionProvider implements ItemExtractionProvider {
         "Item extraction is not configured. Contact an administrator.",
       );
     }
-    const model = environment.ITEM_EXTRACTION_MODEL ?? "gpt-5.6-luna";
+    const model = environment.ITEM_EXTRACTION_MODEL;
     let response: Response;
     try {
       response = await this.request("https://api.openai.com/v1/responses", {

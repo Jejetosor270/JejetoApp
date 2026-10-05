@@ -434,7 +434,12 @@ matching never silently creates a Supplier. Inline creation is a separate explic
 XLSX mapping is deterministic first, with at most one optional semantic mapping call.
 
 Settings → AI processing stores independent Supplier, Item/mapping, and Client Billing
-model choices (Terra, Luna, Sol). Saved choices override environment defaults for new
+model choices (GPT-6 Luna, GPT-6.1 Sol), with GPT-6 Luna as the default for all three.
+Retired GPT-5.6 Terra/Luna/Sol settings and environment defaults resolve to GPT-6 Luna
+on read, without rewriting database settings or historical import metadata.
+Migration `20261005000000_ai_processing_gpt6_models` expands the database model
+constraints and must be deployed before saving the new choices. It is prepared,
+not applied. Saved choices override environment defaults for new
 requests without process caching. ADMIN/MANAGER changes are validated and audited.
 The additive `20260910000000_ai_processing_models` migration is required before rollout.
 Import metadata retains the model used during extraction, not a later settings choice;
