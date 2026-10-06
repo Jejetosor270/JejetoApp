@@ -10,8 +10,8 @@ export function assistantScopeReply(
   return {
     message:
       intent === "CLARIFY"
-        ? "Which record? Give me a name or reference for a Project, Order, Billing document, Client or Supplier."
-        : "I can find ERP records by name or reference. I cannot change records, calculate totals, build filtered lists or answer unrelated questions yet.",
+        ? "Which records? Give me a name or reference, or ask for a list of Projects, Orders, Billing, Clients or Suppliers."
+        : "JejetoBot can find and list ERP records. I cannot change records, calculate financial totals or answer unrelated questions.",
     query: null,
     moreHref: null,
     results: [],
@@ -20,7 +20,7 @@ export function assistantScopeReply(
 }
 
 export function assistantSearchReply(
-  plan: AssistantSearchPlan,
+  plan: Pick<AssistantSearchPlan, "query">,
   found: AssistantSearchResults,
 ): AssistantReply {
   let message = "No matching records found. Try another name or reference.";

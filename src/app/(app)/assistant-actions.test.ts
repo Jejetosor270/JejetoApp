@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(),
   plan: vi.fn(),
   search: vi.fn(),
+  list: vi.fn(),
+  context: vi.fn(),
   guard: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
@@ -11,6 +13,10 @@ vi.mock("@/lib/auth/current-user", () => ({ requireUser: mocks.requireUser }));
 vi.mock("@/lib/assistant/planner", () => ({ planAssistantSearch: mocks.plan }));
 vi.mock("@/lib/assistant/search", () => ({
   searchAssistantRecords: mocks.search,
+}));
+vi.mock("@/lib/assistant/lists", () => ({ listAssistantRecords: mocks.list }));
+vi.mock("@/lib/assistant/context", () => ({
+  resolveAssistantContext: mocks.context,
 }));
 vi.mock("@/lib/assistant/request-guard", async (importOriginal) => {
   const actual =
@@ -24,7 +30,9 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import { askAssistant } from "@/app/(app)/assistant-actions";
+import { askAssistant, readAssistantList } from "@/app/(app)/assistant-actions";
+import { emptyAssistantFilters } from "@/domain/assistant/lists";
+import { AssistantQueryError } from "@/domain/assistant/list-plan";
 import { AssistantLimitError } from "@/lib/assistant/request-guard";
 
 const request = { message: "Find order PO-104", recentMessages: [] };
@@ -35,6 +43,33 @@ const record = {
   label: "PO-104",
   context: "Example Project",
   href: "/orders/order-1",
+};
+const projectId = "00000000-0000-4000-8000-000000000001";
+const supplierId = "00000000-0000-4000-8000-000000000002";
+const listPage = {
+  query: {
+    ...emptyAssistantFilters,
+    kind: "Order",
+    query: "",
+    projectId: null,
+    supplierId,
+    clientId: null,
+  },
+  page: 1,
+};
+const listReply = {
+  message: "Matching Orders.",
+  results: [record],
+  moreHref: null,
+  query: null,
+  listing: {
+    ...listPage,
+    pageSize: 25,
+    total: 26,
+    hasNext: true,
+    hasPrevious: false,
+    filters: ["Supplier: Example"],
+  },
 };
 
 beforeEach(() => {
@@ -47,6 +82,8 @@ beforeEach(() => {
     query: "PO-104",
   });
   mocks.search.mockResolvedValue({ results: [record], truncated: false });
+  mocks.list.mockResolvedValue(listReply);
+  mocks.context.mockResolvedValue({});
   mocks.guard.mockImplementation(
     (_userId: string, work: () => Promise<unknown>) => work(),
   );
@@ -68,7 +105,11 @@ describe("authenticated read-only assistant", () => {
         "employee",
         expect.any(Function),
       );
-      expect(mocks.plan).toHaveBeenCalledWith(request);
+      expect(mocks.plan).toHaveBeenCalledWith({
+        ...request,
+        context: null,
+        previousList: null,
+      });
       expect(mocks.search).toHaveBeenCalledWith("PO-104", "Order");
       expect(mocks.requireUser.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.plan.mock.invocationCallOrder[0] ?? 0,
@@ -169,4 +210,189 @@ describe("authenticated read-only assistant", () => {
       expect(logs).not.toContain(record.label);
     },
   );
+});
+
+describe("JejetoBot scoped lists", () => {
+  it("carries only validated previous filters into a follow-up", async () => {
+    mocks.plan.mockResolvedValue({
+      intent: "LIST",
+      kind: "All",
+      query: null,
+      followUp: true,
+      filters: { ...emptyAssistantFilters, paymentStatus: "OVERDUE" },
+    });
+    expect(await askAssistant({ ...request, previousList: listPage })).toEqual({
+      ok: true,
+      reply: listReply,
+    });
+    expect(mocks.list).toHaveBeenCalledWith({
+      query: { ...listPage.query, paymentStatus: "OVERDUE" },
+      page: 1,
+    });
+    expect(mocks.search).not.toHaveBeenCalled();
+  });
+
+  it("resolves current-page scope only after the active employee is rechecked", async () => {
+    const context = { kind: "Order", id: projectId };
+    mocks.plan.mockResolvedValue({
+      intent: "LIST",
+      kind: "Billing",
+      query: null,
+      contextScope: "PROJECT",
+    });
+    mocks.context.mockResolvedValue({ projectId });
+    await askAssistant({ ...request, context });
+    expect(mocks.context).toHaveBeenCalledWith(context, "PROJECT");
+    expect(mocks.requireUser.mock.invocationCallOrder[1]).toBeLessThan(
+      mocks.context.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(mocks.list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.objectContaining({ kind: "Billing", projectId }),
+      }),
+    );
+  });
+
+  it("does not silently discard filters attached to a SEARCH plan", async () => {
+    mocks.plan.mockResolvedValue({
+      intent: "SEARCH",
+      kind: "Order",
+      query: "PO-104",
+      filters: { ...emptyAssistantFilters, supplier: "Example" },
+    });
+    await askAssistant(request);
+    expect(mocks.search).not.toHaveBeenCalled();
+    expect(mocks.list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.objectContaining({
+          query: "PO-104",
+          supplier: "Example",
+        }),
+      }),
+    );
+  });
+
+  it("does not turn unavailable context into an unrestricted list", async () => {
+    mocks.plan.mockResolvedValue({
+      intent: "LIST",
+      kind: "Order",
+      query: null,
+      contextScope: "PROJECT",
+    });
+    mocks.context.mockRejectedValue(
+      new AssistantQueryError("Open a Project first."),
+    );
+    expect(await askAssistant(request)).toMatchObject({
+      ok: true,
+      reply: { message: "Open a Project first.", results: [] },
+    });
+    expect(mocks.list).not.toHaveBeenCalled();
+  });
+
+  it("requires prior criteria for page navigation, even on a SEARCH plan", async () => {
+    mocks.plan.mockResolvedValue({
+      intent: "SEARCH",
+      kind: "Order",
+      query: "PO-104",
+      page: "NEXT",
+    });
+    expect(await askAssistant(request)).toMatchObject({
+      ok: true,
+      reply: { results: [] },
+    });
+    expect(mocks.list).not.toHaveBeenCalled();
+    expect(mocks.search).not.toHaveBeenCalled();
+  });
+
+  it("blocks context and list access if the session expires during AI planning", async () => {
+    mocks.plan.mockResolvedValue({
+      intent: "LIST",
+      kind: "Order",
+      query: null,
+    });
+    mocks.requireUser
+      .mockResolvedValueOnce(user)
+      .mockRejectedValueOnce(redirectError);
+    await expect(askAssistant(request)).rejects.toBe(redirectError);
+    expect(mocks.context).not.toHaveBeenCalled();
+    expect(mocks.list).not.toHaveBeenCalled();
+  });
+
+  it.each(["USER", "MANAGER", "ADMIN"])(
+    "authenticates %s paging without calling AI",
+    async (role) => {
+      mocks.requireUser.mockResolvedValue({ ...user, role });
+      const page = { ...listPage, page: 2 };
+      expect(await readAssistantList(page)).toEqual({
+        ok: true,
+        reply: listReply,
+      });
+      expect(mocks.list).toHaveBeenCalledWith(page);
+      expect(mocks.requireUser.mock.invocationCallOrder[0]).toBeLessThan(
+        mocks.list.mock.invocationCallOrder[0] ?? 0,
+      );
+      expect(mocks.plan).not.toHaveBeenCalled();
+    },
+  );
+
+  it("authenticates direct paging before any database access", async () => {
+    mocks.requireUser.mockRejectedValue(redirectError);
+    await expect(readAssistantList(listPage)).rejects.toBe(redirectError);
+    expect(mocks.list).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { ...listPage, role: "ADMIN" },
+    { ...listPage, page: 0 },
+    { ...listPage, query: { ...listPage.query, supplierId: "not-an-id" } },
+    { ...listPage, query: { ...listPage.query, raw: "SELECT *" } },
+    { ...listPage, query: { ...listPage.query, kind: "Employee" } },
+  ])("rejects forged/invalid list criteria", async (input) => {
+    expect(await readAssistantList(input)).toMatchObject({
+      ok: false,
+      code: "INVALID",
+    });
+    expect(mocks.list).not.toHaveBeenCalled();
+    expect(mocks.plan).not.toHaveBeenCalled();
+  });
+
+  it("applies burst protection to direct list requests", async () => {
+    mocks.guard.mockRejectedValue(new AssistantLimitError());
+    expect(await readAssistantList(listPage)).toMatchObject({
+      ok: false,
+      code: "LIMIT",
+    });
+    expect(mocks.list).not.toHaveBeenCalled();
+  });
+
+  it("preserves explicit ambiguity choices instead of selecting a record", async () => {
+    const reply = {
+      ...listReply,
+      results: [],
+      clarification: {
+        query: listPage.query,
+        choices: [
+          {
+            field: "supplierId",
+            id: supplierId,
+            label: "Example",
+            context: "Supplier",
+          },
+        ],
+      },
+    };
+    mocks.list.mockResolvedValue(reply);
+    expect(await readAssistantList(listPage)).toEqual({ ok: true, reply });
+  });
+
+  it("does not expose database failures in list replies or logs", async () => {
+    const error = new Error("Private supplier data");
+    mocks.list.mockRejectedValue(error);
+    const response = await readAssistantList(listPage);
+    expect(response).toMatchObject({ ok: false, code: "UNAVAILABLE" });
+    expect(JSON.stringify(response)).not.toContain(error.message);
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain(
+      error.message,
+    );
+  });
 });

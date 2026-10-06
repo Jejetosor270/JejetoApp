@@ -1,4 +1,14 @@
 import { z } from "zod";
+import {
+  assistantFilterNames,
+  assistantListPageSchema,
+  assistantPageContextSchema,
+  assistantPlanFiltersSchema,
+  emptyAssistantFilters,
+  type AssistantChoice,
+  type AssistantListing,
+  type AssistantListQuery,
+} from "@/domain/assistant/lists";
 
 export const ASSISTANT_MESSAGE_LIMIT = 800;
 export const ASSISTANT_CONTEXT_LIMIT = 4;
@@ -17,20 +27,29 @@ export const assistantRequestSchema = z.strictObject({
   recentMessages: z
     .array(z.string().trim().min(2).max(ASSISTANT_MESSAGE_LIMIT))
     .max(ASSISTANT_CONTEXT_LIMIT),
+  context: assistantPageContextSchema.nullable().default(null),
+  previousList: assistantListPageSchema.nullable().default(null),
 });
 
 export const assistantSearchPlanSchema = z
   .strictObject({
-    intent: z.enum(["SEARCH", "CLARIFY", "OUT_OF_SCOPE"]),
+    intent: z.enum(["SEARCH", "LIST", "CLARIFY", "OUT_OF_SCOPE"]),
     query: z.string().trim().min(2).max(100).nullable(),
     kind: z.enum(["All", ...assistantRecordKinds]),
+    filters: assistantPlanFiltersSchema.default(emptyAssistantFilters),
+    followUp: z.boolean().default(false),
+    clearFilters: z.array(z.enum(assistantFilterNames)).max(9).default([]),
+    contextScope: z
+      .enum(["NONE", "PROJECT", "SUPPLIER", "CLIENT"])
+      .default("NONE"),
+    page: z.enum(["FIRST", "NEXT", "PREVIOUS"]).default("FIRST"),
   })
   .refine((plan) => plan.intent !== "SEARCH" || plan.query !== null, {
     path: ["query"],
     message: "A record search needs a name or reference.",
   });
 
-export type AssistantRequest = z.infer<typeof assistantRequestSchema>;
+export type AssistantRequest = z.input<typeof assistantRequestSchema>;
 export type AssistantSearchPlan = z.infer<typeof assistantSearchPlanSchema>;
 export type AssistantRecordKind = (typeof assistantRecordKinds)[number];
 
@@ -51,6 +70,9 @@ export interface AssistantReply extends AssistantSearchResults {
   message: string;
   query: string | null;
   moreHref: string | null;
+  moreLabel?: string;
+  listing?: AssistantListing;
+  clarification?: { query: AssistantListQuery; choices: AssistantChoice[] };
 }
 
 export type AssistantActionResult =

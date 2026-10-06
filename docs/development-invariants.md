@@ -1,23 +1,37 @@
 # Development invariants
 
-## Record assistant — Phase 1
+## JejetoBot — Phases 1–2
 
-- The shared side Assistant is a read-only name/reference finder for Projects,
+- The shared side JejetoBot is a read-only name/reference finder and list assistant for Projects,
   Orders, Billing, Clients and Suppliers. All active employees have the same
   operational read scope as the existing ERP search; no new tenancy or record-level
   permission model is implied. Each request resolves the active database user,
-  validates bounded input, and rechecks the employee before reading records.
-- GPT-6 Luna only proposes a strict search intent. The server validates the plan,
+  validates bounded input, and rechecks the employee after AI planning before reading records.
+- GPT-6 Luna only proposes a strict search/list intent. The server validates the plan,
   runs allowlisted, bounded queries through the shared Trash-aware database client,
   and supplies fixed response text and internal links. No SQL, write tools, web
   browsing, model-generated financial calculations, or raw model prose is exposed.
-  Multiple matches require employee selection; limited results are not presented
-  as exhaustive. Filtered lists and financial/help answers remain later phases.
+  Ambiguous related names require employee selection; limited search results are not
+  presented as exhaustive. Financial calculations and help answers remain later phases.
+- Lists reuse canonical list services and statuses, with exact counts and 25-row pages.
+  Derived status/due-date filters are limited to 500 source records; broader or unstable
+  scopes request narrowing/retry instead of claiming complete results. Delivery and
+  payment status remain separate. Issued Billing includes paid/partial/overdue Invoices;
+  unpaid means a positive authoritative outstanding amount, including partial/overdue.
+  Missing payable values prevent a complete unpaid list. Unsupported filters are explicit,
+  never silently dropped. Open-list links must preserve the complete filter scope.
+- Follow-ups carry validated criteria, not result rows. The browser supplies a recognized
+  record path; the server verifies its visible record and resolves requested Project,
+  Supplier or Client context. An unavailable context must never become a global list.
+  Explicitly global requests do not inherit page scope. Paging and ambiguity selections
+  are authenticated Server Actions without another AI call; selected IDs are revalidated.
 - Chat is held only in React memory, survives close/navigation, and clears on
   reload, sign-out or employee change. Only the current and up to four previous
-  employee questions reach OpenAI, never database results. Requests use the existing
+  employee questions, user-entered prior filters, scope-presence flags, page number,
+  current record kind and Paris business date reach OpenAI, never database results or
+  resolved IDs/labels. Requests use the existing
   server-only OPENAI_API_KEY, fixed gpt-6-luna, store:false, one provider call, a
-  25-second timeout and a 512-token output cap. This does not claim zero provider
+  25-second timeout and a 1,000-token output cap. This does not claim zero provider
   retention beyond the API's configured policy. Safe failure logs omit questions,
   records, raw responses and error text.
 - Limits are per server instance: eight requests/minute/employee, one concurrent

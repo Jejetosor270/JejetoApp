@@ -5,10 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AssistantPanel } from "./assistant-panel";
 import { DraftGuard } from "@/components/forms/draft-guard";
 import type { AssistantActionResult } from "@/domain/assistant/contracts";
+import {
+  emptyAssistantFilters,
+  type AssistantListQuery,
+} from "@/domain/assistant/lists";
 import { clickText, control, enter, mountForm } from "@/test/dom-form";
 
-const askAssistant = vi.hoisted(() => vi.fn());
-vi.mock("@/app/(app)/assistant-actions", () => ({ askAssistant }));
+const { askAssistant, readAssistantList, location } = vi.hoisted(() => ({
+  askAssistant: vi.fn(),
+  readAssistantList: vi.fn(),
+  location: { path: "/" },
+}));
+vi.mock("@/app/(app)/assistant-actions", () => ({
+  askAssistant,
+  readAssistantList,
+}));
+vi.mock("next/navigation", () => ({ usePathname: () => location.path }));
 vi.mock("next/link", () => ({
   default: ({
     onNavigate,
@@ -57,7 +69,9 @@ const success: AssistantActionResult = {
 let view: Awaited<ReturnType<typeof mountForm>>;
 beforeEach(() => {
   vi.clearAllMocks();
+  location.path = "/";
   askAssistant.mockResolvedValue(success);
+  readAssistantList.mockResolvedValue(success);
 });
 afterEach(async () => {
   await view?.unmount();
@@ -67,7 +81,7 @@ afterEach(async () => {
 
 async function open() {
   view = await mountForm(<AssistantPanel />);
-  await clickText("Assistant");
+  await clickText("JejetoBot");
 }
 
 async function submit(message = "Find Order DEMO-001") {
@@ -75,12 +89,12 @@ async function submit(message = "Find Order DEMO-001") {
   await clickText("Send");
 }
 
-describe("Phase 1 assistant panel", () => {
+describe("JejetoBot panel", () => {
   it("opens a shared accessible drawer and returns bounded record links", async () => {
     await open();
     expect(document.activeElement).toBe(control("assistantMessage"));
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-      "Read-only record finder",
+      "Read-only record assistant",
     );
     expect(document.querySelector("form")?.dataset.draftGuard).toBe("off");
     expect(control("assistantMessage").getAttribute("maxlength")).toBe("800");
@@ -88,6 +102,8 @@ describe("Phase 1 assistant panel", () => {
     expect(askAssistant).toHaveBeenCalledExactlyOnceWith({
       message: "Find Order DEMO-001",
       recentMessages: [],
+      context: null,
+      previousList: null,
     });
     expect(document.querySelector('[role="log"]')?.textContent).toContain(
       "Which record did you mean?",
@@ -108,10 +124,10 @@ describe("Phase 1 assistant panel", () => {
     await enter("assistantMessage", "Find the other order");
     await act(async () =>
       document
-        .querySelector<HTMLButtonElement>('[aria-label="Close assistant"]')
+        .querySelector<HTMLButtonElement>('[aria-label="Close JejetoBot"]')
         ?.click(),
     );
-    await clickText("Assistant");
+    await clickText("JejetoBot");
     expect(control("assistantMessage").value).toBe("Find the other order");
     expect(document.querySelector('[role="log"]')?.textContent).toContain(
       "DEMO-001",
@@ -194,6 +210,8 @@ describe("Phase 1 assistant panel", () => {
         "Find Project 10",
         "Find Project 11",
       ],
+      context: null,
+      previousList: null,
     });
     const log = document.querySelector('[role="log"]');
     expect(log?.textContent).not.toContain("Find Project 0");
@@ -218,7 +236,7 @@ describe("Phase 1 assistant panel", () => {
         <AssistantPanel />
       </>,
     );
-    await clickText("Assistant");
+    await clickText("JejetoBot");
     await submit();
     await act(async () =>
       document
@@ -242,7 +260,7 @@ describe("Phase 1 assistant panel", () => {
         ?.click(),
     );
     expect(document.querySelector('[role="dialog"]')).toBeNull();
-    await clickText("Assistant");
+    await clickText("JejetoBot");
     expect(document.querySelector('a[href="/orders/one"]')).not.toBeNull();
   });
 
@@ -270,5 +288,329 @@ describe("Phase 1 assistant panel", () => {
     ).toContain("<img src=x onerror=alert(1)>");
     expect(document.querySelector('[role="log"] img')).toBeNull();
     expect(document.querySelector('[role="log"] script')).toBeNull();
+  });
+});
+
+const projectId = "10000000-0000-4000-8000-000000000001";
+const supplierId = "10000000-0000-4000-8000-000000000002";
+const listQuery: AssistantListQuery = {
+  ...emptyAssistantFilters,
+  kind: "Order",
+  query: "",
+  projectId,
+  supplierId: null,
+  clientId: null,
+};
+
+function listResult(page = 1): AssistantActionResult {
+  if (!success.ok) throw new Error("Missing test reply");
+  return {
+    ok: true,
+    reply: {
+      ...success.reply,
+      message: "Matching Orders.",
+      query: null,
+      truncated: false,
+      moreHref: "/orders?projectId=example",
+      moreLabel: "Open Purchasing",
+      listing: {
+        query: listQuery,
+        page,
+        pageSize: 2,
+        total: 3,
+        hasNext: page < 2,
+        hasPrevious: page > 1,
+        filters: ["Project: Demo", "Payment: Overdue"],
+      },
+    },
+  };
+}
+
+describe("JejetoBot contextual lists", () => {
+  it("reveals the newest question and list header without jumping during paging", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        const log = document.querySelector<HTMLElement>('[role="log"]');
+        const top = this.hasAttribute("data-assistant-turn")
+          ? 900 - (log?.scrollTop ?? 0)
+          : 0;
+        return {
+          top,
+          bottom: top + 100,
+          left: 0,
+          right: 100,
+          x: 0,
+          y: top,
+          width: 100,
+          height: 100,
+          toJSON: () => ({}),
+        };
+      },
+    );
+    askAssistant.mockResolvedValueOnce(listResult());
+    readAssistantList.mockResolvedValueOnce(listResult(2));
+    await open();
+    const log = document.querySelector<HTMLElement>('[role="log"]');
+    if (!log) throw new Error("Missing conversation");
+    Object.defineProperty(log, "scrollHeight", {
+      configurable: true,
+      value: 4000,
+    });
+    await submit("List Orders");
+    expect(log.scrollTop).toBe(900);
+    log.scrollTop = 1500;
+    await clickText("Next");
+    expect(log.scrollTop).toBe(1500);
+  });
+
+  it("shows one list summary instead of repeating the numerical count", async () => {
+    askAssistant.mockResolvedValueOnce(listResult());
+    await open();
+    await submit("List Orders");
+    expect(document.querySelector('[role="log"]')?.textContent).not.toContain(
+      "Matching Orders.",
+    );
+    expect(
+      document.querySelectorAll('[aria-label="Result count"]'),
+    ).toHaveLength(1);
+  });
+
+  it.each([
+    { page: 1, total: 0 },
+    { page: 2, total: 10 },
+  ])(
+    "keeps empty-page guidance without an invalid range ($page/$total)",
+    async ({ page, total }) => {
+      const response = listResult(page);
+      if (!response.ok || !response.reply.listing)
+        throw new Error("Missing list fixture");
+      askAssistant.mockResolvedValueOnce({
+        ok: true,
+        reply: {
+          ...response.reply,
+          message:
+            "No records on this page. Try an earlier page or different filters.",
+          results: [],
+          listing: { ...response.reply.listing, pageSize: 25, total },
+        },
+      });
+      await open();
+      await submit("List Orders");
+      expect(
+        document.querySelector('[aria-label="Result count"]')?.textContent,
+      ).toBe(`0 shown · ${total} matches`);
+      expect(document.querySelector('[role="log"]')?.textContent).toContain(
+        "No records on this page.",
+      );
+      expect(document.querySelector('[role="log"]')?.textContent).not.toContain(
+        "26–10",
+      );
+    },
+  );
+
+  it("pages the same reply without AI, extra turns or resetting a question draft", async () => {
+    askAssistant.mockResolvedValueOnce(listResult());
+    readAssistantList.mockResolvedValueOnce(listResult(2));
+    await open();
+    await submit("Orders for this Project");
+    expect(
+      document.querySelector('[aria-label="Result count"]')?.textContent,
+    ).toBe("1–2 of 3 records");
+    expect(
+      document.querySelector('[aria-label="Applied filters"]')?.textContent,
+    ).toContain("Project: Demo");
+    expect(
+      document.querySelector('a[href="/orders?projectId=example"]')
+        ?.textContent,
+    ).toContain("Open Purchasing");
+    await enter("assistantMessage", "Only unpaid ones");
+    await clickText("Next");
+    expect(readAssistantList).toHaveBeenCalledExactlyOnceWith({
+      query: listQuery,
+      page: 2,
+    });
+    expect(askAssistant).toHaveBeenCalledOnce();
+    expect(
+      document.querySelectorAll('[aria-label="Matching records"]'),
+    ).toHaveLength(1);
+    expect(
+      document.querySelector('[aria-label="Result count"]')?.textContent,
+    ).toBe("3–3 of 3 records");
+    expect(control("assistantMessage").value).toBe("Only unpaid ones");
+    const next = [...document.querySelectorAll("button")].find(
+      (button) => button.textContent === "Next",
+    );
+    expect(next?.disabled).toBe(true);
+    await clickText("Send");
+    expect(askAssistant).toHaveBeenLastCalledWith({
+      message: "Only unpaid ones",
+      recentMessages: ["Orders for this Project"],
+      previousList: { query: listQuery, page: 2 },
+      context: null,
+    });
+  });
+
+  it("keeps list scope when the current page changes and sends new context only on ask", async () => {
+    location.path = `/projects/${projectId}`;
+    askAssistant.mockResolvedValueOnce(listResult());
+    readAssistantList.mockResolvedValueOnce(listResult(2));
+    await open();
+    expect(
+      document.querySelector('[aria-label="Page context"]')?.textContent,
+    ).toBe("Context: Project page");
+    await submit("Orders for this Project");
+    expect(askAssistant).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        context: { kind: "Project", id: projectId },
+      }),
+    );
+    location.path = `/orders/${supplierId}`;
+    await enter("assistantMessage", "Show overdue ones");
+    expect(
+      document.querySelector('[aria-label="Page context"]')?.textContent,
+    ).toBe("Context: Order page");
+    await clickText("Next");
+    expect(readAssistantList).toHaveBeenLastCalledWith({
+      query: listQuery,
+      page: 2,
+    });
+    await clickText("Send");
+    expect(askAssistant).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        context: { kind: "Order", id: supplierId },
+        previousList: { query: listQuery, page: 2 },
+      }),
+    );
+  });
+
+  it("selects an ambiguous relation while preserving all other filters", async () => {
+    const query = {
+      ...listQuery,
+      supplier: "Acme",
+      paymentStatus: "OVERDUE" as const,
+    };
+    askAssistant.mockResolvedValueOnce({
+      ok: true,
+      reply: {
+        message: "Which Supplier?",
+        query: null,
+        moreHref: null,
+        truncated: false,
+        results: [],
+        clarification: {
+          query,
+          choices: [
+            {
+              field: "supplierId",
+              id: supplierId,
+              label: "Acme France",
+              context: "Paris",
+            },
+            {
+              field: "supplierId",
+              id: projectId,
+              label: "Acme UK",
+              context: "London",
+            },
+          ],
+        },
+      },
+    });
+    readAssistantList.mockResolvedValueOnce(listResult());
+    await open();
+    await submit("Overdue Orders for supplier Acme");
+    await act(async () => {
+      document
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="Choose a record"] button',
+        )
+        ?.click();
+    });
+    expect(readAssistantList).toHaveBeenCalledExactlyOnceWith({
+      query: { ...query, supplierId },
+      page: 1,
+    });
+    expect(askAssistant).toHaveBeenCalledOnce();
+    expect(document.querySelector('[aria-label="Choose a record"]')).toBeNull();
+    expect(
+      document.querySelectorAll('[aria-label="Matching records"]'),
+    ).toHaveLength(1);
+  });
+
+  it("retains list results and prompt after a pagination failure", async () => {
+    askAssistant.mockResolvedValueOnce(listResult());
+    readAssistantList.mockResolvedValueOnce({
+      ok: false,
+      code: "LIMIT",
+      error: "Please try again shortly.",
+    });
+    await open();
+    await submit("List Orders");
+    await enter("assistantMessage", "My next question");
+    await clickText("Next");
+    expect(
+      document.querySelector('[aria-label="Result count"]')?.textContent,
+    ).toBe("1–2 of 3 records");
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe(
+      "Please try again shortly.",
+    );
+    expect(control("assistantMessage").value).toBe("My next question");
+    readAssistantList.mockRejectedValueOnce(new Error("Private details"));
+    await clickText("Next");
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+      "results are retained",
+    );
+    expect(document.body.textContent).not.toContain("Private details");
+  });
+
+  it("blocks duplicate page requests synchronously", async () => {
+    askAssistant.mockResolvedValueOnce(listResult());
+    let finish: ((value: AssistantActionResult) => void) | undefined;
+    readAssistantList.mockImplementationOnce(
+      () =>
+        new Promise<AssistantActionResult>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await open();
+    await submit("List Orders");
+    await act(async () => {
+      const next = [...document.querySelectorAll("button")].find(
+        (button) => button.textContent === "Next",
+      );
+      next?.click();
+      next?.click();
+    });
+    expect(readAssistantList).toHaveBeenCalledOnce();
+    expect(document.querySelector('[role="status"]')?.textContent).toContain(
+      "Loading records",
+    );
+    await act(async () => finish?.(listResult(2)));
+  });
+
+  it("clears remembered list, choices and questions with New chat", async () => {
+    askAssistant.mockResolvedValueOnce(listResult());
+    await open();
+    await submit("List Orders");
+    await clickText("New chat");
+    expect(document.querySelector('[aria-label="Result count"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Choose a record"]')).toBeNull();
+    await submit("List Suppliers");
+    expect(askAssistant).toHaveBeenLastCalledWith({
+      message: "List Suppliers",
+      recentMessages: [],
+      context: null,
+      previousList: null,
+    });
+  });
+
+  it("does not turn list/create pages into record context", async () => {
+    location.path = "/orders/new";
+    await open();
+    expect(document.querySelector('[aria-label="Page context"]')).toBeNull();
+    await submit();
+    expect(askAssistant).toHaveBeenLastCalledWith(
+      expect.objectContaining({ context: null }),
+    );
   });
 });

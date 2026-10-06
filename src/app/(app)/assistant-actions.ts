@@ -18,6 +18,33 @@ import {
   withAssistantRequest,
 } from "@/lib/assistant/request-guard";
 import { searchAssistantRecords } from "@/lib/assistant/search";
+import { assistantListPageSchema } from "@/domain/assistant/lists";
+import {
+  AssistantQueryError,
+  buildAssistantListPage,
+} from "@/domain/assistant/list-plan";
+import { listAssistantRecords } from "@/lib/assistant/lists";
+import { resolveAssistantContext } from "@/lib/assistant/context";
+
+function failure(error: unknown): AssistantActionResult {
+  unstable_rethrow(error);
+  if (error instanceof AssistantLimitError) {
+    return { ok: false, code: "LIMIT", error: error.message };
+  }
+  if (error instanceof AssistantQueryError) {
+    return {
+      ok: true,
+      reply: { ...assistantScopeReply("CLARIFY"), message: error.message },
+    };
+  }
+  // Never log questions, database rows, provider outputs or exception text.
+  console.error("[JejetoBot] Request failed", { category: "request_failed" });
+  return {
+    ok: false,
+    code: "UNAVAILABLE",
+    error: "JejetoBot is unavailable right now. Try again, or use Search.",
+  };
+}
 
 export async function askAssistant(
   input: unknown,
@@ -47,8 +74,26 @@ export async function askAssistant(
           error: "Your session changed. Reload the page and try again.",
         };
       }
-      if (plan.intent !== "SEARCH") {
+      if (plan.intent === "CLARIFY" || plan.intent === "OUT_OF_SCOPE") {
         return { ok: true, reply: assistantScopeReply(plan.intent) };
+      }
+      const hasScope =
+        plan.contextScope !== "NONE" ||
+        plan.followUp ||
+        plan.page !== "FIRST" ||
+        plan.clearFilters.length > 0 ||
+        Object.values(plan.filters).some((value) => value !== null);
+      if (plan.intent === "LIST" || hasScope) {
+        const context = await resolveAssistantContext(
+          request.data.context,
+          plan.contextScope,
+        );
+        const page = buildAssistantListPage(
+          plan,
+          request.data.previousList,
+          context,
+        );
+        return { ok: true, reply: await listAssistantRecords(page) };
       }
       // The schema guarantees a non-null search query; keep the guard explicit.
       if (plan.query === null) throw new Error("Invalid assistant search plan");
@@ -56,17 +101,28 @@ export async function askAssistant(
       return { ok: true, reply: assistantSearchReply(plan, found) };
     });
   } catch (error) {
-    unstable_rethrow(error);
-    if (error instanceof AssistantLimitError) {
-      return { ok: false, code: "LIMIT", error: error.message };
-    }
-    // Do not log the prompt, database records, raw provider output or exception text.
-    console.error("[assistant] Request failed", { category: "request_failed" });
+    return failure(error);
+  }
+}
+
+/** Paging and choosing a parent record reuse validated criteria without another AI call. */
+export async function readAssistantList(
+  input: unknown,
+): Promise<AssistantActionResult> {
+  const user = await requireUser();
+  const parsed = assistantListPageSchema.safeParse(input);
+  if (!parsed.success)
     return {
       ok: false,
-      code: "UNAVAILABLE",
-      error:
-        "The assistant is unavailable right now. Try again, or use Search.",
+      code: "INVALID",
+      error: "The list filters are invalid. Ask JejetoBot for a new list.",
     };
+  try {
+    return await withAssistantRequest(user.id, async () => ({
+      ok: true,
+      reply: await listAssistantRecords(parsed.data),
+    }));
+  } catch (error) {
+    return failure(error);
   }
 }

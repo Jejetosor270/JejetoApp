@@ -12,7 +12,7 @@ interface RequestState {
 
 export class AssistantLimitError extends Error {
   constructor() {
-    super("The assistant is busy. Please wait a minute and try again.");
+    super("JejetoBot is busy. Please wait a minute and try again.");
     this.name = "AssistantLimitError";
   }
 }

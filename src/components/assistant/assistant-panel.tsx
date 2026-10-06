@@ -1,10 +1,11 @@
 "use client";
 
 import { MessageSquare, Search, Send, X } from "lucide-react";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useId, useRef, useState } from "react";
 
-import { askAssistant } from "@/app/(app)/assistant-actions";
 import { AssistantReplyView } from "@/components/assistant/assistant-reply";
+import { useAssistantConversation } from "@/components/assistant/use-assistant-conversation";
 import { controlVariants } from "@/components/forms/control-styles";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,73 +17,40 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import {
-  ASSISTANT_CONTEXT_LIMIT,
-  ASSISTANT_MESSAGE_LIMIT,
-  type AssistantReply,
-} from "@/domain/assistant/contracts";
+import { ASSISTANT_MESSAGE_LIMIT } from "@/domain/assistant/contracts";
+import { assistantContextFromPath } from "@/domain/assistant/lists";
 import { cn } from "@/lib/utils";
-
-const TURN_LIMIT = 12;
-interface AssistantTurn {
-  id: number;
-  question: string;
-  reply: AssistantReply;
-}
 
 export function AssistantPanel() {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [turns, setTurns] = useState<AssistantTurn[]>([]);
-  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const inFlight = useRef(false);
-  const nextTurn = useRef(0);
-  const input = useRef<HTMLTextAreaElement>(null);
+  const context = assistantContextFromPath(usePathname());
+  const {
+    draft,
+    setDraft,
+    turns,
+    pendingQuestion,
+    pendingTurn,
+    pending,
+    error,
+    input,
+    send,
+    loadList,
+    clear,
+  } = useAssistantConversation(context);
   const conversation = useRef<HTMLDivElement>(null);
   const fieldId = useId();
-  const pending = pendingQuestion !== null;
 
   useEffect(() => {
     const element = conversation.current;
-    if (open && element) element.scrollTop = element.scrollHeight;
-  }, [open, turns, pendingQuestion]);
-
-  async function send(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const message = draft.trim();
-    if (inFlight.current || message.length < 2) return;
-    inFlight.current = true;
-    setPendingQuestion(message);
-    setError(null);
-    try {
-      const result = await askAssistant({
-        message,
-        recentMessages: turns
-          .slice(-ASSISTANT_CONTEXT_LIMIT)
-          .map((turn) => turn.question),
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      const id = nextTurn.current++;
-      setTurns((previous) =>
-        [...previous, { id, question: message, reply: result.reply }].slice(
-          -TURN_LIMIT,
-        ),
-      );
-      setDraft("");
-    } catch {
-      setError(
-        "The assistant is unavailable. Your question is retained; try again.",
-      );
-    } finally {
-      inFlight.current = false;
-      setPendingQuestion(null);
-      input.current?.focus();
+    const latest = element?.querySelector<HTMLElement>(
+      "[data-assistant-turn]:last-child",
+    );
+    if (open && element && latest) {
+      element.scrollTop +=
+        latest.getBoundingClientRect().top -
+        element.getBoundingClientRect().top;
     }
-  }
+  }, [open, turns.length, pendingQuestion]);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -92,7 +60,7 @@ export function AssistantPanel() {
           variant="outline"
           className="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 shadow-sm"
         >
-          <MessageSquare aria-hidden="true" /> Assistant
+          <MessageSquare aria-hidden="true" /> JejetoBot
         </Button>
       </SheetTrigger>
       <SheetContent
@@ -105,18 +73,13 @@ export function AssistantPanel() {
       >
         <SheetHeader className="border-border bg-muted/50 shrink-0 border-b p-4">
           <div className="flex items-center justify-between gap-3">
-            <SheetTitle>Assistant</SheetTitle>
+            <SheetTitle>JejetoBot</SheetTitle>
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="sm"
                 disabled={pending || (!turns.length && !draft && !error)}
-                onClick={() => {
-                  setTurns([]);
-                  setDraft("");
-                  setError(null);
-                  input.current?.focus();
-                }}
+                onClick={clear}
               >
                 New chat
               </Button>
@@ -124,20 +87,28 @@ export function AssistantPanel() {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="Close assistant"
+                  aria-label="Close JejetoBot"
                 >
                   <X aria-hidden="true" />
                 </Button>
               </SheetClose>
             </div>
           </div>
-          <SheetDescription>Read-only record finder</SheetDescription>
+          <SheetDescription>Read-only record assistant</SheetDescription>
+          {context && (
+            <p
+              className="text-muted-foreground text-xs"
+              aria-label="Page context"
+            >
+              Context: {context.kind} page
+            </p>
+          )}
         </SheetHeader>
         <div
           ref={conversation}
           className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4"
           role="log"
-          aria-label="Assistant conversation"
+          aria-label="JejetoBot conversation"
           aria-live="polite"
           aria-busy={pending}
         >
@@ -148,20 +119,25 @@ export function AssistantPanel() {
                 className="text-muted-foreground size-5"
               />
               <p>
-                Find Projects, Orders, Billing, Clients or Suppliers by name or
-                reference.
+                Find and filter Projects, Orders, Billing, Clients or Suppliers.
               </p>
               <p className="text-muted-foreground">
-                Try “Find Order DEMO-001”.
+                Try “Orders for supplier Acme” or “Overdue invoices in this
+                Project”.
               </p>
               <p className="text-muted-foreground text-xs">
                 No record changes. This chat clears when you reload or sign out.
-                Only your questions are sent to OpenAI.
+                Questions and search criteria go to OpenAI; record results stay
+                in the app.
               </p>
             </div>
           )}
           {turns.map((turn) => (
-            <div className="min-w-0 space-y-3" key={turn.id}>
+            <div
+              className="min-w-0 space-y-3"
+              key={turn.id}
+              data-assistant-turn
+            >
               <p className="bg-muted rounded-md px-3 py-2 text-sm break-words">
                 <span className="sr-only">You: </span>
                 {turn.question}
@@ -169,11 +145,14 @@ export function AssistantPanel() {
               <AssistantReplyView
                 reply={turn.reply}
                 onNavigate={() => setOpen(false)}
+                disabled={pending}
+                busy={pendingTurn === turn.id}
+                onLoadList={(request) => loadList(turn.id, request)}
               />
             </div>
           ))}
-          {pending && (
-            <div className="space-y-3">
+          {pendingQuestion !== null && (
+            <div className="space-y-3" data-assistant-turn>
               <p className="bg-muted rounded-md px-3 py-2 text-sm break-words">
                 <span className="sr-only">You: </span>
                 {pendingQuestion}
@@ -190,7 +169,7 @@ export function AssistantPanel() {
           className="border-border shrink-0 space-y-3 border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
           <label htmlFor={fieldId} className="text-sm font-medium">
-            Find a record
+            Ask JejetoBot
           </label>
           <textarea
             ref={input}
@@ -217,7 +196,7 @@ export function AssistantPanel() {
               controlVariants(),
               "h-auto min-h-20 resize-none py-2",
             )}
-            placeholder="Name or reference…"
+            placeholder="Find records or narrow a list…"
           />
           {error && (
             <p
