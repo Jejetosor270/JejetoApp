@@ -1,5 +1,31 @@
 # Development invariants
 
+## Record assistant — Phase 1
+
+- The shared side Assistant is a read-only name/reference finder for Projects,
+  Orders, Billing, Clients and Suppliers. All active employees have the same
+  operational read scope as the existing ERP search; no new tenancy or record-level
+  permission model is implied. Each request resolves the active database user,
+  validates bounded input, and rechecks the employee before reading records.
+- GPT-6 Luna only proposes a strict search intent. The server validates the plan,
+  runs allowlisted, bounded queries through the shared Trash-aware database client,
+  and supplies fixed response text and internal links. No SQL, write tools, web
+  browsing, model-generated financial calculations, or raw model prose is exposed.
+  Multiple matches require employee selection; limited results are not presented
+  as exhaustive. Filtered lists and financial/help answers remain later phases.
+- Chat is held only in React memory, survives close/navigation, and clears on
+  reload, sign-out or employee change. Only the current and up to four previous
+  employee questions reach OpenAI, never database results. Requests use the existing
+  server-only OPENAI_API_KEY, fixed gpt-6-luna, store:false, one provider call, a
+  25-second timeout and a 512-token output cap. This does not claim zero provider
+  retention beyond the API's configured policy. Safe failure logs omit questions,
+  records, raw responses and error text.
+- Limits are per server instance: eight requests/minute/employee, one concurrent
+  request/employee, four overall, and a bounded/pruned guard map. They are pragmatic
+  burst protection, not a distributed usage or spending guarantee. Business drafts
+  retain their existing navigation guard; failed chat submissions preserve the prompt.
+  This phase adds no schema, migration, package or environment-variable requirement.
+
 ## Decision-focused Project financials
 
 - Project Details prioritizes Costs & profit, Client Billing and Cash, with visual

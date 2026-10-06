@@ -7,6 +7,7 @@ import { TopBar } from "@/components/app-shell/top-bar";
 import type { AccountControlUser } from "@/components/app-shell/account-control";
 import { ReturnNavigation } from "@/components/layout/return-navigation";
 import { DraftGuard } from "@/components/forms/draft-guard";
+import { AssistantPanel } from "@/components/assistant/assistant-panel";
 
 const preferenceKey = "mb-navigation-collapsed";
 function subscribe(callback: () => void) {
@@ -34,7 +35,7 @@ export function AppShell({
   children: ReactNode;
   companyName: string;
   itemManagementEnabled: boolean;
-  user: AccountControlUser;
+  user: AccountControlUser & { id: string };
 }) {
   const collapsed = useSyncExternalStore(
     subscribe,
@@ -79,13 +80,14 @@ export function AppShell({
           />
           <main
             id="main-content"
-            className="flex-1 px-4 py-6 md:px-6 xl:px-8 xl:py-8"
+            className="flex-1 px-4 pt-6 pb-24 md:px-6 xl:px-8 xl:pt-8"
           >
             <div className="mx-auto w-full max-w-[90rem]">
               <DraftGuard>{children}</DraftGuard>
             </div>
           </main>
         </div>
+        <AssistantPanel key={user.id} />
       </div>
     </ReturnNavigation>
   );
