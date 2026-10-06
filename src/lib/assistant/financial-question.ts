@@ -38,15 +38,24 @@ export async function answerFinancialQuestion(
     );
   if (name) {
     const found = await searchAssistantRecords(name, "Project");
-    if (found.results.length === 1 && !found.truncated) {
+    if (
+      found.results.length === 1 &&
+      !found.truncated &&
+      !found.requiresConfirmation
+    ) {
       const project = found.results[0];
       if (project)
         return readAssistantFinancials({ projectId: project.id, topic });
     }
     return {
       message: found.results.length
-        ? "Which Project? Choose a match, or give a more specific name."
-        : "No matching Project found. Check its name or open the Project.",
+        ? found.requiresConfirmation
+          ? "I found close Project names. Choose the one you mean and I'll answer your question."
+          : "Which Project? Choose a match, or give a more specific name."
+        : found.truncated
+          ? "The Project search is incomplete. Try a more specific name or code; I'll keep your financial question."
+          : "No matching Project yet. Try another spelling or its code; I'll keep your financial question.",
+      pendingFinancialTopic: topic,
       results: [],
       query: null,
       moreHref: null,
@@ -76,7 +85,11 @@ export async function answerFinancialQuestion(
       "This record has no available Project. Give the Project name instead.",
     );
   }
-  if (plan.followUp && request.previousFinancial)
+  if (
+    plan.followUp &&
+    request.previousFinancial &&
+    !request.pendingFinancialTopic
+  )
     return readAssistantFinancials({
       projectId: request.previousFinancial.projectId,
       topic,

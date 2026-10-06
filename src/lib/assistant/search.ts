@@ -9,6 +9,7 @@ import {
   type AssistantSearchResults,
 } from "@/domain/assistant/contracts";
 import { getDatabase } from "@/lib/db";
+import { searchAssistantProjects } from "./project-search";
 
 type SearchKind = AssistantSearchPlan["kind"];
 
@@ -29,23 +30,7 @@ async function findRecords(
       .map((record) => record.id),
   });
   const take = ASSISTANT_RESULT_LIMIT + 1;
-  const [projects, orders, billing, clients, suppliers] = await Promise.all([
-    kind === "All" || kind === "Project"
-      ? database.project.findMany({
-          where: {
-            id: idFor("Project"),
-            OR: [{ name: match }, { code: match }],
-          },
-          orderBy: [{ name: "asc" }, { id: "asc" }],
-          take,
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            client: { select: { displayName: true } },
-          },
-        })
-      : Promise.resolve([]),
+  const [orders, billing, clients, suppliers] = await Promise.all([
     kind === "All" || kind === "Order"
       ? database.procurementOrder.findMany({
           where: {
@@ -111,13 +96,6 @@ async function findRecords(
   ]);
 
   return [
-    ...projects.map((project): AssistantRecord => ({
-      id: project.id,
-      type: "Project",
-      label: project.name,
-      context: `${project.code} · ${project.client?.displayName ?? "Unassigned"}`,
-      href: `/projects/${encodeURIComponent(project.id)}`,
-    })),
     ...orders.map((order): AssistantRecord => ({
       id: order.id,
       type: "Order",
@@ -172,14 +150,25 @@ export async function searchAssistantRecords(
   if (plan.query === null) {
     throw new Error("A record search needs a name or reference.");
   }
+  if (plan.kind === "Project") return searchAssistantProjects(plan.query);
   const exact = await findRecords(plan.query, plan.kind, true, []);
   const partial =
     exact.length > ASSISTANT_RESULT_LIMIT
       ? []
       : await findRecords(plan.query, plan.kind, false, exact);
-  const matches = [...exact, ...partial];
+  const otherMatches = [...exact, ...partial];
+  const projects =
+    plan.kind === "All"
+      ? await searchAssistantProjects(plan.query, {
+          allowSuggestions: otherMatches.length === 0,
+        })
+      : ({ results: [], truncated: false } satisfies AssistantSearchResults);
+  const matches = projects.requiresConfirmation
+    ? [...exact, ...projects.results, ...partial]
+    : [...projects.results, ...otherMatches];
   return {
     results: matches.slice(0, ASSISTANT_RESULT_LIMIT),
-    truncated: matches.length > ASSISTANT_RESULT_LIMIT,
+    truncated: projects.truncated || matches.length > ASSISTANT_RESULT_LIMIT,
+    ...(projects.requiresConfirmation ? { requiresConfirmation: true } : {}),
   };
 }

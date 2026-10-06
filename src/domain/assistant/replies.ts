@@ -25,14 +25,17 @@ export function assistantSearchReply(
 ): AssistantReply {
   let message = "No matching records found. Try another name or reference.";
   if (found.results.length === 1) {
-    message = "Here is a matching record. Open it to check the details.";
+    message = found.requiresConfirmation
+      ? "I found a close Project name. Is this the one you mean? Open it to check the details."
+      : "Here is a matching record. Open it to check the details.";
   } else if (found.results.length > 1) {
     message =
       "Which record did you mean? Choose a match or give a more specific name or reference.";
   }
   if (found.truncated) {
-    message =
-      "Here are the first matches, not a complete list. Refine the name or reference, or open Search.";
+    message = found.results.length
+      ? "Here are the first matches, not a complete list. Refine the name or reference, or open Search."
+      : "The search is incomplete. Try a more specific Project name or code, or open Search.";
   }
 
   return {

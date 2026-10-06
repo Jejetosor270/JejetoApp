@@ -7,7 +7,10 @@ import {
   readAssistantFinancial,
   readAssistantList,
 } from "@/app/(app)/assistant-actions";
-import type { AssistantFinancialRequest } from "@/domain/assistant/answers";
+import type {
+  AssistantFinancialRequest,
+  AssistantFinancialTopic,
+} from "@/domain/assistant/answers";
 import {
   ASSISTANT_CONTEXT_LIMIT,
   type AssistantReply,
@@ -32,6 +35,8 @@ export function useAssistantConversation(context: AssistantPageContext | null) {
   );
   const [previousFinancial, setPreviousFinancial] =
     useState<AssistantFinancialRequest | null>(null);
+  const [pendingFinancialTopic, setPendingFinancialTopic] =
+    useState<AssistantFinancialTopic | null>(null);
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [pendingTurn, setPendingTurn] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +53,9 @@ export function useAssistantConversation(context: AssistantPageContext | null) {
       });
     }
     setPreviousFinancial(reply.financial ?? null);
+    setPendingFinancialTopic(
+      reply.financial ? null : (reply.pendingFinancialTopic ?? null),
+    );
   }
 
   async function send(event: FormEvent<HTMLFormElement>) {
@@ -66,6 +74,7 @@ export function useAssistantConversation(context: AssistantPageContext | null) {
         context,
         previousList,
         previousFinancial,
+        pendingFinancialTopic,
       });
       if (!result.ok) {
         setError(result.error);
@@ -150,6 +159,7 @@ export function useAssistantConversation(context: AssistantPageContext | null) {
     setTurns([]);
     setPreviousList(null);
     setPreviousFinancial(null);
+    setPendingFinancialTopic(null);
     setDraft("");
     setError(null);
     input.current?.focus();

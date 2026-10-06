@@ -98,6 +98,26 @@ describe("assistant request boundaries", () => {
     ])
       expect(assistantSearchPlanSchema.safeParse(plan).success).toBe(false);
   });
+
+  it("accepts only a known pending topic, never record data or instructions", () => {
+    const request = {
+      message: "villas bled",
+      recentMessages: [],
+      pendingFinancialTopic: "costs_profit",
+    };
+    expect(assistantRequestSchema.parse(request).pendingFinancialTopic).toBe(
+      "costs_profit",
+    );
+    for (const pendingFinancialTopic of [
+      "DELETE",
+      "https://example.test",
+      { topic: "cash", projectId: "other", amount: "123.00" },
+    ])
+      expect(
+        assistantRequestSchema.safeParse({ ...request, pendingFinancialTopic })
+          .success,
+      ).toBe(false);
+  });
 });
 
 describe("deterministic assistant replies", () => {
@@ -157,5 +177,21 @@ describe("deterministic assistant replies", () => {
         { results: [], truncated: true },
       ).moreHref,
     ).toBeNull();
+  });
+
+  it("labels a near-name suggestion as uncertain, not an exact match", () => {
+    expect(
+      assistantSearchReply(plan, {
+        results: [{ ...record, type: "Project" }],
+        truncated: false,
+        requiresConfirmation: true,
+      }).message,
+    ).toContain("Is this the one");
+  });
+
+  it("does not claim absent Projects after an incomplete scan with no suggestions", () => {
+    expect(
+      assistantSearchReply(plan, { results: [], truncated: true }).message,
+    ).toContain("search is incomplete");
   });
 });

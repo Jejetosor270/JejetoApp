@@ -147,6 +147,7 @@ describe("record assistant planner", () => {
                 ...input,
                 businessDate: "2026-10-06",
                 context: null,
+                pendingFinancialTopic: null,
                 previousFinancial: null,
                 previousList: null,
               }),
@@ -320,6 +321,7 @@ describe("record assistant planner", () => {
       recentMessages: [],
       businessDate: "2026-10-06",
       context: null,
+      pendingFinancialTopic: null,
       previousFinancial: null,
       previousList: null,
     });
@@ -351,6 +353,7 @@ describe("record assistant planner", () => {
       recentMessages: ["How is this Project doing?"],
       businessDate: "2026-10-06",
       context: { kind: "Order" },
+      pendingFinancialTopic: null,
       previousFinancial: { topic: "overview", projectSelected: true },
       previousList: null,
     });
@@ -360,6 +363,155 @@ describe("record assistant planner", () => {
     expect(input.previousFinancial).not.toHaveProperty("amount");
     expect(input.previousFinancial).not.toHaveProperty("label");
   });
+
+  it.each([
+    ["villas bled", "villas bled"],
+    ["I meant Villas Bled", "Villas Bled"],
+    ["I meant Villa Bléd", "Villa Bléd"],
+  ])(
+    "preserves the pending profit question for a corrected name: %s",
+    async (message, project) => {
+      const plan = {
+        ...financialPlan,
+        financialTopic: "costs_profit",
+        contextScope: "NONE",
+        filters: { ...emptyAssistantFilters, project },
+      };
+      const fetchMock = mockResponse(completedResponse(JSON.stringify(plan)));
+      await expect(
+        planAssistantSearch({
+          message,
+          recentMessages: ["what's my profit on villa bled project?"],
+          pendingFinancialTopic: "costs_profit",
+        }),
+      ).resolves.toEqual(plan);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(String(options.body));
+      expect(JSON.parse(body.input[0].content[0].text)).toEqual({
+        message,
+        recentMessages: ["what's my profit on villa bled project?"],
+        businessDate: "2026-10-06",
+        context: null,
+        pendingFinancialTopic: "costs_profit",
+        previousFinancial: null,
+        previousList: null,
+      });
+      expect(body.instructions).toContain("not SEARCH or a generic CLARIFY");
+      expect(body.instructions).toContain(
+        "followUp false and contextScope NONE",
+      );
+      expect(body.instructions).toContain(
+        "Preserve literal employee spelling, singular/plural and accents",
+      );
+      expect(body.instructions).toContain(
+        "Never invent a canonical database name",
+      );
+      expect(body.previous_response_id).toBeUndefined();
+      expect(body.tools).toBeUndefined();
+    },
+  );
+
+  it("allows an explicit new topic to replace the pending topic", async () => {
+    const plan = {
+      ...financialPlan,
+      financialTopic: "vat",
+      contextScope: "NONE",
+      filters: { ...emptyAssistantFilters, project: "Villas Bled" },
+    };
+    const fetchMock = mockResponse(completedResponse(JSON.stringify(plan)));
+    await expect(
+      planAssistantSearch({
+        message: "show VAT for Villas Bled",
+        recentMessages: ["what's my profit on villa bled project?"],
+        pendingFinancialTopic: "costs_profit",
+      }),
+    ).resolves.toEqual(plan);
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(options.body));
+    expect(body.instructions).toContain("A new explicit financial topic wins");
+  });
+
+  it.each([
+    ["find order PO-104", searchPlan],
+    ["How do I record a partial payment?", helpPlan],
+    [
+      "what is the weather?",
+      { ...planDefaults, intent: "OUT_OF_SCOPE", kind: "All", query: null },
+    ],
+  ] as const)(
+    "does not force an independent request into a pending Project: %s",
+    async (message, plan) => {
+      const fetchMock = mockResponse(completedResponse(JSON.stringify(plan)));
+      await expect(
+        planAssistantSearch({
+          message,
+          recentMessages: ["what's my profit on villa bled project?"],
+          pendingFinancialTopic: "costs_profit",
+        }),
+      ).resolves.toEqual(plan);
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(String(options.body));
+      expect(body.instructions).toContain(
+        "Explicit independent searches, lists, help or unrelated requests also win",
+      );
+    },
+  );
+
+  it("sends a pending topic alone and suppresses an earlier selected Project", async () => {
+    const plan = {
+      ...financialPlan,
+      financialTopic: "costs_profit",
+      contextScope: "NONE",
+      filters: { ...emptyAssistantFilters, project: "Villas Bled" },
+    };
+    const fetchMock = mockResponse(completedResponse(JSON.stringify(plan)));
+    const previousProjectId = "b6846ab9-dd7f-40dc-b01c-05cbfdcc995a";
+    await planAssistantSearch({
+      message: "Villas Bled",
+      recentMessages: [],
+      pendingFinancialTopic: "costs_profit",
+      context: { kind: "Project", id: previousProjectId },
+      previousFinancial: { projectId: previousProjectId, topic: "cash" },
+    });
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(options.body));
+    const input = JSON.parse(body.input[0].content[0].text);
+    expect(input.pendingFinancialTopic).toBe("costs_profit");
+    expect(input.context).toEqual({ kind: "Project" });
+    expect(input.previousFinancial).toBeNull();
+    expect(options.body).not.toContain(previousProjectId);
+    expect(input).not.toHaveProperty("results");
+    expect(input).not.toHaveProperty("projectName");
+    expect(input).not.toHaveProperty("metrics");
+    expect(body.instructions).toContain(
+      "Never reuse an earlier selected Project while pendingFinancialTopic exists",
+    );
+  });
+
+  it.each([
+    "tax_advice",
+    "SELECT * FROM projects",
+    {
+      topic: "costs_profit",
+      projectName: "Private Project",
+      amount: "1200.00",
+    },
+  ])(
+    "rejects forged pending topic data before provider access %#",
+    async (pendingFinancialTopic) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      await expect(
+        planAssistantSearch({
+          ...request,
+          pendingFinancialTopic,
+        } as typeof request),
+      ).rejects.toThrow();
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(console.error).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     { projectId: "invalid", topic: "overview" },
@@ -511,6 +663,7 @@ describe("record assistant planner", () => {
       recentMessages: ["Show supplier Acme orders"],
       businessDate: "2026-10-06",
       context: { kind: "Project" },
+      pendingFinancialTopic: null,
       previousFinancial: null,
       previousList: {
         kind: "Order",

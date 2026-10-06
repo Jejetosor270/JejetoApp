@@ -59,6 +59,11 @@ Suppliers, with counts, 25-row pages, explicit ambiguity choices and follow-ups
 such as “only overdue” or “Orders for this Project.” Filters reuse existing list
 services and payment statuses; derived-filter scopes above 500 records ask you to
 narrow the list. Open-list links appear only when their filters are equivalent.
+Project lookup tolerates case, accents, punctuation, word order and common
+singular/plural variants; a bounded fallback suggests close spellings. Clear unique
+name variants can resolve directly, while typo suggestions or ambiguous matches
+ask for confirmation. If a financial question cannot identify its Project, a short
+correction such as “Villas Bled” keeps the original topic instead of starting over.
 It also gives curated workflow help and explains current whole-Project costs,
 pricing profit/markup, issued Billing coverage, cash, VAT and freight. Figures
 come from the same authoritative dashboard as Project Details, with source links,
@@ -67,9 +72,9 @@ it never computes figures or writes the explanation. Arbitrary filtered financia
 totals, historical snapshots, tax advice and unrelated questions remain unsupported.
 JejetoBot cannot edit records. Chat stays in browser memory and clears on reload/sign-out. OpenAI
 receives the current and up to four previous questions, previous user-entered
-filters, page context kind, the prior financial topic/scope-presence flag and business date (`store: false`), never retrieved
+filters, page context kind, pending financial topic, the prior financial topic/scope-presence flag and business date (`store: false`), never retrieved
 records, resolved IDs or financial results. Paging and parent selection do not
-call AI again. An unresolved/new question clears the previous financial scope,
+call AI again. An unresolved/new question clears the previous financial Project ID,
 so a later follow-up cannot silently answer for an older Project. All requests are limited per running server instance (8/minute per
 employee, one in flight per employee and four overall), not a distributed spending
 quota. No new environment variable, package or migration is needed for JejetoBot.

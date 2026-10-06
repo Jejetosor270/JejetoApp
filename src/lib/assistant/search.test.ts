@@ -202,8 +202,8 @@ describe("assistant record search", () => {
       "Unassigned · Unassigned · Furniture deposit",
     );
     expect(response.truncated).toBe(false);
+    expect(mocks.project).toHaveBeenCalledTimes(1);
     for (const find of [
-      mocks.project,
       mocks.order,
       mocks.billing,
       mocks.client,
@@ -247,12 +247,7 @@ describe("assistant record search", () => {
     const response = await searchAssistantRecords("Example", "All");
 
     expect(response.results).toHaveLength(2);
-    expect(mocks.project).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        where: expect.objectContaining({ id: { notIn: ["same-id"] } }),
-      }),
-    );
+    expect(mocks.project).toHaveBeenCalledTimes(1);
     expect(mocks.order).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
@@ -308,6 +303,64 @@ describe("assistant record search", () => {
 
   it("does not invent results for an empty match set", async () => {
     await expect(searchAssistantRecords("No match", "All")).resolves.toEqual({
+      results: [],
+      truncated: false,
+    });
+  });
+
+  it.each(["Project", "All"] as const)(
+    "uses forgiving Project matching for %s only after direct searches fail",
+    async (kind) => {
+      mocks.project
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { id: "bled", name: "Villas Bled", code: "BLED", client: null },
+        ]);
+      const found = await searchAssistantRecords("villa beld", kind);
+      expect(found).toMatchObject({
+        results: [{ id: "bled", type: "Project" }],
+        requiresConfirmation: true,
+      });
+      expect(mocks.project).toHaveBeenCalledTimes(3);
+    },
+  );
+
+  it("does not load a speculative Project catalog when another record type matched", async () => {
+    mocks.order.mockResolvedValueOnce([order("exact", "Villas Bled")]);
+    const found = await searchAssistantRecords("Villas Bled", "All");
+    expect(found.results.map((result) => result.type)).toEqual(["Order"]);
+    expect(mocks.project).toHaveBeenCalledTimes(2);
+    expect(mocks.project).not.toHaveBeenCalledWith(
+      expect.objectContaining({ take: 501 }),
+    );
+  });
+
+  it("requires confirmation for All-search Project partials while preserving an exact Order", async () => {
+    mocks.order.mockResolvedValueOnce([order("exact", "Villa Bled")]);
+    mocks.project
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: "annex", name: "Villa Bled Annex", code: "ANNEX", client: null },
+      ]);
+    const found = await searchAssistantRecords("Villa Bled", "All");
+    expect(found.results.map((record) => record.id)).toEqual([
+      "exact",
+      "annex",
+    ]);
+    expect(found.requiresConfirmation).toBe(true);
+    expect(mocks.project).not.toHaveBeenCalledWith(
+      expect.objectContaining({ take: 501 }),
+    );
+  });
+
+  it("does not return numeric Project substring mismatches in All search", async () => {
+    const wrong = { id: "wrong", name: "Villa 10", code: "P-10", client: null };
+    mocks.project
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([wrong])
+      .mockResolvedValueOnce([wrong]);
+    expect(await searchAssistantRecords("Villa 1", "All")).toEqual({
       results: [],
       truncated: false,
     });

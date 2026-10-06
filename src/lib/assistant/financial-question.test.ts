@@ -96,6 +96,7 @@ describe("JejetoBot financial scope resolution", () => {
       truncated: false,
     },
     { results: [project], truncated: true },
+    { results: [project], truncated: false, requiresConfirmation: true },
   ])(
     "asks for selection on ambiguous or truncated name matches",
     async (found) => {
@@ -114,6 +115,7 @@ describe("JejetoBot financial scope resolution", () => {
       });
       expect(response.truncated).toBe(found.truncated);
       expect(response.answer).toBeUndefined();
+      expect(response.pendingFinancialTopic).toBe("cash");
       expect(mocks.financial).not.toHaveBeenCalled();
     },
   );
@@ -129,6 +131,7 @@ describe("JejetoBot financial scope resolution", () => {
     );
     expect(response.message).toContain("No matching Project");
     expect(response.financialClarification).toBeUndefined();
+    expect(response.pendingFinancialTopic).toBe("cash");
     expect(mocks.financial).not.toHaveBeenCalled();
   });
 
@@ -162,6 +165,33 @@ describe("JejetoBot financial scope resolution", () => {
       topic: "vat",
     });
     expect(mocks.context).not.toHaveBeenCalled();
+  });
+
+  it("continues the original question after a corrected Project name", async () => {
+    await answerFinancialQuestion(filteredPlan({ project: "Villas Bled" }), {
+      message: "villas bled",
+      recentMessages: ["What's my cash on villa bled?"],
+      pendingFinancialTopic: "cash",
+    });
+    expect(mocks.search).toHaveBeenCalledExactlyOnceWith(
+      "Villas Bled",
+      "Project",
+    );
+    expect(mocks.financial).toHaveBeenCalledExactlyOnceWith({
+      projectId,
+      topic: "cash",
+    });
+  });
+
+  it("never reuses a stale Project while a corrected name is pending", async () => {
+    await expect(
+      answerFinancialQuestion(plan({ followUp: true }), {
+        ...request,
+        pendingFinancialTopic: "costs_profit",
+        previousFinancial: { projectId, topic: "cash" },
+      }),
+    ).rejects.toBeInstanceOf(AssistantQueryError);
+    expect(mocks.financial).not.toHaveBeenCalled();
   });
 
   it("does not infer a financial Project from a previous list", async () => {

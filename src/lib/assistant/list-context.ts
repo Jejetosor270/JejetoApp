@@ -44,15 +44,23 @@ export async function resolveListRelations(input: AssistantListQuery): Promise<
       if (!found.results.length) {
         return {
           reply: listClarification(
-            `No matching ${kind} found. Check the name and try again.`,
+            found.truncated
+              ? `The ${kind} search is incomplete. Try a more specific name or code.`
+              : `No matching ${kind} found. Check the name and try again.`,
           ),
         };
       }
-      if (found.results.length !== 1 || found.truncated) {
+      if (
+        found.results.length !== 1 ||
+        found.truncated ||
+        found.requiresConfirmation
+      ) {
         return {
           reply: {
             ...listClarification(
-              `Which ${kind}? Choose a match, or give a more specific name.`,
+              found.requiresConfirmation
+                ? `I found close ${kind} names. Choose the one you mean.`
+                : `Which ${kind}? Choose a match, or give a more specific name.`,
             ),
             clarification: {
               query,

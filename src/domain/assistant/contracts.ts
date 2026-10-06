@@ -38,6 +38,10 @@ export const assistantRequestSchema = z.strictObject({
   context: assistantPageContextSchema.nullable().default(null),
   previousList: assistantListPageSchema.nullable().default(null),
   previousFinancial: assistantFinancialRequestSchema.nullable().default(null),
+  pendingFinancialTopic: z
+    .enum(assistantFinancialTopics)
+    .nullable()
+    .default(null),
 });
 
 export const assistantSearchPlanSchema = z
@@ -93,6 +97,7 @@ export interface AssistantRecord {
 export interface AssistantSearchResults {
   results: AssistantRecord[];
   truncated: boolean;
+  requiresConfirmation?: boolean;
 }
 
 export interface AssistantReply extends AssistantSearchResults {
@@ -104,6 +109,7 @@ export interface AssistantReply extends AssistantSearchResults {
   clarification?: { query: AssistantListQuery; choices: AssistantChoice[] };
   answer?: AssistantAnswer;
   financial?: AssistantFinancialRequest;
+  pendingFinancialTopic?: AssistantFinancialTopic;
   financialClarification?: {
     topic: AssistantFinancialTopic;
     choices: { id: string; label: string; context: string }[];

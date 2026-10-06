@@ -29,9 +29,21 @@
   Project context or a validated previous financial selection. Ambiguity requires
   selection; unavailable/unsupported scope never silently becomes another Project.
   Successful non-financial or unresolved replies clear the prior financial scope.
+  Unresolved financial name lookups retain only their allowlisted topic, not a prior
+  Project ID. A short corrected name resumes that topic. Explicit new questions win;
+  success, unrelated answers and New chat clear the pending topic. This small enum
+  reaches the planner, not candidate names/IDs, response prose or financial amounts.
   Answers include a Project link, up to eight unique supporting source links (missing
   amounts first), full source count and Paris as-of time. Links do not imply that a
   bounded evidence list was used to calculate the whole-Project totals.
+- Project name matching prioritizes literal exact matches, then combines partials with bounded server-side
+  normalization (case, accents, punctuation, token order and common plurals) and
+  conservative minor spelling suggestions. Numeric identifiers are not typo-corrected
+  or reordered; code token order is preserved.
+  Unique complete normalized matches can resolve; fuzzy suggestions and multiple
+  matches require selection. An incomplete candidate scan must never prove uniqueness
+  or claim a Project does not exist. This applies to Project search, financial scope
+  and Project relation filters; it does not change global ERP search or stored names.
 - Lists reuse canonical list services and statuses, with exact counts and 25-row pages.
   Derived status/due-date filters are limited to 500 source records; broader or unstable
   scopes request narrowing/retry instead of claiming complete results. Delivery and

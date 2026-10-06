@@ -127,6 +127,7 @@ describe("authenticated read-only assistant", () => {
         context: null,
         previousList: null,
         previousFinancial: null,
+        pendingFinancialTopic: null,
       });
       expect(mocks.search).toHaveBeenCalledWith("PO-104", "Order");
       expect(mocks.requireUser.mock.invocationCallOrder[0]).toBeLessThan(
@@ -299,6 +300,62 @@ describe("JejetoBot application help", () => {
 
 describe("JejetoBot financial Server Actions", () => {
   const financialRequest = { projectId, topic: "cash" };
+
+  it("keeps a profit question through a failed name and a short correction", async () => {
+    const original = "What's my profit on the villa bled project?";
+    const plan = {
+      intent: "FINANCIAL",
+      kind: "Project",
+      query: null,
+      financialTopic: "costs_profit",
+    };
+    mocks.plan
+      .mockResolvedValueOnce({
+        ...plan,
+        filters: { ...emptyAssistantFilters, project: "villa bled" },
+      })
+      .mockResolvedValueOnce({
+        ...plan,
+        filters: { ...emptyAssistantFilters, project: "villas bled" },
+      });
+    mocks.search
+      .mockResolvedValueOnce({ results: [], truncated: false })
+      .mockResolvedValueOnce({
+        results: [
+          {
+            id: projectId,
+            type: "Project",
+            label: "Villas Bled",
+            context: "BLD",
+            href: `/projects/${projectId}`,
+          },
+        ],
+        truncated: false,
+      });
+    const first = await askAssistant({ message: original, recentMessages: [] });
+    expect(first).toMatchObject({
+      ok: true,
+      reply: { pendingFinancialTopic: "costs_profit" },
+    });
+    expect(mocks.financial).not.toHaveBeenCalled();
+    const second = await askAssistant({
+      message: "villas bled",
+      recentMessages: [original],
+      pendingFinancialTopic: "costs_profit",
+    });
+    expect(second.ok).toBe(true);
+    expect(mocks.plan).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        message: "villas bled",
+        pendingFinancialTopic: "costs_profit",
+        previousFinancial: null,
+      }),
+    );
+    expect(mocks.financial).toHaveBeenCalledExactlyOnceWith({
+      projectId,
+      topic: "costs_profit",
+    });
+  });
   const financialPlan = {
     intent: "FINANCIAL",
     kind: "Project",

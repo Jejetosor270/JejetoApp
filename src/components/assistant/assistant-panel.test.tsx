@@ -109,6 +109,7 @@ describe("JejetoBot panel", () => {
       context: null,
       previousList: null,
       previousFinancial: null,
+      pendingFinancialTopic: null,
     });
     expect(document.querySelector('[role="log"]')?.textContent).toContain(
       "Which record did you mean?",
@@ -218,6 +219,7 @@ describe("JejetoBot panel", () => {
       context: null,
       previousList: null,
       previousFinancial: null,
+      pendingFinancialTopic: null,
     });
     const log = document.querySelector('[role="log"]');
     expect(log?.textContent).not.toContain("Find Project 0");
@@ -453,6 +455,7 @@ describe("JejetoBot contextual lists", () => {
       recentMessages: ["Orders for this Project"],
       previousList: { query: listQuery, page: 2 },
       previousFinancial: null,
+      pendingFinancialTopic: null,
       context: null,
     });
   });
@@ -609,6 +612,7 @@ describe("JejetoBot contextual lists", () => {
       context: null,
       previousList: null,
       previousFinancial: null,
+      pendingFinancialTopic: null,
     });
   });
 
@@ -669,6 +673,19 @@ const financialChoice: AssistantActionResult = {
       topic: "cash",
       choices: [{ id: projectId, label: "Demo Villa", context: "Demo Client" }],
     },
+    pendingFinancialTopic: "cash",
+  },
+};
+
+const missingFinancialProject: AssistantActionResult = {
+  ok: true,
+  reply: {
+    message: "No matching Project. Which Project did you mean?",
+    query: null,
+    results: [],
+    truncated: false,
+    moreHref: null,
+    pendingFinancialTopic: "costs_profit",
   },
 };
 
@@ -741,6 +758,7 @@ describe("JejetoBot help and Project answers", () => {
       context: { kind: "Project", id: projectId },
       previousList: null,
       previousFinancial: financialScope,
+      pendingFinancialTopic: null,
     });
     expect(JSON.stringify(request)).not.toContain("12 345.67");
     expect(JSON.stringify(request)).not.toContain("INV-DEMO");
@@ -938,6 +956,163 @@ describe("JejetoBot help and Project answers", () => {
       await clickText("Send");
       expect(askAssistant).toHaveBeenLastCalledWith(
         expect.objectContaining({ previousFinancial: financialScope }),
+      );
+    },
+  );
+
+  it("carries the unanswered topic into a corrected name without the previous Project", async () => {
+    askAssistant
+      .mockResolvedValueOnce(financialResult)
+      .mockResolvedValueOnce(missingFinancialProject)
+      .mockResolvedValueOnce(financialResult);
+    await open();
+    await submit("Explain Demo Villa cash");
+    await submit("What is the profit for Vilas Bled?");
+    await submit("villas bled");
+    expect(askAssistant).toHaveBeenLastCalledWith({
+      message: "villas bled",
+      recentMessages: [
+        "Explain Demo Villa cash",
+        "What is the profit for Vilas Bled?",
+      ],
+      context: null,
+      previousList: null,
+      previousFinancial: null,
+      pendingFinancialTopic: "costs_profit",
+    });
+    const correction = JSON.stringify(askAssistant.mock.lastCall?.[0]);
+    expect(correction).not.toContain(projectId);
+    expect(correction).not.toContain("12 345.67");
+    expect(correction).not.toContain("INV-DEMO");
+    await submit("And its VAT?");
+    expect(askAssistant).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        previousFinancial: financialScope,
+        pendingFinancialTopic: null,
+      }),
+    );
+  });
+
+  it("keeps only the ambiguous topic when the user types a corrected Project name", async () => {
+    askAssistant
+      .mockResolvedValueOnce(financialResult)
+      .mockResolvedValueOnce(financialChoice);
+    await open();
+    await submit("Explain Demo Villa cash");
+    await submit("Show cash for Villa");
+    await submit("villas bled");
+    expect(askAssistant).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        previousFinancial: null,
+        pendingFinancialTopic: "cash",
+      }),
+    );
+    expect(JSON.stringify(askAssistant.mock.lastCall?.[0])).not.toContain(
+      projectId,
+    );
+  });
+
+  it("clears an ambiguous topic after Project selection", async () => {
+    askAssistant.mockResolvedValueOnce(financialChoice);
+    readAssistantFinancial.mockResolvedValueOnce(financialResult);
+    await open();
+    await submit("Show cash for Villa");
+    await enter("assistantMessage", "And its VAT?");
+    await act(async () =>
+      document
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="Choose a Project"] button',
+        )
+        ?.click(),
+    );
+    await clickText("Send");
+    expect(askAssistant).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        previousFinancial: financialScope,
+        pendingFinancialTopic: null,
+      }),
+    );
+  });
+
+  it.each([
+    ["list", listResult()],
+    [
+      "help",
+      {
+        ok: true,
+        reply: {
+          message: "Help",
+          query: null,
+          results: [],
+          truncated: false,
+          moreHref: null,
+          answer: {
+            title: "Payments",
+            paragraphs: ["Open payment terms."],
+            links: [],
+          },
+        },
+      },
+    ],
+  ] as const)(
+    "clears pending financial topics after unrelated %s answers",
+    async (_kind, response) => {
+      askAssistant
+        .mockResolvedValueOnce(missingFinancialProject)
+        .mockResolvedValueOnce(response);
+      await open();
+      await submit("What is profit for Vilas Bled?");
+      await submit("Other question");
+      await submit("villas bled");
+      expect(askAssistant).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          previousFinancial: null,
+          pendingFinancialTopic: null,
+        }),
+      );
+    },
+  );
+
+  it("clears a pending financial topic with New chat", async () => {
+    askAssistant.mockResolvedValueOnce(missingFinancialProject);
+    await open();
+    await submit("What is profit for Vilas Bled?");
+    await clickText("New chat");
+    await submit("villas bled");
+    expect(askAssistant).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        recentMessages: [],
+        previousFinancial: null,
+        pendingFinancialTopic: null,
+      }),
+    );
+  });
+
+  it.each(["rejection", "transport"])(
+    "preserves an unanswered topic and correction draft after %s failure",
+    async (failure) => {
+      askAssistant.mockResolvedValueOnce(missingFinancialProject);
+      if (failure === "transport")
+        askAssistant.mockRejectedValueOnce(new Error("Private failure"));
+      else
+        askAssistant.mockResolvedValueOnce({
+          ok: false,
+          code: "LIMIT",
+          error: "Try again.",
+        });
+      await open();
+      await submit("What is profit for Vilas Bled?");
+      await submit("villas bled");
+      expect(control("assistantMessage").value).toBe("villas bled");
+      await clickText("Send");
+      expect(askAssistant).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          previousFinancial: null,
+          pendingFinancialTopic: "costs_profit",
+        }),
+      );
+      expect(JSON.stringify(askAssistant.mock.lastCall?.[0])).not.toContain(
+        projectId,
       );
     },
   );

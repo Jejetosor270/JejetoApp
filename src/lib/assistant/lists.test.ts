@@ -367,6 +367,29 @@ describe("JejetoBot lists", () => {
     expect(mocks.orders).not.toHaveBeenCalled();
   });
 
+  it("asks before using a unique typo suggestion as a Project filter", async () => {
+    mocks.search.mockResolvedValue({
+      results: [{ id, label: "Villas Bled", context: "BLD", type: "Project" }],
+      truncated: false,
+      requiresConfirmation: true,
+    });
+    const response = await list({ project: "Vilas Beld" });
+    expect(response.clarification).toMatchObject({
+      query: { project: "Vilas Beld", projectId: null },
+      choices: [{ field: "projectId", id, label: "Villas Bled" }],
+    });
+    expect(response.message).toContain("close Project names");
+    expect(mocks.orders).not.toHaveBeenCalled();
+  });
+
+  it("does not claim no match when the fuzzy catalog scan was incomplete", async () => {
+    mocks.search.mockResolvedValue({ results: [], truncated: true });
+    expect((await list({ project: "Vilas Beld" })).message).toContain(
+      "search is incomplete",
+    );
+    expect(mocks.orders).not.toHaveBeenCalled();
+  });
+
   it("never equates delivery PAID with actual payment PAID", async () => {
     mocks.orders.mockResolvedValue({
       items: [
