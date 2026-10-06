@@ -10,6 +10,7 @@ import {
   convertPaymentAmount,
   supplierPayableBase,
 } from "@/domain/payments/calculations";
+import { cappedCashTerms } from "@/domain/payments/cash-expectations";
 import {
   addMonthsToDateOnly,
   dateOnlyToDate,
@@ -140,6 +141,16 @@ export interface DirectionPaymentResult {
   scheduledOutstanding: AggregateAmount;
   totalRemaining: Decimal | null;
   unscheduled: Decimal | null;
+}
+
+export interface ReportingPaymentBase {
+  amount: Decimal | null;
+  orderId: string;
+  originalAmount?: string | null;
+  currencyCode?: string;
+  expectedFxRate?: string | null;
+  /** Authoritative original-currency net paid, including any recorded refunds. */
+  paidAmount?: string | null;
 }
 
 export interface MonthlyCashFlowResult {
@@ -436,8 +447,81 @@ function actualAmount(
   });
 }
 
+function remainingPaymentAmounts(
+  base: ReportingPaymentBase,
+  installments: readonly ReportingInstallmentInput[],
+  reportingCurrencyCode: string,
+) {
+  const active = installments.filter((item) => !item.isCancelled);
+  const incomplete = () => ({
+    outstanding: active.map((item) => ({ amount: null, id: item.id })),
+    unscheduled: null,
+  });
+  const currencyCode = base.currencyCode ?? reportingCurrencyCode;
+  // Older same-currency callers need no extra context. A converted base cannot
+  // establish an original foreign balance, particularly after Supplier credits.
+  const originalAmount =
+    base.originalAmount === undefined
+      ? currencyCode === reportingCurrencyCode
+        ? (base.amount?.toString() ?? null)
+        : null
+      : base.originalAmount;
+  if (
+    originalAmount === null ||
+    base.paidAmount === null ||
+    installments.some(
+      (item) =>
+        (!item.isCancelled || item.settlements.length > 0) &&
+        (item.reviewRequired || item.currencyCode !== currencyCode),
+    )
+  )
+    return incomplete();
+
+  const paid =
+    base.paidAmount ??
+    installments
+      .flatMap((item) => item.settlements)
+      .reduce((total, settlement) => total.plus(settlement.amount), ZERO)
+      .toString();
+  const schedule = cappedCashTerms(
+    originalAmount,
+    Decimal.min(originalAmount, paid).toString(),
+    installments
+      .toSorted(
+        (a, b) =>
+          (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") ||
+          a.id.localeCompare(b.id),
+      )
+      .map((item) => ({
+        amount: item.outstandingAmount,
+        cancelled: item.isCancelled,
+        due: item.dueDate,
+        installment: item,
+        paid: "0",
+      })),
+  );
+  return {
+    outstanding: schedule.terms
+      .filter(({ term }) => !term.cancelled)
+      .map(({ term, amount }) => ({
+        amount: expectedAmount(
+          term.installment,
+          amount.toString(),
+          reportingCurrencyCode,
+        ),
+        id: term.installment.id,
+      })),
+    unscheduled: convertPaymentAmount({
+      amount: schedule.unscheduled,
+      currencyCode,
+      fxRateToReporting: base.expectedFxRate,
+      reportingCurrencyCode,
+    }),
+  };
+}
+
 export function calculateDirectionPaymentSummary(input: {
-  bases: readonly { amount: Decimal | null; orderId: string }[];
+  bases: readonly ReportingPaymentBase[];
   direction: ReportingInstallmentInput["direction"];
   installments: readonly ReportingInstallmentInput[];
   reportingCurrencyCode: string;
@@ -459,13 +543,24 @@ export function calculateDirectionPaymentSummary(input: {
       id: item.id,
     })),
   );
+  const remaining = input.bases.map((item) => ({
+    ...remainingPaymentAmounts(
+      item,
+      installments.filter(
+        (installment) => installment.orderId === item.orderId,
+      ),
+      input.reportingCurrencyCode,
+    ),
+    id: item.orderId,
+  }));
+  const remainingByInstallment = new Map(
+    remaining.flatMap((item) =>
+      item.outstanding.map((amount) => [amount.id, amount.amount] as const),
+    ),
+  );
   const scheduledOutstanding = aggregateConverted(
     active.map((item) => ({
-      amount: expectedAmount(
-        item,
-        item.outstandingAmount,
-        input.reportingCurrencyCode,
-      ),
+      amount: remainingByInstallment.get(item.id) ?? null,
       id: item.id,
     })),
   );
@@ -473,11 +568,7 @@ export function calculateDirectionPaymentSummary(input: {
     active
       .filter((item) => item.status === "OVERDUE")
       .map((item) => ({
-        amount: expectedAmount(
-          item,
-          item.outstandingAmount,
-          input.reportingCurrencyCode,
-        ),
+        amount: remainingByInstallment.get(item.id) ?? null,
         id: item.id,
       })),
   );
@@ -489,22 +580,22 @@ export function calculateDirectionPaymentSummary(input: {
       })),
     ),
   );
-  const reconciliationComplete =
-    base.missingIds.length === 0 &&
-    scheduled.missingIds.length === 0 &&
-    paid.missingIds.length === 0;
+  const unscheduled = aggregateConverted(
+    remaining.map((item) => ({ amount: item.unscheduled, id: item.id })),
+  );
+  const remainingComplete =
+    unscheduled.missingIds.length === 0 &&
+    scheduledOutstanding.missingIds.length === 0;
   return {
     base,
     overdue,
     paid,
     scheduled,
     scheduledOutstanding,
-    totalRemaining: reconciliationComplete
-      ? Decimal.max(base.value.minus(paid.value), ZERO)
+    totalRemaining: remainingComplete
+      ? scheduledOutstanding.value.plus(unscheduled.value)
       : null,
-    unscheduled: reconciliationComplete
-      ? Decimal.max(base.value.minus(scheduled.value), ZERO)
-      : null,
+    unscheduled: unscheduled.missingIds.length === 0 ? unscheduled.value : null,
   };
 }
 

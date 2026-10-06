@@ -34,13 +34,13 @@ describe("Billing less Order sell presentation", () => {
   });
 
   it("adds the global total, gap count, and Project reporting column", () => {
-    expect(portfolio).toContain("Total Billing less Order sell");
+    expect(portfolio).toContain("Issued Billing less Order sell");
     expect(portfolio).toContain(
       "Projects with Billing shortfall against Order sell",
     );
     expect(portfolio).toContain("Billing surplus over Order sell");
     expect(portfolio).toContain("Billing shortfall against Order sell");
-    expect(portfolio).toContain('"Billing less Order sell HT"');
+    expect(portfolio).toContain('"Issued Billing less Order sell HT"');
     expect(portfolio).toContain('view === "funding"');
     expect(portfolio).toContain("project.fundingCoverage.fundingCoverageHt");
     expect(portfolio).toContain("formatSignedMoney");

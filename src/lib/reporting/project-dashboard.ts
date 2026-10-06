@@ -22,6 +22,7 @@ import { billingCashContexts } from "@/domain/billing/cash-expectations";
 import { getClientCreditPosition } from "@/domain/billing/credits";
 import { calculateProjectTargets } from "@/domain/projects/targets";
 import { invoiceCoverageContributions } from "@/lib/billing/reporting";
+import { projectPricingRows } from "./project-pricing";
 
 export const projectDashboardInclude = {
   billingDocuments: {
@@ -136,22 +137,12 @@ export function buildProjectDashboard(input: {
       note,
     }));
   const freightExpenses = project.freightExpenses;
-  const cost = [
-    ...orderRows(
-      (order) => order.costs.reportingEconomicLandedCost,
-      "Order economic cost after Supplier credits, including non-deductible VAT.",
-    ),
-    ...freightExpenses.map((expense) => ({
-      label: expense.description,
-      href: expenseHref(expense.id),
-      amount: convert(
-        freightExpenseEconomicCost(expense),
-        expense.currencyCode,
-        expense.fxRateToReporting,
-      ),
-      note: "Separate Project freight economic cost, including non-deductible VAT.",
-    })),
-  ];
+  const pricingRows = projectPricingRows({
+    projectId: project.id,
+    reportingCurrencyCode: currency,
+    orders,
+    freightExpenses,
+  });
   const freightCost = [
     ...orderRows(
       (order) =>
@@ -352,11 +343,7 @@ export function buildProjectDashboard(input: {
         note: "Actual dated refund; independent actual FX.",
       }));
   const dashboard = projectDashboard({
-    cost,
-    sell: orderRows(
-      (order) => order.costs.reportingSellingRevenue,
-      "Agreed active Order selling HT.",
-    ),
+    ...pricingRows,
     invoiced: billingRows(invoices, "totalHt"),
     toInvoice: billingRows(pending, "totalHt"),
     receipts: input.receipts.map((receipt) => ({

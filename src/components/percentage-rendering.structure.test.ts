@@ -32,7 +32,7 @@ describe("financial percentage presentation boundaries", () => {
     [
       "Portfolio dashboard",
       "src/components/reporting/portfolio-report.tsx",
-      "formatRate(report.financial.markupRate)",
+      "formatRate(pricing ? pricing.markupRate : report.financial.markupRate)",
     ],
   ])("keeps %s on the shared rate formatter", (_label, path, marker) => {
     expect(

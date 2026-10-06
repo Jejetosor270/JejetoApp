@@ -1,8 +1,5 @@
 import { listProjectOrders } from "@/lib/procurement/orders";
-import {
-  listFreightCash,
-  listFreightCommitments,
-} from "@/lib/freight/cash-reporting";
+import { listFreightCash } from "@/lib/freight/cash-reporting";
 import { difference, sumKnown } from "@/domain/finance/project-control";
 import { recognizedReceiptWhere } from "@/lib/billing/receipt-eligibility";
 import "server-only";
@@ -51,12 +48,16 @@ import {
   type PaymentInstallmentView,
 } from "@/lib/payments/payments";
 import { listOrders, type OrderSummary } from "@/lib/procurement/orders";
-import {
-  listCreditRefundCash,
-  listClientRefundObligations,
-  type CreditRefundCash,
-} from "./credit-refunds";
+import { listCreditRefundCash, type CreditRefundCash } from "./credit-refunds";
 import { cappedCashTerms } from "@/domain/payments/cash-expectations";
+import { projectDashboardInclude } from "./project-dashboard";
+import { buildCashOutlookDocuments } from "./cash-outlook";
+import { projectPricingRows, summarizeProjectPricing } from "./project-pricing";
+import {
+  projectCashOutlook,
+  type CashOutlookDocument,
+  type ProjectCashOutlook,
+} from "@/domain/finance/project-cash-outlook";
 
 export interface ReportingRangeInput {
   end?: string | undefined;
@@ -65,6 +66,7 @@ export interface ReportingRangeInput {
 }
 
 interface ReportingReceiptInput {
+  reportingAmount?: string | null;
   isOutflow?: boolean;
   amount: string;
   currencyCode: string;
@@ -113,6 +115,7 @@ export interface SerializedFinancialSummary {
 }
 
 export interface SerializedCashFlow {
+  outlook?: ProjectCashOutlook;
   planned?: {
     amount: string;
     complete: boolean;
@@ -189,6 +192,7 @@ export interface OverdueReportingItem {
 }
 
 export interface ProjectReportingSnapshot {
+  pricing?: ReturnType<typeof summarizeProjectPricing>;
   refundNet?: string | null;
   freightPaid?: string | null;
   cashFlow: SerializedCashFlow;
@@ -204,6 +208,7 @@ export interface ProjectReportingSnapshot {
 }
 
 export interface PortfolioProjectRow {
+  pricing?: ReturnType<typeof summarizeProjectPricing>;
   clientBillingComplete: boolean;
   cashPosition: string | null;
   clientName: string;
@@ -224,6 +229,8 @@ export interface PortfolioProjectRow {
 }
 
 export interface PortfolioReportingSnapshot {
+  supplierScoped?: boolean;
+  pricing?: ReturnType<typeof summarizeProjectPricing>;
   activeProjectCount: number;
   cashFlow: SerializedCashFlow;
   cashPosition: string | null;
@@ -352,25 +359,6 @@ function installmentInput(
   };
 }
 
-function clientInstallmentInput(
-  installment: ClientCashInstallment,
-): ReportingInstallmentInput {
-  return {
-    reviewRequired: Boolean(installment.reviewReason),
-    currencyCode: installment.currencyCode,
-    direction: PaymentDirection.CLIENT_RECEIPT,
-    dueDate: installment.dueDate,
-    expectedFxRate: installment.expectedFxRate,
-    id: installment.id,
-    isCancelled: installment.isCancelled,
-    orderId: installment.billingDocumentId,
-    outstandingAmount: installment.outstandingAmount,
-    scheduledAmount: installment.scheduledAmount,
-    settlements: [],
-    status: installment.status,
-  };
-}
-
 function serializedAggregate(
   aggregate: AggregateAmount,
 ): SerializedAggregateAmount {
@@ -426,14 +414,34 @@ function serializedDirection(
 }
 
 function serializedCashFlow(input: {
-  undatedRefundCount?: number;
+  outlook: ProjectCashOutlook;
+  plannedOnly?: boolean;
   clientReceipts: readonly ReportingReceiptInput[];
   end: string;
   installments: readonly ReportingInstallmentInput[];
   reportingCurrencyCode: string;
   start: string;
 }): SerializedCashFlow {
-  const scheduleRows = buildMonthlyCashFlow(input);
+  // Expected cash comes from the same capped, source-currency obligations as Project Details.
+  const scheduleRows = buildMonthlyCashFlow({ ...input, installments: [] });
+  const expectedEntries = input.outlook.entries.filter((entry) =>
+    input.plannedOnly ? entry.kind === "planned" : entry.kind !== "planned",
+  );
+  for (const [index, entry] of expectedEntries.entries()) {
+    if (!entry.due || entry.due < input.start || entry.due > input.end)
+      continue;
+    const row = scheduleRows.find(
+      (item) => item.month === entry.due?.slice(0, 7),
+    );
+    if (!row) continue;
+    if (entry.amount === null) {
+      row.expectedComplete = false;
+      row.missingExpectedIds.push(`expectation-${index}`);
+    } else if (entry.kind === "payment")
+      row.expectedOut = row.expectedOut.plus(entry.amount);
+    else row.expectedIn = row.expectedIn.plus(entry.amount);
+    row.expectedNet = row.expectedIn.minus(row.expectedOut);
+  }
   const actualByMonth = new Map<
     string,
     { cashIn: Decimal; cashOut: Decimal; missingIds: string[] }
@@ -449,12 +457,17 @@ function serializedCashFlow(input: {
       continue;
     const month = actualByMonth.get(receipt.receivedAt.slice(0, 7));
     if (!month) continue;
-    const converted = convertPaymentAmount({
-      amount: receipt.amount,
-      currencyCode: receipt.currencyCode,
-      fxRateToReporting: receipt.fxRate,
-      reportingCurrencyCode: input.reportingCurrencyCode,
-    });
+    const converted =
+      receipt.reportingAmount !== undefined
+        ? receipt.reportingAmount === null
+          ? null
+          : new Decimal(receipt.reportingAmount)
+        : convertPaymentAmount({
+            amount: receipt.amount,
+            currencyCode: receipt.currencyCode,
+            fxRateToReporting: receipt.fxRate,
+            reportingCurrencyCode: input.reportingCurrencyCode,
+          });
     if (converted === null) month.missingIds.push(receipt.id);
     else if (receipt.isOutflow) month.cashOut = month.cashOut.plus(converted);
     else month.cashIn = month.cashIn.plus(converted);
@@ -492,13 +505,15 @@ function serializedCashFlow(input: {
     };
   });
   const totals = summarizeMonthlyCashFlow(rows);
-  const undatedReviews =
-    (input.undatedRefundCount ?? 0) +
-    input.installments.filter(
-      (item) =>
-        item.reviewRequired && !item.isCancelled && item.dueDate === null,
-    ).length;
+  const unresolved = expectedEntries.filter(
+    (entry) =>
+      entry.due === null ||
+      entry.due < input.outlook.today ||
+      entry.amount === null ||
+      entry.reviewReason,
+  ).length;
   return {
+    outlook: input.outlook,
     chart: cashFlowChartScale(rows),
     end: input.end,
     rows: rows.map((row) => ({
@@ -520,12 +535,12 @@ function serializedCashFlow(input: {
       actualIn: totals.actualIn.toString(),
       actualNet: totals.actualNet.toString(),
       actualOut: totals.actualOut.toString(),
-      expectedComplete: totals.expectedComplete && undatedReviews === 0,
+      expectedComplete: totals.expectedComplete && unresolved === 0,
       expectedIn: totals.expectedIn.toString(),
       expectedNet: totals.expectedNet.toString(),
       expectedOut: totals.expectedOut.toString(),
       missingActualCount: totals.missingActualIds.length,
-      missingExpectedCount: totals.missingExpectedIds.length + undatedReviews,
+      missingExpectedCount: unresolved,
     },
   };
 }
@@ -653,10 +668,10 @@ export function capSupplierTermsForCredits(
 }
 
 function projectSnapshot(input: {
-  clientRefundDueCount?: number;
+  cashDocuments: CashOutlookDocument[];
+  pricingRows: ReturnType<typeof projectPricingRows>;
   refunds?: readonly CreditRefundCash[];
   freightPayments?: readonly ReportingReceiptInput[];
-  freightCommitments?: readonly ReportingInstallmentInput[];
   clientInstallments: readonly ClientCashInstallment[];
   clientReceipts: readonly ReportingReceiptInput[];
   installments: readonly PaymentInstallmentView[];
@@ -664,46 +679,51 @@ function projectSnapshot(input: {
   range: { end: string; start: string };
   reportingCurrencyCode: string;
 }): ProjectReportingSnapshot {
+  const activeOrders = input.orders.filter(
+    (order) => order.status !== "CANCELLED",
+  );
   const financial = calculateProjectFinancialSummary(
-    input.orders.map(orderInput),
+    activeOrders.map(orderInput),
   );
   const cashSum = (rows: readonly ReportingReceiptInput[]) =>
     sumKnown(
-      rows.map(
-        (row) =>
-          convertPaymentAmount({
-            amount: row.amount,
-            currencyCode: row.currencyCode,
-            fxRateToReporting: row.fxRate,
-            reportingCurrencyCode: input.reportingCurrencyCode,
-          })?.toFixed(4) ?? null,
+      rows.map((row) =>
+        row.reportingAmount !== undefined
+          ? row.reportingAmount
+          : (convertPaymentAmount({
+              amount: row.amount,
+              currencyCode: row.currencyCode,
+              fxRateToReporting: row.fxRate,
+              reportingCurrencyCode: input.reportingCurrencyCode,
+            })?.toFixed(4) ?? null),
       ),
     );
   const freightPaid = cashSum(input.freightPayments ?? []);
+  const cancelledOrderIds = new Set(
+    input.orders
+      .filter((order) => order.status === "CANCELLED")
+      .map((order) => order.id),
+  );
   const creditCapped = capSupplierTermsForCredits(
-    input.installments,
+    input.installments.map((term) =>
+      cancelledOrderIds.has(term.orderId)
+        ? { ...term, isCancelled: true }
+        : term,
+    ),
     input.orders,
   );
   const installments = creditCapped.map(installmentInput);
-  const cashFlowInstallments = [
-    ...(input.freightCommitments ?? []),
-    ...installments,
-    ...input.clientInstallments
-      .filter((item) => !plannedClientTerm(item))
-      .map(clientInstallmentInput),
-  ];
-  const undatedRefundCount =
-    (input.clientRefundDueCount ?? 0) +
-    input.orders.filter(
-      (order) =>
-        (order.credits?.count ?? 0) > 0 &&
-        new Decimal(order.supplierPayment.refundDue ?? "0").greaterThan(0),
-    ).length;
+  const outlook = projectCashOutlook(
+    input.cashDocuments,
+    input.reportingCurrencyCode,
+    businessToday(),
+    null,
+  );
   const planned = serializedCashFlow({
+    outlook,
+    plannedOnly: true,
     clientReceipts: [],
-    installments: input.clientInstallments
-      .filter(plannedClientTerm)
-      .map(clientInstallmentInput),
+    installments: [],
     reportingCurrencyCode: input.reportingCurrencyCode,
     start: input.range.start,
     end: input.range.end,
@@ -712,9 +732,13 @@ function projectSnapshot(input: {
     financial.orders.map((order) => [order.id, order]),
   );
   const supplier = calculateDirectionPaymentSummary({
-    bases: financial.orders.map((order) => ({
-      amount: order.supplierPayable,
+    bases: activeOrders.map((order) => ({
+      amount: orderFinancials.get(order.id)?.supplierPayable ?? null,
       orderId: order.id,
+      originalAmount: order.supplierPayment.totalPayable,
+      currencyCode: order.orderCurrencyCode,
+      expectedFxRate: order.costs.purchaseFxRate,
+      paidAmount: order.supplierPayment.netPaid ?? order.supplierPayment.paid,
     })),
     direction: PaymentDirection.SUPPLIER_PAYMENT,
     installments,
@@ -736,12 +760,20 @@ function projectSnapshot(input: {
       installment,
     ]);
   }
-  const orderRows = input.orders.map((order) => {
+  const orderRows = activeOrders.map((order) => {
     const contribution = orderFinancials.get(order.id);
     const orderInstallments = installmentsByOrder.get(order.id) ?? [];
     const supplierPayment = calculateDirectionPaymentSummary({
       bases: [
-        { amount: contribution?.supplierPayable ?? null, orderId: order.id },
+        {
+          amount: contribution?.supplierPayable ?? null,
+          orderId: order.id,
+          originalAmount: order.supplierPayment.totalPayable,
+          currencyCode: order.orderCurrencyCode,
+          expectedFxRate: order.costs.purchaseFxRate,
+          paidAmount:
+            order.supplierPayment.netPaid ?? order.supplierPayment.paid,
+        },
       ],
       direction: PaymentDirection.SUPPLIER_PAYMENT,
       installments: orderInstallments,
@@ -768,20 +800,21 @@ function projectSnapshot(input: {
     };
   });
   return {
+    pricing: summarizeProjectPricing(input.pricingRows),
     refundNet: difference(
       cashSum((input.refunds ?? []).filter((row) => !row.isOutflow)),
       cashSum((input.refunds ?? []).filter((row) => row.isOutflow)),
     ),
     cashFlow: {
       ...serializedCashFlow({
-        undatedRefundCount,
+        outlook,
         clientReceipts: [
           ...input.clientReceipts,
           ...(input.freightPayments ?? []),
           ...(input.refunds ?? []),
         ],
         end: input.range.end,
-        installments: cashFlowInstallments,
+        installments,
         reportingCurrencyCode: input.reportingCurrencyCode,
         start: input.range.start,
       }),
@@ -839,13 +872,11 @@ export async function getProjectReportingSnapshot(
     clientInstallments,
     receipts,
     freightPayments,
-    freightCommitments,
     refunds,
-    clientRefundObligations,
   ] = await Promise.all([
     database.project.findUnique({
       where: { id: projectId },
-      select: { reportingCurrencyCode: true },
+      select: { reportingCurrencyCode: true, ...projectDashboardInclude },
     }),
     listProjectOrders(projectId),
     listProjectSupplierInstallments(projectId),
@@ -864,16 +895,25 @@ export async function getProjectReportingSnapshot(
       },
     }),
     listFreightCash([projectId]),
-    listFreightCommitments([projectId]),
     listCreditRefundCash([projectId]),
-    listClientRefundObligations([projectId]),
   ]);
   if (!project) return null;
   return projectSnapshot({
-    clientRefundDueCount: clientRefundObligations.length,
+    cashDocuments: buildCashOutlookDocuments({
+      projectId,
+      orders,
+      installments,
+      billingDocuments: project.billingDocuments,
+      freightExpenses: project.freightExpenses,
+    }),
+    pricingRows: projectPricingRows({
+      projectId,
+      reportingCurrencyCode: project.reportingCurrencyCode,
+      orders,
+      freightExpenses: project.freightExpenses,
+    }),
     refunds,
     freightPayments,
-    freightCommitments,
     clientInstallments,
     clientReceipts: receipts.map((receipt) => ({
       amount: receipt.amount.toString(),
@@ -900,11 +940,17 @@ export async function getPortfolioReportingSnapshot(
       ...(filters.projectId ? { id: filters.projectId } : {}),
       ...(filters.projectStatus ? { status: filters.projectStatus } : {}),
       ...(filters.supplierId
-        ? { orders: { some: { supplierId: filters.supplierId } } }
+        ? {
+            OR: [
+              { orders: { some: { supplierId: filters.supplierId } } },
+              { freightExpenses: { some: { supplierId: filters.supplierId } } },
+            ],
+          }
         : {}),
     },
     orderBy: [{ status: "asc" }, { name: "asc" }],
     select: {
+      ...projectDashboardInclude,
       client: { select: { displayName: true } },
       code: true,
       id: true,
@@ -927,8 +973,10 @@ export async function getPortfolioReportingSnapshot(
         projectIds: [...projectIds],
         supplierId: filters.supplierId,
       }),
-      getProjectsClientBillingSummaries(projects),
-      listClientCashInstallments([...projectIds]),
+      getProjectsClientBillingSummaries(filters.supplierId ? [] : projects),
+      filters.supplierId
+        ? Promise.resolve([])
+        : listClientCashInstallments([...projectIds]),
     ]);
   const scopedOrders = orders.filter((order) =>
     projectIds.has(order.project.id),
@@ -936,33 +984,28 @@ export async function getPortfolioReportingSnapshot(
   const scopedInstallments = installments.filter((item) =>
     projectIds.has(item.projectId),
   );
-  const receiptRecords = await database.clientReceipt.findMany({
-    where: {
-      AND: [recognizedReceiptWhere],
-      billingDocument: { projectId: { in: [...projectIds] } },
-    },
-    select: {
-      amount: true,
-      billingDocument: { select: { currencyCode: true, projectId: true } },
-      fxRateToReporting: true,
-      id: true,
-      receivedAt: true,
-    },
-  });
+  const receiptRecords = filters.supplierId
+    ? []
+    : await database.clientReceipt.findMany({
+        where: {
+          AND: [recognizedReceiptWhere],
+          billingDocument: { projectId: { in: [...projectIds] } },
+        },
+        select: {
+          amount: true,
+          billingDocument: { select: { currencyCode: true, projectId: true } },
+          fxRateToReporting: true,
+          id: true,
+          receivedAt: true,
+        },
+      });
   const freightPayments = await listFreightCash(
-    [...projectIds],
-    filters.supplierId,
-  );
-  const freightCommitments = await listFreightCommitments(
     [...projectIds],
     filters.supplierId,
   );
   const refunds = await listCreditRefundCash([...projectIds], {
     supplierId: filters.supplierId,
   });
-  const clientRefundObligations = await listClientRefundObligations([
-    ...projectIds,
-  ]);
   const scopedReceipts = receiptRecords.map((receipt) => ({
     amount: receipt.amount.toString(),
     currencyCode: receipt.billingDocument.currencyCode,
@@ -972,18 +1015,42 @@ export async function getPortfolioReportingSnapshot(
     receivedAt: dateToDateOnly(receipt.receivedAt),
   }));
   const range = reportingRange(rangeInput);
+  const sourcesByProject = new Map(
+    projects.map((project) => {
+      const sources = {
+        projectId: project.id,
+        reportingCurrencyCode: project.reportingCurrencyCode,
+        orders: scopedOrders.filter((order) => order.project.id === project.id),
+        installments: scopedInstallments.filter(
+          (item) => item.projectId === project.id,
+        ),
+        billingDocuments: filters.supplierId ? [] : project.billingDocuments,
+        freightExpenses: project.freightExpenses.filter(
+          (expense) =>
+            !filters.supplierId || expense.supplierId === filters.supplierId,
+        ),
+      };
+      return [
+        project.id,
+        {
+          cashDocuments: buildCashOutlookDocuments(sources),
+          pricingRows: projectPricingRows(sources),
+        },
+      ];
+    }),
+  );
+  const projectSources = (projectId: string) => {
+    const sources = sourcesByProject.get(projectId);
+    if (!sources) throw new Error("Project reporting sources are missing.");
+    return sources;
+  };
   const projectSnapshots = new Map(
     projects.map((project) => [
       project.id,
       projectSnapshot({
-        clientRefundDueCount: clientRefundObligations.filter(
-          (row) => row.projectId === project.id,
-        ).length,
+        ...projectSources(project.id),
         refunds: refunds.filter((row) => row.projectId === project.id),
         freightPayments: freightPayments.filter(
-          (row) => row.projectId === project.id,
-        ),
-        freightCommitments: freightCommitments.filter(
           (row) => row.projectId === project.id,
         ),
         clientInstallments: clientInstallments.filter(
@@ -1008,8 +1075,8 @@ export async function getPortfolioReportingSnapshot(
         project.id,
         calculateProjectFundingCoverage({
           clientBillingCoverageComplete:
-            billingSummary?.coverageComplete ?? false,
-          clientBillingCoverageHt: billingSummary?.coverageHt ?? "0",
+            billingSummary?.invoicedComplete ?? false,
+          clientBillingCoverageHt: billingSummary?.invoicedHt ?? "0",
           supplierOrders: scopedOrders
             .filter((order) => order.project.id === project.id)
             .map((order) => ({
@@ -1047,15 +1114,21 @@ export async function getPortfolioReportingSnapshot(
         ? "EXCESS_BILLING_COVERAGE"
         : "FUNDING_GAP"
     : null;
+  const companyPricing = companyProjects.map((project) => {
+    const pricing = projectSnapshots.get(project.id)?.pricing;
+    if (!pricing) throw new Error("Project pricing summary is missing.");
+    return pricing;
+  });
   const companySnapshot = projectSnapshot({
-    clientRefundDueCount: clientRefundObligations.filter((row) =>
-      companyProjectIds.has(row.projectId),
-    ).length,
+    cashDocuments: companyProjects.flatMap(
+      (project) => projectSources(project.id).cashDocuments,
+    ),
+    pricingRows: {
+      cost: companyPricing.flatMap((pricing) => pricing.cost.rows),
+      sell: companyPricing.flatMap((pricing) => pricing.sell.rows),
+    },
     refunds: refunds.filter((row) => companyProjectIds.has(row.projectId)),
     freightPayments: freightPayments.filter(
-      (row) => row.projectId !== null && companyProjectIds.has(row.projectId),
-    ),
-    freightCommitments: freightCommitments.filter(
       (row) => row.projectId !== null && companyProjectIds.has(row.projectId),
     ),
     clientInstallments: clientInstallments.filter((item) =>
@@ -1094,25 +1167,14 @@ export async function getPortfolioReportingSnapshot(
       paidTtc: new Decimal(0),
     },
   );
-  const companyCashPosition =
-    companyBilling.complete &&
-    companySnapshot.payments.supplier.paid.complete &&
-    companySnapshot.freightPaid !== null &&
-    companySnapshot.refundNet !== null
-      ? companyBilling.paidTtc
-          .minus(
-            new Decimal(companySnapshot.payments.supplier.paid.value).plus(
-              companySnapshot.freightPaid ?? "0",
-            ),
-          )
-          .plus(companySnapshot.refundNet ?? "0")
-      : null;
   return {
+    supplierScoped: Boolean(filters.supplierId),
+    ...(companySnapshot.pricing ? { pricing: companySnapshot.pricing } : {}),
     activeProjectCount: projects.filter(
       (project) => project.status === ProjectStatus.ACTIVE,
     ).length,
     cashFlow: companySnapshot.cashFlow,
-    cashPosition: companyCashPosition?.toString() ?? null,
+    cashPosition: companySnapshot.cashPosition,
     clientBilling: {
       complete: companyBilling.complete,
       invoicedHt: companyBilling.invoicedHt.toString(),
@@ -1150,31 +1212,17 @@ export async function getPortfolioReportingSnapshot(
       const snapshot = projectSnapshots.get(project.id);
       if (!snapshot) throw new Error("Project reporting snapshot is missing.");
       const clientBilling = clientBillingByProject.get(project.id);
-      if (!clientBilling)
+      if (!clientBilling && !filters.supplierId)
         throw new Error("Project Billing summary is missing.");
       const fundingCoverage = fundingCoverageByProject.get(project.id);
       if (!fundingCoverage)
         throw new Error("Project Funding Coverage is missing.");
-      const cashPosition =
-        clientBilling.complete &&
-        snapshot.payments.supplier.paid.complete &&
-        snapshot.freightPaid !== null &&
-        snapshot.refundNet !== null
-          ? new Decimal(clientBilling.paidTtc)
-              .minus(
-                new Decimal(snapshot.payments.supplier.paid.value).plus(
-                  snapshot.freightPaid ?? "0",
-                ),
-              )
-              .plus(snapshot.refundNet ?? "0")
-          : null;
       return {
-        cashPosition: cashPosition?.toString() ?? null,
-        clientBillingComplete: clientBilling.complete,
+        ...(snapshot.pricing ? { pricing: snapshot.pricing } : {}),
+        cashPosition: snapshot.cashPosition,
+        clientBillingComplete: clientBilling?.complete ?? false,
         clientName: project.client?.displayName ?? "Unassigned",
-        clientOutstanding: clientBilling.complete
-          ? clientBilling.outstandingTtc
-          : null,
+        clientOutstanding: snapshot.cashFlow.outlook?.outstandingIn ?? null,
         code: project.code,
         economicLandedCost: snapshot.financial.totals.economicLandedCost.value,
         financialComplete: snapshot.financial.complete,
@@ -1187,7 +1235,7 @@ export async function getPortfolioReportingSnapshot(
         reportingCurrencyCode: project.reportingCurrencyCode,
         salesRevenue: snapshot.financial.totals.salesRevenue.value,
         status: project.status,
-        supplierOutstanding: snapshot.payments.supplier.totalRemaining,
+        supplierOutstanding: snapshot.cashFlow.outlook?.outstandingOut ?? null,
       };
     }),
   };

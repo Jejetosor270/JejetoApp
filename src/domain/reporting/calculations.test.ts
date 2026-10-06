@@ -271,7 +271,15 @@ describe("payment reporting and cash flow", () => {
 
   it("converts expected and actual foreign cash with their independent FX rates", () => {
     const result = calculateDirectionPaymentSummary({
-      bases: [{ amount: new Decimal(100), orderId: "order-1" }],
+      bases: [
+        {
+          amount: new Decimal(100),
+          currencyCode: "USD",
+          expectedFxRate: "0.8",
+          orderId: "order-1",
+          originalAmount: "125",
+        },
+      ],
       direction: "CLIENT_RECEIPT",
       installments: [
         installment({
@@ -294,7 +302,322 @@ describe("payment reporting and cash flow", () => {
     expect(result.scheduledOutstanding.value.toString()).toBe("48");
     expect(result.paid.value.toString()).toBe("30");
     expect(result.unscheduled?.toString()).toBe("20");
-    expect(result.totalRemaining?.toString()).toBe("70");
+    expect(result.totalRemaining?.toString()).toBe("68");
+  });
+
+  it.each([
+    { paid: "100", outstanding: "0", actual: "70", remaining: "0" },
+    { paid: "40", outstanding: "60", actual: "28", remaining: "48" },
+  ])(
+    "values the original $outstanding balance independently of actual payment FX",
+    ({ paid, outstanding, actual, remaining }) => {
+      const result = calculateDirectionPaymentSummary({
+        bases: [
+          {
+            amount: new Decimal(90),
+            currencyCode: "USD",
+            expectedFxRate: "0.9",
+            orderId: "order-1",
+            originalAmount: "100",
+          },
+        ],
+        direction: "SUPPLIER_PAYMENT",
+        installments: [
+          installment({
+            currencyCode: "USD",
+            direction: "SUPPLIER_PAYMENT",
+            expectedFxRate: "0.8",
+            outstandingAmount: outstanding,
+            settlements: [
+              {
+                actualFxRate: "0.7",
+                amount: paid,
+                id: "settlement-1",
+                settledAt: "2026-08-31",
+              },
+            ],
+          }),
+        ],
+        reportingCurrencyCode: "EUR",
+      });
+
+      expect(result.paid.value.toString()).toBe(actual);
+      expect(result.scheduledOutstanding.value.toString()).toBe(remaining);
+      expect(result.totalRemaining?.toString()).toBe(remaining);
+      expect(result.unscheduled?.toString()).toBe("0");
+    },
+  );
+
+  it("keeps known obligations complete when only actual payment FX is missing", () => {
+    const result = calculateDirectionPaymentSummary({
+      bases: [
+        {
+          amount: new Decimal(135),
+          currencyCode: "USD",
+          expectedFxRate: "0.9",
+          orderId: "order-1",
+          originalAmount: "150",
+        },
+      ],
+      direction: "CLIENT_RECEIPT",
+      installments: [
+        installment({ currencyCode: "USD", expectedFxRate: "0.8" }),
+      ],
+      reportingCurrencyCode: "EUR",
+    });
+
+    expect(result.paid.missingIds).toEqual(["settlement-1"]);
+    expect(result.scheduledOutstanding.value.toString()).toBe("48");
+    expect(result.unscheduled?.toString()).toBe("45");
+    expect(result.totalRemaining?.toString()).toBe("93");
+  });
+
+  it.each([
+    { originalAmount: "100", termFx: null, orderFx: "0.9" },
+    { originalAmount: "150", termFx: "0.8", orderFx: null },
+  ])(
+    "keeps a nonzero obligation incomplete without its required expected FX: %j",
+    ({ originalAmount, termFx, orderFx }) => {
+      const result = calculateDirectionPaymentSummary({
+        bases: [
+          {
+            amount: new Decimal(90),
+            currencyCode: "USD",
+            expectedFxRate: orderFx,
+            orderId: "order-1",
+            originalAmount,
+          },
+        ],
+        direction: "CLIENT_RECEIPT",
+        installments: [
+          installment({
+            currencyCode: "USD",
+            expectedFxRate: termFx,
+            settlements: [
+              {
+                actualFxRate: "0.7",
+                amount: "40",
+                id: "settlement-1",
+                settledAt: "2026-08-31",
+              },
+            ],
+          }),
+        ],
+        reportingCurrencyCode: "EUR",
+      });
+
+      expect(result.paid.missingIds).toEqual([]);
+      expect(result.totalRemaining).toBeNull();
+    },
+  );
+
+  it("needs no FX for a known fully settled original-currency obligation", () => {
+    const result = calculateDirectionPaymentSummary({
+      bases: [
+        {
+          amount: null,
+          currencyCode: "USD",
+          expectedFxRate: null,
+          orderId: "order-1",
+          originalAmount: "100",
+        },
+      ],
+      direction: "CLIENT_RECEIPT",
+      installments: [
+        installment({
+          currencyCode: "USD",
+          outstandingAmount: "0",
+          settlements: [
+            {
+              actualFxRate: null,
+              amount: "100",
+              id: "settlement-1",
+              settledAt: "2026-08-31",
+            },
+          ],
+        }),
+      ],
+      reportingCurrencyCode: "EUR",
+    });
+
+    expect(result.base.missingIds).toEqual(["order-1"]);
+    expect(result.paid.missingIds).toEqual(["settlement-1"]);
+    expect(result.scheduled.missingIds).toEqual(["installment-1"]);
+    expect(result.scheduledOutstanding.missingIds).toEqual([]);
+    expect(result.totalRemaining?.toString()).toBe("0");
+    expect(result.unscheduled?.toString()).toBe("0");
+  });
+
+  it("caps remaining terms at the credit-adjusted original obligation", () => {
+    const result = calculateDirectionPaymentSummary({
+      bases: [
+        {
+          amount: new Decimal(74),
+          currencyCode: "USD",
+          expectedFxRate: "0.9",
+          orderId: "order-1",
+          originalAmount: "80",
+          paidAmount: "40",
+        },
+      ],
+      direction: "CLIENT_RECEIPT",
+      installments: [
+        installment({
+          currencyCode: "USD",
+          expectedFxRate: "0.8",
+          status: "OVERDUE",
+        }),
+      ],
+      reportingCurrencyCode: "EUR",
+    });
+
+    expect(result.scheduled.value.toString()).toBe("80");
+    expect(result.scheduledOutstanding.value.toString()).toBe("32");
+    expect(result.overdue.value.toString()).toBe("32");
+    expect(result.totalRemaining?.toString()).toBe("32");
+  });
+
+  it.each([false, true])(
+    "caps same-date terms by ID regardless of their input order (reversed: %s)",
+    (reversed) => {
+      const terms = [
+        installment({
+          currencyCode: "USD",
+          expectedFxRate: "0.8",
+          id: "term-a",
+          outstandingAmount: "50",
+          scheduledAmount: "50",
+          settlements: [],
+        }),
+        installment({
+          currencyCode: "USD",
+          expectedFxRate: "0.9",
+          id: "term-b",
+          outstandingAmount: "50",
+          scheduledAmount: "50",
+          settlements: [],
+        }),
+      ];
+      const result = calculateDirectionPaymentSummary({
+        bases: [
+          {
+            amount: new Decimal(45),
+            currencyCode: "USD",
+            expectedFxRate: "0.9",
+            orderId: "order-1",
+            originalAmount: "50",
+            paidAmount: "0",
+          },
+        ],
+        direction: "CLIENT_RECEIPT",
+        installments: reversed ? terms.toReversed() : terms,
+        reportingCurrencyCode: "EUR",
+      });
+
+      expect(result.scheduledOutstanding.value.toString()).toBe("40");
+      expect(result.totalRemaining?.toString()).toBe("40");
+      expect(result.unscheduled?.toString()).toBe("0");
+    },
+  );
+
+  it("retains settlements on cancelled terms and converts only the remaining schedule", () => {
+    const result = calculateDirectionPaymentSummary({
+      bases: [
+        {
+          amount: new Decimal(135),
+          currencyCode: "USD",
+          expectedFxRate: "0.9",
+          orderId: "order-1",
+          originalAmount: "150",
+        },
+      ],
+      direction: "CLIENT_RECEIPT",
+      installments: [
+        installment({
+          currencyCode: "USD",
+          expectedFxRate: "0.8",
+          isCancelled: true,
+          settlements: [
+            {
+              actualFxRate: "0.7",
+              amount: "40",
+              id: "settlement-1",
+              settledAt: "2026-08-31",
+            },
+          ],
+        }),
+        installment({
+          currencyCode: "USD",
+          expectedFxRate: "0.8",
+          id: "active-term",
+          outstandingAmount: "50",
+          scheduledAmount: "50",
+          settlements: [],
+        }),
+      ],
+      reportingCurrencyCode: "EUR",
+    });
+
+    expect(result.paid.value.toString()).toBe("28");
+    expect(result.scheduled.value.toString()).toBe("40");
+    expect(result.scheduledOutstanding.value.toString()).toBe("40");
+    expect(result.unscheduled?.toString()).toBe("54");
+    expect(result.totalRemaining?.toString()).toBe("94");
+  });
+
+  it.each([
+    { currencyCode: "GBP", originalAmount: "100" },
+    { currencyCode: "USD", originalAmount: null },
+    {},
+  ])(
+    "does not infer original balances across unlike or unknown currencies: %j",
+    (context) => {
+      const result = calculateDirectionPaymentSummary({
+        bases: [{ amount: new Decimal(90), orderId: "order-1", ...context }],
+        direction: "CLIENT_RECEIPT",
+        installments: [
+          installment({ currencyCode: "USD", expectedFxRate: "0.8" }),
+        ],
+        reportingCurrencyCode: "EUR",
+      });
+
+      expect(result.scheduledOutstanding.missingIds).toEqual(["installment-1"]);
+      expect(result.totalRemaining).toBeNull();
+      expect(result.unscheduled).toBeNull();
+    },
+  );
+
+  it("does not offset another Order's obligation with credited overpayment", () => {
+    const result = calculateDirectionPaymentSummary({
+      bases: [
+        {
+          amount: new Decimal(60),
+          orderId: "order-1",
+          originalAmount: "60",
+          paidAmount: "80",
+        },
+        { amount: new Decimal(100), orderId: "order-2" },
+      ],
+      direction: "CLIENT_RECEIPT",
+      installments: [
+        installment({
+          outstandingAmount: "0",
+          settlements: [
+            {
+              actualFxRate: null,
+              amount: "100",
+              id: "settlement-1",
+              settledAt: "2026-08-31",
+            },
+          ],
+        }),
+      ],
+      reportingCurrencyCode: "EUR",
+    });
+
+    expect(result.paid.value.toString()).toBe("100");
+    expect(result.totalRemaining?.toString()).toBe("100");
+    expect(result.unscheduled?.toString()).toBe("100");
   });
 
   it("forecasts only outstanding partial balances and uses actual settlement dates", () => {

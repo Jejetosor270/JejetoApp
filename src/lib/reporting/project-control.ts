@@ -2,10 +2,7 @@ import { billingIsIssued } from "@/domain/billing/status";
 import "server-only";
 import Decimal from "decimal.js";
 import type { ProjectFinancialRow } from "@/domain/projects/financial-drilldown";
-import {
-  projectCashOutlook,
-  type CashOutlookDocument,
-} from "@/domain/finance/project-cash-outlook";
+import { projectCashOutlook } from "@/domain/finance/project-cash-outlook";
 import { calculateProjectTargets } from "@/domain/projects/targets";
 import { projectFreightBudget } from "@/domain/freight/calculations";
 import {
@@ -25,6 +22,7 @@ import {
 import { getDatabase } from "@/lib/db";
 import { activeCreditsInclude } from "@/lib/credits/select";
 import { listCreditRefundCash } from "./credit-refunds";
+import { buildCashOutlookDocuments } from "./cash-outlook";
 import { capSupplierTermsForCredits } from "./reports";
 import { recognizedReceiptWhere } from "@/lib/billing/receipt-eligibility";
 import { listProjectOrders } from "@/lib/procurement/orders";
@@ -35,8 +33,6 @@ import {
 } from "@/lib/freight/expenses";
 import { getProjectClientBillingSummary } from "@/lib/billing/reporting";
 import { reportingAmount } from "@/domain/finance/calculations";
-import { billingCashContexts } from "@/domain/billing/cash-expectations";
-import { getClientCreditPosition } from "@/domain/billing/credits";
 import {
   cashFunding,
   categoryPosition,
@@ -543,119 +539,13 @@ export async function getProjectControl(projectId: string) {
   const orderHtCost = sumKnown(
     activeOrders.map((order) => order.costs.reportingLandedCost),
   );
-  const totalPaid = (
-    rows: readonly { id: string; amount: { toString(): string } }[],
-  ) =>
-    [...new Map(rows.map((row) => [row.id, row])).values()]
-      .reduce((sum, row) => sum.plus(row.amount.toString()), new Decimal(0))
-      .toFixed(4);
-  const outlookDocuments: CashOutlookDocument[] = activeOrders.map((order) => ({
-    source: {
-      label: order.orderNumber,
-      href: `/orders/${order.id}?tab=related`,
-    },
-    kind: "payment",
-    currency: order.orderCurrencyCode,
-    total: order.supplierPayment.totalPayable,
-    paid: order.supplierPayment.netPaid ?? order.supplierPayment.paid,
-    creditAdjusted: (order.credits?.count ?? 0) > 0,
-    fx: order.costs.purchaseFxRate,
-    terms: installments
-      .filter((term) => term.orderId === order.id)
-      .map((term) => ({
-        amount: term.scheduledAmount,
-        paid: term.paidAmount,
-        due: term.dueDate,
-        fx: term.expectedFxRate,
-        cancelled: term.isCancelled,
-      })),
-  }));
-  for (const order of activeOrders) {
-    if (!order.credits?.count) continue;
-    const refundDue = order.supplierPayment.refundDue ?? "0";
-    if (new Decimal(refundDue).greaterThan(0))
-      outlookDocuments.push({
-        source: {
-          label: `Supplier refund · ${order.orderNumber}`,
-          href: `/orders/${order.id}?tab=related#credits`,
-        },
-        kind: "issued",
-        currency: order.orderCurrencyCode,
-        total: refundDue,
-        paid: "0",
-        fx: null,
-        terms: [],
-      });
-  }
-  for (const context of billingCashContexts(project.billingDocuments)) {
-    const { document: doc, terms } = context;
-    outlookDocuments.push({
-      source: { label: doc.reference, href: `/billing/${doc.id}?tab=related` },
-      kind: context.kind,
-      reviewReason: context.reviewReason,
-      currency: doc.currencyCode,
-      total: context.total,
-      paid: context.paid,
-      creditAdjusted: (doc.credits?.length ?? 0) > 0,
-      fx: doc.fxRateToReporting?.toString() ?? null,
-      terms: terms.map((term) => ({
-        amount: term.scheduledAmount.toString(),
-        paid: totalPaid(term.receipts),
-        due: dateToDateOnly(term.dueDate ?? doc.dueDate),
-        fx: term.expectedFxRateToReporting?.toString() ?? null,
-        cancelled: term.isCancelled,
-      })),
-    });
-    if (
-      context.kind === "issued" &&
-      !context.reviewReason &&
-      doc.credits.length > 0
-    ) {
-      const refundDue = getClientCreditPosition(doc).refundDue;
-      if (new Decimal(refundDue).greaterThan(0))
-        outlookDocuments.push({
-          source: {
-            label: `Client refund · ${doc.reference}`,
-            href: `/billing/${doc.id}?tab=related#credits`,
-          },
-          kind: "payment",
-          currency: doc.currencyCode,
-          total: refundDue,
-          paid: "0",
-          fx: null,
-          terms: [],
-        });
-    }
-  }
-  for (const expense of project.freightExpenses) {
-    const total = freightPayable(
-      expense.costAmountHt.toString(),
-      expense.vatAmount?.toString() ?? null,
-      expense.vatTreatment,
-    );
-    const paid = totalPaid(expense.payments);
-    const fx = expense.fxRateToReporting?.toString() ?? null;
-    outlookDocuments.push({
-      source: {
-        label: expense.description,
-        href: `/projects/${projectId}?tab=freight`,
-      },
-      kind: "payment",
-      currency: expense.currencyCode,
-      total,
-      paid,
-      fx,
-      terms: [
-        {
-          amount: total,
-          paid,
-          fx,
-          due: dateToDateOnly(expense.dueDate),
-          cancelled: false,
-        },
-      ],
-    });
-  }
+  const outlookDocuments = buildCashOutlookDocuments({
+    projectId,
+    orders: activeOrders,
+    installments,
+    billingDocuments: project.billingDocuments,
+    freightExpenses: project.freightExpenses,
+  });
   const cashOutlook = projectCashOutlook(
     outlookDocuments,
     currency,

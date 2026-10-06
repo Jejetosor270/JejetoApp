@@ -27,12 +27,14 @@ export function CashFlowPanel({
   currencyCode,
   horizon,
   showHorizonControls = true,
+  supplierScoped = false,
 }: {
   baseHref: string;
   cashFlow: SerializedCashFlow;
   currencyCode: string;
   horizon: CashFlowHorizon;
   showHorizonControls?: boolean;
+  supplierScoped?: boolean;
 }) {
   const hasActivity = cashFlow.rows.some(
     (row) =>
@@ -49,8 +51,9 @@ export function CashFlowPanel({
         <div>
           <h2 className="text-sm font-semibold">Cash-flow forecast</h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            Expected receipts include issued Invoices only, capped by their
-            unpaid balances; actual cash uses recorded settlement dates.{" "}
+            {supplierScoped
+              ? "Supplier payments and refunds only; no Client cash is attributed to this Supplier."
+              : "Expected receipts include issued Invoices only, capped by their unpaid balances; actual cash uses recorded settlement dates."}{" "}
             {formatDateOnly(cashFlow.start)}–{formatDateOnly(cashFlow.end)}.
           </p>
         </div>
@@ -71,29 +74,125 @@ export function CashFlowPanel({
       <dl className="mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {(
           [
-            ["Expected in", cashFlow.totals.expectedIn],
-            ["Expected out", cashFlow.totals.expectedOut],
-            ["Expected net", cashFlow.totals.expectedNet],
-            ["Actual in", cashFlow.totals.actualIn],
-            ["Actual out", cashFlow.totals.actualOut],
-            ["Actual net", cashFlow.totals.actualNet],
+            [
+              "Expected in",
+              cashFlow.totals.expectedIn,
+              cashFlow.totals.expectedComplete,
+            ],
+            [
+              "Expected out",
+              cashFlow.totals.expectedOut,
+              cashFlow.totals.expectedComplete,
+            ],
+            [
+              "Expected net",
+              cashFlow.totals.expectedNet,
+              cashFlow.totals.expectedComplete,
+            ],
+            [
+              "Actual in",
+              cashFlow.totals.actualIn,
+              cashFlow.totals.actualComplete,
+            ],
+            [
+              "Actual out",
+              cashFlow.totals.actualOut,
+              cashFlow.totals.actualComplete,
+            ],
+            [
+              "Actual net",
+              cashFlow.totals.actualNet,
+              cashFlow.totals.actualComplete,
+            ],
           ] as const
-        ).map(([label, value]) => (
+        ).map(([label, value, complete]) => (
           <div className="bg-muted/25 rounded-md border p-3" key={label}>
             <dt className="text-muted-foreground text-xs">{label}</dt>
             <dd className="financial-figure mt-1 text-sm font-semibold">
-              {formatMoney(value, currencyCode)}
+              {complete ? formatMoney(value, currencyCode) : "Incomplete"}
             </dd>
           </div>
         ))}
       </dl>
       {!cashFlow.totals.expectedComplete || !cashFlow.totals.actualComplete ? (
         <p className="text-destructive mt-3 text-xs">
-          Incomplete data: {cashFlow.totals.missingExpectedCount} expected and{" "}
-          {cashFlow.totals.missingActualCount} actual cash amount(s) are not
-          included in converted totals. Review missing FX, undated refunds or
-          inconsistent Billing/payment-term links.
+          Forecast review: {cashFlow.totals.missingExpectedCount} expected cash
+          issue(s); {cashFlow.totals.missingActualCount} actual cash amount(s)
+          need FX. Overdue and undated balances are not moved into this period.
+          Dated rows below remain available; incomplete amounts are never zero.
         </p>
+      ) : null}
+      {cashFlow.outlook &&
+      (cashFlow.totals.missingExpectedCount > 0 ||
+        (cashFlow.planned?.missingCount ?? 0) > 0) ? (
+        <details className="mt-3 rounded-md border p-3 text-xs">
+          <summary className="cursor-pointer font-medium">
+            Forecast gaps
+          </summary>
+          <p className="text-muted-foreground mt-2">
+            {cashFlow.outlook.overdueCount} overdue ·{" "}
+            {cashFlow.outlook.undatedCount} undated ·{" "}
+            {cashFlow.outlook.unscheduledCount} unscheduled ·{" "}
+            {cashFlow.outlook.missingFxCount} missing amounts/FX ·{" "}
+            {cashFlow.outlook.reviewCount} source reviews. Unscheduled balances
+            are included in undated amounts, not added twice.
+          </p>
+          <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+            {(
+              [
+                ["Overdue in", cashFlow.outlook.overdueIn],
+                ["Overdue out", cashFlow.outlook.overdueOut],
+                ["Undated in", cashFlow.outlook.undatedIn],
+                ["Undated out", cashFlow.outlook.undatedOut],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd className="financial-figure">
+                  {value === null
+                    ? "Incomplete"
+                    : formatMoney(value, currencyCode)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <ul className="mt-3 space-y-2">
+            {cashFlow.outlook.entries
+              .filter(
+                (entry) =>
+                  !entry.due ||
+                  entry.due < (cashFlow.outlook?.today ?? "") ||
+                  entry.amount === null ||
+                  entry.reviewReason,
+              )
+              .map((entry, index) => (
+                <li key={`${entry.source?.href}-${index}`}>
+                  {entry.source ? (
+                    <Link
+                      className="font-medium hover:underline"
+                      href={entry.source.href}
+                    >
+                      {entry.source.label}
+                    </Link>
+                  ) : (
+                    "Source record"
+                  )}
+                  {" · "}
+                  {entry.kind === "planned" ? "Planned · " : ""}
+                  {entry.reviewReason ??
+                    (entry.amount === null
+                      ? "Missing amount/FX"
+                      : !entry.due
+                        ? "Date/schedule needed"
+                        : "Overdue")}
+                  {" · "}
+                  {entry.amount === null
+                    ? "Incomplete"
+                    : formatMoney(entry.amount, currencyCode)}
+                </li>
+              ))}
+          </ul>
+        </details>
       ) : null}
       {cashFlow.planned ? (
         <details className="mt-3 rounded-md border p-3 text-xs">
@@ -149,30 +248,37 @@ export function CashFlowPanel({
                 <span className="text-muted-foreground text-xs">
                   {monthLabel(row.month)}
                 </span>
-                <div className="space-y-1.5">
-                  <div className="bg-muted h-2 overflow-hidden rounded-sm">
-                    <div
-                      className="bg-positive h-full rounded-sm"
-                      style={{ width: row.cashInWidth }}
-                    />
+                {cashFlow.rows.find((month) => month.month === row.month)
+                  ?.expectedComplete === false ? (
+                  <span className="text-destructive text-xs">
+                    Incomplete — review source data
+                  </span>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="bg-muted h-2 overflow-hidden rounded-sm">
+                      <div
+                        className="bg-positive h-full rounded-sm"
+                        style={{ width: row.cashInWidth }}
+                      />
+                    </div>
+                    <div className="bg-muted h-2 overflow-hidden rounded-sm">
+                      <div
+                        className="bg-destructive h-full rounded-sm"
+                        style={{ width: row.cashOutWidth }}
+                      />
+                    </div>
+                    <div className="bg-muted h-2 overflow-hidden rounded-sm">
+                      <div
+                        className={
+                          row.netNegative
+                            ? "bg-destructive h-full rounded-sm"
+                            : "bg-primary h-full rounded-sm"
+                        }
+                        style={{ width: row.netWidth }}
+                      />
+                    </div>
                   </div>
-                  <div className="bg-muted h-2 overflow-hidden rounded-sm">
-                    <div
-                      className="bg-destructive h-full rounded-sm"
-                      style={{ width: row.cashOutWidth }}
-                    />
-                  </div>
-                  <div className="bg-muted h-2 overflow-hidden rounded-sm">
-                    <div
-                      className={
-                        row.netNegative
-                          ? "bg-destructive h-full rounded-sm"
-                          : "bg-primary h-full rounded-sm"
-                      }
-                      style={{ width: row.netWidth }}
-                    />
-                  </div>
-                </div>
+                )}
               </div>
             ))}
           </div>
@@ -212,7 +318,9 @@ export function CashFlowPanel({
                         className="financial-figure px-3 py-2 text-right"
                         key={`${row.month}-${index}`}
                       >
-                        {formatMoney(value, currencyCode)}
+                        {(index < 3 ? row.expectedComplete : row.actualComplete)
+                          ? formatMoney(value, currencyCode)
+                          : "Incomplete"}
                       </td>
                     ))}
                   </tr>

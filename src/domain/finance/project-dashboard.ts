@@ -78,8 +78,6 @@ export interface ProjectDashboardInput {
 }
 
 const sourceKeys = [
-  "cost",
-  "sell",
   "invoiced",
   "toInvoice",
   "receipts",
@@ -132,11 +130,40 @@ export function subtractProjectRows(
   }));
 }
 
+/** Shared recorded pricing position; callers supply amounts in one reporting currency. */
+export function summarizeProjectPricing(source: {
+  cost: readonly ProjectMetricRow[];
+  sell: readonly ProjectMetricRow[];
+}) {
+  const cost = projectMetric(
+    reconciledProjectRows(source.cost),
+    "Current active Order economic costs plus separate Project freight expenses once. Non-deductible input VAT is included; Supplier credits reduce cost.",
+  );
+  const sell = projectMetric(
+    reconciledProjectRows(source.sell),
+    "Agreed selling HT on active Orders. Project-only freight adds cost but creates no invented selling price.",
+  );
+  const profit = projectMetric(
+    [...sell.rows, ...subtractProjectRows(cost.rows)],
+    "Recorded Order selling HT minus all recorded economic costs, including Project-only freight. This is the recorded pricing scope, not final Project profit.",
+  );
+  const { markupRate, marginRate } = calculateProjectActualProfitability(
+    cost.value,
+    sell.value,
+  );
+  return { cost, sell, profit, markupRate, marginRate };
+}
+
 /** Decimal-only Project read model. Empty activity is zero; an unknown input stays unknown. */
 export function projectDashboard(
   source: ProjectDashboardInput,
 ): ProjectDashboard {
-  const input = { ...source };
+  const pricing = summarizeProjectPricing(source);
+  const input = {
+    ...source,
+    cost: pricing.cost.rows,
+    sell: pricing.sell.rows,
+  };
   for (const key of sourceKeys) input[key] = reconciledProjectRows(source[key]);
   const received = [
     ...input.receipts,
@@ -160,18 +187,9 @@ export function projectDashboard(
     note: "Freight HT cost with the Project freight markup applied.",
   }));
   const metrics: ProjectDashboard["metrics"] = {
-    cost: projectMetric(
-      input.cost,
-      "Current active Order economic costs plus separate Project freight expenses once. Non-deductible input VAT is included; Supplier credits reduce cost.",
-    ),
-    sell: projectMetric(
-      input.sell,
-      "Agreed selling HT on active Orders. Project-only freight adds cost but creates no invented selling price.",
-    ),
-    profit: projectMetric(
-      [...input.sell, ...subtractProjectRows(input.cost)],
-      "Recorded Order selling HT minus all recorded economic costs, including Project-only freight. This is the recorded pricing scope, not final Project profit.",
-    ),
+    cost: pricing.cost,
+    sell: pricing.sell,
+    profit: pricing.profit,
     planned: projectMetric(
       planned,
       "Issued and To be invoiced Client Invoice HT after credits. Quotes, Drafts and cancelled documents are excluded.",
@@ -273,10 +291,7 @@ export function projectDashboard(
   }
   return {
     metrics,
-    markupRate: calculateProjectActualProfitability(
-      metrics.cost.value,
-      metrics.sell.value,
-    ).markupRate,
+    markupRate: pricing.markupRate,
     expectedMarkupRate: calculateProjectActualProfitability(
       metrics.expectedCost.value,
       metrics.planned.value,

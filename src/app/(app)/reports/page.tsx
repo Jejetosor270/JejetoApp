@@ -119,7 +119,7 @@ function ReportingFilters({
                 ) ?? "commercial"
               }
               options={[
-                { label: "Order pricing plan", value: "commercial" },
+                { label: "Project pricing", value: "commercial" },
                 { label: "Order sell coverage", value: "funding" },
                 { label: "Cash", value: "cash" },
               ]}
@@ -177,7 +177,13 @@ function ReportingFilters({
           ))}
         </select>
       </FilterField>
-      <FilterField label="Supplier">
+      <FilterField
+        label={
+          view === "vat" || view === "freight"
+            ? "Projects using Supplier"
+            : "Supplier"
+        }
+      >
         <select
           className={filterControlClassName}
           defaultValue={first(params, "supplierId") ?? ""}
@@ -268,6 +274,7 @@ export default async function ReportsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requireUser();
   const params = await searchParams;
   const view =
     selected(
@@ -302,8 +309,7 @@ export default async function ReportsPage({
           start: dateFrom && isDateOnly(dateFrom) ? dateFrom : undefined,
         })
       : Promise.resolve(null);
-  const [, options, report, actualCash, vat, freight] = await Promise.all([
-    requireUser(),
+  const [options, report, actualCash, vat, freight] = await Promise.all([
     listReportingOptions(),
     reportPromise,
     view === "payments"
@@ -340,6 +346,13 @@ export default async function ReportsPage({
       />
 
       <ReportingFilters options={options} params={params} view={view} />
+      {(view === "vat" || view === "freight") && reportingFilters.supplierId ? (
+        <p className="text-muted-foreground text-xs">
+          Showing full-Project {view === "vat" ? "VAT" : "freight"} for Projects
+          using this Supplier, not Supplier-attributed Client Billing or Project
+          budgets.
+        </p>
+      ) : null}
 
       {view === "projects" && report ? (
         <>
@@ -375,6 +388,7 @@ export default async function ReportsPage({
             cashFlow={report.cashFlow}
             currencyCode={report.companyCurrencyCode}
             horizon={horizon}
+            supplierScoped={report.supplierScoped ?? false}
           />
           <OverdueItems items={report.overdueItems} />
         </>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   projectDashboard,
+  summarizeProjectPricing,
   type ProjectDashboardInput,
   type ProjectMetricRow,
 } from "./project-dashboard";
@@ -38,6 +39,55 @@ const input = (
 });
 
 describe("Project dashboard", () => {
+  it("shares reconciled recorded pricing and preserves source totals at four decimal places", () => {
+    const source = input({
+      cost: [row("0.333333", "A"), row("0.333333", "B"), row("0.333333", "C")],
+      sell: [row("1.100001")],
+    });
+    const pricing = summarizeProjectPricing(source);
+    const dashboard = projectDashboard(source);
+    expect(pricing.cost.value).toBe("1.0000");
+    expect(pricing.cost.rows.map((source) => source.amount)).toEqual([
+      "0.3333",
+      "0.3334",
+      "0.3333",
+    ]);
+    expect(pricing.sell.value).toBe("1.1000");
+    expect(pricing.profit.value).toBe("0.1000");
+    expect(pricing.markupRate).toBe("0.100000");
+    expect(pricing.marginRate).toBe("0.090909");
+    expect(dashboard.metrics.cost).toEqual(pricing.cost);
+    expect(dashboard.metrics.sell).toEqual(pricing.sell);
+    expect(dashboard.metrics.profit).toEqual(pricing.profit);
+    expect(dashboard.markupRate).toBe(pricing.markupRate);
+  });
+
+  it("derives aggregate rates from comparable Project money and handles zero denominators", () => {
+    const first = summarizeProjectPricing({
+      cost: [row("100")],
+      sell: [row("200")],
+    });
+    const second = summarizeProjectPricing({
+      cost: [row("900")],
+      sell: [row("990")],
+    });
+    const total = summarizeProjectPricing({
+      cost: [...first.cost.rows, ...second.cost.rows],
+      sell: [...first.sell.rows, ...second.sell.rows],
+    });
+    expect(total.profit.value).toBe("190.0000");
+    expect(total.markupRate).toBe("0.190000");
+    expect(total.marginRate).toBe("0.159664");
+
+    const empty = summarizeProjectPricing({ cost: [], sell: [] });
+    expect(empty.profit.value).toBe("0.0000");
+    expect(empty.markupRate).toBeNull();
+    expect(empty.marginRate).toBeNull();
+    const noCost = summarizeProjectPricing({ cost: [], sell: [row("100")] });
+    expect(noCost.markupRate).toBeNull();
+    expect(noCost.marginRate).toBe("1.000000");
+  });
+
   it("uses signed source rows and counts all issued Billing after credits for coverage", () => {
     const dashboard = projectDashboard(
       input({
