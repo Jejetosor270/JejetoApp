@@ -10,8 +10,8 @@ export function assistantScopeReply(
   return {
     message:
       intent === "CLARIFY"
-        ? "Which records? Give me a name or reference, or ask for a list of Projects, Orders, Billing, Clients or Suppliers."
-        : "JejetoBot can find and list ERP records. I cannot change records, calculate financial totals or answer unrelated questions.",
+        ? "Give me a record name or reference, a list request, a workflow question, or the Project whose figures you want explained."
+        : "JejetoBot can find ERP records, explain existing Project figures and guide you through supported workflows. I cannot change records, invent calculations or answer unrelated questions.",
     query: null,
     moreHref: null,
     results: [],

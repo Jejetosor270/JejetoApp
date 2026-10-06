@@ -25,6 +25,10 @@ import {
 } from "@/domain/assistant/list-plan";
 import { listAssistantRecords } from "@/lib/assistant/lists";
 import { resolveAssistantContext } from "@/lib/assistant/context";
+import { getAssistantHelp } from "@/domain/assistant/help";
+import { assistantFinancialRequestSchema } from "@/domain/assistant/answers";
+import { readAssistantFinancials } from "@/lib/assistant/financial";
+import { answerFinancialQuestion } from "@/lib/assistant/financial-question";
 
 function failure(error: unknown): AssistantActionResult {
   unstable_rethrow(error);
@@ -77,6 +81,36 @@ export async function askAssistant(
       if (plan.intent === "CLARIFY" || plan.intent === "OUT_OF_SCOPE") {
         return { ok: true, reply: assistantScopeReply(plan.intent) };
       }
+      if (plan.intent === "HELP" && plan.helpTopic) {
+        if (
+          plan.kind !== "All" ||
+          plan.query ||
+          plan.contextScope !== "NONE" ||
+          plan.followUp ||
+          plan.page !== "FIRST" ||
+          plan.clearFilters.length ||
+          Object.values(plan.filters).some((value) => value !== null)
+        )
+          throw new AssistantQueryError(
+            "Ask a workflow question without record filters, or ask about a specific Project's figures.",
+          );
+        return {
+          ok: true,
+          reply: {
+            message: "Application guide",
+            results: [],
+            query: null,
+            moreHref: null,
+            truncated: false,
+            answer: getAssistantHelp(plan.helpTopic, currentUser.role),
+          },
+        };
+      }
+      if (plan.intent === "FINANCIAL")
+        return {
+          ok: true,
+          reply: await answerFinancialQuestion(plan, request.data),
+        };
       const hasScope =
         plan.contextScope !== "NONE" ||
         plan.followUp ||
@@ -100,6 +134,28 @@ export async function askAssistant(
       const found = await searchAssistantRecords(plan.query, plan.kind);
       return { ok: true, reply: assistantSearchReply(plan, found) };
     });
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Explicit Project selection refreshes canonical figures without another AI request. */
+export async function readAssistantFinancial(
+  input: unknown,
+): Promise<AssistantActionResult> {
+  const user = await requireUser();
+  const request = assistantFinancialRequestSchema.safeParse(input);
+  if (!request.success)
+    return {
+      ok: false,
+      code: "INVALID",
+      error: "Choose a valid Project and financial topic.",
+    };
+  try {
+    return await withAssistantRequest(user.id, async () => ({
+      ok: true,
+      reply: await readAssistantFinancials(request.data),
+    }));
   } catch (error) {
     return failure(error);
   }

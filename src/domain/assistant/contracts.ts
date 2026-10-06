@@ -1,4 +1,12 @@
 import { z } from "zod";
+import { assistantHelpTopics } from "@/domain/assistant/help";
+import {
+  assistantFinancialTopics,
+  assistantFinancialRequestSchema,
+  type AssistantAnswer,
+  type AssistantFinancialRequest,
+  type AssistantFinancialTopic,
+} from "@/domain/assistant/answers";
 import {
   assistantFilterNames,
   assistantListPageSchema,
@@ -29,11 +37,19 @@ export const assistantRequestSchema = z.strictObject({
     .max(ASSISTANT_CONTEXT_LIMIT),
   context: assistantPageContextSchema.nullable().default(null),
   previousList: assistantListPageSchema.nullable().default(null),
+  previousFinancial: assistantFinancialRequestSchema.nullable().default(null),
 });
 
 export const assistantSearchPlanSchema = z
   .strictObject({
-    intent: z.enum(["SEARCH", "LIST", "CLARIFY", "OUT_OF_SCOPE"]),
+    intent: z.enum([
+      "SEARCH",
+      "LIST",
+      "HELP",
+      "FINANCIAL",
+      "CLARIFY",
+      "OUT_OF_SCOPE",
+    ]),
     query: z.string().trim().min(2).max(100).nullable(),
     kind: z.enum(["All", ...assistantRecordKinds]),
     filters: assistantPlanFiltersSchema.default(emptyAssistantFilters),
@@ -43,11 +59,24 @@ export const assistantSearchPlanSchema = z
       .enum(["NONE", "PROJECT", "SUPPLIER", "CLIENT"])
       .default("NONE"),
     page: z.enum(["FIRST", "NEXT", "PREVIOUS"]).default("FIRST"),
+    helpTopic: z.enum(assistantHelpTopics).nullable().default(null),
+    financialTopic: z.enum(assistantFinancialTopics).nullable().default(null),
   })
   .refine((plan) => plan.intent !== "SEARCH" || plan.query !== null, {
     path: ["query"],
     message: "A record search needs a name or reference.",
-  });
+  })
+  .refine((plan) => (plan.intent === "HELP") === (plan.helpTopic !== null), {
+    path: ["helpTopic"],
+    message: "Select an application help topic only for a help request.",
+  })
+  .refine(
+    (plan) => (plan.intent === "FINANCIAL") === (plan.financialTopic !== null),
+    {
+      path: ["financialTopic"],
+      message: "Select a financial topic only for a financial request.",
+    },
+  );
 
 export type AssistantRequest = z.input<typeof assistantRequestSchema>;
 export type AssistantSearchPlan = z.infer<typeof assistantSearchPlanSchema>;
@@ -73,6 +102,12 @@ export interface AssistantReply extends AssistantSearchResults {
   moreLabel?: string;
   listing?: AssistantListing;
   clarification?: { query: AssistantListQuery; choices: AssistantChoice[] };
+  answer?: AssistantAnswer;
+  financial?: AssistantFinancialRequest;
+  financialClarification?: {
+    topic: AssistantFinancialTopic;
+    choices: { id: string; label: string; context: string }[];
+  };
 }
 
 export type AssistantActionResult =

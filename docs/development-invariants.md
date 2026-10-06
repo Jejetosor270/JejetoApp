@@ -1,18 +1,37 @@
 # Development invariants
 
-## JejetoBot — Phases 1–2
+## JejetoBot — Phases 1–3
 
 - The shared side JejetoBot is a read-only name/reference finder and list assistant for Projects,
   Orders, Billing, Clients and Suppliers. All active employees have the same
   operational read scope as the existing ERP search; no new tenancy or record-level
   permission model is implied. Each request resolves the active database user,
   validates bounded input, and rechecks the employee after AI planning before reading records.
-- GPT-6 Luna only proposes a strict search/list intent. The server validates the plan,
+- GPT-6 Luna only proposes a strict search/list/help/financial intent. The server validates the plan,
   runs allowlisted, bounded queries through the shared Trash-aware database client,
   and supplies fixed response text and internal links. No SQL, write tools, web
   browsing, model-generated financial calculations, or raw model prose is exposed.
   Ambiguous related names require employee selection; limited search results are not
-  presented as exhaustive. Financial calculations and help answers remain later phases.
+  presented as exhaustive.
+- Workflow help is curated in `src/domain/assistant/help.ts`, not model-authored.
+  It covers payments, issuing/marking paid, allocations, pricing, VAT/FX, Project
+  financials, credits/refunds and document intake. USER guidance directs record
+  changes to ADMIN/MANAGER; JejetoBot never performs those changes for any role.
+- Financial explanations use `getProjectControl().dashboard`, exactly as Project
+  Details. The adapter in `src/lib/assistant/financial.ts` only selects, formats and
+  explains existing costs/profit/markup, Billing coverage, cash, VAT and freight.
+  No independent sums, rates or financial engine are introduced. Empty activity is
+  zero; missing money remains Incomplete; undefined zero-cost markup is Not applicable.
+  Explanations distinguish pricing profit from earned/final profit, coverage from cash,
+  markup from margin and management VAT from tax filing. No arbitrary subsets,
+  hypothetical amounts or historical financial snapshots are supported.
+- Financial scope is one visible Project, resolved from its name, an explicit current
+  Project context or a validated previous financial selection. Ambiguity requires
+  selection; unavailable/unsupported scope never silently becomes another Project.
+  Successful non-financial or unresolved replies clear the prior financial scope.
+  Answers include a Project link, up to eight unique supporting source links (missing
+  amounts first), full source count and Paris as-of time. Links do not imply that a
+  bounded evidence list was used to calculate the whole-Project totals.
 - Lists reuse canonical list services and statuses, with exact counts and 25-row pages.
   Derived status/due-date filters are limited to 500 source records; broader or unstable
   scopes request narrowing/retry instead of claiming complete results. Delivery and
@@ -28,7 +47,7 @@
 - Chat is held only in React memory, survives close/navigation, and clears on
   reload, sign-out or employee change. Only the current and up to four previous
   employee questions, user-entered prior filters, scope-presence flags, page number,
-  current record kind and Paris business date reach OpenAI, never database results or
+  current record kind, previous financial topic/scope-presence flag and Paris business date reach OpenAI, never database results or
   resolved IDs/labels. Requests use the existing
   server-only OPENAI_API_KEY, fixed gpt-6-luna, store:false, one provider call, a
   25-second timeout and a 1,000-token output cap. This does not claim zero provider

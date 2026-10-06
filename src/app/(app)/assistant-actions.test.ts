@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   context: vi.fn(),
   guard: vi.fn(),
+  financial: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth/current-user", () => ({ requireUser: mocks.requireUser }));
@@ -17,6 +18,9 @@ vi.mock("@/lib/assistant/search", () => ({
 vi.mock("@/lib/assistant/lists", () => ({ listAssistantRecords: mocks.list }));
 vi.mock("@/lib/assistant/context", () => ({
   resolveAssistantContext: mocks.context,
+}));
+vi.mock("@/lib/assistant/financial", () => ({
+  readAssistantFinancials: mocks.financial,
 }));
 vi.mock("@/lib/assistant/request-guard", async (importOriginal) => {
   const actual =
@@ -30,7 +34,11 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import { askAssistant, readAssistantList } from "@/app/(app)/assistant-actions";
+import {
+  askAssistant,
+  readAssistantList,
+  readAssistantFinancial,
+} from "@/app/(app)/assistant-actions";
 import { emptyAssistantFilters } from "@/domain/assistant/lists";
 import { AssistantQueryError } from "@/domain/assistant/list-plan";
 import { AssistantLimitError } from "@/lib/assistant/request-guard";
@@ -84,6 +92,15 @@ beforeEach(() => {
   mocks.search.mockResolvedValue({ results: [record], truncated: false });
   mocks.list.mockResolvedValue(listReply);
   mocks.context.mockResolvedValue({});
+  mocks.financial.mockResolvedValue({
+    message: "Current Project figures.",
+    results: [],
+    query: null,
+    moreHref: null,
+    truncated: false,
+    financial: { projectId, topic: "cash" },
+    answer: { title: "Example Project", paragraphs: [], links: [] },
+  });
   mocks.guard.mockImplementation(
     (_userId: string, work: () => Promise<unknown>) => work(),
   );
@@ -109,6 +126,7 @@ describe("authenticated read-only assistant", () => {
         ...request,
         context: null,
         previousList: null,
+        previousFinancial: null,
       });
       expect(mocks.search).toHaveBeenCalledWith("PO-104", "Order");
       expect(mocks.requireUser.mock.invocationCallOrder[0]).toBeLessThan(
@@ -210,6 +228,240 @@ describe("authenticated read-only assistant", () => {
       expect(logs).not.toContain(record.label);
     },
   );
+});
+
+describe("JejetoBot application help", () => {
+  it.each(["USER", "MANAGER", "ADMIN"])(
+    "provides safe read-only guidance to %s without reading records",
+    async (role) => {
+      mocks.requireUser.mockResolvedValue({ ...user, role });
+      mocks.plan.mockResolvedValue({
+        intent: "HELP",
+        kind: "All",
+        query: null,
+        helpTopic: "mark_paid",
+      });
+      const response = await askAssistant({
+        message: "How do I mark an Invoice paid?",
+        recentMessages: [],
+      });
+      expect(response).toMatchObject({
+        ok: true,
+        reply: { answer: { title: "Mark paid" } },
+      });
+      if (!response.ok) throw new Error("Expected help answer");
+      const text = response.reply.answer?.paragraphs.join(" ");
+      expect(text).toContain("full remaining balance as actual cash");
+      expect(text).toContain("JejetoBot is read-only");
+      expect(text).toContain(
+        role === "USER" ? "Ask an ADMIN or MANAGER" : "cannot save changes",
+      );
+      expect(response.reply.answer?.steps?.join(" ")).toContain(
+        "first be saved as Invoiced",
+      );
+      expect(mocks.requireUser).toHaveBeenCalledTimes(2);
+      expect(mocks.search).not.toHaveBeenCalled();
+      expect(mocks.list).not.toHaveBeenCalled();
+      expect(mocks.context).not.toHaveBeenCalled();
+      expect(mocks.financial).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { kind: "Order" },
+    { query: "PO-104" },
+    { followUp: true },
+    { contextScope: "PROJECT" },
+    { page: "NEXT" },
+    { clearFilters: ["status"] },
+    { filters: { ...emptyAssistantFilters, project: "Villa" } },
+  ])(
+    "does not silently discard a record scope on a HELP plan",
+    async (override) => {
+      mocks.plan.mockResolvedValue({
+        intent: "HELP",
+        kind: "All",
+        query: null,
+        helpTopic: "partial_payment",
+        ...override,
+      });
+      const response = await askAssistant(request);
+      expect(response).toMatchObject({ ok: true, reply: { results: [] } });
+      if (!response.ok) throw new Error("Expected clarification");
+      expect(response.reply.answer).toBeUndefined();
+      expect(response.reply.message).toContain("without record filters");
+      expect(mocks.search).not.toHaveBeenCalled();
+      expect(mocks.list).not.toHaveBeenCalled();
+      expect(mocks.financial).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe("JejetoBot financial Server Actions", () => {
+  const financialRequest = { projectId, topic: "cash" };
+  const financialPlan = {
+    intent: "FINANCIAL",
+    kind: "Project",
+    query: null,
+    financialTopic: "cash",
+    filters: { ...emptyAssistantFilters, project: "Example" },
+  };
+
+  it.each(["USER", "MANAGER", "ADMIN"])(
+    "resolves an authenticated named Project question for %s",
+    async (role) => {
+      mocks.requireUser.mockResolvedValue({ ...user, role });
+      mocks.plan.mockResolvedValue(financialPlan);
+      mocks.search.mockResolvedValue({
+        results: [{ ...record, type: "Project", id: projectId }],
+        truncated: false,
+      });
+      expect(
+        await askAssistant({
+          message: "What is Example Project cash?",
+          recentMessages: [],
+        }),
+      ).toMatchObject({ ok: true, reply: { financial: financialRequest } });
+      expect(mocks.search).toHaveBeenCalledExactlyOnceWith(
+        "Example",
+        "Project",
+      );
+      expect(mocks.financial).toHaveBeenCalledExactlyOnceWith(financialRequest);
+      expect(mocks.requireUser.mock.invocationCallOrder[0]).toBeLessThan(
+        mocks.plan.mock.invocationCallOrder[0] ?? 0,
+      );
+      expect(mocks.requireUser.mock.invocationCallOrder[1]).toBeLessThan(
+        mocks.search.mock.invocationCallOrder[0] ?? 0,
+      );
+      expect(mocks.requireUser.mock.invocationCallOrder[1]).toBeLessThan(
+        mocks.financial.mock.invocationCallOrder[0] ?? 0,
+      );
+      expect(mocks.list).not.toHaveBeenCalled();
+    },
+  );
+
+  it("checks authentication before financial planning or reads", async () => {
+    mocks.plan.mockResolvedValue(financialPlan);
+    mocks.requireUser.mockRejectedValue(redirectError);
+    await expect(askAssistant(request)).rejects.toBe(redirectError);
+    expect(mocks.plan).not.toHaveBeenCalled();
+    expect(mocks.search).not.toHaveBeenCalled();
+    expect(mocks.financial).not.toHaveBeenCalled();
+  });
+
+  it.each(["expired", "changed"])(
+    "blocks financial reads when the account is %s after planning",
+    async (condition) => {
+      mocks.plan.mockResolvedValue(financialPlan);
+      mocks.requireUser.mockResolvedValueOnce(user);
+      if (condition === "expired")
+        mocks.requireUser.mockRejectedValueOnce(redirectError);
+      else mocks.requireUser.mockResolvedValueOnce({ ...user, id: "other" });
+      if (condition === "expired")
+        await expect(askAssistant(request)).rejects.toBe(redirectError);
+      else
+        expect(await askAssistant(request)).toMatchObject({
+          ok: false,
+          code: "UNAVAILABLE",
+        });
+      expect(mocks.context).not.toHaveBeenCalled();
+      expect(mocks.search).not.toHaveBeenCalled();
+      expect(mocks.financial).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns explicit Project choices without selecting the first name match", async () => {
+    mocks.plan.mockResolvedValue(financialPlan);
+    mocks.search.mockResolvedValue({
+      results: [
+        { ...record, id: projectId, type: "Project", label: "Example A" },
+        { ...record, id: supplierId, type: "Project", label: "Example B" },
+      ],
+      truncated: false,
+    });
+    const response = await askAssistant(request);
+    expect(response).toMatchObject({
+      ok: true,
+      reply: {
+        financialClarification: {
+          topic: "cash",
+          choices: [{ id: projectId }, { id: supplierId }],
+        },
+      },
+    });
+    expect(mocks.financial).not.toHaveBeenCalled();
+  });
+
+  it.each(["USER", "MANAGER", "ADMIN"])(
+    "authenticates %s direct selection without AI",
+    async (role) => {
+      mocks.requireUser.mockResolvedValue({ ...user, role });
+      expect(await readAssistantFinancial(financialRequest)).toMatchObject({
+        ok: true,
+        reply: { financial: financialRequest },
+      });
+      expect(mocks.financial).toHaveBeenCalledExactlyOnceWith(financialRequest);
+      expect(mocks.requireUser.mock.invocationCallOrder[0]).toBeLessThan(
+        mocks.financial.mock.invocationCallOrder[0] ?? 0,
+      );
+      expect(mocks.guard).toHaveBeenCalledWith(user.id, expect.any(Function));
+      expect(mocks.plan).not.toHaveBeenCalled();
+      expect(mocks.search).not.toHaveBeenCalled();
+      expect(mocks.list).not.toHaveBeenCalled();
+    },
+  );
+
+  it("authenticates direct selection before any database access", async () => {
+    mocks.requireUser.mockRejectedValue(redirectError);
+    await expect(readAssistantFinancial(financialRequest)).rejects.toBe(
+      redirectError,
+    );
+    expect(mocks.financial).not.toHaveBeenCalled();
+    expect(mocks.guard).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { ...financialRequest, projectId: "not-an-id" },
+    { ...financialRequest, topic: "salary" },
+    { ...financialRequest, userId: "other" },
+    { ...financialRequest, role: "ADMIN" },
+    { ...financialRequest, amount: "99999" },
+    { ...financialRequest, dateFrom: "2026-01-01" },
+  ])(
+    "rejects injected identity, amounts or unsupported direct financial scope",
+    async (input) => {
+      expect(await readAssistantFinancial(input)).toMatchObject({
+        ok: false,
+        code: "INVALID",
+      });
+      expect(mocks.plan).not.toHaveBeenCalled();
+      expect(mocks.financial).not.toHaveBeenCalled();
+      expect(mocks.guard).not.toHaveBeenCalled();
+    },
+  );
+
+  it("applies rate protection to direct financial reads", async () => {
+    mocks.guard.mockRejectedValue(new AssistantLimitError());
+    expect(await readAssistantFinancial(financialRequest)).toMatchObject({
+      ok: false,
+      code: "LIMIT",
+    });
+    expect(mocks.financial).not.toHaveBeenCalled();
+    expect(mocks.plan).not.toHaveBeenCalled();
+  });
+
+  it("redacts financial database errors from replies and logs", async () => {
+    const error = new Error(
+      "Confidential amount 999999 and database credential",
+    );
+    mocks.financial.mockRejectedValue(error);
+    const response = await readAssistantFinancial(financialRequest);
+    expect(response).toMatchObject({ ok: false, code: "UNAVAILABLE" });
+    expect(JSON.stringify(response)).not.toContain(error.message);
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain(
+      error.message,
+    );
+  });
 });
 
 describe("JejetoBot scoped lists", () => {

@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { emptyAssistantFilters } from "@/domain/assistant/lists";
+import { assistantHelpTopics } from "@/domain/assistant/help";
+import { assistantFinancialTopics } from "@/domain/assistant/answers";
 import {
   AssistantProviderError,
   planAssistantSearch,
@@ -16,12 +18,29 @@ const planDefaults = {
   clearFilters: [],
   contextScope: "NONE",
   page: "FIRST",
+  helpTopic: null,
+  financialTopic: null,
 };
 const searchPlan = {
   ...planDefaults,
   intent: "SEARCH",
   query: "PO-104",
   kind: "Order",
+};
+const helpPlan = {
+  ...planDefaults,
+  intent: "HELP",
+  kind: "All",
+  query: null,
+  helpTopic: "partial_payment",
+};
+const financialPlan = {
+  ...planDefaults,
+  intent: "FINANCIAL",
+  kind: "Project",
+  query: null,
+  financialTopic: "overview",
+  contextScope: "PROJECT",
 };
 
 function completedResponse(text: string | null) {
@@ -76,6 +95,7 @@ afterEach(() => {
 
 describe("record assistant planner", () => {
   it("uses one bounded, non-stored Luna request with strict structured output", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
     const fetchMock = mockResponse(
       completedResponse(JSON.stringify(searchPlan)),
     );
@@ -85,6 +105,7 @@ describe("record assistant planner", () => {
     };
     await expect(planAssistantSearch(input)).resolves.toEqual(searchPlan);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(timeout).toHaveBeenCalledWith(25_000);
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.openai.com/v1/responses");
     expect(options.cache).toBe("no-store");
@@ -110,6 +131,8 @@ describe("record assistant planner", () => {
               "clearFilters",
               "contextScope",
               "page",
+              "helpTopic",
+              "financialTopic",
             ],
           },
         },
@@ -124,6 +147,7 @@ describe("record assistant planner", () => {
                 ...input,
                 businessDate: "2026-10-06",
                 context: null,
+                previousFinancial: null,
                 previousList: null,
               }),
             },
@@ -147,6 +171,14 @@ describe("record assistant planner", () => {
     expect(filterSchema.required.toSorted()).toEqual(
       Object.keys(filterSchema.properties).toSorted(),
     );
+    expect(body.text.format.schema.properties.helpTopic.enum).toEqual([
+      ...assistantHelpTopics,
+      null,
+    ]);
+    expect(body.text.format.schema.properties.financialTopic.enum).toEqual([
+      ...assistantFinancialTopics,
+      null,
+    ]);
     expect(console.error).not.toHaveBeenCalled();
   });
 
@@ -218,6 +250,162 @@ describe("record assistant planner", () => {
       await expect(planAssistantSearch(request)).resolves.toEqual(plan);
     },
   );
+
+  it.each(assistantHelpTopics)(
+    "accepts only the curated %s help selector, not a generated answer",
+    async (helpTopic) => {
+      const plan = { ...helpPlan, helpTopic };
+      mockResponse(completedResponse(JSON.stringify(plan)));
+      await expect(
+        planAssistantSearch({
+          message: "How do I use this application?",
+          recentMessages: [],
+        }),
+      ).resolves.toEqual(plan);
+    },
+  );
+
+  it.each(assistantFinancialTopics)(
+    "accepts the bounded full-Project %s financial selector",
+    async (financialTopic) => {
+      const plan = { ...financialPlan, financialTopic };
+      mockResponse(completedResponse(JSON.stringify(plan)));
+      await expect(
+        planAssistantSearch({
+          message: "Explain this Project's figures",
+          recentMessages: [],
+          context: {
+            kind: "Project",
+            id: "b6846ab9-dd7f-40dc-b01c-05cbfdcc995a",
+          },
+        }),
+      ).resolves.toEqual(plan);
+    },
+  );
+
+  it("keeps Phase 3 as a selector with no financial data or mutation tools", async () => {
+    const fetchMock = mockResponse(completedResponse(JSON.stringify(helpPlan)));
+    await planAssistantSearch({
+      message: "How do I record a partial payment?",
+      recentMessages: [],
+    });
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(options.body));
+    expect(body.instructions).toContain(
+      "The server supplies curated instructions",
+    );
+    expect(body.instructions).toContain(
+      "This asks for instructions, not execution",
+    );
+    expect(body.instructions).toContain(
+      "only current full-Project explanations",
+    );
+    expect(body.instructions).toContain(
+      "never infer Project financial scope from a filtered previousList",
+    );
+    expect(body.instructions).toContain(
+      "filtered subset, historical period or hypothetical change",
+    );
+    expect(body.instructions).toContain(
+      "OUT_OF_SCOPE: executing edits/payments/creation/deletion",
+    );
+    expect(body.instructions).toContain("No result data is available to you");
+    expect(body.instructions).toContain(
+      "No database records, resolved names/IDs, SQL, tools, website access, or financial figures are available to you",
+    );
+    expect(body.tools).toBeUndefined();
+    expect(body.previous_response_id).toBeUndefined();
+    expect(JSON.parse(body.input[0].content[0].text)).toEqual({
+      message: "How do I record a partial payment?",
+      recentMessages: [],
+      businessDate: "2026-10-06",
+      context: null,
+      previousFinancial: null,
+      previousList: null,
+    });
+  });
+
+  it("carries only the previous financial topic and Project-presence flag", async () => {
+    const plan = {
+      ...financialPlan,
+      financialTopic: "vat",
+      contextScope: "NONE",
+      followUp: true,
+    };
+    const fetchMock = mockResponse(completedResponse(JSON.stringify(plan)));
+    const projectId = "b6846ab9-dd7f-40dc-b01c-05cbfdcc995a";
+    const currentOrderId = "9e76826d-35b3-4a7a-b6c2-ecbb3fd907d5";
+    await expect(
+      planAssistantSearch({
+        message: "And its VAT?",
+        recentMessages: ["How is this Project doing?"],
+        context: { kind: "Order", id: currentOrderId },
+        previousFinancial: { projectId, topic: "overview" },
+      }),
+    ).resolves.toEqual(plan);
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(options.body));
+    const input = JSON.parse(body.input[0].content[0].text);
+    expect(input).toEqual({
+      message: "And its VAT?",
+      recentMessages: ["How is this Project doing?"],
+      businessDate: "2026-10-06",
+      context: { kind: "Order" },
+      previousFinancial: { topic: "overview", projectSelected: true },
+      previousList: null,
+    });
+    expect(options.body).not.toContain(projectId);
+    expect(options.body).not.toContain(currentOrderId);
+    expect(input.previousFinancial).not.toHaveProperty("metrics");
+    expect(input.previousFinancial).not.toHaveProperty("amount");
+    expect(input.previousFinancial).not.toHaveProperty("label");
+  });
+
+  it.each([
+    { projectId: "invalid", topic: "overview" },
+    { projectId: "b6846ab9-dd7f-40dc-b01c-05cbfdcc995a", topic: "tax_advice" },
+    {
+      projectId: "b6846ab9-dd7f-40dc-b01c-05cbfdcc995a",
+      topic: "overview",
+      metrics: [{ label: "Private revenue", value: "123456.78" }],
+    },
+  ])(
+    "rejects forged financial context before provider access %#",
+    async (previousFinancial) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      await expect(
+        planAssistantSearch({
+          ...request,
+          previousFinancial,
+        } as typeof request),
+      ).rejects.toThrow();
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { ...helpPlan, helpTopic: null },
+    { ...financialPlan, financialTopic: null },
+    { ...helpPlan, helpTopic: "password_reset" },
+    { ...financialPlan, financialTopic: "tax_advice" },
+    { ...helpPlan, financialTopic: "overview" },
+    { ...financialPlan, helpTopic: "project_financials" },
+    { ...searchPlan, helpTopic: "mark_paid" },
+    { ...searchPlan, financialTopic: "overview" },
+    { ...searchPlan, intent: "LIST", helpTopic: "billing_allocation" },
+    { ...helpPlan, sql: "SELECT * FROM procurement_orders" },
+    { ...financialPlan, amount: "1000.00" },
+    { ...financialPlan, answer: "Private financial prose" },
+    { ...helpPlan, href: "https://example.com/phishing" },
+  ])("rejects unsupported or cross-intent Phase 3 output %#", async (plan) => {
+    mockResponse(completedResponse(JSON.stringify(plan)));
+    await expectFailure("schema_validation_failure");
+    const logs = JSON.stringify(vi.mocked(console.error).mock.calls);
+    expect(logs).not.toContain("Private financial prose");
+    expect(logs).not.toContain("SELECT *");
+    expect(logs).not.toContain("example.com");
+  });
 
   it.each([
     {
@@ -323,6 +511,7 @@ describe("record assistant planner", () => {
       recentMessages: ["Show supplier Acme orders"],
       businessDate: "2026-10-06",
       context: { kind: "Project" },
+      previousFinancial: null,
       previousList: {
         kind: "Order",
         query: "",
@@ -517,7 +706,15 @@ describe("record assistant planner", () => {
     await expectFailure("schema_validation_failure");
   });
 
-  it.each(["filters", "followUp", "clearFilters", "contextScope", "page"])(
+  it.each([
+    "filters",
+    "followUp",
+    "clearFilters",
+    "contextScope",
+    "page",
+    "helpTopic",
+    "financialTopic",
+  ])(
     "rejects missing %s instead of defaulting a partial model plan",
     async (field) => {
       const partial = Object.fromEntries(

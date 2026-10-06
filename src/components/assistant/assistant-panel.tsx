@@ -35,6 +35,7 @@ export function AssistantPanel() {
     input,
     send,
     loadList,
+    loadFinancial,
     clear,
   } = useAssistantConversation(context);
   const conversation = useRef<HTMLDivElement>(null);
@@ -94,7 +95,7 @@ export function AssistantPanel() {
               </SheetClose>
             </div>
           </div>
-          <SheetDescription>Read-only record assistant</SheetDescription>
+          <SheetDescription>Read-only ERP assistant</SheetDescription>
           {context && (
             <p
               className="text-muted-foreground text-xs"
@@ -119,11 +120,12 @@ export function AssistantPanel() {
                 className="text-muted-foreground size-5"
               />
               <p>
-                Find and filter Projects, Orders, Billing, Clients or Suppliers.
+                Find records, understand Project figures or get help using the
+                ERP.
               </p>
               <p className="text-muted-foreground">
-                Try “Orders for supplier Acme” or “Overdue invoices in this
-                Project”.
+                Try “Orders for supplier Acme”, “Explain this Project’s cash” or
+                “How do I record a receipt?”
               </p>
               <p className="text-muted-foreground text-xs">
                 No record changes. This chat clears when you reload or sign out.
@@ -148,6 +150,7 @@ export function AssistantPanel() {
                 disabled={pending}
                 busy={pendingTurn === turn.id}
                 onLoadList={(request) => loadList(turn.id, request)}
+                onLoadFinancial={(request) => loadFinancial(turn.id, request)}
               />
             </div>
           ))}
@@ -158,7 +161,7 @@ export function AssistantPanel() {
                 {pendingQuestion}
               </p>
               <p className="text-muted-foreground text-sm" role="status">
-                Finding records…
+                Checking your question…
               </p>
             </div>
           )}
@@ -196,7 +199,7 @@ export function AssistantPanel() {
               controlVariants(),
               "h-auto min-h-20 resize-none py-2",
             )}
-            placeholder="Find records or narrow a list…"
+            placeholder="Find records, ask about a Project or get help…"
           />
           {error && (
             <p

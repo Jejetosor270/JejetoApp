@@ -2,7 +2,12 @@
 
 import { useRef, useState, type FormEvent } from "react";
 
-import { askAssistant, readAssistantList } from "@/app/(app)/assistant-actions";
+import {
+  askAssistant,
+  readAssistantFinancial,
+  readAssistantList,
+} from "@/app/(app)/assistant-actions";
+import type { AssistantFinancialRequest } from "@/domain/assistant/answers";
 import {
   ASSISTANT_CONTEXT_LIMIT,
   type AssistantReply,
@@ -25,6 +30,8 @@ export function useAssistantConversation(context: AssistantPageContext | null) {
   const [previousList, setPreviousList] = useState<AssistantListPage | null>(
     null,
   );
+  const [previousFinancial, setPreviousFinancial] =
+    useState<AssistantFinancialRequest | null>(null);
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [pendingTurn, setPendingTurn] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,13 +40,14 @@ export function useAssistantConversation(context: AssistantPageContext | null) {
   const input = useRef<HTMLTextAreaElement>(null);
   const pending = pendingQuestion !== null || pendingTurn !== null;
 
-  function rememberList(reply: AssistantReply) {
+  function rememberScope(reply: AssistantReply) {
     if (reply.listing) {
       setPreviousList({
         query: reply.listing.query,
         page: reply.listing.page,
       });
     }
+    setPreviousFinancial(reply.financial ?? null);
   }
 
   async function send(event: FormEvent<HTMLFormElement>) {
@@ -57,6 +65,7 @@ export function useAssistantConversation(context: AssistantPageContext | null) {
           .map((turn) => turn.question),
         context,
         previousList,
+        previousFinancial,
       });
       if (!result.ok) {
         setError(result.error);
@@ -68,7 +77,7 @@ export function useAssistantConversation(context: AssistantPageContext | null) {
           -TURN_LIMIT,
         ),
       );
-      rememberList(result.reply);
+      rememberScope(result.reply);
       setDraft("");
     } catch {
       setError(
@@ -97,9 +106,39 @@ export function useAssistantConversation(context: AssistantPageContext | null) {
           turn.id === turnId ? { ...turn, reply: result.reply } : turn,
         ),
       );
-      rememberList(result.reply);
+      rememberScope(result.reply);
     } catch {
       setError("JejetoBot couldn't load this list. Your results are retained.");
+    } finally {
+      inFlight.current = false;
+      setPendingTurn(null);
+    }
+  }
+
+  async function loadFinancial(
+    turnId: number,
+    request: AssistantFinancialRequest,
+  ) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setPendingTurn(turnId);
+    setError(null);
+    try {
+      const result = await readAssistantFinancial(request);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setTurns((previous) =>
+        previous.map((turn) =>
+          turn.id === turnId ? { ...turn, reply: result.reply } : turn,
+        ),
+      );
+      rememberScope(result.reply);
+    } catch {
+      setError(
+        "JejetoBot couldn't load this Project. Your question is retained.",
+      );
     } finally {
       inFlight.current = false;
       setPendingTurn(null);
@@ -110,6 +149,7 @@ export function useAssistantConversation(context: AssistantPageContext | null) {
     if (inFlight.current) return;
     setTurns([]);
     setPreviousList(null);
+    setPreviousFinancial(null);
     setDraft("");
     setError(null);
     input.current?.focus();
@@ -126,6 +166,7 @@ export function useAssistantConversation(context: AssistantPageContext | null) {
     input,
     send,
     loadList,
+    loadFinancial,
     clear,
   };
 }

@@ -11,14 +11,17 @@ import {
 } from "@/domain/assistant/lists";
 import { clickText, control, enter, mountForm } from "@/test/dom-form";
 
-const { askAssistant, readAssistantList, location } = vi.hoisted(() => ({
-  askAssistant: vi.fn(),
-  readAssistantList: vi.fn(),
-  location: { path: "/" },
-}));
+const { askAssistant, readAssistantList, readAssistantFinancial, location } =
+  vi.hoisted(() => ({
+    askAssistant: vi.fn(),
+    readAssistantList: vi.fn(),
+    readAssistantFinancial: vi.fn(),
+    location: { path: "/" },
+  }));
 vi.mock("@/app/(app)/assistant-actions", () => ({
   askAssistant,
   readAssistantList,
+  readAssistantFinancial,
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => location.path }));
 vi.mock("next/link", () => ({
@@ -72,6 +75,7 @@ beforeEach(() => {
   location.path = "/";
   askAssistant.mockResolvedValue(success);
   readAssistantList.mockResolvedValue(success);
+  readAssistantFinancial.mockResolvedValue(success);
 });
 afterEach(async () => {
   await view?.unmount();
@@ -94,7 +98,7 @@ describe("JejetoBot panel", () => {
     await open();
     expect(document.activeElement).toBe(control("assistantMessage"));
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-      "Read-only record assistant",
+      "Read-only ERP assistant",
     );
     expect(document.querySelector("form")?.dataset.draftGuard).toBe("off");
     expect(control("assistantMessage").getAttribute("maxlength")).toBe("800");
@@ -104,6 +108,7 @@ describe("JejetoBot panel", () => {
       recentMessages: [],
       context: null,
       previousList: null,
+      previousFinancial: null,
     });
     expect(document.querySelector('[role="log"]')?.textContent).toContain(
       "Which record did you mean?",
@@ -191,7 +196,7 @@ describe("JejetoBot panel", () => {
     });
     expect(askAssistant).toHaveBeenCalledOnce();
     expect(document.querySelector('[role="status"]')?.textContent).toContain(
-      "Finding records",
+      "Checking your question",
     );
     expect(control("assistantMessage").hasAttribute("readonly")).toBe(true);
     await act(async () => finish?.(success));
@@ -212,6 +217,7 @@ describe("JejetoBot panel", () => {
       ],
       context: null,
       previousList: null,
+      previousFinancial: null,
     });
     const log = document.querySelector('[role="log"]');
     expect(log?.textContent).not.toContain("Find Project 0");
@@ -446,6 +452,7 @@ describe("JejetoBot contextual lists", () => {
       message: "Only unpaid ones",
       recentMessages: ["Orders for this Project"],
       previousList: { query: listQuery, page: 2 },
+      previousFinancial: null,
       context: null,
     });
   });
@@ -601,6 +608,7 @@ describe("JejetoBot contextual lists", () => {
       recentMessages: [],
       context: null,
       previousList: null,
+      previousFinancial: null,
     });
   });
 
@@ -612,5 +620,348 @@ describe("JejetoBot contextual lists", () => {
     expect(askAssistant).toHaveBeenLastCalledWith(
       expect.objectContaining({ context: null }),
     );
+  });
+});
+
+const financialScope = { projectId, topic: "cash" as const };
+const financialResult: AssistantActionResult = {
+  ok: true,
+  reply: {
+    message: "Project cash summary.",
+    query: null,
+    results: [],
+    truncated: false,
+    moreHref: null,
+    financial: financialScope,
+    answer: {
+      title: "Demo Villa · Cash",
+      paragraphs: [
+        "Recorded receipts less payments. This is not a bank balance.",
+      ],
+      metrics: [
+        {
+          label: "Net cash TTC",
+          value: "12 345.67 EUR",
+          href: `/projects/${projectId}?metric=net_cash`,
+        },
+        { label: "To collect TTC", value: null },
+      ],
+      sources: [
+        { label: "INV-DEMO", href: "/billing/demo", note: "Client receipt" },
+      ],
+      sourceCount: 10,
+      warnings: ["A receipt has missing FX."],
+      links: [{ label: "Open Project", href: `/projects/${projectId}` }],
+      asOf: "06/10/2026",
+    },
+  },
+};
+
+const financialChoice: AssistantActionResult = {
+  ok: true,
+  reply: {
+    message: "Which Project?",
+    query: null,
+    results: [],
+    truncated: false,
+    moreHref: null,
+    financialClarification: {
+      topic: "cash",
+      choices: [{ id: projectId, label: "Demo Villa", context: "Demo Client" }],
+    },
+  },
+};
+
+describe("JejetoBot help and Project answers", () => {
+  it("renders trusted formatted metrics, incomplete values, warnings and linked evidence", async () => {
+    askAssistant.mockResolvedValueOnce(financialResult);
+    await open();
+    await submit("Explain this Project's cash");
+    const answer = document.querySelector('[aria-label="Demo Villa · Cash"]');
+    expect(answer?.textContent).toContain("12 345.67 EUR");
+    expect(answer?.textContent).toContain("Incomplete");
+    expect(answer?.textContent).toContain("As of 06/10/2026");
+    expect(answer?.textContent).not.toContain("Project cash summary.");
+    expect(answer?.querySelector("dd")?.className).toContain("text-right");
+    expect(answer?.querySelector("dd")?.className).toContain("tabular-nums");
+    expect(
+      answer?.querySelector('[aria-label="Review warnings"]')?.textContent,
+    ).toContain("missing FX");
+    expect(answer?.querySelector("details")?.open).toBe(false);
+    expect(answer?.querySelector("summary")?.textContent).toBe("Sources (10)");
+    expect(
+      answer
+        ?.querySelector('a[href="/billing/demo"]')
+        ?.getAttribute("data-prefetch"),
+    ).toBe("false");
+    expect(answer?.textContent).toContain("Showing 1 of 10 sources");
+  });
+
+  it("renders application help steps as text with normal guarded navigation", async () => {
+    askAssistant.mockResolvedValueOnce({
+      ok: true,
+      reply: {
+        message: "Help",
+        query: null,
+        results: [],
+        moreHref: null,
+        truncated: false,
+        answer: {
+          title: "Record a receipt",
+          paragraphs: ["Only issued Invoices can receive cash."],
+          steps: ["Open Billing.", "Open payment terms.", "Choose Mark paid."],
+          links: [{ label: "Open Billing", href: "/billing" }],
+        },
+      },
+    });
+    await open();
+    await submit("How do I record a receipt?");
+    expect(
+      document.querySelectorAll('[aria-label="Record a receipt"] ol li'),
+    ).toHaveLength(3);
+    await enter("assistantMessage", "My next question");
+    await act(async () =>
+      document.querySelector<HTMLAnchorElement>('a[href="/billing"]')?.click(),
+    );
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await clickText("JejetoBot");
+    expect(control("assistantMessage").value).toBe("My next question");
+  });
+
+  it("remembers only a Project ID and topic for follow-ups, not amounts or evidence", async () => {
+    location.path = `/projects/${projectId}`;
+    askAssistant.mockResolvedValueOnce(financialResult);
+    await open();
+    await submit("Explain this Project's cash");
+    await submit("And its VAT?");
+    const request = askAssistant.mock.lastCall?.[0];
+    expect(request).toEqual({
+      message: "And its VAT?",
+      recentMessages: ["Explain this Project's cash"],
+      context: { kind: "Project", id: projectId },
+      previousList: null,
+      previousFinancial: financialScope,
+    });
+    expect(JSON.stringify(request)).not.toContain("12 345.67");
+    expect(JSON.stringify(request)).not.toContain("INV-DEMO");
+    expect(JSON.stringify(request)).not.toContain("Demo Villa");
+  });
+
+  it("resolves an ambiguous Project without AI and preserves the question draft", async () => {
+    askAssistant.mockResolvedValueOnce(financialChoice);
+    readAssistantFinancial.mockResolvedValueOnce(financialResult);
+    await open();
+    await submit("Show cash for Villa");
+    await enter("assistantMessage", "And its VAT?");
+    await act(async () =>
+      document
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="Choose a Project"] button',
+        )
+        ?.click(),
+    );
+    expect(readAssistantFinancial).toHaveBeenCalledExactlyOnceWith(
+      financialScope,
+    );
+    expect(askAssistant).toHaveBeenCalledOnce();
+    expect(
+      document.querySelector('[aria-label="Choose a Project"]'),
+    ).toBeNull();
+    expect(
+      document.querySelector('[aria-label="Demo Villa · Cash"]'),
+    ).not.toBeNull();
+    expect(control("assistantMessage").value).toBe("And its VAT?");
+    await clickText("Send");
+    expect(askAssistant).toHaveBeenLastCalledWith(
+      expect.objectContaining({ previousFinancial: financialScope }),
+    );
+  });
+
+  it("retains financial choices and drafts on failure without showing private diagnostics", async () => {
+    askAssistant.mockResolvedValueOnce(financialChoice);
+    readAssistantFinancial.mockResolvedValueOnce({
+      ok: false,
+      code: "LIMIT",
+      error: "Try again shortly.",
+    });
+    await open();
+    await submit("Show cash for Villa");
+    await enter("assistantMessage", "Draft question");
+    const choose = () =>
+      act(async () =>
+        document
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="Choose a Project"] button',
+          )
+          ?.click(),
+      );
+    await choose();
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe(
+      "Try again shortly.",
+    );
+    expect(
+      document.querySelector('[aria-label="Choose a Project"]'),
+    ).not.toBeNull();
+    expect(control("assistantMessage").value).toBe("Draft question");
+    readAssistantFinancial.mockRejectedValueOnce(
+      new Error("Private diagnostic"),
+    );
+    await choose();
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+      "retained",
+    );
+    expect(document.body.textContent).not.toContain("Private diagnostic");
+    expect(control("assistantMessage").value).toBe("Draft question");
+  });
+
+  it("blocks repeated Project selections while a request is pending", async () => {
+    askAssistant.mockResolvedValueOnce(financialChoice);
+    let finish: ((result: AssistantActionResult) => void) | undefined;
+    readAssistantFinancial.mockImplementationOnce(
+      () =>
+        new Promise<AssistantActionResult>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await open();
+    await submit("Show cash for Villa");
+    await act(async () => {
+      const button = document.querySelector<HTMLButtonElement>(
+        '[aria-label="Choose a Project"] button',
+      );
+      button?.click();
+      button?.click();
+    });
+    expect(readAssistantFinancial).toHaveBeenCalledOnce();
+    expect(
+      document.querySelector<HTMLButtonElement>(
+        '[aria-label="Choose a Project"] button',
+      )?.disabled,
+    ).toBe(true);
+    await act(async () => finish?.(financialResult));
+  });
+
+  it("retains list scope alongside financial context and clears both in New chat", async () => {
+    askAssistant
+      .mockResolvedValueOnce(listResult())
+      .mockResolvedValueOnce(financialResult);
+    await open();
+    await submit("List Orders");
+    await submit("Show Project cash");
+    await submit("Only overdue Orders");
+    expect(askAssistant).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        previousList: { query: listQuery, page: 1 },
+        previousFinancial: financialScope,
+      }),
+    );
+    await clickText("New chat");
+    expect(
+      document.querySelector('[aria-label="Demo Villa · Cash"]'),
+    ).toBeNull();
+    await submit("Find something else");
+    expect(askAssistant).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        recentMessages: [],
+        previousList: null,
+        previousFinancial: null,
+      }),
+    );
+  });
+
+  it.each([
+    ["ambiguous Project", financialChoice],
+    [
+      "unavailable Project",
+      {
+        ok: true,
+        reply: {
+          message: "No matching Project found.",
+          query: null,
+          results: [],
+          truncated: false,
+          moreHref: null,
+        },
+      },
+    ],
+    ["list", listResult()],
+    [
+      "help",
+      {
+        ok: true,
+        reply: {
+          message: "Help",
+          query: null,
+          results: [],
+          truncated: false,
+          moreHref: null,
+          answer: {
+            title: "Payments",
+            paragraphs: ["Open payment terms."],
+            links: [],
+          },
+        },
+      },
+    ],
+  ] as const)(
+    "clears financial scope after a successful %s reply",
+    async (_name, response) => {
+      askAssistant
+        .mockResolvedValueOnce(financialResult)
+        .mockResolvedValueOnce(response);
+      await open();
+      await submit("Explain Demo Villa's cash");
+      await submit("Tell me about another Project");
+      await submit("And its VAT?");
+      expect(askAssistant).toHaveBeenLastCalledWith(
+        expect.objectContaining({ previousFinancial: null }),
+      );
+    },
+  );
+
+  it.each(["rejection", "transport"])(
+    "retains financial scope and draft after %s failure",
+    async (failure) => {
+      askAssistant.mockResolvedValueOnce(financialResult);
+      if (failure === "transport")
+        askAssistant.mockRejectedValueOnce(new Error("Private failure"));
+      else
+        askAssistant.mockResolvedValueOnce({
+          ok: false,
+          code: "LIMIT",
+          error: "Try again.",
+        });
+      await open();
+      await submit("Explain Demo Villa's cash");
+      await submit("And its VAT?");
+      expect(control("assistantMessage").value).toBe("And its VAT?");
+      await clickText("Send");
+      expect(askAssistant).toHaveBeenLastCalledWith(
+        expect.objectContaining({ previousFinancial: financialScope }),
+      );
+    },
+  );
+
+  it("treats answer and source text literally", async () => {
+    if (!financialResult.ok || !financialResult.reply.answer)
+      throw new Error("Missing fixture");
+    askAssistant.mockResolvedValueOnce({
+      ok: true,
+      reply: {
+        ...financialResult.reply,
+        answer: {
+          ...financialResult.reply.answer,
+          title: "<script>example</script>",
+          paragraphs: ["<img src=x onerror=alert(1)>"],
+        },
+      },
+    });
+    await open();
+    await submit("Explain Project cash");
+    expect(document.querySelector('[role="log"]')?.textContent).toContain(
+      "<img src=x onerror=alert(1)>",
+    );
+    expect(document.querySelector('[role="log"] img')).toBeNull();
+    expect(document.querySelector('[role="log"] script')).toBeNull();
   });
 });

@@ -50,6 +50,54 @@ describe("assistant request boundaries", () => {
     ])
       expect(assistantSearchPlanSchema.safeParse(plan).success).toBe(false);
   });
+
+  it("limits prior financial context to a Project ID and known topic", () => {
+    const financial = {
+      projectId: "00000000-0000-4000-8000-000000000001",
+      topic: "cash",
+    };
+    const request = {
+      message: "And its VAT?",
+      recentMessages: [],
+      previousFinancial: financial,
+    };
+    expect(assistantRequestSchema.parse(request).previousFinancial).toEqual(
+      financial,
+    );
+    for (const previousFinancial of [
+      { ...financial, projectId: "unvalidated" },
+      { ...financial, topic: "arbitrary_sql" },
+      { ...financial, amount: "12345.00" },
+      { ...financial, label: "Private Project name" },
+      { ...financial, role: "ADMIN" },
+    ])
+      expect(
+        assistantRequestSchema.safeParse({ ...request, previousFinancial })
+          .success,
+      ).toBe(false);
+  });
+
+  it("rejects missing or cross-intent help and financial topics", () => {
+    for (const plan of [
+      { intent: "HELP", kind: "All", query: null },
+      { intent: "FINANCIAL", kind: "Project", query: null },
+      {
+        intent: "HELP",
+        kind: "All",
+        query: null,
+        helpTopic: "partial_payment",
+        financialTopic: "cash",
+      },
+      {
+        intent: "SEARCH",
+        kind: "Order",
+        query: "O-123",
+        financialTopic: "cash",
+      },
+      { intent: "LIST", kind: "Order", query: null, helpTopic: "mark_paid" },
+    ])
+      expect(assistantSearchPlanSchema.safeParse(plan).success).toBe(false);
+  });
 });
 
 describe("deterministic assistant replies", () => {
