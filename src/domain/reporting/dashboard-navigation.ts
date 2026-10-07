@@ -14,6 +14,7 @@ export function dashboardReportHref(
     "projectStatus",
     "horizon",
     "trendMonths",
+    "cashDelay",
   ]) {
     const value = params[key];
     if (typeof value === "string" && value) query.set(key, value);

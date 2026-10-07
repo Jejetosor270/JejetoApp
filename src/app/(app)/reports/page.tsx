@@ -8,6 +8,11 @@ import { ViewField } from "@/components/listing/view-selector";
 
 import { CashFlowPanel } from "@/components/reporting/cash-flow-panel";
 import { ReportsDashboard } from "@/components/reporting/reports-dashboard";
+import { ReportExport } from "@/components/reporting/report-export";
+import {
+  cashDelay,
+  cashDelayOptions,
+} from "@/domain/reporting/forecast-scenario";
 import { dashboardHistoryRange } from "@/domain/finance/reports-dashboard";
 import {
   dashboardReportHref,
@@ -131,6 +136,12 @@ function ReportingFilters({
                 ]}
               />
               <ViewField
+                field="cashDelay"
+                label="Cash-in delay"
+                defaultValue={cashDelay(first(params, "cashDelay"))}
+                options={cashDelayOptions}
+              />
+              <ViewField
                 field="horizon"
                 label="Forecast"
                 defaultValue={
@@ -166,6 +177,13 @@ function ReportingFilters({
         </>
       }
     >
+      {view !== "dashboard" ? (
+        <input
+          type="hidden"
+          name="cashDelay"
+          value={cashDelay(first(params, "cashDelay"))}
+        />
+      ) : null}
       {view !== "dashboard" ? (
         <input
           type="hidden"
@@ -408,10 +426,36 @@ export default async function ReportsPage({
       />
 
       <ReportingFilters options={options} params={params} view={view} />
+      <ReportExport
+        view={view}
+        params={{
+          ...params,
+          projectStatus,
+          direction,
+          horizon,
+          trendMonths: String(
+            dashboardTrendMonths(first(params, "trendMonths")),
+          ),
+          cashDelay: cashDelay(first(params, "cashDelay")),
+          dateFrom:
+            view === "cash-flow"
+              ? report?.cashFlow.start
+              : dateFrom && isDateOnly(dateFrom)
+                ? dateFrom
+                : undefined,
+          dateTo:
+            view === "cash-flow"
+              ? report?.cashFlow.end
+              : dateTo && isDateOnly(dateTo)
+                ? dateTo
+                : undefined,
+        }}
+      />
       {view === "dashboard" && report ? (
         <ReportsDashboard
           report={report}
           horizon={horizon}
+          delay={cashDelay(first(params, "cashDelay"))}
           links={{
             transactions: dashboardReportHref(params, "payments", {
               dateFrom: historyRange.start,

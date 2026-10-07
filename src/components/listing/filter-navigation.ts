@@ -22,7 +22,8 @@ export function clearFiltersHref(pathname: string, params: URLSearchParams) {
     if (
       (!presentationKeys.has(key) &&
         !(
-          pathname === "/reports" && ["horizon", "trendMonths"].includes(key)
+          pathname === "/reports" &&
+          ["horizon", "trendMonths", "cashDelay"].includes(key)
         )) ||
       key === "page" ||
       (pathname === "/reports" && key === "direction")

@@ -10,6 +10,8 @@ import type { CashFlowHorizon } from "@/config/reporting";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import { formatDateOnly } from "@/domain/payments/dates";
 import { CashBars, dashboardLink, ProjectBars } from "./dashboard-charts";
+import { ForecastScenario } from "./forecast-scenario";
+import type { CashDelay } from "@/domain/reporting/forecast-scenario";
 
 export interface DashboardLinks {
   transactions: string;
@@ -38,10 +40,12 @@ export function ReportsDashboard({
   report,
   links,
   horizon,
+  delay = "0",
 }: {
   report: DashboardReport;
   links: DashboardLinks;
   horizon: CashFlowHorizon;
+  delay?: CashDelay;
 }) {
   const currency = report.companyCurrencyCode;
   const history = report.cashFlow;
@@ -331,6 +335,15 @@ export function ReportsDashboard({
             </details>
           ) : null}
         </section>
+      ) : null}
+      {outlook ? (
+        <ForecastScenario
+          outlook={outlook}
+          currency={currency}
+          horizon={horizon}
+          delay={delay}
+          href={links.forecast}
+        />
       ) : null}
       <div className="grid gap-5 xl:grid-cols-2">
         <section

@@ -56,8 +56,9 @@ export function dashboardForecast(
   outlook: ProjectCashOutlook,
   currency: string,
   horizon: CashFlowHorizon,
+  selectedRange?: { start: string; end: string },
 ) {
-  const range = cashFlowRange(outlook.today, horizon);
+  const range = selectedRange ?? cashFlowRange(outlook.today, horizon);
   const months = buildMonthlyCashFlow({
     ...range,
     installments: [],
