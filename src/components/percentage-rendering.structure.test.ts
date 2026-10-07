@@ -22,7 +22,7 @@ describe("financial percentage presentation boundaries", () => {
     [
       "Billing",
       "src/components/billing/billing-detail.tsx",
-      "formatRate(financial?.actualMarkupRate ?? null)",
+      "formatRate(profitability.orderRates[allocation.orderId] ?? null)",
     ],
     [
       "Payment schedules",

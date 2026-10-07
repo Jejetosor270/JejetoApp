@@ -1,5 +1,10 @@
 "use client";
 import { BillingStatusControl } from "./billing-status";
+import { BillingProfitability } from "./billing-profitability";
+import {
+  billingProfitability,
+  type BillingProfitOrder,
+} from "@/domain/finance/billing-profitability";
 
 import {
   RelatedRecords,
@@ -91,7 +96,7 @@ interface BillingDetailOptions {
   }[];
 }
 
-interface OrderFinancialView {
+interface OrderFinancialView extends BillingProfitOrder {
   actualMarkupRate: string | null;
   id: string;
   plannedSell: string | null;
@@ -292,6 +297,27 @@ export function BillingDetail({
     })),
     saved.otherCoverageHt,
   );
+  const profitability = billingProfitability({
+    totalHt: saved.totalHt,
+    freightHt: saved.freightCoverageHt,
+    otherHt: saved.otherCoverageHt,
+    currency: saved.currencyCode,
+    reportingCurrency: document.project.reportingCurrencyCode,
+    fx: saved.fxRate || null,
+    rates:
+      saved.projectId === document.projectId
+        ? (document.projectMarkup ?? [null, null, null])
+        : [null, null, null],
+    cancelled: saved.isCancelled,
+    credits: document.profitabilityCredits ?? [],
+    allocations: saved.allocations.map((allocation) => ({
+      orderId: allocation.orderId,
+      allocatedAmount: allocation.amount,
+      freightCoverageHt: allocation.freightCoverageHt,
+      otherCoverageHt: allocation.otherCoverageHt,
+    })),
+    orders: orderFinancials,
+  });
   const saveAllocation = (allocation: SavedBillingAllocation) => {
     const update = (current: BillingDraft): BillingDraft => ({
       ...current,
@@ -1124,46 +1150,10 @@ export function BillingDetail({
                       ]}
                     />
                   </article>
-                  <article className="bg-card min-w-0 rounded-lg border p-4">
-                    <RecordSectionHeading title="Invoice allocation HT" />
-                    <div className="mt-3 overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr>
-                            <th className="p-2 text-left">Measure</th>
-                            {freightBreakdown.categories.map((c) => (
-                              <th key={c.label} className="p-2 text-right">
-                                {c.label}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(
-                            [
-                              ["Total", "total"],
-                              ["Allocated to Orders", "allocated"],
-                              ["Project remainder", "remaining"],
-                            ] as const
-                          ).map(([label, key]) => (
-                            <tr key={key} className="border-t">
-                              <th className="p-2 text-left font-normal">
-                                {label}
-                              </th>
-                              {freightBreakdown.categories.map((c) => (
-                                <td
-                                  key={c.label}
-                                  className="financial-figure p-2 text-right"
-                                >
-                                  {formatMoney(c[key], saved.currencyCode)}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </article>
+                  <BillingProfitability
+                    result={profitability}
+                    currency={saved.currencyCode}
+                  />
                 </section>
                 <section className="bg-card rounded-lg border p-4">
                   <RecordSectionHeading title="Dates" />
@@ -1265,7 +1255,7 @@ export function BillingDetail({
                     "Other/services HT",
                     "% of Billing",
                     "Planned sell HT",
-                    "Allocated billing markup",
+                    "Actual markup",
                   ],
                   numericColumns: [2, 3, 4, 5, 6, 7],
                   rows: saved.allocations.map((allocation) => {
@@ -1317,7 +1307,9 @@ export function BillingDetail({
                             savedProject?.reportingCurrencyCode ??
                             document.project.reportingCurrencyCode,
                         ),
-                        formatRate(financial?.actualMarkupRate ?? null),
+                        formatRate(
+                          profitability.orderRates[allocation.orderId] ?? null,
+                        ),
                       ],
                     };
                   }),

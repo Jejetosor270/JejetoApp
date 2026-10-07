@@ -188,7 +188,14 @@ const billingInclude = {
   },
   receipts: { orderBy: { receivedAt: "asc" } },
   project: {
-    select: { id: true, name: true, reportingCurrencyCode: true },
+    select: {
+      id: true,
+      name: true,
+      reportingCurrencyCode: true,
+      defaultProductMarkupRate: true,
+      defaultFreightMarkupRate: true,
+      defaultOtherCostMarkupRate: true,
+    },
   },
   imports: {
     include: {
@@ -264,6 +271,31 @@ function billingView(record: BillingRecord, today = businessToday()) {
   );
   return {
     ...(activeBillingCredits(record).length ? { creditPosition } : {}),
+    ...(record.project
+      ? {
+          projectMarkup: [
+            record.project.defaultProductMarkupRate?.toString() ?? null,
+            record.project.defaultFreightMarkupRate?.toString() ?? null,
+            record.project.defaultOtherCostMarkupRate?.toString() ?? null,
+          ],
+        }
+      : {}),
+    ...(activeBillingCredits(record).length
+      ? {
+          profitabilityCredits: activeBillingCredits(record).map((credit) => ({
+            totalHt: credit.totalHt.toString(),
+            vatAmount: credit.vatAmount.toString(),
+            freightCoverageHt: credit.freightCoverageHt.toString(),
+            otherCoverageHt: credit.otherCoverageHt.toString(),
+            allocations: (credit.allocations ?? []).map((allocation) => ({
+              orderId: allocation.orderId,
+              amountHt: allocation.amountHt.toString(),
+              freightCoverageHt: allocation.freightCoverageHt.toString(),
+              otherCoverageHt: allocation.otherCoverageHt.toString(),
+            })),
+          })),
+        }
+      : {}),
     allocations: record.allocations.map((allocation) => ({
       freightCoverageHt: allocation.freightCoverageHt?.toString() ?? "0",
       otherCoverageHt: allocation.otherCoverageHt?.toString() ?? "0",
@@ -361,14 +393,20 @@ function billingView(record: BillingRecord, today = businessToday()) {
       sequence: installment.sequence,
     })),
     paymentTermsRaw: record.paymentTermsRaw,
-    project: record.project ?? {
-      id: "",
-      name: "Unassigned",
-      reportingCurrencyCode: retainedCurrency(
-        null,
-        record.detachedReportingCurrencyCode,
-      ),
-    },
+    project: record.project
+      ? {
+          id: record.project.id,
+          name: record.project.name,
+          reportingCurrencyCode: record.project.reportingCurrencyCode,
+        }
+      : {
+          id: "",
+          name: "Unassigned",
+          reportingCurrencyCode: retainedCurrency(
+            null,
+            record.detachedReportingCurrencyCode,
+          ),
+        },
     projectId: record.projectId ?? "",
     reference: record.reference,
     status,

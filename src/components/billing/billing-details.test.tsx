@@ -168,13 +168,37 @@ function value(label: string) {
     (element) => element.textContent === label,
   )?.nextElementSibling?.textContent;
 }
-async function mount(documentData: ClientBillingView = record, canEdit = true) {
+it("shows Billing-specific allocated profit and markup separately from unallocated HT", async () => {
+  await mount({ ...record, projectMarkup: ["0.3", "0.15", "0"] }, false, [
+    {
+      id: "order-id",
+      plannedSell: "500",
+      economicCost: "400",
+      reportingCurrencyCode: "EUR",
+      actualMarkupRate: "0.99",
+      invoicedAllocated: "100",
+    },
+  ]);
+  expect(matrix("Expected profit", 3)).toBe("210.70 EUR");
+  expect(matrix("Allocated cost", 3)).toBe("80.00 EUR");
+  expect(matrix("Allocated profit", 3)).toBe("20.00 EUR");
+  expect(matrix("Actual markup", 3)).toBe("25%");
+  expect(matrix("Unallocated HT", 3)).toBe("900.00 EUR");
+  expect(document.querySelector("#overview")?.textContent).not.toContain(
+    "Potential Client return",
+  );
+});
+async function mount(
+  documentData: ClientBillingView = record,
+  canEdit = true,
+  orderFinancials: ComponentProps<typeof BillingDetail>["orderFinancials"] = [],
+) {
   view = await mountForm(
     <BillingDetail
       canEdit={canEdit}
       document={documentData}
       options={options}
-      orderFinancials={[]}
+      orderFinancials={orderFinancials}
       startEditing={false}
     />,
   );
@@ -240,10 +264,10 @@ it("continues showing the due date for partially paid Billing", async () => {
 
 it("shows allocation and freight figures in Details, separately from Client outstanding", async () => {
   await mount();
-  expect(matrix("Project remainder", 0)).toBe("725.00 EUR");
+  expect(matrix("Unallocated HT", 0)).toBe("725.00 EUR");
   expect(matrix("Total", 1)).toBe("200.00 EUR");
   expect(matrix("Allocated to Orders", 1)).toBe("25.00 EUR");
-  expect(matrix("Project remainder", 1)).toBe("175.00 EUR");
+  expect(matrix("Unallocated HT", 1)).toBe("175.00 EUR");
   expect(value("Outstanding")).toBe("1 100.00 EUR");
   expect(value("Status")).toBeUndefined();
   expect(value("Payment status")).toBeUndefined();
@@ -283,9 +307,9 @@ it("contains the allocation table within a shrinkable single column on narrow sc
 
 it("keeps zero allocations explicit and all freight at Project level", async () => {
   await mount({ ...record, allocations: [] });
-  expect(matrix("Project remainder", 0)).toBe("800.00 EUR");
+  expect(matrix("Unallocated HT", 0)).toBe("800.00 EUR");
   expect(matrix("Allocated to Orders", 1)).toBe("0.00 EUR");
-  expect(matrix("Project remainder", 1)).toBe("200.00 EUR");
+  expect(matrix("Unallocated HT", 1)).toBe("200.00 EUR");
 });
 it("preserves Other/services classification and allocation through a rejected full edit", async () => {
   actions.save.mockResolvedValue({
@@ -366,7 +390,7 @@ it("does not expose editing to read-only employees", async () => {
     ),
   ).toBe(false);
   expect(document.querySelector('[name="recordStatus"]')).toBeNull();
-  expect(matrix("Project remainder", 0)).toBe("725.00 EUR");
+  expect(matrix("Unallocated HT", 0)).toBe("725.00 EUR");
 });
 
 it.each([

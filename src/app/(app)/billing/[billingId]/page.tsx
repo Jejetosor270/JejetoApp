@@ -47,6 +47,9 @@ export default async function BillingDetailPage({
       options={options}
       orderFinancials={orders.map((order) => ({
         actualMarkupRate: order.billing.actualMarkupRate,
+        economicCost: order.costs.reportingEconomicLandedCost,
+        cancelled: order.status === "CANCELLED",
+        invoicedAllocated: order.billing.invoicedAllocated,
         id: order.id,
         plannedSell: order.costs.reportingSellingRevenue,
         reportingCurrencyCode: order.project.reportingCurrencyCode,

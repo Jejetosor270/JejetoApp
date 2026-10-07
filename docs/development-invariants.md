@@ -1,5 +1,12 @@
 # Development invariants
 
+## Billing allocation profitability
+
+- Billing Details retains Merchandise, Freight and Other/services and adds Total. Agreed markup uses current Project category defaults. Expected profit is the portion embedded in net Billing HT: category HT minus category HT / (1 + category markup). It is distinct from allocated profit; the Total rate is derived from summed implied costs and profit, never averaged rates.
+- Allocated cost attributes the linked Order's full economic cost (including freight, other costs, Supplier credits and non-recoverable VAT) in proportion to this Billing allocation / authoritative Order selling HT. Each Billing category receives its share of this proportional whole-Order cost, not a separate component-cost reconstruction. Allocated profit is allocation HT minus attributed cost; Actual markup is that profit / attributed cost. Related Order rows use this same Billing-specific ratio, not combined allocations from other Invoices.
+- Client credits reduce Invoice categories and only their explicitly credited allocations using the shared credit helpers. Missing linked costs/FX, cancelled sources, zero selling bases and Order overcoverage remain incomplete; zero-cost markup is undefined. Calculations use Decimal in `src/domain/finance/billing-profitability.ts` and preserve original currencies through comparable reporting bases.
+- The residual is labelled **Unallocated HT**, without a refund note. It is excluded from allocated profit and creates no credit/refund, cash, schedule or allocation change. No migration is required.
+
 ## JejetoBot — Phases 1–3
 
 - The shared side JejetoBot is a read-only name/reference finder and list assistant for Projects,
