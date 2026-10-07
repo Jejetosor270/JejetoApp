@@ -276,6 +276,9 @@ async function createApprovedSchedule(
     inputVatAmount: calculatedInputVat,
     inputVatTreatment: order.inputVatTreatment,
     supplierPurchase: order.purchaseCost ?? "0",
+    freight: order.freight,
+    customsDuties: order.customsDuties,
+    miscellaneous: order.miscellaneous,
   });
   const latest = await transaction.paymentInstallment.findFirst({
     where: { direction: PaymentDirection.SUPPLIER_PAYMENT, orderId },

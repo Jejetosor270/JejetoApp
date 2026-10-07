@@ -175,7 +175,7 @@ it("reconciles complete Project economics, approved budget, credits, refunds and
     paid: "114.0000",
     cash: "102.0000",
     toCollect: "0.0000",
-    toPay: "0.0000",
+    toPay: "10.0000",
     expectedCost: "142.0000",
     expectedProfit: "88.0000",
     freightCost: "30.0000",
@@ -203,7 +203,7 @@ it("reconciles complete Project economics, approved budget, credits, refunds and
     control.dashboard.alerts.some(
       (alert) => alert.label === "Cost payable review",
     ),
-  ).toBe(true);
+  ).toBe(false);
   const summary = await getProjectClientBillingSummary(project.id);
   expect(metrics.coverage.value).toBe(
     difference(summary?.invoicedHt ?? null, metrics.sell.value),

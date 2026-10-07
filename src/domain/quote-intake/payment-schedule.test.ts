@@ -7,6 +7,20 @@ import {
 } from "@/domain/quote-intake/payment-schedule";
 
 describe("quote payment schedule draft reconciliation", () => {
+  it("includes reviewed freight and other costs without adding VAT twice", () => {
+    expect(
+      calculateQuoteSupplierPayable({
+        applyInputVat: true,
+        inputVatAmount: "746",
+        inputVatRatePercent: "20",
+        inputVatTaxableBase: "3730",
+        inputVatTreatment: "DOMESTIC",
+        purchaseCost: "3450",
+        freight: "280",
+        miscellaneous: "0",
+      }).toFixed(2),
+    ).toBe("4476.00");
+  });
   it("reuses the supplier payable VAT basis", () => {
     expect(
       calculateQuoteSupplierPayable({

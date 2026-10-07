@@ -98,6 +98,32 @@ describe("payment persistence", () => {
     });
   });
 
+  it("creates a half-payment from full Order cost plus invoice VAT", async () => {
+    getOrder.mockResolvedValue({
+      ...order,
+      costs: {
+        ...order.costs,
+        purchaseCost: "3450",
+        freight: "280",
+        customsDuties: "0",
+        miscellaneous: "0",
+        inputVat: { amount: "746", treatment: "DOMESTIC" },
+      },
+    });
+    await createInstallment("actor-1", {
+      basis: "PERCENTAGE",
+      currencyCode: "USD",
+      direction: "SUPPLIER_PAYMENT",
+      dueDate: "2026-11-06",
+      label: "Half",
+      orderId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      percentageRate: "0.5",
+    });
+    expect(transaction.paymentInstallment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ scheduledAmount: "2238.0000" }),
+    });
+  });
+
   it("moves the authoritative due date when an installment is edited", async () => {
     database.paymentInstallment.findUnique.mockResolvedValue({
       currencyCode: "USD",

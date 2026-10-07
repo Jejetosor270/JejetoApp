@@ -12,6 +12,9 @@ export async function createDefaultSupplierTerm(
   input: Pick<
     CreateOrderInput,
     | "purchaseCost"
+    | "freight"
+    | "customsDuties"
+    | "miscellaneous"
     | "inputVatTreatment"
     | "inputVatAmount"
     | "inputVatTaxableBase"
@@ -22,6 +25,9 @@ export async function createDefaultSupplierTerm(
 ) {
   const amount = supplierPayableBase({
     supplierPurchase: input.purchaseCost ?? "0",
+    freight: input.freight,
+    customsDuties: input.customsDuties,
+    miscellaneous: input.miscellaneous,
     inputVatTreatment: input.inputVatTreatment,
     inputVatAmount:
       input.inputVatAmount ??

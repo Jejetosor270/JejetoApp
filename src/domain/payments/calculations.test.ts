@@ -98,21 +98,45 @@ describe("payment calculations", () => {
     ).toBe("PAID_IN_FULL");
   });
 
-  it("uses supplier invoice VAT but excludes unrelated landed costs", () => {
+  it("uses all Order costs and only VAT payable to the Supplier", () => {
     expect(
       supplierPayableBase({
         inputVatAmount: "20000",
         inputVatTreatment: "DOMESTIC",
         supplierPurchase: "100000",
+        freight: "1000",
+        customsDuties: "200",
+        miscellaneous: "50",
       }).toFixed(2),
-    ).toBe("120000.00");
+    ).toBe("121250.00");
     expect(
       supplierPayableBase({
         inputVatAmount: "20000",
         inputVatTreatment: "IMPORT",
         supplierPurchase: "100000",
+        freight: "1000",
       }).toFixed(2),
-    ).toBe("100000.00");
+    ).toBe("101000.00");
+  });
+
+  it("includes Terrace freight once and preserves the recorded partial payment", () => {
+    const payable = supplierPayableBase({
+      supplierPurchase: "3450",
+      freight: "280",
+      inputVatTreatment: "DOMESTIC",
+      inputVatAmount: "746",
+    });
+    expect(payable.toFixed(2)).toBe("4476.00");
+    expect(payable.minus("2238").toFixed(2)).toBe("2238.00");
+    expect(scheduledAmountFromPercentage(payable, "0.5").toFixed(2)).toBe(
+      "2238.00",
+    );
+    const existing = reconcileSchedule(payable, [
+      { scheduledAmount: "4196", paidAmount: "2238" },
+    ]);
+    expect(existing.unscheduled.toFixed(2)).toBe("280.00");
+    expect(existing.remainingTotal.toFixed(2)).toBe("2238.00");
+    expect(existing.scheduledOutstanding.toFixed(2)).toBe("1958.00");
   });
 
   it("uses selling revenue plus output VAT without double-counting freight", () => {

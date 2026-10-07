@@ -97,8 +97,8 @@
 - Net cash remains net Client receipts less net Supplier/freight payments, including
   actual refunds and each cash record's independent FX. To collect uses authoritative
   issued Invoice outstanding; To pay includes remaining Supplier/freight obligations
-  and Client refunds due. Neither is a bank balance. Extra Order freight/customs/other
-  cost lines outside the Supplier payable base are flagged, not fabricated as liabilities.
+  and Client refunds due. Neither is a bank balance. Supplier payable includes all
+  Order cost lines; separate Project freight expenses remain distinct obligations.
 - Freight cash attribution groups recognized cash by issued Invoice, including an
   explicitly matched Quote once. Net freight and TTC account for active credits;
   attributable net cash is capped by the net Invoice freight portion. Contributions
@@ -380,8 +380,15 @@ amounts and dates, not actual cash. Persist scheduled amounts; later pricing cha
 must not silently rewrite them. Prevent over-settlement and distinguish scheduled
 outstanding from unscheduled and total remaining balances.
 
-Supplier payable uses purchase HT plus input VAT payable under the current helper's
-`DOMESTIC`/`CUSTOM` treatments; unrelated freight/customs/miscellaneous are excluded.
+Supplier payable uses total Order cost HT (purchase + freight + customs/duties +
+miscellaneous) plus input VAT payable under the helper's `DOMESTIC`/`CUSTOM`
+treatments. This applies consistently to Order balances, new terms, intake and
+reporting; recoverable VAT is still cash payable, never added twice through economic
+cost. Separate Project freight expenses must not duplicate an Order cost. Existing
+terms retain their saved amounts; any uncovered difference is unscheduled until an
+employee edits/adds a term or explicitly records the full remaining Order payment.
+Actual payments and credits are preserved. Supplier credit HT remains limited to
+product purchase cost; credit/refund cash limits use the full Order payable.
 Actual cash uses receipt/settlement dates and their own FX. Forecasts use outstanding
 Billing/Supplier installments, due dates, and expected FX. Cash position is Client
 cash received minus Supplier cash paid. Cash timing never determines profitability.

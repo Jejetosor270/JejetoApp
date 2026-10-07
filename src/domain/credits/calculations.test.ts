@@ -116,6 +116,23 @@ describe("explicit credit reductions", () => {
       }),
     ).toThrow("original");
   });
+  it("preserves historical Supplier refunds when corrected costs reopen debt", () => {
+    expect(
+      creditCashPosition({
+        originalTtc: "110",
+        creditedTtc: "10",
+        paidTtc: "100",
+        refundedTtc: "10",
+        preserveRecordedRefunds: true,
+      }),
+    ).toEqual({
+      netDue: "100.0000",
+      netPaid: "90.0000",
+      outstanding: "10.0000",
+      refundDue: "0.0000",
+    });
+  });
+
   it("reverses partial input VAT recoverability without reducing selling prices", () => {
     expect(
       supplierCreditEffect({

@@ -319,19 +319,6 @@ export function buildProjectDashboard(input: {
         href: entry.source?.href ?? budgetHref,
         note: `${entry.source?.label}: ${entry.reviewReason ?? (entry.amount === null ? "A required expected cash FX rate is missing." : entry.due === null ? "An outstanding balance has no due date or complete schedule." : `Outstanding TTC was due ${entry.due}.`)}`,
       })),
-    ...orders
-      .filter((order) =>
-        [
-          order.costs.freight,
-          order.costs.customsDuties,
-          order.costs.miscellaneous,
-        ].some((amount) => amount !== null && !new Decimal(amount).isZero()),
-      )
-      .map((order) => ({
-        label: "Cost payable review",
-        href: `/orders/${order.id}`,
-        note: `${order.orderNumber}: freight, customs or other cost lines are economic costs outside the Supplier payable base. Review their payment coverage; no extra liability is inferred.`,
-      })),
   ];
   const refundRows = (outflow: boolean): ProjectMetricRow[] =>
     input.refunds

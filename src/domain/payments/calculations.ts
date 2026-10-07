@@ -162,6 +162,9 @@ export function reconcileSchedule(
 const SUPPLIER_PAYABLE_VAT_TREATMENTS = new Set(["DOMESTIC", "CUSTOM"]);
 
 export function supplierPayableBase(input: {
+  freight?: FinancialDecimal | null | undefined;
+  customsDuties?: FinancialDecimal | null | undefined;
+  miscellaneous?: FinancialDecimal | null | undefined;
   inputVatAmount?: FinancialDecimal | null | undefined;
   inputVatTreatment?: string | null | undefined;
   supplierPurchase: FinancialDecimal;
@@ -173,7 +176,11 @@ export function supplierPayableBase(input: {
     SUPPLIER_PAYABLE_VAT_TREATMENTS.has(input.inputVatTreatment)
       ? nonNegative(input.inputVatAmount, "Supplier invoice VAT")
       : ZERO;
-  return purchase.plus(payableVat);
+  return purchase
+    .plus(nonNegative(input.freight ?? "0", "Freight"))
+    .plus(nonNegative(input.customsDuties ?? "0", "Customs / duties"))
+    .plus(nonNegative(input.miscellaneous ?? "0", "Other costs"))
+    .plus(payableVat);
 }
 
 export function clientReceivableBase(input: {

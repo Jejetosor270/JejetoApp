@@ -6,6 +6,7 @@ import {
   calculateCashPosition,
   calculateDirectionPaymentSummary,
   calculateProjectFinancialSummary,
+  calculateReportingOrder,
   cashFlowChartScale,
   cashFlowRange,
   daysOverdue,
@@ -65,6 +66,25 @@ function order(
     totalSellingRevenue: values.sales,
   };
 }
+
+it("reports full Supplier cost with independent FX and unchanged economic profit", () => {
+  const source = order("freight", {
+    purchaseCost: "3450",
+    economicCost: "3730",
+    inputVat: "746",
+    sales: "4807",
+  });
+  source.cost.freight = "280";
+  source.cost.landedCost = "3730";
+  source.orderCurrencyCode = "USD";
+  source.purchaseFxRate = "0.9";
+  const result = calculateReportingOrder(source);
+  expect(result.supplierPayable?.toFixed(2)).toBe("4028.40");
+  expect(result.economicLandedCost?.toFixed(2)).toBe("3357.00");
+  expect(result.grossProfit?.toFixed(2)).toBe("1450.00");
+  source.purchaseFxRate = null;
+  expect(calculateReportingOrder(source).supplierPayable).toBeNull();
+});
 
 function installment(
   overrides: Partial<ReportingInstallmentInput> = {},

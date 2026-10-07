@@ -553,7 +553,7 @@ it("builds the compact overview from full costs, agreed sell and full payable wi
       paidTtc: "55.0000",
       balanceTtc: "65.0000",
     },
-    funding: { recordedPayableTtc: "144.0000", balanceTtc: "-24.0000" },
+    funding: { recordedPayableTtc: "164.0000", balanceTtc: "-44.0000" },
     orders: {
       costHt: "120.0000",
       sellHt: "180.0000",

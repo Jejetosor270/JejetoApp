@@ -104,6 +104,8 @@ export function creditCashPosition(input: {
   creditedTtc: string;
   paidTtc: string;
   refundedTtc: string;
+  /** Supplier payable corrections may reopen debt after a previously valid refund. */
+  preserveRecordedRefunds?: boolean;
 }) {
   const original = amount(input.originalTtc, "Original TTC");
   const credited = amount(input.creditedTtc, "Credit TTC");
@@ -113,13 +115,13 @@ export function creditCashPosition(input: {
     throw new RangeError("Credits exceed the original TTC amount.");
   const netDue = original.minus(credited);
   const refundLimit = Decimal.max(paid.minus(netDue), 0);
-  if (refunded.greaterThan(refundLimit))
+  if (refunded.greaterThan(refundLimit) && !input.preserveRecordedRefunds)
     throw new RangeError("Refunds exceed the cash refundable after credits.");
   return {
     netDue: netDue.toFixed(4),
     netPaid: paid.minus(refunded).toFixed(4),
     outstanding: Decimal.max(netDue.minus(paid).plus(refunded), 0).toFixed(4),
-    refundDue: refundLimit.minus(refunded).toFixed(4),
+    refundDue: Decimal.max(refundLimit.minus(refunded), 0).toFixed(4),
   };
 }
 

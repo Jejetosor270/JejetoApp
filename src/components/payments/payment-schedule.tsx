@@ -113,7 +113,9 @@ export function PaymentSchedule({
       {summary.unscheduled !== "0" && (
         <p className="text-sm">
           Without payment terms:{" "}
-          {formatMoney(summary.unscheduled, summary.baseCurrencyCode)}
+          {formatMoney(summary.unscheduled, summary.baseCurrencyCode)}. Existing
+          terms retain their saved amounts. Edit a term to cover the difference;
+          recorded payments stay unchanged.
         </p>
       )}
       {summary.overallocated !== "0" && (

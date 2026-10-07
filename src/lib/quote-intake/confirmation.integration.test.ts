@@ -321,7 +321,7 @@ describe("reviewed quote confirmation persistence", () => {
           currencyCode: "EUR",
           direction: "SUPPLIER_PAYMENT",
           percentageRate: "0.300000",
-          scheduledAmount: "36000.0000",
+          scheduledAmount: "37575.0000",
         }),
       ],
     });

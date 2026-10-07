@@ -44,6 +44,9 @@ export function calculateQuoteSupplierPayable(input: {
   inputVatTaxableBase: string;
   inputVatTreatment: string;
   purchaseCost: string;
+  freight?: string;
+  customsDuties?: string;
+  miscellaneous?: string;
 }): Decimal {
   const purchase = money(input.purchaseCost) ?? new Decimal(0);
   const manualVat = money(input.inputVatAmount);
@@ -59,6 +62,9 @@ export function calculateQuoteSupplierPayable(input: {
       ? input.inputVatTreatment
       : undefined,
     supplierPurchase: purchase,
+    freight: money(input.freight ?? ""),
+    customsDuties: money(input.customsDuties ?? ""),
+    miscellaneous: money(input.miscellaneous ?? ""),
   });
 }
 

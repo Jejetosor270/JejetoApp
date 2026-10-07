@@ -224,7 +224,7 @@ export function projectDashboard(
     ),
     toPay: projectMetric(
       input.toPay,
-      "Remaining Supplier payable and Project freight obligations plus Client refunds due. Includes unscheduled and undated balances. Order freight, customs and other cost lines do not invent payable obligations.",
+      "Remaining Supplier payable, including all Order costs and payable input VAT, plus separate Project freight obligations and Client refunds due. Includes unscheduled and undated balances.",
     ),
     expectedCost: projectMetric(
       expectedCost,

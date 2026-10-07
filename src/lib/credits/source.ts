@@ -1,5 +1,6 @@
 import "server-only";
 import Decimal from "decimal.js";
+import { supplierPayableBase } from "@/domain/payments/calculations";
 import type { Prisma } from "@/generated/prisma/client";
 import { billingIsIssued } from "@/domain/billing/status";
 import { uniqueReceiptTotal } from "@/domain/billing/cash-expectations";
@@ -206,7 +207,21 @@ export async function loadCreditSource(
     original: {
       totalHt: purchase,
       vatAmount: payableVat,
-      totalTtc: new Decimal(purchase).plus(payableVat).toFixed(4),
+      // Credit HT remains limited to products; cash obligations include all Order costs.
+      totalTtc: supplierPayableBase({
+        supplierPurchase: purchase,
+        freight: source.costLines
+          .find((row) => row.category === "FREIGHT")
+          ?.originalAmount.toString(),
+        customsDuties: source.costLines
+          .find((row) => row.category === "CUSTOMS_DUTIES")
+          ?.originalAmount.toString(),
+        miscellaneous: source.costLines
+          .find((row) => row.category === "MISCELLANEOUS")
+          ?.originalAmount.toString(),
+        inputVatAmount: payableVat,
+        inputVatTreatment: vat?.treatment,
+      }).toFixed(4),
       freightCoverageHt: "0",
       otherCoverageHt: "0",
     },
@@ -247,6 +262,7 @@ export function sourceCreditPosition(source: CreditSource) {
         creditedTtc: remaining.creditedTtc,
         paidTtc: source.paidTtc,
         refundedTtc,
+        preserveRecordedRefunds: source.side === "SUPPLIER",
       }),
     },
     expectedVersion: editVersion(source.snapshot),

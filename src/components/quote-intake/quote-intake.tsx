@@ -258,6 +258,8 @@ export function QuoteReview({
     inputVatTaxableBase: financialValues.inputVatTaxableBase,
     inputVatTreatment,
     purchaseCost: applyPurchaseCost ? financialValues.purchaseCost : "",
+    freight: applyFreight ? financialValues.freight : "",
+    miscellaneous: applyMiscellaneous ? financialValues.miscellaneous : "",
   }).toFixed(4);
   const paymentCurrency =
     orderCurrencyCode || project?.reportingCurrencyCode || "EUR";

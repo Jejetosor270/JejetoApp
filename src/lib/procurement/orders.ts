@@ -883,6 +883,12 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
         inputVatAmount: input?.vatAmount.toString() ?? null,
         inputVatTreatment: input?.treatment ?? null,
         supplierPurchase,
+        freight: costAmount(order, ProcurementCostCategory.FREIGHT),
+        customsDuties: costAmount(
+          order,
+          ProcurementCostCategory.CUSTOMS_DUTIES,
+        ),
+        miscellaneous: costAmount(order, ProcurementCostCategory.MISCELLANEOUS),
       })
     : null;
   const scheduledSupplier = order.paymentInstallments
@@ -905,6 +911,7 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
         creditedTtc: credits.payable,
         paidTtc: paidSupplier.toString(),
         refundedTtc: credits.refunded,
+        preserveRecordedRefunds: true,
       })
     : null;
   const supplierPayable = cashPosition
