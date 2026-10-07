@@ -7,6 +7,12 @@ import type { Metadata } from "next";
 import { ViewField } from "@/components/listing/view-selector";
 
 import { CashFlowPanel } from "@/components/reporting/cash-flow-panel";
+import { ReportsDashboard } from "@/components/reporting/reports-dashboard";
+import { dashboardHistoryRange } from "@/domain/finance/reports-dashboard";
+import {
+  dashboardReportHref,
+  dashboardTrendMonths,
+} from "@/domain/reporting/dashboard-navigation";
 import {
   ActualCashReport,
   GlobalFreightReport,
@@ -22,7 +28,7 @@ import {
   ProjectPortfolioTable,
 } from "@/components/reporting/portfolio-report";
 import { isCashFlowHorizon, type CashFlowHorizon } from "@/config/reporting";
-import { isDateOnly } from "@/domain/payments/dates";
+import { businessToday, isDateOnly } from "@/domain/payments/dates";
 import { formatEnumLabel } from "@/domain/presentation/labels";
 import { PaymentDirection, ProjectStatus } from "@/generated/prisma/client";
 import { requireUser } from "@/lib/auth/current-user";
@@ -39,6 +45,7 @@ import {
 export const metadata: Metadata = { title: "Reports" };
 
 const views = [
+  { label: "Dashboard", value: "dashboard" },
   { label: "Portfolio", value: "projects" },
   { label: "Cash", value: "cash-flow" },
   { label: "Transactions", value: "payments" },
@@ -109,6 +116,37 @@ function ReportingFilters({
                     : item.label,
             }))}
           />
+          {view === "dashboard" ? (
+            <>
+              <ViewField
+                field="trendMonths"
+                label="Cash trend"
+                defaultValue={String(
+                  dashboardTrendMonths(first(params, "trendMonths")),
+                )}
+                options={[
+                  { label: "Last 3 months", value: "3" },
+                  { label: "Last 6 months", value: "6" },
+                  { label: "Last 12 months", value: "12" },
+                ]}
+              />
+              <ViewField
+                field="horizon"
+                label="Forecast"
+                defaultValue={
+                  isCashFlowHorizon(first(params, "horizon") ?? "")
+                    ? (first(params, "horizon") ?? "90d")
+                    : "90d"
+                }
+                options={[
+                  { label: "Next 30 days", value: "30d" },
+                  { label: "Next 90 days", value: "90d" },
+                  { label: "Next 6 months", value: "6m" },
+                  { label: "Next 12 months", value: "12m" },
+                ]}
+              />
+            </>
+          ) : null}
           {view === "projects" && (
             <ViewField
               field="portfolioView"
@@ -128,6 +166,13 @@ function ReportingFilters({
         </>
       }
     >
+      {view !== "dashboard" ? (
+        <input
+          type="hidden"
+          name="trendMonths"
+          value={first(params, "trendMonths") ?? "6"}
+        />
+      ) : null}
       {view !== "projects" && (
         <input
           name="portfolioView"
@@ -142,7 +187,7 @@ function ReportingFilters({
           value={first(params, "direction") ?? ""}
         />
       )}
-      {view !== "cash-flow" && (
+      {view !== "cash-flow" && view !== "dashboard" && (
         <input
           name="horizon"
           type="hidden"
@@ -280,11 +325,17 @@ export default async function ReportsPage({
     selected(
       views.map((item) => item.value),
       first(params, "view"),
-    ) ?? "projects";
+    ) ?? "dashboard";
   const requestedHorizon = first(params, "horizon") ?? "";
   const horizon: CashFlowHorizon = isCashFlowHorizon(requestedHorizon)
     ? requestedHorizon
-    : "12m";
+    : view === "dashboard"
+      ? "90d"
+      : "12m";
+  const historyRange = dashboardHistoryRange(
+    businessToday(),
+    dashboardTrendMonths(first(params, "trendMonths")),
+  );
   const dateFrom = first(params, "dateFrom");
   const dateTo = first(params, "dateTo");
   const projectStatus = selected(
@@ -302,11 +353,21 @@ export default async function ReportsPage({
     supplierId: first(params, "supplierId"),
   };
   const reportPromise =
-    view === "projects" || view === "cash-flow"
+    view === "dashboard" || view === "projects" || view === "cash-flow"
       ? getPortfolioReportingSnapshot(reportingFilters, {
-          end: dateTo && isDateOnly(dateTo) ? dateTo : undefined,
+          end:
+            view === "dashboard"
+              ? historyRange.end
+              : dateTo && isDateOnly(dateTo)
+                ? dateTo
+                : undefined,
           horizon,
-          start: dateFrom && isDateOnly(dateFrom) ? dateFrom : undefined,
+          start:
+            view === "dashboard"
+              ? historyRange.start
+              : dateFrom && isDateOnly(dateFrom)
+                ? dateFrom
+                : undefined,
         })
       : Promise.resolve(null);
   const [options, report, actualCash, vat, freight] = await Promise.all([
@@ -331,7 +392,7 @@ export default async function ReportsPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Reports"
+        title={view === "dashboard" ? "Financial dashboard" : "Reports"}
         actions={
           <Button variant="outline" asChild>
             <Link href="/reports/reconciliation">Bank reconciliation</Link>
@@ -339,13 +400,35 @@ export default async function ReportsPage({
         }
         description={
           <>
-            Read-only Project financial, cash-flow, and payment reporting
-            derived from current operational records.
+            {view === "dashboard"
+              ? "Cash trends, upcoming obligations and Project pricing. Read-only, from your records."
+              : "Read-only Project financial, cash-flow, and payment reporting derived from current operational records."}
           </>
         }
       />
 
       <ReportingFilters options={options} params={params} view={view} />
+      {view === "dashboard" && report ? (
+        <ReportsDashboard
+          report={report}
+          horizon={horizon}
+          links={{
+            transactions: dashboardReportHref(params, "payments", {
+              dateFrom: historyRange.start,
+              dateTo: historyRange.end,
+            }),
+            forecast: dashboardReportHref(params, "cash-flow", { horizon }),
+            projects: dashboardReportHref(params, "projects", {
+              portfolioView: "commercial",
+            }),
+            coverage: dashboardReportHref(params, "projects", {
+              portfolioView: "funding",
+            }),
+            vat: dashboardReportHref(params, "vat"),
+            freight: dashboardReportHref(params, "freight"),
+          }}
+        />
+      ) : null}
       {(view === "vat" || view === "freight") && reportingFilters.supplierId ? (
         <p className="text-muted-foreground text-xs">
           Showing full-Project {view === "vat" ? "VAT" : "freight"} for Projects

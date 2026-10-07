@@ -20,7 +20,10 @@ export function clearFiltersHref(pathname: string, params: URLSearchParams) {
   const query = new URLSearchParams(params);
   for (const key of [...query.keys()]) {
     if (
-      !presentationKeys.has(key) ||
+      (!presentationKeys.has(key) &&
+        !(
+          pathname === "/reports" && ["horizon", "trendMonths"].includes(key)
+        )) ||
       key === "page" ||
       (pathname === "/reports" && key === "direction")
     )
