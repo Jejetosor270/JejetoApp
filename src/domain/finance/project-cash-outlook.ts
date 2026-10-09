@@ -30,6 +30,7 @@ export function projectCashOutlook(
   currentCash: string | null,
 ) {
   const entries: {
+    unscheduled?: boolean;
     reviewReason?: string;
     kind: CashOutlookDocument["kind"];
     due: string | null;
@@ -89,6 +90,7 @@ export function projectCashOutlook(
       if (document.kind === "planned") plannedUnscheduledCount++;
       else unscheduledCount++;
       entries.push({
+        unscheduled: true,
         ...(document.source ? { source: document.source } : {}),
         kind: document.kind,
         due: null,

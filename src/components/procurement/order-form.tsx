@@ -272,6 +272,11 @@ function InputVatFields({
               onChange("inputVatTreatment", nextTreatment);
               if (!inputVatRecoverabilityApplies(nextTreatment))
                 onChange("inputVatRecoverablePercent", "");
+              else if (
+                nextTreatment === "DOMESTIC" &&
+                !draft.inputVatRecoverablePercent
+              )
+                onChange("inputVatRecoverablePercent", "100");
             }}
             value={draft.inputVatTreatment}
           >

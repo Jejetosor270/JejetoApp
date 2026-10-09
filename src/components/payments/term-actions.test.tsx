@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { mountForm, clickText, enter, control } from "@/test/dom-form";
 import type { ClientBillingView } from "@/lib/billing/billing";
@@ -49,8 +49,10 @@ vi.mock("./related-cash-create", () => ({
     <input aria-label="Receipt draft" defaultValue="" />
   ),
 }));
-vi.mock("@/components/billing/billing-installment-editor", () => ({
-  BillingInstallmentEditor: () => <button>Term details</button>,
+vi.mock("@/components/billing/billing-term-form", () => ({
+  BillingTermForm: () => (
+    <input aria-label="Term draft" defaultValue="Deposit" />
+  ),
 }));
 vi.mock("@/components/billing/billing-receipt-editor", () => ({
   BillingReceiptEditor: () => <button>Correct receipt</button>,
@@ -146,35 +148,22 @@ async function mountBilling(
     <BillingScheduleManager canEdit={canEdit} document={bill} />,
   );
 }
-function more() {
-  const summary = [...document.querySelectorAll("summary")].find((node) =>
-    node.textContent?.includes("More actions"),
-  );
-  if (!summary || !(summary.parentElement instanceof HTMLDetailsElement))
-    throw new Error("Missing More actions");
-  return { summary, details: summary.parentElement };
-}
-
 it.each(["supplier", "billing"])(
-  "keeps only the full-payment primary action outside %s overflow",
+  "offers one Edit entry point with the full form and payment actions for %s",
   async (kind) => {
     if (kind === "supplier") await mountSupplier();
     else await mountBilling();
-    const { summary, details } = more();
-    expect(details.open).toBe(false);
-    expect(details.textContent).toContain("Record partial payment");
-    expect(details.textContent).toContain("Term details");
-    expect(details.textContent).toContain("Cancel remaining term");
-    expect(details.textContent).not.toContain("Mark paid");
-    await act(async () => summary.click());
-    expect(details.open).toBe(true);
-    await act(async () =>
-      details.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    expect(document.body.textContent).not.toContain("More actions");
+    expect(document.body.textContent).not.toContain("Mark paid");
+    expect(
+      [...document.querySelectorAll("button")].filter(
+        (node) => node.textContent === "Edit",
       ),
-    );
-    expect(details.open).toBe(false);
-    expect(document.activeElement).toBe(summary);
+    ).toHaveLength(1);
+    await clickText("Edit");
+    expect(document.querySelector('[aria-label="Term draft"]')).not.toBeNull();
+    expect(document.body.textContent).toContain("Record partial payment");
+    expect(document.body.textContent).toContain("Cancel remaining term");
     await clickText("Mark paid");
     expect(mocks.paid).toHaveBeenCalledOnce();
   },
@@ -185,10 +174,11 @@ it.each(["supplier", "billing"])(
   async (kind) => {
     if (kind === "supplier") await mountSupplier("100");
     else await mountBilling("PAID", "100");
+    await clickText("Edit");
     expect(document.body.textContent).not.toContain("Mark paid");
     expect(document.body.textContent).not.toContain("Record partial payment");
     expect(document.body.textContent).not.toContain("Cancel remaining term");
-    expect(more().details.textContent).toContain("Term details");
+    expect(document.querySelector('[aria-label="Term draft"]')).not.toBeNull();
     expect(document.body.textContent).toContain("Payment history (1)");
     expect(document.body.textContent).toContain(
       kind === "supplier" ? "Correct payment" : "Correct receipt",
@@ -201,10 +191,11 @@ it.each(["supplier", "billing"])(
   async (kind) => {
     if (kind === "supplier") await mountSupplier("20", true);
     else await mountBilling("INVOICED", "20", true);
+    await clickText("Edit");
     expect(document.body.textContent).not.toContain("Mark paid");
     expect(document.body.textContent).not.toContain("Record partial payment");
     expect(document.body.textContent).not.toContain("Cancel remaining term");
-    expect(more().details.textContent).toContain("Reactivate term");
+    expect(document.body.textContent).toContain("Reactivate term");
   },
 );
 
@@ -212,6 +203,7 @@ it.each(["DRAFT", "TO_BE_INVOICED", "CANCELLED"])(
   "preserves issue-first payment gating for %s Billing",
   async (status) => {
     await mountBilling(status);
+    await clickText("Edit");
     expect(document.body.textContent).not.toContain("Mark paid");
     expect(document.body.textContent).not.toContain("Record partial payment");
     expect(mocks.paid).not.toHaveBeenCalled();
@@ -229,19 +221,15 @@ it.each(["supplier", "billing"])(
   },
 );
 
-it("keeps the term editor mounted independently of the overflow disclosure", async () => {
+it("keeps the term draft while opening a partial-payment drawer", async () => {
   await mountSupplier();
-  const { summary, details } = more();
-  await act(async () => summary.click());
-  await clickText("Term details");
+  await clickText("Edit");
   const input = document.querySelector<HTMLInputElement>(
     '[aria-label="Term draft"]',
   );
   if (!input) throw new Error("Missing editor");
   input.value = "Changed deposit";
-  await act(async () => {
-    details.open = false;
-  });
+  await clickText("Record partial payment");
   expect(
     document.querySelector<HTMLInputElement>('[aria-label="Term draft"]')
       ?.value,
@@ -251,10 +239,9 @@ it("keeps the term editor mounted independently of the overflow disclosure", asy
 it("retains date and actual FX in the payment drawer after a rejected save", async () => {
   mocks.paid.mockResolvedValue({ error: "Review actual payment FX" });
   await mountSupplier();
+  await clickText("Edit");
   await clickText("Mark paid");
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-    "Review actual payment FX",
-  );
+  expect(document.body.textContent).toContain("Review actual payment FX");
   await enter("paymentDate", "2026-10-01");
   await enter("paymentFx", "0.85");
   await clickText("Record remaining payment");

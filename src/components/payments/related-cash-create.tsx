@@ -2,10 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadRelatedCreation } from "@/app/(app)/related-records/create-actions";
-import {
-  createClientBillingInstallmentAction,
-  recordClientReceiptAction,
-} from "@/app/(app)/billing/actions";
+import { recordClientReceiptAction } from "@/app/(app)/billing/actions";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { InstallmentForm, SettlementForm } from "./payment-forms";
 import {
@@ -18,10 +15,9 @@ import {
 import { DateInput } from "@/components/forms/date-input";
 import { Button } from "@/components/ui/button";
 import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
-import { humanPercentageToFraction } from "@/domain/validation/percentage";
 import { businessToday } from "@/domain/payments/dates";
 import type { ClientBillingView } from "@/lib/billing/billing";
-import type { PaymentActionState } from "@/domain/payments/action-state";
+import { BillingTermForm } from "@/components/billing/billing-term-form";
 import type { BillingActionState } from "@/domain/billing/action-state";
 import type { CashRecordKind } from "@/lib/related-records/types";
 
@@ -225,33 +221,9 @@ function CreationContents({
             onSaved={saved}
           />
         ) : (
-          <InstallmentForm
+          <BillingTermForm
             key={form.document.id}
-            action={async (_: PaymentActionState, values: FormData) => {
-              values.set("billingDocumentId", form.document.id);
-              values.set(
-                "scheduledAmount",
-                String(values.get("amountDisplay") ?? ""),
-              );
-              const rate = humanPercentageToFraction(
-                String(values.get("percentageRate") ?? ""),
-                { maximumPercent: "100" },
-              );
-              if (rate !== null && rate !== "")
-                values.set("percentageRate", rate);
-              else values.delete("percentageRate");
-              return createClientBillingInstallmentAction(
-                { status: "idle", message: "" },
-                values,
-              );
-            }}
-            baseAmount={form.document.totalTtc}
-            currencies={[{ code: form.document.currencyCode }]}
-            defaultCurrencyCode={form.document.currencyCode}
-            direction="CLIENT_RECEIPT"
-            orderId=""
-            reportingCurrencyCode={form.document.project.reportingCurrencyCode}
-            hideExpectedFx
+            document={form.document}
             onSaved={saved}
           />
         )

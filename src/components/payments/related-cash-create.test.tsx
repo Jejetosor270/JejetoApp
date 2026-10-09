@@ -3,11 +3,15 @@ import { act } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { clickText, control, enter, mountForm } from "@/test/dom-form";
 import { RelatedCashCreate } from "./related-cash-create";
+import { BillingTermForm } from "@/components/billing/billing-term-form";
+import type { ClientBillingView } from "@/lib/billing/billing";
+import { clientBillingInstallmentCreateSchema } from "@/domain/billing/validation";
 
 const mock = vi.hoisted(() => ({
   load: vi.fn(),
   receipt: vi.fn(),
   installment: vi.fn(),
+  update: vi.fn(),
   supplier: vi.fn(),
   refresh: vi.fn(),
 }));
@@ -17,6 +21,7 @@ vi.mock("@/app/(app)/related-records/create-actions", () => ({
 vi.mock("@/app/(app)/billing/actions", () => ({
   recordClientReceiptAction: mock.receipt,
   createClientBillingInstallmentAction: mock.installment,
+  updateClientBillingInstallmentAction: mock.update,
 }));
 vi.mock("@/app/(app)/payments/actions", () => ({
   createInstallmentAction: mock.supplier,
@@ -111,4 +116,74 @@ it("offers a retry after a load failure", async () => {
   expect(document.querySelector("form")).toBeNull();
   await clickText("Retry");
   expect(document.querySelector("form")).not.toBeNull();
+});
+
+it("submits Billing percentages in human units, converting exactly once in validation", async () => {
+  mock.installment.mockResolvedValue({
+    status: "error",
+    message: "Keep draft",
+  });
+  view = await mountForm(
+    <RelatedCashCreate scope={scope} kind="client-installment" />,
+  );
+  await clickText("Add Client payment term");
+  await enter("label", "Deposit");
+  const percentLabel = [...document.querySelectorAll("label")].find((label) =>
+    label.textContent?.includes("Payment term %"),
+  );
+  const input = percentLabel?.querySelector("input");
+  if (!input) throw new Error("Missing term percentage");
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set?.call(input, "30");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await submit();
+  const values = mock.installment.mock.calls[0]?.[1] as FormData;
+  expect(values.get("percentageRate")).toBe("30");
+  expect(values.get("scheduledAmount")).toBe("360.0000");
+  const parsed = clientBillingInstallmentCreateSchema.parse({
+    ...Object.fromEntries(values),
+    billingDocumentId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+  });
+  expect(parsed.percentageRate).toBe("0.300000");
+});
+
+it("prefills fixed Billing terms and preserves their amount and draft when editing fails", async () => {
+  mock.update.mockResolvedValue({
+    status: "error",
+    message: "Review the term",
+  });
+  const term = {
+    id: "term-id",
+    billingDocumentId: scope.id,
+    billingTotalTtc: "1200",
+    basis: "FIXED_AMOUNT",
+    currencyCode: "EUR",
+    label: "Deposit",
+    percentageRate: null,
+    scheduledAmount: "300",
+    dueDate: "2026-12-01",
+    notes: "Keep note",
+  } as ClientBillingView["paymentInstallments"][number];
+  view = await mountForm(
+    <BillingTermForm document={documentData} installment={term} />,
+  );
+  const percentLabel = [...document.querySelectorAll("label")].find((label) =>
+    label.textContent?.includes("Payment term %"),
+  );
+  expect(percentLabel?.querySelector("input")?.value).toBe("25");
+  await enter("label", "Reviewed deposit");
+  await submit();
+  const values = mock.update.mock.calls[0]?.[1] as FormData;
+  expect(values.get("id")).toBe(term.id);
+  expect(values.get("basis")).toBe("FIXED_AMOUNT");
+  expect(values.get("scheduledAmount")).toBe("300");
+  expect(values.get("dueDate")).toBe("2026-12-01");
+  expect(control("label").value).toBe("Reviewed deposit");
+  expect(control("notes").value).toBe("Keep note");
+  expect(document.body.textContent).toContain("Review the term");
+  expect(mock.installment).not.toHaveBeenCalled();
 });

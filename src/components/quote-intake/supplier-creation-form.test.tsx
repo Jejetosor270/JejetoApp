@@ -44,6 +44,18 @@ describe("Supplier creation from invoice review", () => {
     await view?.unmount();
   });
 
+  it("defaults Domestic VAT to full recovery without replacing explicit percentages", async () => {
+    await enter("inputVatTreatment", "DOMESTIC");
+    expect(control("inputVatRecoverablePercent").value).toBe("100");
+    await enter("inputVatRecoverablePercent", "40");
+    await enter("inputVatTreatment", "IMPORT");
+    await enter("inputVatTreatment", "DOMESTIC");
+    expect(control("inputVatRecoverablePercent").value).toBe("40");
+    await enter("inputVatRecoverablePercent", "0");
+    await enter("inputVatTreatment", "DOMESTIC");
+    expect(control("inputVatRecoverablePercent").value).toBe("0");
+  });
+
   it("opens beside the selector even with evidence collapsed and preserves the Order draft after creation", async () => {
     const button = [...view.container.querySelectorAll("button")].find(
       (node) => node.textContent === "New Supplier",

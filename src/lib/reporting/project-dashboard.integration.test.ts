@@ -23,6 +23,53 @@ afterAll(async () => {
   await memory.close();
 });
 
+it("flags an uncovered payable as Unscheduled balance, not a missing term date", async () => {
+  const project = await memory.raw.project.create({
+    data: {
+      code: "DATED-GAP",
+      name: "Dated terms",
+      reportingCurrencyCode: "EUR",
+    },
+  });
+  const order = await memory.raw.procurementOrder.create({
+    data: {
+      projectId: project.id,
+      orderNumber: "DATED-GAP",
+      packageName: "Package",
+      orderCurrencyCode: "EUR",
+      sellingCurrencyCode: "EUR",
+      pricingMode: "DIRECT_SELLING_PRICE",
+      sellingPriceAmount: "150",
+      costLines: {
+        create: [
+          { category: "SUPPLIER_PURCHASE", originalAmount: "100" },
+          { category: "FREIGHT", originalAmount: "20" },
+        ],
+      },
+      paymentInstallments: {
+        create: {
+          direction: "SUPPLIER_PAYMENT",
+          sequence: 1,
+          label: "Balance",
+          basis: "FIXED_AMOUNT",
+          scheduledAmount: "100",
+          currencyCode: "EUR",
+          dueDate: dateOnlyToDate("2099-12-01"),
+        },
+      },
+    },
+  });
+  const result = await getProjectControl(project.id);
+  const alerts = result.dashboard.alerts.filter((alert) =>
+    alert.href.includes(order.id),
+  );
+  expect(alerts).toContainEqual(
+    expect.objectContaining({ label: "Unscheduled balance" }),
+  );
+  expect(alerts.some((alert) => alert.label === "Date needed")).toBe(false);
+  expect(result.dashboard.metrics.toPay.value).toBe("120.0000");
+});
+
 it("reconciles complete Project economics, approved budget, credits, refunds and VAT to exact records", async () => {
   const db = memory.raw;
   const today = dateOnlyToDate(businessToday());

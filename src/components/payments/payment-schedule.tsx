@@ -43,8 +43,6 @@ export function PaymentSchedule({
       : "Historical planning only.",
     ...(canEdit
       ? ({
-          editKind: "supplier-installment",
-          editParentId: orderId,
           removal: {
             kind: "assignment",
             relation: "supplier-installment-order",
@@ -173,8 +171,7 @@ export function PaymentSchedule({
                   <TermPaymentActions
                     supplier={{ ...term, outstandingAmount: remaining }}
                     canPay={supplier && !term.isCancelled && remaining !== "0"}
-                  >
-                    <EditorDrawer title="Term details">
+                    editor={
                       <InstallmentForm
                         baseAmount={summary.baseAmount}
                         currencies={currencies}
@@ -184,7 +181,8 @@ export function PaymentSchedule({
                         reportingCurrencyCode={reportingCurrencyCode}
                         installment={term}
                       />
-                    </EditorDrawer>
+                    }
+                  >
                     {(term.isCancelled || state.remaining !== "0") && (
                       <TermStatusAction
                         id={term.id}

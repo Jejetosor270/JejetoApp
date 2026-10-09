@@ -1,6 +1,5 @@
 "use client";
 import { useCallback, useState, useTransition, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
 import { payTermRemainingAction } from "@/app/(app)/payments/term-paid-actions";
 import { useRouter } from "next/navigation";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
@@ -19,7 +18,7 @@ export function TermPaymentActions(
         supplier: PaymentInstallmentView;
       }
     | { document: ClientBillingView; termId: string; remaining: string }
-  ) & { canPay?: boolean; children?: ReactNode },
+  ) & { canPay?: boolean; children?: ReactNode; editor: ReactNode },
 ) {
   const canPay = props.canPay ?? true;
   const [mode, setMode] = useState<"paid" | "partial" | null>(null);
@@ -57,55 +56,41 @@ export function TermPaymentActions(
       }
     });
   return (
-    <div className="flex flex-wrap gap-2">
-      {canPay && (
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={pending}
-          onClick={markPaid}
-        >
-          {pending ? "Recording…" : "Mark paid"}
+    <EditorDrawer
+      title="Edit payment term"
+      trigger={
+        <Button size="sm" variant="outline" type="button">
+          Edit
         </Button>
-      )}
-      <details
-        className="group/term-actions self-start"
-        onKeyDown={(event) => {
-          if (
-            event.key !== "Escape" ||
-            !(event.target instanceof Node) ||
-            !event.currentTarget.contains(event.target)
-          )
-            return;
-          event.preventDefault();
-          event.currentTarget.open = false;
-          event.currentTarget.querySelector("summary")?.focus();
-        }}
-      >
-        <summary className="focus-visible:ring-ring/50 hover:bg-accent flex h-8 cursor-pointer list-none items-center gap-1 rounded-md px-2 text-xs font-medium outline-none focus-visible:ring-2 [&::-webkit-details-marker]:hidden">
-          More actions
-          <ChevronDown
-            aria-hidden="true"
-            className="size-3 group-open/term-actions:rotate-180"
-          />
-        </summary>
-        <div className="bg-muted/40 mt-1 flex flex-wrap items-center gap-2 rounded-md border p-2">
-          {canPay && (
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={pending}
-              onClick={() => {
-                setError(null);
-                setMode("partial");
-              }}
-            >
-              Record partial payment
-            </Button>
-          )}
-          {props.children}
-        </div>
-      </details>
+      }
+    >
+      {props.editor}
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4">
+        {canPay && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending}
+            onClick={markPaid}
+          >
+            {pending ? "Recording…" : "Mark paid"}
+          </Button>
+        )}
+        {canPay && (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={pending}
+            onClick={() => {
+              setError(null);
+              setMode("partial");
+            }}
+          >
+            Record partial payment
+          </Button>
+        )}
+        {props.children}
+      </div>
       {mode && (
         <EditorDrawer
           open
@@ -165,6 +150,6 @@ export function TermPaymentActions(
           )}
         </EditorDrawer>
       )}
-    </div>
+    </EditorDrawer>
   );
 }

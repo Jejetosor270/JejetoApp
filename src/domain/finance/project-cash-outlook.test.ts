@@ -29,6 +29,22 @@ const report = (
 ) => projectCashOutlook(documents, "EUR", "2026-09-26", cash);
 
 describe("Project cash outlook", () => {
+  it("distinguishes a dated schedule gap from an actual undated term", () => {
+    const result = report([
+      document({ total: "120" }),
+      document({
+        terms: [
+          { amount: "100", paid: "20", due: null, fx: null, cancelled: false },
+        ],
+      }),
+    ]);
+    expect(result.entries).toEqual([
+      { kind: "issued", due: "2026-09-30", amount: "80.0000" },
+      { kind: "issued", due: null, amount: "20.0000", unscheduled: true },
+      { kind: "issued", due: null, amount: "80.0000" },
+    ]);
+    expect(result.outstandingIn).toBe("180.0000");
+  });
   it("keeps source attribution on capped terms, unscheduled balances and incomplete totals", () => {
     const source = { label: "INV-1", href: "/billing/one" };
     const result = report([
@@ -38,7 +54,13 @@ describe("Project cash outlook", () => {
     ]);
     expect(result.entries).toEqual([
       { source, kind: "issued", due: "2026-09-30", amount: "80.0000" },
-      { source, kind: "issued", due: null, amount: "80.0000" },
+      {
+        source,
+        kind: "issued",
+        due: null,
+        amount: "80.0000",
+        unscheduled: true,
+      },
       { source, kind: "issued", due: null, amount: null },
     ]);
   });

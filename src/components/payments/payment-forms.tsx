@@ -86,7 +86,20 @@ export function InstallmentForm({
   currencies: readonly { code: string }[];
   defaultCurrencyCode: string;
   direction: "SUPPLIER_PAYMENT" | "CLIENT_RECEIPT";
-  installment?: PaymentInstallmentView;
+  installment?: Pick<
+    PaymentInstallmentView,
+    | "id"
+    | "basis"
+    | "currencyCode"
+    | "label"
+    | "percentageRate"
+    | "scheduledAmount"
+    | "dueDate"
+    | "notes"
+  > &
+    Partial<
+      Pick<PaymentInstallmentView, "impliedPercentageRate" | "expectedFxRate">
+    >;
   orderId: string;
   reportingCurrencyCode: string;
 }) {
@@ -107,7 +120,10 @@ export function InstallmentForm({
   const [percentage, setPercentage] = useState(
     rateToPercentInput(
       installment?.percentageRate ?? installment?.impliedPercentageRate ?? null,
-    ),
+    ) ||
+      (installment
+        ? (percentageFromAmount(baseAmount, installment.scheduledAmount) ?? "")
+        : ""),
   );
   const [amount, setAmount] = useState(installment?.scheduledAmount ?? "");
   const [dueDate, setDueDate] = useState(installment?.dueDate ?? "");

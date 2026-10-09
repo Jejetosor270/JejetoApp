@@ -200,6 +200,7 @@ describe("shared cash outlook source adapter", () => {
     );
     expect(result.entries).toEqual([
       {
+        unscheduled: true,
         kind: "issued",
         due: null,
         amount: "10.0000",
@@ -209,6 +210,7 @@ describe("shared cash outlook source adapter", () => {
         },
       },
       {
+        unscheduled: true,
         kind: "payment",
         due: null,
         amount: "10.0000",

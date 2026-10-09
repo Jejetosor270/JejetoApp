@@ -98,6 +98,10 @@ it("autofills new-order purchase VAT without forcing a VAT treatment or changing
   expect(value("inputVatTreatment")).toBe("");
   expect(value("inputVatTaxableBase")).toBeNull();
   await enter("inputVatTreatment", "DOMESTIC");
+  expect(value("inputVatRecoverablePercent")).toBe("100");
+  await enter("inputVatRecoverablePercent", "0");
+  await enter("inputVatTreatment", "DOMESTIC");
+  expect(value("inputVatRecoverablePercent")).toBe("0");
   expect(value("inputVatTaxableBase")).toBe("123.4567");
   await enter("purchaseCost", "200");
   expect(value("inputVatTaxableBase")).toBe("200");

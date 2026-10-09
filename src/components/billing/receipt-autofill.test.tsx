@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement } from "react";
+import { createElement } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { mountForm, clickText, enter, control } from "@/test/dom-form";
 import type { ClientBillingView } from "@/lib/billing/billing";
@@ -19,8 +19,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock("./billing-installment-editor", () => ({
-  BillingInstallmentEditor: () => null,
+vi.mock("./billing-term-form", () => ({
+  BillingTermForm: () => null,
 }));
 vi.mock("./billing-receipt-editor", () => ({
   BillingReceiptEditor: () => null,
@@ -60,15 +60,11 @@ it("marks a term paid from its exact remaining balance and preserves a rejected 
   );
   expect(view.container.textContent).toContain("Date needed · Partially paid");
   expect(view.container.querySelector("details")?.open).toBe(false);
+  await clickText("Edit");
   await clickText("Mark paid");
   expect(paid).toHaveBeenCalledWith(
     expect.objectContaining({ kind: "client", id: "term", documentId: "bill" }),
   );
-  const more = [...view.container.querySelectorAll("summary")].find((summary) =>
-    summary.textContent?.includes("More actions"),
-  );
-  if (!more) throw new Error("Missing term actions disclosure");
-  await act(async () => more.click());
   await clickText("Record partial payment");
   expect(control("amount").value).toBe("");
   expect(control("installmentId").value).toBe("term");

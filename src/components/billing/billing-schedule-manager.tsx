@@ -5,7 +5,7 @@ import { RelatedRecordTable } from "@/components/layout/related-records";
 import { RelatedCashCreate } from "@/components/payments/related-cash-create";
 import { TermPaymentActions } from "@/components/payments/term-payment-actions";
 import { BillingReceiptEditor } from "./billing-receipt-editor";
-import { BillingInstallmentEditor } from "./billing-installment-editor";
+import { BillingTermForm } from "./billing-term-form";
 import { businessToday, formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import {
@@ -33,8 +33,6 @@ export function BillingScheduleManager({
         : "Record full or partial payments directly against each term.",
     ...(editable
       ? ({
-          editKind: "client-installment",
-          editParentId: document.id,
           removal: {
             kind: "assignment",
             relation: "client-installment-billing",
@@ -148,6 +146,9 @@ export function BillingScheduleManager({
                     document={document}
                     termId={term.id}
                     remaining={remaining}
+                    editor={
+                      <BillingTermForm document={document} installment={term} />
+                    }
                     canPay={
                       !document.isCancelled &&
                       !term.isCancelled &&
@@ -158,13 +159,6 @@ export function BillingScheduleManager({
                       )
                     }
                   >
-                    <BillingInstallmentEditor
-                      actionOnly
-                      actionLabel="Term details"
-                      canEdit
-                      billingDocumentId={term.billingDocumentId}
-                      installment={term}
-                    />
                     {!document.isCancelled &&
                       (term.isCancelled || remaining !== "0") && (
                         <TermStatusAction

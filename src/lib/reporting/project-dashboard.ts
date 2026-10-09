@@ -313,11 +313,13 @@ export function buildProjectDashboard(input: {
           ? "Cash review needed"
           : entry.amount === null
             ? "Missing FX"
-            : entry.due === null
-              ? "Date needed"
-              : "Overdue balance",
+            : entry.unscheduled
+              ? "Unscheduled balance"
+              : entry.due === null
+                ? "Date needed"
+                : "Overdue balance",
         href: entry.source?.href ?? budgetHref,
-        note: `${entry.source?.label}: ${entry.reviewReason ?? (entry.amount === null ? "A required expected cash FX rate is missing." : entry.due === null ? "An outstanding balance has no due date or complete schedule." : `Outstanding TTC was due ${entry.due}.`)}`,
+        note: `${entry.source?.label}: ${entry.reviewReason ?? (entry.amount === null ? "A required expected cash FX rate is missing." : entry.unscheduled ? "Part of the outstanding balance is unscheduled. Review payment terms or refund timing; existing due dates are retained." : entry.due === null ? "An outstanding payment term has no due date." : `Outstanding TTC was due ${entry.due}.`)}`,
       })),
   ];
   const refundRows = (outflow: boolean): ProjectMetricRow[] =>

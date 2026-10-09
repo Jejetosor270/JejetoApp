@@ -922,6 +922,10 @@ export function QuoteReview({
                       setInputVatTreatment(treatment);
                       if (!inputVatRecoverabilityApplies(treatment))
                         setInputVatRecoverablePercent("");
+                      else if (treatment === "DOMESTIC")
+                        setInputVatRecoverablePercent(
+                          (current) => current || "100",
+                        );
                     }}
                     required={applyInputVat}
                     value={inputVatTreatment}
