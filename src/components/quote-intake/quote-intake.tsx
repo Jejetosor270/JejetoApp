@@ -1047,8 +1047,11 @@ export function QuoteReview({
                     <option value="">Skip for now</option>
                     {billingDocuments.map((document) => (
                       <option key={document.id} value={document.id}>
-                        {document.reference} · {document.documentType} ·{" "}
-                        {formatMoney(document.totalHt, document.currencyCode)}
+                        {document.reference}
+                        {document.shortDescription
+                          ? ` · ${document.shortDescription}`
+                          : ""}{" "}
+                        · {formatMoney(document.totalHt, document.currencyCode)}
                       </option>
                     ))}
                   </select>

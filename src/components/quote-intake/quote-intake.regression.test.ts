@@ -42,6 +42,7 @@ const options = {
       isProjectRemainderApproved: false,
       projectId,
       reference: "CLIENT-INV-1",
+      shortDescription: "Living room furnishings",
       totalHt: "60000.0000",
     },
   ],
@@ -99,6 +100,45 @@ function review(supplierMatched: boolean) {
 }
 
 describe("Supplier document review rendering", () => {
+  it("identifies Billing by reference, short description and amount within the selected Project", () => {
+    const html = renderToStaticMarkup(
+      createElement(QuoteReview, {
+        options: {
+          ...options,
+          billingDocuments: [
+            ...options.billingDocuments,
+            {
+              ...options.billingDocuments[0]!,
+              id: "other",
+              projectId: "other-project",
+              shortDescription: "Other Project description",
+            },
+          ],
+        },
+        review: review(true),
+      }),
+    );
+    expect(html).toContain(
+      "CLIENT-INV-1 · Living room furnishings · 60 000.00 EUR",
+    );
+    expect(html).not.toContain("Other Project description");
+  });
+  it("keeps a clean reference and amount when Billing has no description", () => {
+    const html = renderToStaticMarkup(
+      createElement(QuoteReview, {
+        options: {
+          ...options,
+          billingDocuments: options.billingDocuments.map((document) => ({
+            ...document,
+            shortDescription: null,
+          })),
+        },
+        review: review(true),
+      }),
+    );
+    expect(html).toContain("CLIENT-INV-1 · 60 000.00 EUR");
+    expect(html).not.toContain("CLIENT-INV-1 · INVOICE");
+  });
   it("renders a populated Invoice review without reading optional Billing state before initialization", () => {
     const html = renderToStaticMarkup(
       createElement(QuoteReview, { options, review: review(true) }),

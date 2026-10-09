@@ -26,6 +26,7 @@ export function intakeOptions(itemsEnabled = false): QuoteIntakeOptions {
         isProjectRemainderApproved: false,
         projectId: reviewProjectId,
         reference: "FICTIONAL-INV-1",
+        shortDescription: null,
         totalHt: "60000.0000",
       },
     ],
