@@ -185,6 +185,7 @@ export function QuoteReview({
   const extraction = review.extraction;
   const [selectedSupplierId, setSelectedSupplierId] =
     useState(suggestedSupplier);
+  const [supplierFormOpen, setSupplierFormOpen] = useState(false);
   const [createdSupplier, setCreatedSupplier] = useState<{
     displayName: string;
     id: string;
@@ -238,6 +239,7 @@ export function QuoteReview({
     (supplier: { displayName: string; id: string }) => {
       setCreatedSupplier(supplier);
       setSelectedSupplierId(supplier.id);
+      setSupplierFormOpen(false);
     },
     [setCreatedSupplier, setSelectedSupplierId],
   );
@@ -486,6 +488,8 @@ export function QuoteReview({
             ) : null}
           </section>
           <QuoteSupplierCreationForm
+            open={supplierFormOpen}
+            onOpenChange={setSupplierFormOpen}
             currencies={options.currencies}
             extraction={extraction}
             fallbackCurrencyCode={
@@ -636,25 +640,37 @@ export function QuoteReview({
                   </Field>
                 </div>
               )}
-              <Field error={fieldErrors.supplierId} label="Supplier" required>
-                <select
-                  aria-invalid={Boolean(fieldErrors.supplierId) || undefined}
-                  className={inputWithError("supplierId")}
-                  name="supplierId"
-                  onChange={(event) =>
-                    setSelectedSupplierId(event.target.value)
-                  }
-                  required
-                  value={selectedSupplierId}
+              <div className="min-w-0 space-y-2">
+                <Field error={fieldErrors.supplierId} label="Supplier" required>
+                  <select
+                    aria-invalid={Boolean(fieldErrors.supplierId) || undefined}
+                    className={inputWithError("supplierId")}
+                    name="supplierId"
+                    onChange={(event) =>
+                      setSelectedSupplierId(event.target.value)
+                    }
+                    required
+                    value={selectedSupplierId}
+                  >
+                    <option value="">Choose Supplier</option>
+                    {selectableSuppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Button
+                  onClick={() => setSupplierFormOpen(true)}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  disabled={pending}
+                  aria-haspopup="dialog"
                 >
-                  <option value="">Choose Supplier</option>
-                  {selectableSuppliers.map((supplier) => (
-                    <option key={supplier.id} value={supplier.id}>
-                      {supplier.displayName}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+                  New Supplier
+                </Button>
+              </div>
               <div className="text-muted-foreground self-end pb-2 text-xs">
                 Match: {formatEnumLabel(review.supplierMatch.status)}
                 {review.supplierMatch.basis

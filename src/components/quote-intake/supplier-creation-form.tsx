@@ -1,7 +1,7 @@
 "use client";
 
-import { Plus, X } from "lucide-react";
 import { useActionState, useEffect, useState } from "react";
+import { EditorDrawer } from "@/components/forms/editor-drawer";
 
 import { createQuoteSupplierAction } from "@/app/(app)/orders/import/actions";
 import {
@@ -129,7 +129,7 @@ function SupplierCreationFields({
       >
         {input("defaultPaymentTermsDays")}
       </Field>
-      <label className="grid gap-1.5 text-sm font-medium md:col-span-2">
+      <label className="grid gap-1.5 text-sm font-medium @lg:col-span-2">
         Default payment terms wording
         <textarea
           className={`${inputClassName} h-20 py-2`}
@@ -140,7 +140,7 @@ function SupplierCreationFields({
           value={values.defaultPaymentTermsNotes}
         />
       </label>
-      <label className="grid gap-1.5 text-sm font-medium md:col-span-2">
+      <label className="grid gap-1.5 text-sm font-medium @lg:col-span-2">
         Notes
         <textarea
           className={`${inputClassName} h-20 py-2`}
@@ -158,13 +158,16 @@ export function QuoteSupplierCreationForm({
   extraction,
   fallbackCurrencyCode,
   onSupplierSelected,
+  open,
+  onOpenChange,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   currencies: Array<{ code: string; name: string }>;
   extraction: SupplierQuoteExtraction;
   fallbackCurrencyCode: string;
   onSupplierSelected: (supplier: { displayName: string; id: string }) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(
     createQuoteSupplierAction,
     initialQuoteSupplierCreationState,
@@ -178,7 +181,6 @@ export function QuoteSupplierCreationForm({
       : { ...draft, defaultCurrencyCode: fallbackCurrencyCode };
   });
   const fieldErrors = state.fieldErrors ?? {};
-  const formOpen = open && state.status !== "success";
   useEffect(() => {
     if (state.status === "success" && state.supplier) {
       onSupplierSelected(state.supplier);
@@ -189,87 +191,57 @@ export function QuoteSupplierCreationForm({
   };
 
   return (
-    <section className="bg-card rounded-lg border p-4 sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold">Supplier selection</h2>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Existing matches remain preferred. Creating a Supplier is always an
-            explicit employee action.
+    <EditorDrawer
+      title="New Supplier"
+      description="Review the extracted details, then create and select the Supplier. Your Order review stays unchanged."
+      open={open}
+      onOpenChange={(next) => {
+        if (!pending) onOpenChange(next);
+      }}
+    >
+      <form action={action} className="grid gap-3 @lg:grid-cols-2">
+        <SupplierCreationFields
+          currencies={currencies}
+          fieldErrors={fieldErrors}
+          setValue={setValue}
+          values={values}
+        />
+        {state.duplicateCandidates?.length ? (
+          <div className="bg-warning-muted rounded-md border p-3 @lg:col-span-2">
+            <p className="text-sm font-medium">{state.message}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {state.duplicateCandidates.map((candidate) => (
+                <Button
+                  key={candidate.id}
+                  onClick={() => {
+                    onSupplierSelected(candidate);
+                    onOpenChange(false);
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  Use {candidate.displayName} ·{" "}
+                  {formatEnumLabel(candidate.basis).toLowerCase()}
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : state.status === "error" ? (
+          <p className="text-destructive text-sm @lg:col-span-2" role="alert">
+            {state.message}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-3 @lg:col-span-2">
+          <SubmitButton pending={pending}>
+            Create and select Supplier
+          </SubmitButton>
+          <p className="text-muted-foreground text-xs">
+            Duplicate VAT and normalized names are checked again before
+            creation.
           </p>
         </div>
-        {state.status !== "success" ? (
-          <Button
-            onClick={() => setOpen((current) => !current)}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            {formOpen ? (
-              <X data-icon="inline-start" />
-            ) : (
-              <Plus data-icon="inline-start" />
-            )}
-            {formOpen ? "Close Supplier form" : "Create new Supplier"}
-          </Button>
-        ) : null}
-      </div>
-      {state.status === "success" ? (
-        <p className="text-positive mt-3 text-sm" role="status">
-          {state.message}
-        </p>
-      ) : null}
-      {formOpen ? (
-        <form
-          action={action}
-          className="mt-4 grid gap-3 border-t pt-4 md:grid-cols-2 xl:grid-cols-4"
-        >
-          <SupplierCreationFields
-            currencies={currencies}
-            fieldErrors={fieldErrors}
-            setValue={setValue}
-            values={values}
-          />
-          {state.duplicateCandidates?.length ? (
-            <div className="bg-warning-muted rounded-md border p-3 md:col-span-2 xl:col-span-4">
-              <p className="text-sm font-medium">{state.message}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {state.duplicateCandidates.map((candidate) => (
-                  <Button
-                    key={candidate.id}
-                    onClick={() => {
-                      onSupplierSelected(candidate);
-                      setOpen(false);
-                    }}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    Use {candidate.displayName} ·{" "}
-                    {formatEnumLabel(candidate.basis).toLowerCase()}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          ) : state.status === "error" ? (
-            <p
-              className="text-destructive text-sm md:col-span-2 xl:col-span-4"
-              role="alert"
-            >
-              {state.message}
-            </p>
-          ) : null}
-          <div className="flex items-center gap-3 md:col-span-2 xl:col-span-4">
-            <SubmitButton pending={pending}>
-              Create and select Supplier
-            </SubmitButton>
-            <p className="text-muted-foreground text-xs">
-              Duplicate VAT and normalized names are checked again before
-              creation.
-            </p>
-          </div>
-        </form>
-      ) : null}
-    </section>
+      </form>
+    </EditorDrawer>
   );
 }
