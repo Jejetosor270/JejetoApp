@@ -148,7 +148,7 @@ describe("financial attention", () => {
       ).toBe("90.0500");
     },
   );
-  it.each(["supplier", "freight"] as const)(
+  it.each(["supplier", "client", "freight"] as const)(
     "does not borrow document dates for %s terms",
     (side) => {
       const issues = build([
@@ -168,7 +168,7 @@ describe("financial attention", () => {
     },
   );
 
-  it.each(["supplier", "client"] as const)(
+  it.each(["supplier", "freight"] as const)(
     "retains %s document fallback reminders without inventing scheduled cash",
     (side) => {
       const issues = build([{ ...doc, side, terms: [], dueDate: today }]);
@@ -180,10 +180,7 @@ describe("financial attention", () => {
         date: today,
         basis: "TTC",
         href: doc.href,
-        title:
-          side === "client"
-            ? "Client payment outstanding"
-            : "Supplier payment outstanding",
+        title: "Supplier payment outstanding",
       });
       expect(issues.map((issue) => issue.key)).toContain(
         "cash-incomplete:project",
@@ -423,7 +420,7 @@ describe("financial attention", () => {
     expect(issues.some((row) => row.key.includes("cancelled"))).toBe(false);
     expect(issues.some((row) => row.key.startsWith("cash-gap"))).toBe(false);
   });
-  it("flags unscheduled and overallocated balances and uses Invoice fallback due dates", () => {
+  it("flags unscheduled and overallocated balances without borrowing Invoice dates", () => {
     const noTerms = { ...doc, terms: [] };
     expect(build([noTerms]).map((row) => row.key)).toEqual(
       expect.arrayContaining(["schedule:doc", "missing-date:doc"]),
@@ -440,10 +437,13 @@ describe("financial attention", () => {
       terms: [{ ...term, dueDate: null }],
     };
     expect(
-      build([invoice]).find((row) => row.key === "term-due:term")?.priority,
-    ).toBe("Overdue");
+      build([invoice]).find((row) => row.key === "term-due:term"),
+    ).toBeUndefined();
     expect(build([invoice]).some((row) => row.key === "term-date:term")).toBe(
-      false,
+      true,
+    );
+    expect(build([{ ...invoice, terms: [] }]).map((row) => row.key)).toEqual(
+      expect.arrayContaining(["schedule:doc", "missing-date:doc"]),
     );
   });
   it("only proposes duplicates for the same side, counterparty, date, amount and currency", () => {

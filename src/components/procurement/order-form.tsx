@@ -38,7 +38,11 @@ import {
   formatRate,
   rateToPercentInput,
 } from "@/domain/procurement/presentation";
-import { addWeeksToDateOnly } from "@/domain/payments/dates";
+import { businessToday, formatDateOnly } from "@/domain/payments/dates";
+import {
+  supplierDocumentDate,
+  type SupplierDocumentKind,
+} from "@/domain/procurement/document-date";
 import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
 import { formatEnumLabel } from "@/domain/presentation/labels";
 import { vatAmount as calculateVatAmount } from "@/domain/finance/calculations";
@@ -394,17 +398,25 @@ export function OrderForm({
   onSaved,
   options,
   order,
+  recordDelivery = false,
 }: {
   onCancel?: () => void;
   onSaved?: () => void;
   options: OrderFormOptions;
   order?: EditableOrder;
+  recordDelivery?: boolean;
 }) {
   const router = useRouter();
   const [expectedVersion] = useState(order?.editVersion ?? "");
   const [expectedFields] = useState(order?.editFields ?? "");
   const [shortDescription, setShortDescription] = useState(
     order?.shortDescription ?? "",
+  );
+  const [documentKind, setDocumentKind] = useState<SupplierDocumentKind>(
+    supplierDocumentDate(order ?? {}).kind,
+  );
+  const [deliveryDateWasProposed, setDeliveryDateWasProposed] = useState(
+    recordDelivery && !order?.actualDeliveryDate,
   );
   const isEditing = Boolean(order);
   const serverAction = order ? updateOrderAction : createOrderAction;
@@ -438,7 +450,8 @@ export function OrderForm({
     options.suppliers.find((item) => item.id === order?.supplier.id) ??
     options.suppliers[0];
   const [draft, setDraft] = useState<OrderDraft>(() => ({
-    actualDeliveryDate: order?.actualDeliveryDate ?? "",
+    actualDeliveryDate:
+      order?.actualDeliveryDate ?? (recordDelivery ? businessToday() : ""),
     buildingIds: order?.buildingIds ?? [],
     category: order?.category ?? "",
     customsDuties: order?.costs.customsDuties ?? "",
@@ -476,10 +489,7 @@ export function OrderForm({
       order?.costs.inputVat?.taxableBase ?? order?.costs.purchaseCost ?? "",
     inputVatBaseIsManual: order?.costs.inputVat?.taxableBase != null,
     inputVatTreatment: order?.costs.inputVat?.treatment ?? "",
-    leadTimeWeeks:
-      order?.leadTimeWeeks?.toString() ??
-      initialSupplier?.defaultLeadTimeWeeks?.toString() ??
-      "",
+    leadTimeWeeks: order?.leadTimeWeeks?.toString() ?? "",
     miscellaneous: order?.costs.miscellaneous ?? "",
     notes: order?.notes ?? "",
     orderCurrencyCode:
@@ -520,7 +530,7 @@ export function OrderForm({
       "EUR",
     sellingFxRate: order?.costs.sellingFxRate ?? "",
     sellingPriceAmount: order?.packageSellingPrice ?? "",
-    status: order?.status ?? "DRAFT",
+    status: recordDelivery ? "DELIVERED" : (order?.status ?? "DRAFT"),
     supplierId: order?.supplier.id ?? initialSupplier?.id ?? "",
     supplierOrderConfirmationReference:
       order?.supplierOrderConfirmationReference ?? "",
@@ -554,9 +564,10 @@ export function OrderForm({
   const sellingCurrency = draft.sellingCurrencyCode;
   const pricingMode = draft.pricingMode;
   const freightTreatment = draft.freightTreatment;
-  const orderDate = draft.orderDate;
-  const leadTimeWeeks = draft.leadTimeWeeks;
-  const expectedReadyDate = draft.expectedReadyDate;
+  const documentDateField =
+    documentKind === "INVOICE" ? "invoiceDate" : "quoteDate";
+  const otherDocumentDateField =
+    documentKind === "INVOICE" ? "quoteDate" : "invoiceDate";
   const purchaseCost = draft.purchaseCost;
   const freightCost = draft.freight;
   const freightAllowanceIsManual = draft.freightAllowanceMode === "MANUAL";
@@ -738,15 +749,6 @@ export function OrderForm({
     }
     changeDraft("pricingMode", next);
   }
-  function refreshExpectedReady(nextDate: string, nextWeeks: string) {
-    const weeks = Number(nextWeeks);
-    changeDraft(
-      "expectedReadyDate",
-      nextDate && Number.isInteger(weeks) && weeks >= 0
-        ? addWeeksToDateOnly(nextDate, weeks)
-        : "",
-    );
-  }
   const formRef = useRef<HTMLFormElement>(null);
   const fieldErrors = state.fieldErrors ?? {};
   const errorClass = (name: string) =>
@@ -857,24 +859,51 @@ export function OrderForm({
               value={draft.category}
             />
           </Field>
-          <Field error={fieldErrors.quoteDate} label="Supplier quote date">
+          <Field
+            label={isEditing ? "Document date to edit" : "Supplier document"}
+          >
+            <select
+              className={inputClassName}
+              name="supplierDocumentKind"
+              value={documentKind}
+              onChange={(event) =>
+                setDocumentKind(event.target.value as SupplierDocumentKind)
+              }
+            >
+              <option value="QUOTE">Quote</option>
+              <option value="INVOICE">Invoice</option>
+            </select>
+          </Field>
+          <Field
+            error={fieldErrors[documentDateField]}
+            label={`Supplier document date · ${documentKind === "INVOICE" ? "Invoice" : "Quote"}`}
+          >
             <DateInput
-              aria-invalid={Boolean(fieldErrors.quoteDate) || undefined}
-              className={errorClass("quoteDate")}
-              name="quoteDate"
-              onChange={(event) => changeDraft("quoteDate", event.target.value)}
-
-              value={draft.quoteDate}
+              key={documentDateField}
+              aria-invalid={
+                Boolean(fieldErrors[documentDateField]) || undefined
+              }
+              className={errorClass(documentDateField)}
+              name={documentDateField}
+              onChange={(event) =>
+                changeDraft(documentDateField, event.target.value)
+              }
+              value={draft[documentDateField]}
             />
           </Field>
-          <Field error={fieldErrors.invoiceDate} label="Invoice date">
+          <Field
+            error={fieldErrors.expectedDeliveryDate}
+            label="Expected delivery"
+          >
             <DateInput
-              name="invoiceDate"
-              aria-invalid={Boolean(fieldErrors.invoiceDate) || undefined}
-              className={errorClass("invoiceDate")}
-              value={draft.invoiceDate}
+              name="expectedDeliveryDate"
+              aria-invalid={
+                Boolean(fieldErrors.expectedDeliveryDate) || undefined
+              }
+              className={errorClass("expectedDeliveryDate")}
+              value={draft.expectedDeliveryDate}
               onChange={(event) =>
-                changeDraft("invoiceDate", event.target.value)
+                changeDraft("expectedDeliveryDate", event.target.value)
               }
             />
           </Field>
@@ -883,7 +912,22 @@ export function OrderForm({
               aria-invalid={Boolean(fieldErrors.status) || undefined}
               className={errorClass("status")}
               name="status"
-              onChange={(event) => changeDraft("status", event.target.value)}
+              onChange={(event) => {
+                changeDraft("status", event.target.value);
+                if (
+                  event.target.value === "DELIVERED" &&
+                  !draft.actualDeliveryDate
+                ) {
+                  changeDraft("actualDeliveryDate", businessToday());
+                  setDeliveryDateWasProposed(true);
+                } else if (
+                  event.target.value !== "DELIVERED" &&
+                  deliveryDateWasProposed
+                ) {
+                  changeDraft("actualDeliveryDate", "");
+                  setDeliveryDateWasProposed(false);
+                }
+              }}
               value={draft.status}
             >
               {options.statuses
@@ -898,6 +942,31 @@ export function OrderForm({
                 ))}
             </select>
           </Field>
+          {draft.status === "DELIVERED" || draft.actualDeliveryDate ? (
+            <Field error={fieldErrors.actualDeliveryDate} label="Delivered on">
+              <DateInput
+                aria-invalid={
+                  Boolean(fieldErrors.actualDeliveryDate) || undefined
+                }
+                className={errorClass("actualDeliveryDate")}
+                name="actualDeliveryDate"
+                onChange={(event) => {
+                  changeDraft("actualDeliveryDate", event.target.value);
+                  setDeliveryDateWasProposed(false);
+                }}
+                value={draft.actualDeliveryDate}
+              />
+              <p className="text-muted-foreground mt-1 text-xs">
+                Confirm the actual delivery date before saving.
+              </p>
+            </Field>
+          ) : (
+            <input
+              name="actualDeliveryDate"
+              type="hidden"
+              value={draft.actualDeliveryDate}
+            />
+          )}
           <Field error={fieldErrors.projectId} label="Project">
             <select
               aria-invalid={Boolean(fieldErrors.projectId) || undefined}
@@ -941,12 +1010,6 @@ export function OrderForm({
                 changeDraft("supplierId", event.target.value);
                 if (!isEditing && next)
                   changeDraft("orderCurrencyCode", next.defaultCurrencyCode);
-                if (!isEditing && next) {
-                  const nextLeadTime =
-                    next.defaultLeadTimeWeeks?.toString() ?? "";
-                  changeDraft("leadTimeWeeks", nextLeadTime);
-                  refreshExpectedReady(orderDate, nextLeadTime);
-                }
               }}
               value={supplierId}
             >
@@ -1159,93 +1222,71 @@ export function OrderForm({
             ))}
           </div>
         </fieldset>
-        <details className="bg-muted/20 rounded-lg border p-4">
+        <details
+          className="bg-muted/20 rounded-lg border p-4"
+          open={Boolean(
+            fieldErrors[otherDocumentDateField] || fieldErrors.orderDate,
+          )}
+        >
           <summary className="cursor-pointer text-sm font-semibold">
-            Procurement timing
+            Additional date details
           </summary>
           <p className="text-muted-foreground mt-1 text-xs">
-            Business dates remain date-only. Expected ready is calculated from
-            Order date and lead time, and remains editable.
+            Quote, Invoice and Order dates remain separate. Changing the current
+            document does not replace an earlier date.
           </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Field
+              error={fieldErrors[otherDocumentDateField]}
+              label={
+                documentKind === "INVOICE"
+                  ? "Supplier quote date"
+                  : "Supplier invoice date"
+              }
+            >
+              <DateInput
+                key={otherDocumentDateField}
+                aria-invalid={
+                  Boolean(fieldErrors[otherDocumentDateField]) || undefined
+                }
+                className={errorClass(otherDocumentDateField)}
+                name={otherDocumentDateField}
+                onChange={(event) =>
+                  changeDraft(otherDocumentDateField, event.target.value)
+                }
+                value={draft[otherDocumentDateField]}
+              />
+            </Field>
             <Field error={fieldErrors.orderDate} label="Order date">
               <DateInput
                 aria-invalid={Boolean(fieldErrors.orderDate) || undefined}
                 className={errorClass("orderDate")}
                 name="orderDate"
-                onChange={(event) => {
-                  changeDraft("orderDate", event.target.value);
-                  refreshExpectedReady(event.target.value, leadTimeWeeks);
-                }}
-
-                value={orderDate}
-              />
-            </Field>
-            <Field error={fieldErrors.leadTimeWeeks} label="Lead time (weeks)">
-              <input
-                aria-invalid={Boolean(fieldErrors.leadTimeWeeks) || undefined}
-                className={errorClass("leadTimeWeeks")}
-                inputMode="numeric"
-                max="520"
-                min="0"
-                name="leadTimeWeeks"
-                onChange={(event) => {
-                  changeDraft("leadTimeWeeks", event.target.value);
-                  refreshExpectedReady(orderDate, event.target.value);
-                }}
-                type="number"
-                value={leadTimeWeeks}
-              />
-            </Field>
-            <Field error={fieldErrors.expectedReadyDate} label="Expected ready">
-              <DateInput
-                aria-invalid={
-                  Boolean(fieldErrors.expectedReadyDate) || undefined
-                }
-                className={errorClass("expectedReadyDate")}
-                name="expectedReadyDate"
                 onChange={(event) =>
-                  changeDraft("expectedReadyDate", event.target.value)
+                  changeDraft("orderDate", event.target.value)
                 }
-
-                value={expectedReadyDate}
-              />
-            </Field>
-            <Field
-              error={fieldErrors.expectedDeliveryDate}
-              label="Expected delivery"
-            >
-              <DateInput
-                aria-invalid={
-                  Boolean(fieldErrors.expectedDeliveryDate) || undefined
-                }
-                className={errorClass("expectedDeliveryDate")}
-                name="expectedDeliveryDate"
-                onChange={(event) =>
-                  changeDraft("expectedDeliveryDate", event.target.value)
-                }
-
-                value={draft.expectedDeliveryDate}
-              />
-            </Field>
-            <Field
-              error={fieldErrors.actualDeliveryDate}
-              label="Actual delivery"
-            >
-              <DateInput
-                aria-invalid={
-                  Boolean(fieldErrors.actualDeliveryDate) || undefined
-                }
-                className={errorClass("actualDeliveryDate")}
-                name="actualDeliveryDate"
-                onChange={(event) =>
-                  changeDraft("actualDeliveryDate", event.target.value)
-                }
-
-                value={draft.actualDeliveryDate}
+                value={draft.orderDate}
               />
             </Field>
           </div>
+          <input
+            name="leadTimeWeeks"
+            type="hidden"
+            value={draft.leadTimeWeeks}
+          />
+          <input
+            name="expectedReadyDate"
+            type="hidden"
+            value={draft.expectedReadyDate}
+          />
+          {(draft.leadTimeWeeks || draft.expectedReadyDate) && (
+            <p className="text-muted-foreground mt-3 text-xs">
+              Previous logistics details: lead time{" "}
+              {draft.leadTimeWeeks ? `${draft.leadTimeWeeks} weeks` : "—"};
+              ready {formatDateOnly(draft.expectedReadyDate || null)}. Retained
+              for reference.
+            </p>
+          )}
         </details>
         <details className="rounded-lg border p-4" open>
           <summary className="cursor-pointer text-sm font-semibold">

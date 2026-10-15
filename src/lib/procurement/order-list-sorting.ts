@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import type { OrderSort } from "@/config/order-list";
 import { carrierName } from "@/config/carriers";
 import { recordPaymentStatusLabel } from "@/domain/payments/record-status";
+import { supplierDocumentDate } from "@/domain/procurement/document-date";
 import type { OrderSummary } from "./orders";
 
 type SortValue = { value: string | null; currency?: string; numeric?: boolean };
@@ -46,8 +47,12 @@ function sortValue(order: OrderSummary, field: OrderSort): SortValue {
     case "dueDate":
       return {
         value:
-          order.supplierPayment.paidAt ?? order.supplierPayment.nextDueDate,
+          order.supplierPayment.status === "PAID"
+            ? null
+            : order.supplierPayment.nextDueDate,
       };
+    case "documentDate":
+      return { value: supplierDocumentDate(order).date };
     case "carrier":
       return {
         value: order.carrierCode
@@ -70,6 +75,7 @@ export const derivedOrderSorts: readonly OrderSort[] = [
   "outstanding",
   "paymentStatus",
   "dueDate",
+  "documentDate",
   "carrier",
 ];
 

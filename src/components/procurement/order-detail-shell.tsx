@@ -17,20 +17,26 @@ export function OrderDetailShell({
   options,
   order,
   startEditing = false,
+  recordDelivery = false,
 }: {
   canEdit: boolean;
   children: ReactNode;
   options: OrderFormOptions;
   order: EditableOrder;
   startEditing?: boolean;
+  recordDelivery?: boolean;
 }) {
   const [editing, setEditing] = useState(canEdit && startEditing);
+  const [proposeDelivery, setProposeDelivery] = useState(recordDelivery);
   return (
     <div className="relative space-y-6">
       {canEdit ? (
         <Button
           className="float-right mt-4 mr-4 ml-4 sm:mt-5 sm:mr-5"
-          onClick={() => setEditing(true)}
+          onClick={() => {
+            setProposeDelivery(false);
+            setEditing(true);
+          }}
           type="button"
           variant="outline"
         >
@@ -39,11 +45,23 @@ export function OrderDetailShell({
       ) : null}
       {children}
       {canEdit && editing ? (
-        <EditorDrawer open wide title="Edit Order" onOpenChange={setEditing}>
+        <EditorDrawer
+          open
+          wide
+          title="Edit Order"
+          onOpenChange={(open) => {
+            setEditing(open);
+            if (!open) setProposeDelivery(false);
+          }}
+        >
           <OrderForm
-            onSaved={() => setEditing(false)}
+            onSaved={() => {
+              setEditing(false);
+              setProposeDelivery(false);
+            }}
             options={options}
             order={order}
+            recordDelivery={proposeDelivery}
           />
         </EditorDrawer>
       ) : null}

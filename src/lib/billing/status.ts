@@ -1,7 +1,12 @@
 import "server-only";
 import Decimal from "decimal.js";
 import { z } from "zod";
-import { businessToday } from "@/domain/payments/dates";
+import {
+  businessToday,
+  dateOnlyToDate,
+  dateToDateOnly,
+  isDateOnly,
+} from "@/domain/payments/dates";
 import { billingIsIssued, billingStatuses } from "@/domain/billing/status";
 import { clientReceiptSchema } from "@/domain/billing/validation";
 import { Prisma } from "@/generated/prisma/client";
@@ -20,6 +25,10 @@ import {
 export const billingStatusChangeSchema = z.object({
   id: z.uuid(),
   value: z.enum(billingStatuses),
+  documentDate: z
+    .string()
+    .refine(isDateOnly, "Enter a valid Invoice date.")
+    .optional(),
   paymentDate: z.string().optional(),
   paymentFx: z.string().optional(),
   confirmedAmount: z.string().optional(),
@@ -59,6 +68,12 @@ export async function changeBillingStatusInTransaction(
   const paid = receipts.reduce((sum, r) => sum.plus(r.amount), new Decimal(0));
   const position = getClientCreditPosition(doc);
   const remaining = new Decimal(position.outstanding);
+  const confirmingIssue =
+    doc.workflowStatus === "TO_BE_INVOICED" && input.value === "INVOICED";
+  if (input.documentDate !== undefined && !confirmingIssue)
+    throw new ClientBillingValidationError(
+      "Confirm the Invoice date when issuing a planned Invoice.",
+    );
   if (
     ["DRAFT", "TO_BE_INVOICED", "CANCELLED"].includes(input.value) &&
     activeBillingCredits(doc).length
@@ -116,6 +131,9 @@ export async function changeBillingStatusInTransaction(
       isCancelled: input.value === "CANCELLED",
       paymentStatusOverride: null,
       updatedById: actorId,
+      ...(input.documentDate !== undefined
+        ? { documentDate: dateOnlyToDate(input.documentDate) }
+        : {}),
     },
   });
   if (
@@ -179,7 +197,16 @@ export async function changeBillingStatusInTransaction(
     entityId: doc.id,
     entityReference: doc.reference,
     summary: "Changed Billing status.",
-    metadata: { previous: doc.workflowStatus, status: input.value },
+    metadata: {
+      previous: doc.workflowStatus,
+      status: input.value,
+      ...(input.documentDate !== undefined
+        ? {
+            previousDocumentDate: dateToDateOnly(doc.documentDate),
+            documentDate: input.documentDate,
+          }
+        : {}),
+    },
   });
 }
 

@@ -367,7 +367,7 @@ function collectBillingCash(
         id: term.id,
         amount: term.scheduledAmount.toString(),
         paid: uniqueReceiptTotal(term.receipts),
-        due: dateToDateOnly(term.dueDate ?? record.dueDate),
+        due: dateToDateOnly(term.dueDate),
         cancelled: term.isCancelled,
         currency: term.currencyCode,
         fx: term.expectedFxRateToReporting?.toString() ?? null,
@@ -402,7 +402,7 @@ function addReceivableBalance(
   }));
   const view = calculateClientBillingAmounts({
     documentType: record.documentType,
-    dueDate: earliestUnpaidTermDate(terms, dateToDateOnly(record.dueDate)),
+    dueDate: earliestUnpaidTermDate(terms),
     isCancelled: record.isCancelled,
     paidAmounts: receiptRecords(record).map((receipt) =>
       receipt.amount.toString(),
@@ -426,7 +426,6 @@ function addReceivableBalance(
     overdueTermAmount({
       terms,
       outstanding: view.outstanding,
-      fallbackDate: dateToDateOnly(record.dueDate),
       today: state.today,
     }),
     record.currencyCode,
@@ -726,7 +725,7 @@ export async function listClientCashInstallments(
       source: term,
       amount: term.scheduledAmount.toString(),
       paid: context.reviewReason ? "0" : uniqueReceiptTotal(term.receipts),
-      due: dateToDateOnly(term.dueDate ?? document.dueDate),
+      due: dateToDateOnly(term.dueDate),
       cancelled: term.isCancelled,
     }));
     // Diagnostic amounts remain original-currency evidence only. Consumers must not aggregate them.

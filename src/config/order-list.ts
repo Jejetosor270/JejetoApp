@@ -4,13 +4,14 @@ export const orderSortLabels = {
   reference: "Reference",
   orderDate: "Order date",
   invoiceDate: "Invoice date",
+  documentDate: "Supplier document date",
   project: "Project",
   package: "Package",
   supplier: "Supplier",
   status: "Delivery status",
   purchase: "Purchase HT",
   paymentStatus: "Payment status",
-  dueDate: "Due / paid",
+  dueDate: "Next payment due",
   expectedDelivery: "Expected delivery",
   economicCost: "Economic Landed Cost HT",
   sell: "Total Order Sell HT",
@@ -26,6 +27,14 @@ export const orderSortLabels = {
 
 export type OrderSort = keyof typeof orderSortLabels;
 export const orderSortFields = Object.keys(orderSortLabels) as OrderSort[];
+// Keep historical sort URLs valid without presenting retired date choices.
+export const visibleOrderSortFields: readonly OrderSort[] =
+  orderSortFields.filter(
+    (field) =>
+      field !== "orderDate" &&
+      field !== "invoiceDate" &&
+      field !== "expectedReady",
+  );
 export type OrderViewMode =
   "general" | "financial" | "supplier-payment" | "delivery";
 export const orderViewColumns: Record<OrderViewMode, readonly OrderSort[]> = {
@@ -37,7 +46,7 @@ export const orderViewColumns: Record<OrderViewMode, readonly OrderSort[]> = {
     "status",
     "purchase",
     "paymentStatus",
-    "invoiceDate",
+    "documentDate",
     "dueDate",
     "expectedDelivery",
   ],
@@ -66,7 +75,6 @@ export const orderViewColumns: Record<OrderViewMode, readonly OrderSort[]> = {
   delivery: [
     "reference",
     "status",
-    "expectedReady",
     "expectedDelivery",
     "supplier",
     "project",

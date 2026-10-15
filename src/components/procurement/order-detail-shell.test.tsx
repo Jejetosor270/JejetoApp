@@ -5,9 +5,14 @@ import { mountForm, clickText, enter, control } from "@/test/dom-form";
 import { OrderDetailShell } from "./order-detail-shell";
 
 vi.mock("./order-form", () => ({
-  OrderForm: () => (
+  OrderForm: ({ recordDelivery = false }: { recordDelivery?: boolean }) => (
     <form>
       <input name="orderDraft" defaultValue="Original" />
+      <input
+        name="deliveryIntent"
+        type="hidden"
+        value={String(recordDelivery)}
+      />
     </form>
   ),
 }));
@@ -53,4 +58,26 @@ it("does not offer Order editing to read-only employees", async () => {
   );
   expect(view.container.textContent).toBe("Summary");
   expect(view.container.querySelector("button")).toBeNull();
+});
+
+it("consumes a table delivery intent when cancelled so normal editing cannot reapply it", async () => {
+  view = await mountForm(
+    <OrderDetailShell
+      canEdit
+      options={options}
+      order={order}
+      startEditing
+      recordDelivery
+    >
+      Summary
+    </OrderDetailShell>,
+  );
+  expect(
+    document.querySelector<HTMLInputElement>('[name="deliveryIntent"]')?.value,
+  ).toBe("true");
+  await clickText("Close");
+  await clickText("Edit order");
+  expect(
+    document.querySelector<HTMLInputElement>('[name="deliveryIntent"]')?.value,
+  ).toBe("false");
 });

@@ -272,6 +272,8 @@ describe("single order cost write", () => {
       inputVatTreatment: "IMPORT",
       orderCurrencyCode: "USD",
       orderNumber: "PO-001",
+      orderDate: "2026-08-25",
+      leadTimeWeeks: "9",
       outputVatRate: "20",
       outputVatTreatment: "DOMESTIC",
       packageName: "Example",
@@ -292,6 +294,7 @@ describe("single order cost write", () => {
           carrierOtherName: "Local freight",
           trackingReference: "BOL-123",
           budgetPurchaseAmountHt: "70000.0000",
+          expectedReadyDate: null,
         }),
       }),
     );

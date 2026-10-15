@@ -205,9 +205,9 @@
   transactions are unchanged.
 - Purchasing and Reports keep presentation selectors inside their filter form with
   one Apply action. Billing's standard drawer keeps linked Order allocations collapsed
-  but mounted, opening them for validation errors. Lists label mixed date columns
-  Due / paid, identify paid dates, and call the open-term editor Next payment due;
-  Billing Details names the document's Invoice/Quote due date separately.
+  but mounted, opening them for validation errors. Lists show Next payment due
+  or Paid; payment dates remain in expandable cash history. Billing Details links
+  its next due date to the authoritative Payment terms section.
 - Financial labels distinguish Order pricing plans, allocated Billing recovery,
   full-Project invoiced results and cash. Presentation changes never turn Order
   sell coverage or partial allocation recovery into realized Project profit.
@@ -729,11 +729,12 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 
 ## Simplified payment terms
 
-- New Billing/Order records create reviewed terms, otherwise one 100% term when the payable is positive. Billing uses its due date; absent dates remain null and display Date needed. Existing records are never backfilled or silently rescheduled. Quote/Invoice matches retain one forecast.
+- New Billing/Order records create reviewed terms, otherwise one 100% term when the payable is positive. Billing's creation-time Payment due seeds that default term only; explicit split terms retain their own dates. Absent dates remain null and display Date needed. Existing records are never silently rescheduled. Quote/Invoice matches retain one forecast.
 - Terms support inline label/date/amount edits, detailed edits, full/partial payment recording and cancellation. Status derives from cash and dates; overdue partial payments show both facts. Actual cash dates, currency and independent FX remain authoritative. Cancelling a term removes its remaining forecast while retaining cash history.
-- Project and parent collection status use unpaid term dates. Overdue Client amounts include only overdue term balances, capped by Invoice outstanding; historical unscheduled documents retain their document-date fallback. Undated Client terms use the document due-date fallback for reporting/calendar; truly undated terms remain in all-remaining commitments without a calendar event.
+- Project and parent collection status use unpaid term dates. Overdue Client amounts include only overdue term balances, capped by Invoice outstanding. Payment terms are the sole due-date authority for reporting, calendar, status and cash forecasts; no runtime fallback to the historical Billing document date is permitted. Undated terms remain in all-remaining commitments without a calendar event.
 - Settings Empty Trash is an ADMIN-only explicit permanent deletion, with typed confirmation and audit retention. It deletes only trashed business rows and dependent supporting data transactionally, rejecting active dependencies. Normal deletion remains recoverable Trash. Never invoke Empty Trash as part of development or verification against live data.
 - Requires `20260917000000_optional_payment_term_dates`, prepared only; applying it is a separate controlled step.
+- Before deploying the date simplification, apply the controlled `20261015000000_payment_term_due_dates` migration. It preserves legacy effective dates on terms without overwriting explicit dates, retains the historical document fields and protects Trash restoration. Conflicting dates on a shared Quote/Invoice term stop the migration for review. Preparing or testing it does not authorize running it against the configured database.
 
 ## Project coverage and Financials presentation
 
@@ -764,8 +765,13 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 ## Purchasing dates and list simplification
 
 - Purchasing labels the operational/fulfilment column Delivery status; Payment status remains
-  separate. Its standard table includes Invoice date, Payment due date and Expected delivery.
-  Payment due date is the earliest outstanding non-cancelled Supplier installment date.
+  separate. Its standard table includes Supplier document date, Next payment due and Expected delivery.
+  The document date prefers a recorded Invoice date, otherwise Quote date, with its source labelled.
+  Next payment due is the earliest outstanding non-cancelled Supplier term date.
+- Everyday Purchasing entry shows one selected Supplier document date and Expected delivery.
+  Additional details preserve Order/older document dates and historical ready/lead-time values.
+  Ready dates are no longer recalculated or emitted on the calendar. Marking Delivered proposes
+  an actual delivery date for employee confirmation; expected and actual delivery history stay separate.
 - Supplier invoiceDate is a separate optional business date, edited in the Order form. Never infer
   it from Order or Quote dates or overwrite it when an intake omits it. Historical values stay null.
   Requires migration `20260919000000_supplier_invoice_date`, prepared but not applied.
@@ -775,8 +781,9 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
   Decimal comparison, missing derived values sort last, and ties use immutable IDs.
   Derived sorting loads the filtered scope on the server; very large scopes may require
   optimization without introducing duplicate persisted financial totals.
-- Billing includes the document's Invoice date column and omits its TTC total column; Received
-  and Outstanding retain their authoritative TTC cash values. Quote rows use their document date.
+- Billing labels document dates by context: Quote date, Planned invoice date or Invoice date.
+  Received and Outstanding retain their authoritative TTC cash values. Planned invoice dates
+  remain Issue invoice reminders and never become payment deadlines.
 - Project Details no longer renders the redundant Full-Project target vs actual table.
   Financials, coverage, VAT and underlying reporting calculations remain unchanged.
 - More omits Unassigned cash records and Unassigned records. This is navigation-only removal;
@@ -806,8 +813,8 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 - Distinct names identify different bases: Billing less cost, Billing less Order sell, Unallocated Invoice HT, Cash balance and Freight recovery surplus. Project-default freight target, applicable-markup recovery target and allocated billing minus freight cost remain different established formulas.
 - Full Order/Billing financial editors and Billing allocation drawers carry a version of the record and financial dependencies. Stale saves are rejected with changed field/group names while retaining drafts. Transactions are serializable. Closing/reopening refreshes the edit snapshot; a refreshed page must not silently bless a stale draft.
 - Simple text/date cells remain inline; money and relationship choices use contextual drawers. Derived totals link to their authoritative source editor. Billing has one status control in its header; Reference is primary and short description is secondary. Legacy Order title stays secondary to Reference and separate from Project Package grouping.
-- Due-date display uses the earliest unpaid term with the Client document fallback where needed. Date edits affect that term only, never the whole schedule. Cash calendars use remaining TTC, show original scheduled TTC separately, identify Quote planning and Invoice expectations, and list Issue invoice reminders separately.
-- In Billing and Purchasing list date columns, fully paid records display the latest authoritative receipt/Supplier settlement date instead of an empty next due date. Sorting uses that displayed date. Paid-date editing links to the underlying cash records; scheduled due dates, forecasts and calendar rules are unchanged. Payment corrections that reopen the balance restore the unpaid due-date display. No receipt/settlement date is invented when cash history is absent.
+- Due-date display uses the earliest unpaid term, with no Client document fallback. Date edits affect that term only, never the whole schedule. Cash calendars use remaining TTC, show original scheduled TTC separately, identify Quote planning and Invoice expectations, and list Issue invoice reminders separately.
+- Billing and Purchasing list date columns show Next payment due, or Paid when settled. Sorting uses unpaid term dates only, with undated/paid rows last; settlement dates remain in expandable history. Payment corrections that reopen the balance restore the unpaid due-date display. No receipt/settlement date is invented when cash history is absent.
 - Supplier-scoped actual cash filters outflows at transaction level, includes freight-only Supplier relationships and suppresses Client inflows rather than inventing Supplier attribution.
 - Billing filters include derived status. Monetary/status sorting occurs before pagination and exports share the same validated filter/sort scope. Unlike currencies are grouped, never summed or compared as if equivalent.
 - Allocation presentation distinguishes Merchandise, Freight and Other/services, with total/allocated/Project remainder. Payment term labels remain unchanged, with percentage/fixed basis in a separate column.

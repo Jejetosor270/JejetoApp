@@ -1,4 +1,8 @@
-import { orderSortFields, orderSortLabels } from "@/config/order-list";
+import {
+  orderSortFields,
+  orderSortLabels,
+  visibleOrderSortFields,
+} from "@/config/order-list";
 import { DateInput } from "@/components/forms/date-input";
 import { CreateOrderActions } from "@/components/procurement/create-order-actions";
 import { ViewField } from "@/components/listing/view-selector";
@@ -226,27 +230,42 @@ export default async function OrdersPage({
             ))}
           </select>
         </FilterField>
-        <FilterField label="Order date from">
-          <DateInput
-            className={filterControlClassName}
-            defaultValue={dateFrom ?? ""}
-            name="dateFrom"
-          />
-        </FilterField>
-        <FilterField label="Order date to">
-          <DateInput
-            className={filterControlClassName}
-            defaultValue={dateTo ?? ""}
-            name="dateTo"
-          />
-        </FilterField>
+        <details
+          className="rounded-md border p-3"
+          open={Boolean(dateFrom || dateTo)}
+        >
+          <summary className="cursor-pointer text-xs font-medium">
+            Additional date filters
+          </summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <FilterField label="Order date from">
+              <DateInput
+                className={filterControlClassName}
+                defaultValue={dateFrom ?? ""}
+                name="dateFrom"
+              />
+            </FilterField>
+            <FilterField label="Order date to">
+              <DateInput
+                className={filterControlClassName}
+                defaultValue={dateTo ?? ""}
+                name="dateTo"
+              />
+            </FilterField>
+          </div>
+        </details>
         <FilterField label="Sort by">
           <select
             className={filterControlClassName}
             defaultValue={sort}
             name="sort"
           >
-            {orderSortFields.map((field) => (
+            {!visibleOrderSortFields.includes(sort) && (
+              <option hidden value={sort}>
+                {orderSortLabels[sort]} · saved sort
+              </option>
+            )}
+            {visibleOrderSortFields.map((field) => (
               <option key={field} value={field}>
                 {orderSortLabels[field]}
               </option>

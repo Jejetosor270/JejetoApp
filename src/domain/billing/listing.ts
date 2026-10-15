@@ -68,7 +68,7 @@ export function sortBillingRows<
     else {
       const key = (row: T) =>
         sort === "dueDate"
-          ? (row.paidAt ?? row.dueDate)
+          ? row.dueDate
           : sort === "project"
             ? row.project.name
             : sort === "date"

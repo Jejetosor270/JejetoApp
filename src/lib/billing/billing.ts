@@ -19,6 +19,8 @@ import { retainedCurrency } from "@/lib/related-records/context";
 import { freightCoverageBreakdown } from "@/domain/billing/freight-coverage";
 import "server-only";
 import { editBillingDueDate } from "./due-date";
+import { ClientBillingValidationError } from "./errors";
+export { ClientBillingValidationError } from "./errors";
 import {
   editVersion,
   editFieldVersions,
@@ -76,7 +78,6 @@ import {
   listOrderFundingRows,
 } from "@/lib/procurement/orders";
 
-export class ClientBillingValidationError extends Error {}
 export class ClientBillingNotFoundError extends Error {}
 
 async function assertNoActiveBillingCredits(
@@ -236,7 +237,6 @@ function billingView(record: BillingRecord, today = businessToday()) {
           amount: payment.amount.toString(),
         })),
       })),
-      dateToDateOnly(record.dueDate),
     ),
     isCancelled: record.isCancelled,
     paidAmounts: receipts.map((receipt) => receipt.amount.toString()),
@@ -256,7 +256,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
       paid: term.receipts
         .reduce((sum, receipt) => sum.plus(receipt.amount), new Decimal(0))
         .toFixed(4),
-      due: dateToDateOnly(term.dueDate ?? record.dueDate),
+      due: dateToDateOnly(term.dueDate),
       cancelled: term.isCancelled,
     })),
   );
@@ -315,15 +315,16 @@ function billingView(record: BillingRecord, today = businessToday()) {
     currencyCode: record.currencyCode,
     documentDate: dateToDateOnly(record.documentDate),
     documentType: record.documentType,
-    dueDate: earliestUnpaidTermDate(
-      visibleInstallments.map((t) => ({
-        dueDate: dateToDateOnly(t.dueDate),
-        isCancelled: t.isCancelled,
-        scheduledAmount: t.scheduledAmount.toString(),
-        payments: t.receipts.map((r) => ({ amount: r.amount.toString() })),
-      })),
-      dateToDateOnly(record.dueDate),
-    ),
+    dueDate: new Decimal(calculated.outstanding).isZero()
+      ? null
+      : earliestUnpaidTermDate(
+          visibleInstallments.map((t) => ({
+            dueDate: dateToDateOnly(t.dueDate),
+            isCancelled: t.isCancelled,
+            scheduledAmount: t.scheduledAmount.toString(),
+            payments: t.receipts.map((r) => ({ amount: r.amount.toString() })),
+          })),
+        ),
     fxRate: record.fxRateToReporting?.toString() ?? null,
     id: record.id,
     ...(record.paymentStatusOverride
@@ -743,7 +744,6 @@ export async function confirmClientBillingDocument(
         currencyCode: input.currencyCode,
         documentDate: dateOnlyToDate(input.documentDate),
         documentType: input.documentType,
-        dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
         fxRateToReporting:
           input.currencyCode === project.reportingCurrencyCode
             ? null
@@ -759,10 +759,16 @@ export async function confirmClientBillingDocument(
           : {}),
         isCancelled: input.isCancelled,
         isProjectRemainderApproved: input.isProjectRemainderApproved,
-        matchedInstallmentId:
-          input.documentType === ClientBillingDocumentType.INVOICE
-            ? (input.matchedInstallmentId ?? null)
-            : null,
+        ...(input.action === "CREATE" ||
+        input.replaceSchedule ||
+        input.matchedInstallmentId != null
+          ? {
+              matchedInstallmentId:
+                input.documentType === ClientBillingDocumentType.INVOICE
+                  ? (input.matchedInstallmentId ?? null)
+                  : null,
+            }
+          : {}),
         notes: input.notes ?? null,
         paymentTermsRaw: input.paymentTermsRaw ?? null,
         ...(input.shortDescription === undefined
@@ -789,6 +795,7 @@ export async function confirmClientBillingDocument(
               isCancelled: true,
               id: true,
               projectId: true,
+              matchedInstallmentId: true,
             },
           })
         : null;
@@ -818,10 +825,13 @@ export async function confirmClientBillingDocument(
             });
       const usesMatchedSchedule =
         input.documentType === ClientBillingDocumentType.INVOICE &&
-        Boolean(input.matchedInstallmentId);
+        Boolean(
+          input.matchedInstallmentId ??
+          (!input.replaceSchedule ? existing?.matchedInstallmentId : null),
+        );
       if (
         input.action === "UPDATE" &&
-        (input.replaceSchedule || usesMatchedSchedule)
+        (input.replaceSchedule || input.matchedInstallmentId != null)
       ) {
         const protectedInstallments =
           await transaction.clientPaymentInstallment.count({
@@ -1337,10 +1347,12 @@ export async function updateClientBillingInline(
         "A billing document with recorded Client receipts cannot be cancelled.",
       );
     }
+    if (input.dueDate !== undefined) {
+      await editBillingDueDate(transaction, actorId, input.id, input.dueDate);
+    }
     const document = await transaction.clientBillingDocument.update({
       where: { id: input.id },
       data: {
-        dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
         isCancelled: input.isCancelled,
         ...(existing.isCancelled !== input.isCancelled
           ? {
@@ -2181,6 +2193,9 @@ export async function updateClientBillingDocumentInTransaction(
     input.allocations,
     input.isProjectRemainderApproved,
   );
+  if (input.dueDate !== undefined) {
+    await editBillingDueDate(transaction, actorId, input.id, input.dueDate);
+  }
   await transaction.clientBillingDocument.update({
     where: { id: input.id },
     data: {
@@ -2188,12 +2203,6 @@ export async function updateClientBillingDocumentInTransaction(
       currencyCode: input.currencyCode,
       documentDate: dateOnlyToDate(input.documentDate),
       documentType: input.documentType,
-      dueDate: await editBillingDueDate(
-        transaction,
-        actorId,
-        input.id,
-        input.dueDate ?? null,
-      ),
       ...(input.shortDescription === undefined
         ? {}
         : { shortDescription: input.shortDescription || null }),

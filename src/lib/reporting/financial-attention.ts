@@ -173,7 +173,7 @@ export async function getFinancialAttention(
       partyId: bill.clientId ?? "",
       href: `/billing/${bill.id}?tab=related`,
       date: dateToDateOnly(bill.documentDate),
-      dueDate: dateToDateOnly(bill.dueDate),
+      dueDate: null,
       currency: bill.currencyCode,
       totalHt: bill.totalHt.toString(),
       totalTtc: context.total,

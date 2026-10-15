@@ -244,6 +244,7 @@ const confirmationSchema = z
     purchaseCost: optionalMoney,
     purchaseFxRate: optionalFx,
     quoteDate: optionalDate,
+    sourceDocumentType: z.enum(["QUOTE", "INVOICE"]).default("QUOTE"),
     supplierId: z.uuid("Choose an existing or newly created Supplier."),
     supplierQuoteReference: optionalString(120),
   })
@@ -314,7 +315,7 @@ const confirmationSchema = z
         value.applyQuoteDate,
         value.quoteDate,
         "quoteDate",
-        "Enter the quote date.",
+        "Enter the supplier document date.",
       ],
       [
         value.applyQuoteReference,
@@ -543,6 +544,7 @@ export function quoteConfirmationValues(formData: FormData): unknown {
     purchaseCost: stringValue(formData, "purchaseCost"),
     purchaseFxRate: stringValue(formData, "purchaseFxRate"),
     quoteDate: stringValue(formData, "quoteDate"),
+    sourceDocumentType: stringValue(formData, "sourceDocumentType"),
     supplierId: stringValue(formData, "supplierId"),
     supplierQuoteReference: stringValue(formData, "supplierQuoteReference"),
   };

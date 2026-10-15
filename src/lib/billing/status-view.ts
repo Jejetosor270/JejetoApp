@@ -48,7 +48,6 @@ export function billingRecordStatus(
             scheduledAmount: t.scheduledAmount.toString(),
             payments: t.receipts.map((r) => ({ amount: r.amount.toString() })),
           })),
-          dateToDateOnly(record.dueDate),
         ),
   });
 }

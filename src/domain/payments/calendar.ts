@@ -7,7 +7,6 @@ export type CalendarEventType =
   | "ISSUE_INVOICE"
   | "SUPPLIER_PAYMENT"
   | "CLIENT_RECEIPT"
-  | "EXPECTED_READY"
   | "EXPECTED_DELIVERY"
   | "ACTUAL_DELIVERY"
   | "ITEM_WAREHOUSE"
@@ -60,7 +59,6 @@ export function buildCalendarEvents(input: {
   orders: readonly {
     actualDeliveryDate: string | null;
     expectedDeliveryDate: string | null;
-    expectedReadyDate: string | null;
     id: string;
     orderNumber: string;
     projectName: string;
@@ -117,7 +115,6 @@ export function buildCalendarEvents(input: {
     }));
   const orderEvents = input.orders.flatMap((order) => {
     const dates = [
-      ["EXPECTED_READY", order.expectedReadyDate, "Expected ready"],
       ["EXPECTED_DELIVERY", order.expectedDeliveryDate, "Expected delivery"],
       ["ACTUAL_DELIVERY", order.actualDeliveryDate, "Delivered"],
     ] as const;

@@ -24,7 +24,7 @@ it("selects the earliest unpaid ISO date across years and months regardless of i
   ];
   const original = structuredClone(terms);
   for (const rows of [terms, terms.toReversed()]) {
-    expect(earliestUnpaidTermDate(rows, null)).toBe("2026-02-09");
+    expect(earliestUnpaidTermDate(rows)).toBe("2026-02-09");
     expect(nextUnpaidTerm(rows)?.id).toBe("earliest");
   }
   expect(terms).toEqual(original);
@@ -61,34 +61,27 @@ it("ignores cancelled, fully paid, overpaid and zero terms while retaining a pre
     },
     unpaidTerm,
   ];
-  expect(earliestUnpaidTermDate(terms, "2025-01-01")).toBe("2026-09-30");
+  expect(earliestUnpaidTermDate(terms)).toBe("2026-09-30");
   expect(nextUnpaidTerm(terms)?.id).toBe("partial");
-  expect(earliestUnpaidTermDate(terms.slice(0, 4), "2025-01-01")).toBeNull();
+  expect(earliestUnpaidTermDate(terms.slice(0, 4))).toBeNull();
   expect(nextUnpaidTerm(terms.slice(0, 4))).toBeUndefined();
 });
 
-it.each([
-  ["2026-09-01", "2026-09-01", "undated"],
-  ["2026-11-01", "2026-10-01", "unpaid"],
-  [null, "2026-10-01", "unpaid"],
-] as const)(
-  "orders undated terms using fallback %s only when present",
-  (fallback, expected, id) => {
-    const terms = [unpaidTerm, { ...unpaidTerm, id: "undated", dueDate: null }];
-    expect(earliestUnpaidTermDate(terms, fallback)).toBe(expected);
-    expect(nextUnpaidTerm(terms, fallback)?.id).toBe(id);
-  },
-);
+it("keeps undated terms separate from the earliest scheduled unpaid term", () => {
+  const terms = [unpaidTerm, { ...unpaidTerm, id: "undated", dueDate: null }];
+  expect(earliestUnpaidTermDate(terms)).toBe("2026-10-01");
+  expect(nextUnpaidTerm(terms)?.id).toBe("unpaid");
+});
 
 it("keeps undated unpaid terms selectable without inventing a date and breaks equal-date ties by ID", () => {
   const undated = [{ ...unpaidTerm, dueDate: null }];
-  expect(earliestUnpaidTermDate(undated, null)).toBeNull();
+  expect(earliestUnpaidTermDate(undated)).toBeNull();
   expect(nextUnpaidTerm(undated)?.id).toBe("unpaid");
   const tied = [
     { ...unpaidTerm, id: "b" },
     { ...unpaidTerm, id: "a" },
   ];
-  expect(earliestUnpaidTermDate(tied, null)).toBe("2026-10-01");
+  expect(earliestUnpaidTermDate(tied)).toBe("2026-10-01");
   expect(nextUnpaidTerm(tied)?.id).toBe("a");
   expect(nextUnpaidTerm(tied.toReversed())?.id).toBe("a");
 });
@@ -157,7 +150,7 @@ it("shows overdue and partial together, while paid and cancelled take precedence
     "CANCELLED",
   );
 });
-it("uses unpaid term dates before a stale document date falling back for an undated term", () => {
+it("uses only unpaid term dates and never invents dates for undated or absent terms", () => {
   const term = {
     dueDate: "2026-09-01",
     isCancelled: false,
@@ -165,18 +158,15 @@ it("uses unpaid term dates before a stale document date falling back for an unda
     payments: [{ amount: "100" }],
   };
   expect(
-    earliestUnpaidTermDate(
-      [term, { ...term, dueDate: "2026-10-01", payments: [] }],
-      "2026-08-01",
-    ),
+    earliestUnpaidTermDate([
+      term,
+      { ...term, dueDate: "2026-10-01", payments: [] },
+    ]),
   ).toBe("2026-10-01");
   expect(
-    earliestUnpaidTermDate(
-      [{ ...term, dueDate: null, payments: [] }],
-      "2026-08-01",
-    ),
-  ).toBe("2026-08-01");
-  expect(earliestUnpaidTermDate([], "2026-08-01")).toBe("2026-08-01");
+    earliestUnpaidTermDate([{ ...term, dueDate: null, payments: [] }]),
+  ).toBeNull();
+  expect(earliestUnpaidTermDate([])).toBeNull();
 });
 
 it("counts only overdue term balances, capped by the actual Invoice outstanding", () => {
@@ -197,9 +187,12 @@ it("counts only overdue term balances, capped by the actual Invoice outstanding"
       },
     ],
     outstanding: "90",
-    fallbackDate: null,
     today: "2026-09-09",
   };
   expect(overdueTermAmount(input)).toBe("30");
   expect(overdueTermAmount({ ...input, outstanding: "20" })).toBe("20");
+  expect(overdueTermAmount({ ...input, terms: [] })).toBe("0");
+  expect(
+    overdueTermAmount({ ...input, terms: [{ ...overdue, dueDate: null }] }),
+  ).toBe("0");
 });

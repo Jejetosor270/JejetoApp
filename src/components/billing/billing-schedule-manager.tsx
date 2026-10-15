@@ -42,7 +42,7 @@ export function BillingScheduleManager({
       : {}),
     columns: [
       "Payment term",
-      "Due date",
+      "Payment due",
       "Amount TTC",
       financialLabels.clientReceived,
       financialLabels.remaining,

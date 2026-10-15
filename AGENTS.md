@@ -213,3 +213,5 @@ No floating-point finance, mutable supplier defaults as historical order truth, 
 ## Payment terms workflow
 
 Billing, Purchasing and Projects expose editable payment terms with derived statuses and expandable actual cash history. Preserve the normalized settlement/receipt records underneath. New records default to reviewed terms or one 100% term; missing due dates remain null. Existing terms are never silently rewritten. Settings Empty Trash is an explicitly confirmed ADMIN-only permanent operation retaining audit history; normal business deletion remains recoverable.
+
+Payment terms alone own due dates; legacy Billing document due dates are historical only after the controlled date backfill. Everyday Purchasing shows the current Supplier document date (Quote or Invoice) and Expected delivery; preserve older dates in additional details. Tables show Next payment due or Paid, with actual payment dates in cash history. Never infer an Invoice date from a Quote or Order date.

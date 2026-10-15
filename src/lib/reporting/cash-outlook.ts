@@ -138,7 +138,7 @@ export function buildCashOutlookDocuments({
       terms: terms.map((term) => ({
         amount: term.scheduledAmount.toString(),
         paid: uniqueReceiptTotal(term.receipts),
-        due: dateToDateOnly(term.dueDate ?? doc.dueDate),
+        due: dateToDateOnly(term.dueDate),
         fx: term.expectedFxRateToReporting?.toString() ?? null,
         cancelled: term.isCancelled,
       })),

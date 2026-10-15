@@ -28,7 +28,6 @@ function eventLabel(event: ProcurementCalendarEvent) {
     return event.documentType === "QUOTE"
       ? "Quote-planned cash in"
       : "Invoice cash in";
-  if (event.type === "EXPECTED_READY") return "Ready";
   if (event.type === "EXPECTED_DELIVERY") return "Delivery";
   if (event.type === "ITEM_WAREHOUSE") return "Item warehouse";
   if (event.type === "ITEM_FABRICATOR") return "Item fabricator";
@@ -103,7 +102,7 @@ export default async function CalendarPage({
       <PageHeader
         title="Procurement calendar"
         description={
-          <>Derived automatically from payment due dates and Order timing.</>
+          <>Payment due dates, deliveries and planned invoice dates.</>
         }
         actions={
           <>

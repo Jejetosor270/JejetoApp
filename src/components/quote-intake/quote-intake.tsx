@@ -34,6 +34,7 @@ import {
   initialQuoteProcessingState,
 } from "@/domain/quote-intake/action-state";
 import type { ExtractionStatus } from "@/domain/quote-intake/extraction";
+import type { SupplierDocumentKind } from "@/domain/procurement/document-date";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
 import { calculateQuoteSupplierPayable } from "@/domain/quote-intake/payment-schedule";
 import { inputVatRecoverabilityApplies } from "@/domain/vat/recoverability";
@@ -191,6 +192,8 @@ export function QuoteReview({
     id: string;
   } | null>(null);
   const [orderNumber, setOrderNumber] = useState("");
+  const [sourceDocumentType, setSourceDocumentType] =
+    useState<SupplierDocumentKind>("QUOTE");
   const previewVersion = useRef(0);
   const [revisionBasis, setRevisionBasis] = useState<string | null>(null);
   const [previewMessage, setPreviewMessage] = useState("");
@@ -602,6 +605,28 @@ export function QuoteReview({
               </label>
             </div>
             <div className="mt-4 grid gap-3 @lg:grid-cols-2 @4xl:grid-cols-2">
+              <Field
+                label="Supplier document"
+                error={fieldErrors.sourceDocumentType}
+              >
+                <select
+                  className={inputWithError("sourceDocumentType")}
+                  name="sourceDocumentType"
+                  value={sourceDocumentType}
+                  onChange={(event) =>
+                    setSourceDocumentType(
+                      event.target.value as SupplierDocumentKind,
+                    )
+                  }
+                >
+                  <option value="QUOTE">Quote</option>
+                  <option value="INVOICE">Invoice</option>
+                </select>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Confirm the document type so its date is saved against the
+                  correct source.
+                </p>
+              </Field>
               {actionType === "CREATE" ? (
                 <Field
                   error={fieldErrors.orderNumber}
@@ -739,7 +764,7 @@ export function QuoteReview({
               <ApplyField
                 checked={financial.quoteDate !== null}
                 error={fieldErrors.quoteDate}
-                label="quote date"
+                label={`Supplier document date · ${sourceDocumentType === "INVOICE" ? "Invoice" : "Quote"}`}
                 name="applyQuoteDate"
               >
                 <DateInput
@@ -848,18 +873,6 @@ export function QuoteReview({
                     }))
                   }
                   value={financialValues.miscellaneous}
-                />
-              </ApplyField>
-              <ApplyField
-                checked={financial.leadTimeWeeks !== null}
-                label="lead time"
-                name="applyLeadTime"
-              >
-                <input
-                  className={inputClassName}
-                  defaultValue={financial.leadTimeWeeks ?? ""}
-                  inputMode="numeric"
-                  name="leadTimeWeeks"
                 />
               </ApplyField>
               <ApplyField

@@ -41,6 +41,7 @@ function storedCellValue(order: EditableOrder, field: StoredField) {
         .find((line) => line.category === "SUPPLIER_PURCHASE")
         ?.originalAmount.toString() ?? "")
     : field === "invoiceDate" ||
+        field === "quoteDate" ||
         field === "expectedReadyDate" ||
         field === "expectedDeliveryDate"
       ? (dateToDateOnly(order[field]) ?? "")
@@ -235,6 +236,7 @@ async function directCellUpdate(
       break;
     }
     case "invoiceDate":
+    case "quoteDate":
     case "expectedReadyDate":
     case "expectedDeliveryDate": {
       if (value && !isDateOnly(value))

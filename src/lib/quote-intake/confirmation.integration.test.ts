@@ -48,6 +48,7 @@ vi.mock("@/lib/procurement/orders", async (importOriginal) => {
 });
 
 import { confirmSupplierQuote } from "@/lib/quote-intake/confirmation";
+import { writeAuditEvent } from "@/lib/audit/events";
 
 const projectId = "a12b6b9b-10e9-4e42-b93f-38796de4f65a";
 const supplierId = "b12b6b9b-10e9-4e42-b93f-38796de4f65a";
@@ -341,6 +342,9 @@ describe("reviewed quote confirmation persistence", () => {
 
   it("creates a Order from an Invoice without optional schedule, Items, or Billing allocation", async () => {
     const form = commonForm("CREATE");
+    form.set("sourceDocumentType", "INVOICE");
+    form.set("applyQuoteDate", "on");
+    form.set("quoteDate", "2026-08-25");
     form.set("applyCurrency", "on");
     form.set("orderCurrencyCode", "EUR");
     form.set("applyPurchaseCost", "on");
@@ -365,6 +369,8 @@ describe("reviewed quote confirmation persistence", () => {
         inputVatAmount: "10000.0000",
         orderCurrencyCode: "EUR",
         orderNumber: "PO-INVOICE-NEW",
+        invoiceDate: "2026-08-25",
+        quoteDate: undefined,
         purchaseCost: "50000.0000",
       }),
     );
@@ -380,6 +386,54 @@ describe("reviewed quote confirmation persistence", () => {
       }),
     });
   });
+
+  it.each(["QUOTE", "INVOICE"] as const)(
+    "applies a reviewed %s date without overwriting the other document or historical ready date",
+    async (sourceDocumentType) => {
+      const form = commonForm("UPDATE");
+      form.set("orderId", orderId);
+      form.set("sourceDocumentType", sourceDocumentType);
+      form.set("applyQuoteDate", "on");
+      form.set("quoteDate", "2026-08-25");
+      form.set("applyLeadTime", "on");
+      form.set("leadTimeWeeks", "9");
+      orderMocks.getOrderInTransaction.mockResolvedValue({
+        ...existingOrder(),
+        invoiceDate: "2026-02-10",
+        expectedReadyDate: "2026-04-15",
+      });
+
+      await confirmSupplierQuote("actor-1", parsed(form));
+
+      expect(orderMocks.updateOrderInTransaction).toHaveBeenCalledWith(
+        transaction,
+        "actor-1",
+        expect.objectContaining({
+          invoiceDate:
+            sourceDocumentType === "INVOICE" ? "2026-08-25" : "2026-02-10",
+          quoteDate:
+            sourceDocumentType === "QUOTE" ? "2026-08-25" : "2026-01-10",
+          expectedReadyDate: "2026-04-15",
+        }),
+      );
+      expect(transaction.supplierQuoteImport.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          quoteDate:
+            sourceDocumentType === "QUOTE" ? new Date("2026-08-25") : null,
+        }),
+      });
+      expect(writeAuditEvent).toHaveBeenCalledWith(
+        transaction,
+        "actor-1",
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            sourceDocumentType,
+            documentDate: "2026-08-25",
+          }),
+        }),
+      );
+    },
+  );
 
   it("persists an explicitly approved fixed-amount installment without recalculation", async () => {
     const form = commonForm("CREATE");

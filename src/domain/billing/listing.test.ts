@@ -12,7 +12,7 @@ const row = {
   documentDate: "2026-09-01",
   project: { name: "Project" },
 };
-it("sorts the displayed completion date for paid invoices, keeping missing dates last", () => {
+it("sorts only next payment due dates, keeping paid and undated invoices last", () => {
   const rows = [
     { ...row, id: "paid", status: "PAID", dueDate: null, paidAt: "2026-09-20" },
     { ...row, id: "unpaid", paidAt: null },
@@ -20,13 +20,13 @@ it("sorts the displayed completion date for paid invoices, keeping missing dates
   ];
   expect(sortBillingRows(rows, "dueDate", "asc").map((r) => r.id)).toEqual([
     "unpaid",
-    "paid",
     "missing",
+    "paid",
   ]);
   expect(sortBillingRows(rows, "dueDate", "desc").map((r) => r.id)).toEqual([
-    "paid",
     "unpaid",
     "missing",
+    "paid",
   ]);
 });
 it("validates status and sorts Decimal money exactly, with deterministic ties and currencies", () => {

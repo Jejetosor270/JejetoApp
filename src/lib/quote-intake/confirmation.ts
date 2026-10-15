@@ -76,6 +76,7 @@ function currentOrderValues(order: OrderSummary): CreateOrderInput {
     notes: order.notes ?? undefined,
     orderCurrencyCode: order.orderCurrencyCode,
     orderDate: order.orderDate ?? undefined,
+    invoiceDate: order.invoiceDate ?? undefined,
     orderNumber: order.orderNumber,
     outputVatAmount: order.costs.outputVat?.amountIsManual
       ? order.costs.outputVat.amount
@@ -152,9 +153,7 @@ function reviewedOrderValues(
     expectedDeliveryDate: input.applyExpectedDeliveryDate
       ? input.expectedDeliveryDate
       : current?.expectedDeliveryDate,
-    expectedReadyDate: input.applyLeadTime
-      ? undefined
-      : current?.expectedReadyDate,
+    expectedReadyDate: current?.expectedReadyDate,
     freight: input.applyFreight ? input.freight : current?.freight,
     freightMarkupOverrideRate: current?.freightMarkupOverrideRate
       ? new Decimal(current.freightMarkupOverrideRate).times(100).toString()
@@ -228,7 +227,14 @@ function reviewedOrderValues(
     purchaseFxRate: input.applyCurrency
       ? input.purchaseFxRate
       : current?.purchaseFxRate,
-    quoteDate: input.applyQuoteDate ? input.quoteDate : current?.quoteDate,
+    quoteDate:
+      input.applyQuoteDate && input.sourceDocumentType === "QUOTE"
+        ? input.quoteDate
+        : current?.quoteDate,
+    invoiceDate:
+      input.applyQuoteDate && input.sourceDocumentType === "INVOICE"
+        ? input.quoteDate
+        : current?.invoiceDate,
     sellingCurrencyCode:
       current?.sellingCurrencyCode ?? projectReportingCurrency,
     sellingFxRate: current?.sellingFxRate,
@@ -577,7 +583,12 @@ export async function confirmSupplierQuote(
           paymentTermsRaw: input.paymentTermsRaw ?? null,
           processedById: actorId,
           projectId: input.projectId,
-          quoteDate: values.quoteDate ? dateOnlyToDate(values.quoteDate) : null,
+          quoteDate:
+            input.sourceDocumentType === "QUOTE" &&
+            input.applyQuoteDate &&
+            input.quoteDate
+              ? dateOnlyToDate(input.quoteDate)
+              : null,
           supplierId: input.supplierId,
           supplierQuoteReference: values.supplierQuoteReference ?? null,
         },
@@ -589,13 +600,15 @@ export async function confirmSupplierQuote(
         entityType: "QUOTE_IMPORT",
         metadata: {
           action: input.action,
+          sourceDocumentType: input.sourceDocumentType,
+          documentDate: input.applyQuoteDate ? (input.quoteDate ?? null) : null,
           paymentScheduleApproved: input.approveSchedule,
           provider: QUOTE_EXTRACTION_PROVIDER,
         },
         summary:
           input.action === "CREATE"
-            ? "Created an Order from an employee-approved quote extraction."
-            : "Updated an Order from an employee-approved quote extraction.",
+            ? `Created an Order from an employee-approved Supplier ${input.sourceDocumentType === "INVOICE" ? "Invoice" : "Quote"}.`
+            : `Updated an Order from an employee-approved Supplier ${input.sourceDocumentType === "INVOICE" ? "Invoice" : "Quote"}.`,
       });
       return orderId;
     },

@@ -1302,12 +1302,6 @@ export async function getProcurementCalendarEvents(
         where: {
           OR: [
             {
-              expectedReadyDate: {
-                gte: dateOnlyToDate(from),
-                lte: dateOnlyToDate(to),
-              },
-            },
-            {
               expectedDeliveryDate: {
                 gte: dateOnlyToDate(from),
                 lte: dateOnlyToDate(to),
@@ -1324,7 +1318,6 @@ export async function getProcurementCalendarEvents(
         select: {
           actualDeliveryDate: true,
           expectedDeliveryDate: true,
-          expectedReadyDate: true,
           id: true,
           orderNumber: true,
           project: { select: { name: true } },
@@ -1445,9 +1438,6 @@ export async function getProcurementCalendarEvents(
         : null,
       expectedDeliveryDate: order.expectedDeliveryDate
         ? dateToDateOnly(order.expectedDeliveryDate)
-        : null,
-      expectedReadyDate: order.expectedReadyDate
-        ? dateToDateOnly(order.expectedReadyDate)
         : null,
       id: order.id,
       orderNumber: order.orderNumber,

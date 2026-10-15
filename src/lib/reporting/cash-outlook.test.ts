@@ -68,6 +68,16 @@ const outlook = (input: CashOutlookSources, actualCash: string | null = "0") =>
   );
 
 describe("shared cash outlook source adapter", () => {
+  it("keeps undated Client terms undated despite a historical document due date", () => {
+    const documents = buildCashOutlookDocuments(
+      sources({
+        billingDocuments: [
+          billing({ dueDate, paymentInstallments: [term({ dueDate: null })] }),
+        ],
+      }),
+    );
+    expect(documents[0]?.terms[0]?.due).toBeNull();
+  });
   it("includes unscheduled Orders, undated freight and unscheduled issued balances", () => {
     const result = outlook(
       sources({
@@ -150,7 +160,7 @@ describe("shared cash outlook source adapter", () => {
               term({
                 id: "planned-term",
                 scheduledAmount: "60",
-                dueDate: null,
+                dueDate,
               }),
             ],
           }),

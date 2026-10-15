@@ -42,11 +42,15 @@ it("breaks equal-value ties by immutable ID without mutating the input", () => {
   expect(rows[0]?.id).toBe("b");
 });
 
-it("sorts paid dates alongside unpaid due dates in both directions", () => {
+it("sorts next unpaid due dates without substituting historical payment dates", () => {
   const rows = [
     {
       ...row("paid", "100"),
-      supplierPayment: { nextDueDate: null, paidAt: "2026-09-20" },
+      supplierPayment: {
+        status: "PAID",
+        nextDueDate: "2026-01-01",
+        paidAt: "2026-09-20",
+      },
     },
     {
       ...row("unpaid", "100"),
@@ -59,12 +63,30 @@ it("sorts paid dates alongside unpaid due dates in both directions", () => {
   ] as OrderSummary[];
   expect(sortOrderSummaries(rows, "dueDate", "asc").map((r) => r.id)).toEqual([
     "unpaid",
-    "paid",
     "missing",
+    "paid",
   ]);
   expect(sortOrderSummaries(rows, "dueDate", "desc").map((r) => r.id)).toEqual([
-    "paid",
     "unpaid",
     "missing",
+    "paid",
   ]);
+});
+
+it("sorts the displayed supplier document date, preferring the Invoice over its earlier Quote", () => {
+  const rows = [
+    {
+      ...row("invoice", "100"),
+      quoteDate: "2026-01-01",
+      invoiceDate: "2026-03-01",
+    },
+    { ...row("quote", "100"), quoteDate: "2026-02-01", invoiceDate: null },
+    { ...row("missing", "100"), quoteDate: null, invoiceDate: null },
+  ] as OrderSummary[];
+  expect(
+    sortOrderSummaries(rows, "documentDate", "asc").map((r) => r.id),
+  ).toEqual(["quote", "invoice", "missing"]);
+  expect(
+    sortOrderSummaries(rows, "documentDate", "desc").map((r) => r.id),
+  ).toEqual(["invoice", "quote", "missing"]);
 });

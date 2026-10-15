@@ -6,6 +6,7 @@ import {
 } from "@/components/inline-editing/editable-cell";
 import { saveTableCellAction } from "@/app/(app)/cell-actions";
 import { BillingStatusControl } from "./billing-status";
+import { billingDocumentDateLabel } from "./billing-date-label";
 import type { CellEditInput } from "@/domain/listing/cell-edit";
 import type { ComponentProps, ReactNode } from "react";
 import { trashSelectedAction } from "@/app/(app)/settings/trash/actions";
@@ -128,33 +129,33 @@ function BillingRow({
       <td className="px-3 py-3">
         {cell(
           "documentDate",
-          "Invoice date",
+          billingDocumentDateLabel(
+            document.documentType,
+            document.workflowStatus,
+          ),
           document.documentDate,
           formatDateOnly(document.documentDate),
           { type: "date" },
         )}
       </td>
       <td className="px-3 py-3">
-        {document.paidAt ? (
+        {document.status === "PAID" ? (
           <SourceCell
             href={`${href}?tab=related#schedule`}
-            label={`Paid date for ${document.reference}`}
+            label={`Payment history for ${document.reference}`}
             canEdit={editable}
           >
-            <span>
-              {formatDateOnly(document.paidAt)}
-              <span className="text-muted-foreground ml-1.5 text-xs">Paid</span>
-            </span>
+            Paid
           </SourceCell>
         ) : (
           cell(
             "dueDate",
             "Next payment due",
             document.dueDate,
-            formatDateOnly(document.dueDate),
+            document.dueDate ? formatDateOnly(document.dueDate) : "Date needed",
             {
               type: "date",
-              hint: "Updates the earliest unpaid term only; uses the document due date when no unpaid term exists.",
+              hint: "Updates the earliest unpaid payment term only. Manage split payments in Payment terms.",
             },
           )
         )}
@@ -191,6 +192,7 @@ function BillingRow({
       </td>
       <td className="px-3 py-3">
         <BillingStatusControl
+          documentDate={document.documentDate}
           id={document.id}
           status={document.status}
           documentType={document.documentType}
@@ -259,14 +261,14 @@ export function BillingTable({
 
               <SortHeader
                 className="px-3 py-3"
-                label="Invoice date"
+                label="Document date"
                 field="date"
                 defaultSort="updated"
                 defaultDirection="desc"
               />
               <SortHeader
                 className="px-3 py-3"
-                label="Due / paid"
+                label="Next payment due"
                 field="dueDate"
                 defaultSort="updated"
                 defaultDirection="desc"

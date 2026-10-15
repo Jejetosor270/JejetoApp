@@ -1,5 +1,6 @@
 "use client";
 import { BillingCreationStatus } from "./billing-status";
+import { billingDocumentDateLabel } from "./billing-date-label";
 import { DocumentReviewWorkspace } from "@/components/intake/document-review-workspace";
 import { useDocumentPreview } from "@/components/intake/use-document-preview";
 import { manualBillingReview } from "@/domain/billing/manual-review";
@@ -157,7 +158,12 @@ function scheduleFromReview(
 ): ScheduleRow[] {
   return review.proposal.installments.map((item) => ({
     basis: item.basis === "PERCENTAGE" ? "PERCENTAGE" : "FIXED_AMOUNT",
-    dueDate: item.dueDate ?? "",
+    dueDate:
+      item.dueDate ??
+      (review.proposal.installments.length === 1
+        ? review.proposal.dueDate
+        : null) ??
+      "",
     fixedAmount:
       item.fixedAmount ??
       amountFromPercentage(
@@ -197,6 +203,7 @@ export function ClientDocumentReview({
     proposal.documentType ?? "QUOTE",
   );
   const [reference, setReference] = useState(proposal.reference ?? "");
+  const [workflowStatus, setWorkflowStatus] = useState("");
   const [shortDescription, setShortDescription] = useState("");
   const [documentDate, setDocumentDate] = useState(proposal.documentDate ?? "");
   const [dueDate, setDueDate] = useState(proposal.dueDate ?? "");
@@ -509,6 +516,7 @@ export function ClientDocumentReview({
                 onChange={(event) => {
                   const next = event.target.value as "QUOTE" | "INVOICE";
                   setDocumentType(next);
+                  setWorkflowStatus("");
                   if (next !== "INVOICE") setMatchedInstallmentId("");
                 }}
                 value={documentType}
@@ -520,6 +528,7 @@ export function ClientDocumentReview({
             <BillingCreationStatus
               key={documentType}
               documentType={documentType}
+              onStatusChange={setWorkflowStatus}
             />
             <ReviewField
               error={state.fieldErrors?.reference}
@@ -548,7 +557,7 @@ export function ClientDocumentReview({
             </ReviewField>
             <ReviewField
               error={state.fieldErrors?.documentDate}
-              label="Document date"
+              label={billingDocumentDateLabel(documentType, workflowStatus)}
               required
             >
               <DateInput
@@ -558,15 +567,6 @@ export function ClientDocumentReview({
                 required
 
                 value={documentDate}
-              />
-            </ReviewField>
-            <ReviewField error={state.fieldErrors?.dueDate} label="Due date">
-              <DateInput
-                className={inputClassName}
-                name="dueDate"
-                onChange={(event) => setDueDate(event.target.value)}
-
-                value={dueDate}
               />
             </ReviewField>
             <ReviewField
@@ -822,9 +822,7 @@ export function ClientDocumentReview({
           <section className="bg-card rounded-lg border p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-sm font-semibold">
-                  Proposed Client payment schedule
-                </h2>
+                <h2 className="text-sm font-semibold">Payment terms</h2>
                 <p className="text-muted-foreground mt-1 text-xs">
                   Payment terms use TTC and are saved only with this
                   confirmation.
@@ -838,12 +836,12 @@ export function ClientDocumentReview({
                   setSchedule((current) => [
                     ...current,
                     {
-                      basis: "FIXED_AMOUNT",
-                      dueDate: dueDate,
-                      fixedAmount: "",
+                      basis: current.length ? "FIXED_AMOUNT" : "PERCENTAGE",
+                      dueDate: current.length ? "" : dueDate,
+                      fixedAmount: current.length ? "" : totalTtc,
                       label: `Payment term ${current.length + 1}`,
                       notes: "",
-                      percentage: "",
+                      percentage: current.length ? "" : "100",
                     },
                   ])
                 }
@@ -943,7 +941,7 @@ export function ClientDocumentReview({
                   </ReviewField>
                   <ReviewField
                     error={state.fieldErrors?.[`installments.${index}.dueDate`]}
-                    label="Due date"
+                    label="Payment due"
                   >
                     <DateInput
                       className={inputClassName}
@@ -978,19 +976,40 @@ export function ClientDocumentReview({
                   <Button
                     type="button"
                     variant="ghost"
-                    onClick={() =>
+                    onClick={() => {
+                      if (schedule.length === 1) setDueDate(item.dueDate);
                       setSchedule((current) =>
                         current.filter((_, rowIndex) => rowIndex !== index),
-                      )
-                    }
+                      );
+                    }}
                   >
                     Remove
                   </Button>
                 </div>
               ))}
-              {schedule.length === 0 ? (
+              {schedule.length === 0 && !existingDocumentId ? (
+                <div className="space-y-2">
+                  <ReviewField
+                    error={state.fieldErrors?.dueDate}
+                    label="Payment due"
+                  >
+                    <DateInput
+                      className={inputClassName}
+                      name="dueDate"
+                      onChange={(event) => setDueDate(event.target.value)}
+                      value={dueDate}
+                    />
+                  </ReviewField>
+                  <p className="text-muted-foreground text-xs">
+                    New Billing creates one payment term for the full TTC
+                    amount. Leave the date blank if it is not known.
+                  </p>
+                </div>
+              ) : null}
+              {schedule.length === 0 && existingDocumentId ? (
                 <p className="text-muted-foreground text-xs">
-                  No schedule will be created unless you add one.
+                  Existing payment terms are preserved unless you explicitly
+                  replace them. Add reviewed terms before choosing replacement.
                 </p>
               ) : null}
               {schedule.length ? (

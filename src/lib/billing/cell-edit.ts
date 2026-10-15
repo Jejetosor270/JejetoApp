@@ -59,13 +59,7 @@ export async function editBillingCell(
       if ((!value && field === "documentDate") || (value && !isDateOnly(value)))
         throw new CellEditError("Enter a valid date.");
       if (field === "documentDate") data.documentDate = dateOnlyToDate(value);
-      else
-        data.dueDate = await editBillingDueDate(
-          tx,
-          actorId,
-          input.id,
-          value || null,
-        );
+      else await editBillingDueDate(tx, actorId, input.id, value || null);
     }
     await tx.clientBillingDocument.update({ where: { id: input.id }, data });
     await writeAuditEvent(tx, actorId, {

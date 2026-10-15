@@ -35,16 +35,11 @@ export function overdueTermAmount(input: {
     payments: readonly { amount: string }[];
   }[];
   outstanding: string;
-  fallbackDate: string | null;
   today: string;
 }): string {
-  if (!input.terms.length)
-    return input.fallbackDate && input.fallbackDate < input.today
-      ? input.outstanding
-      : "0";
   const overdue = input.terms
     .filter((term) => {
-      const due = term.dueDate ?? input.fallbackDate;
+      const due = term.dueDate;
       return !term.isCancelled && due !== null && due < input.today;
     })
     .reduce(
@@ -70,9 +65,7 @@ export function earliestUnpaidTermDate(
     scheduledAmount: string;
     payments: readonly { amount: string }[];
   }[],
-  fallback: string | null,
 ): string | null {
-  if (!terms.length) return fallback;
   const dates = terms
     .filter(
       (term) =>
@@ -85,25 +78,11 @@ export function earliestUnpaidTermDate(
         ),
     )
     .flatMap((term) => {
-      const date = term.dueDate ?? fallback;
+      const date = term.dueDate;
       return date ? [date] : [];
     })
     .sort((a, b) => a.localeCompare(b));
-  return (
-    dates[0] ??
-    (terms.some(
-      (term) =>
-        !term.isCancelled &&
-        new Decimal(term.scheduledAmount).greaterThan(
-          term.payments.reduce(
-            (sum, row) => sum.plus(row.amount),
-            new Decimal(0),
-          ),
-        ),
-    )
-      ? fallback
-      : null)
-  );
+  return dates[0] ?? null;
 }
 
 /** Same deterministic term drives both the date shown and its edit target. */
@@ -115,7 +94,7 @@ export function nextUnpaidTerm<
     scheduledAmount: string;
     payments: readonly { amount: string }[];
   },
->(terms: readonly T[], fallback: string | null = null): T | undefined {
+>(terms: readonly T[]): T | undefined {
   return terms
     .filter(
       (term) =>
@@ -129,9 +108,8 @@ export function nextUnpaidTerm<
     )
     .toSorted(
       (a, b) =>
-        (a.dueDate ?? fallback ?? "9999-12-31").localeCompare(
-          b.dueDate ?? fallback ?? "9999-12-31",
-        ) || a.id.localeCompare(b.id),
+        (a.dueDate ?? "9999-12-31").localeCompare(b.dueDate ?? "9999-12-31") ||
+        a.id.localeCompare(b.id),
     )[0];
 }
 

@@ -38,6 +38,7 @@ it("confirms the remaining amount and keeps payment details when saving fails", 
   view = await mountForm(
     <BillingStatusControl
       id="billing"
+      documentDate="2026-10-01"
       status="INVOICED"
       documentType="INVOICE"
       remaining="80.0000"
@@ -78,6 +79,7 @@ it.each(["DRAFT", "TO_BE_INVOICED", "CANCELLED"])(
     view = await mountForm(
       <BillingStatusControl
         id="billing"
+        documentDate="2026-10-01"
         status={status}
         documentType="INVOICE"
         remaining="80.0000"
@@ -117,15 +119,57 @@ it.each(["DRAFT", "TO_BE_INVOICED", "CANCELLED"])(
       amount: "",
       paymentDate: "",
       paymentFx: "",
+      ...(status === "TO_BE_INVOICED" ? { documentDate: "2026-10-01" } : {}),
     });
   },
 );
+
+it("confirms the planned date when issuing an Invoice and retains a rejected correction", async () => {
+  actions.save.mockResolvedValue({
+    status: "error",
+    message: "Review the Invoice date.",
+  });
+  view = await mountForm(
+    <BillingStatusControl
+      id="billing"
+      status="TO_BE_INVOICED"
+      documentType="INVOICE"
+      documentDate="2026-10-01"
+      remaining="80.0000"
+      currency="EUR"
+      canEdit
+    />,
+  );
+  await act(async () =>
+    document
+      .querySelector<HTMLButtonElement>('[aria-label="Change Billing status"]')
+      ?.click(),
+  );
+  await enter("billingStatus", "INVOICED");
+  expect(control("documentDate").value).toBe("01/10/2026");
+  expect(actions.save).not.toHaveBeenCalled();
+  await enter("documentDate", "15/10/2026");
+  await clickText("Confirm status");
+  expect(actions.save).toHaveBeenCalledWith(
+    expect.objectContaining({
+      value: "INVOICED",
+      documentDate: "2026-10-15",
+      paymentDate: "",
+    }),
+  );
+  expect(control("documentDate").value).toBe("15/10/2026");
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+    "Review the Invoice date",
+  );
+  expect(actions.refresh).not.toHaveBeenCalled();
+});
 
 it("retains the one-click full receipt action for an issued, partially paid Invoice", async () => {
   actions.save.mockResolvedValue({ status: "success", message: "Saved" });
   view = await mountForm(
     <BillingStatusControl
       id="billing"
+      documentDate="2026-10-01"
       status="PARTIALLY_PAID"
       documentType="INVOICE"
       remaining="80.0000"
@@ -147,6 +191,7 @@ it("shows only the status badge to read-only employees", async () => {
   view = await mountForm(
     <BillingStatusControl
       id="billing"
+      documentDate="2026-10-01"
       status="INVOICED"
       documentType="INVOICE"
       remaining="80.0000"

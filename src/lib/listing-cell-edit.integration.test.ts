@@ -197,6 +197,28 @@ it("saves only the chosen field, audits it, rejects stale edits and invalid date
     }),
   ).toBe(3);
 });
+it("edits Quote dates independently and rejects invalid or stale dates", async () => {
+  const input = {
+    kind: "order",
+    id: orderId,
+    field: "quoteDate",
+    previous: "",
+    value: "2026-08-05",
+  };
+  await saveTableCell(actorId, input);
+  const order = await getOrder(orderId);
+  expect(order?.quoteDate).toBe("2026-08-05");
+  expect(order?.invoiceDate).toBe("2026-09-09");
+  await expect(saveTableCell(actorId, input)).rejects.toThrow("changed");
+  await expect(
+    saveTableCell(actorId, {
+      ...input,
+      previous: "2026-08-05",
+      value: "2026-02-30",
+    }),
+  ).rejects.toThrow("date");
+});
+
 it("recalculates purchase-based selling and output VAT without rescheduling or changing input VAT", async () => {
   const before = await getOrder(orderId);
   await saveTableCell(actorId, {

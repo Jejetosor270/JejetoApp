@@ -1,5 +1,6 @@
 "use client";
 import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { saveTableCellAction } from "@/app/(app)/cell-actions";
 import { RecordPaymentStatus } from "@/components/payments/record-payment-status";
 import {
@@ -18,6 +19,7 @@ import {
 import { carriers, carrierName } from "@/config/carriers";
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
+import { supplierDocumentDate } from "@/domain/procurement/document-date";
 import { formatEnumLabel } from "@/domain/presentation/labels";
 import type { CellEditInput } from "@/domain/listing/cell-edit";
 import type { OrderSummary } from "@/lib/procurement/orders";
@@ -47,10 +49,12 @@ export function OrderRow({
   view: OrderViewMode;
   options?: OrderTableOptions;
 }) {
+  const router = useRouter();
   const editable = canEdit && order.status !== "CANCELLED";
   const recordHref = `/orders/${order.id}`;
   const editorHref = `${recordHref}?edit=1`;
   const paymentsHref = `${recordHref}?tab=related#payments`;
+  const documentDate = supplierDocumentDate(order);
   type Field = Extract<CellEditInput, { kind: "order" }>["field"];
   function cell(
     field: Field,
@@ -70,15 +74,23 @@ export function OrderRow({
         value={value ?? ""}
         display={display}
         canEdit={editable}
-        onSave={(next, previous) =>
-          saveTableCellAction({
+        onSave={async (next, previous) => {
+          if (
+            field === "status" &&
+            next === "DELIVERED" &&
+            previous !== "DELIVERED"
+          ) {
+            router.push(`${editorHref}&delivery=1`);
+            return { status: "success" };
+          }
+          return saveTableCellAction({
             kind: "order",
             id: order.id,
             field,
             value: next,
             previous,
-          })
-        }
+          });
+        }}
         {...extra}
       />
     );
@@ -173,12 +185,29 @@ export function OrderRow({
           formatEnumLabel(order.status),
           {
             type: "select",
+            hint: "Marking delivered opens the Order editor to confirm the actual delivery date.",
             options: statuses
               .filter((status) => status !== "CANCELLED")
               .map((status) => ({
                 value: status,
                 label: formatEnumLabel(status),
               })),
+          },
+        );
+      case "documentDate":
+        return cell(
+          documentDate.field,
+          `Supplier document date · ${documentDate.kind === "INVOICE" ? "Invoice" : "Quote"}`,
+          documentDate.date,
+          <span>
+            {formatDateOnly(documentDate.date)}
+            <span className="text-muted-foreground ml-1.5 text-xs">
+              {documentDate.kind === "INVOICE" ? "Invoice" : "Quote"}
+            </span>
+          </span>,
+          {
+            type: "date",
+            hint: "Quote and Invoice dates remain separate. Edit either source date in Edit order.",
           },
         );
       case "invoiceDate":
@@ -298,19 +327,14 @@ export function OrderRow({
           paymentsHref,
         );
       case "dueDate":
-        if (order.supplierPayment.paidAt)
+        if (order.supplierPayment.status === "PAID")
           return (
             <SourceCell
-              label={`Paid date for ${order.orderNumber}`}
+              label={`Payment history for ${order.orderNumber}`}
               href={paymentsHref}
               canEdit={editable}
             >
-              <span>
-                {formatDateOnly(order.supplierPayment.paidAt)}
-                <span className="text-muted-foreground ml-1.5 text-xs">
-                  Paid
-                </span>
-              </span>
+              Paid
             </SourceCell>
           );
         return (

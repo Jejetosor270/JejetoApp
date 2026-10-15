@@ -245,7 +245,11 @@ function checkScheduleInformation(
         : null,
       "TTC",
     );
-  if (hasBalance && terms.length === 0 && !doc.dueDate)
+  if (
+    hasBalance &&
+    terms.length === 0 &&
+    (doc.side === "client" || !doc.dueDate)
+  )
     add(
       doc,
       "missing-date",
@@ -266,6 +270,7 @@ function checkDocumentDue(
 ) {
   const { remaining, terms } = schedule;
   if (
+    doc.side !== "client" &&
     remaining?.greaterThan(0) &&
     terms.length === 0 &&
     doc.dueDate &&
@@ -274,9 +279,7 @@ function checkDocumentDue(
     add(
       doc,
       "document-due",
-      doc.side === "client"
-        ? "Client payment outstanding"
-        : "Supplier payment outstanding",
+      "Supplier payment outstanding",
       doc.dueDate < today ? "Overdue" : "Upcoming",
       "Document balance; no active payment terms exist.",
       remaining.toFixed(4),
@@ -402,7 +405,7 @@ function checkPaymentTerms(
             source: term,
             amount: term.scheduled,
             paid: term.paid,
-            due: term.dueDate ?? (doc.side === "client" ? doc.dueDate : null),
+            due: term.dueDate,
             cancelled: term.cancelled,
           })),
         ).terms
@@ -416,7 +419,7 @@ function checkPaymentTerms(
   } of capped) {
     checkTermActualFx(doc, term, add);
     if (!balance.greaterThan(0)) continue;
-    const due = term.dueDate ?? (doc.side === "client" ? doc.dueDate : null);
+    const due = term.dueDate;
     checkTermDue(doc, term, balance, due, { today, end }, add);
     if (!due) position.complete = false;
     addTermForecast(doc, term, balance, due, end, position, add);

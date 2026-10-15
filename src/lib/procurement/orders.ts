@@ -48,7 +48,6 @@ import type {
   UpdateOrderInput,
 } from "@/domain/procurement/validation";
 import {
-  addWeeksToDateOnly,
   businessToday,
   dateOnlyToDate,
   dateToDateOnly,
@@ -1272,11 +1271,6 @@ async function assertRelations(
   return context;
 }
 function orderData(input: CreateOrderInput, project: ProjectPricingContext) {
-  const expectedReadyDate =
-    input.expectedReadyDate ??
-    (input.orderDate !== undefined && input.leadTimeWeeks !== undefined
-      ? addWeeksToDateOnly(input.orderDate, input.leadTimeWeeks)
-      : undefined);
   return {
     actualDeliveryDate: input.actualDeliveryDate
       ? dateOnlyToDate(input.actualDeliveryDate)
@@ -1289,8 +1283,8 @@ function orderData(input: CreateOrderInput, project: ProjectPricingContext) {
     expectedDeliveryDate: input.expectedDeliveryDate
       ? dateOnlyToDate(input.expectedDeliveryDate)
       : null,
-    expectedReadyDate: expectedReadyDate
-      ? dateOnlyToDate(expectedReadyDate)
+    expectedReadyDate: input.expectedReadyDate
+      ? dateOnlyToDate(input.expectedReadyDate)
       : null,
     freightResaleAmount:
       input.pricingMode === "DIRECT_SELLING_PRICE" &&

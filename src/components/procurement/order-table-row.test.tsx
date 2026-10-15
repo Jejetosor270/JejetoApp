@@ -2,7 +2,8 @@
 vi.mock("@/app/(app)/payments/record-status-actions", () => ({
   saveRecordStatusAction: vi.fn(),
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+const router = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountForm } from "@/test/dom-form";
@@ -152,7 +153,7 @@ describe("Purchasing click-to-edit on every column set", () => {
       document.querySelector('[role="dialog"] a')?.getAttribute("href"),
     ).toBe("/orders/order-id?tab=related#payments");
   });
-  it("shows the paid date in the same cell and directs edits to actual payments", async () => {
+  it("shows Paid without a date and directs employees to actual payment history", async () => {
     mounted = await mountForm(
       <table>
         <tbody>
@@ -176,19 +177,79 @@ describe("Purchasing click-to-edit on every column set", () => {
       </table>,
     );
     const paid = document.querySelector(
-      'button[aria-label="Manage Paid date for PO-001"]',
+      'button[aria-label="Manage Payment history for PO-001"]',
     );
-    expect(paid?.textContent).toContain("26/09/2026");
-    expect(paid?.textContent).toContain("Paid");
+    expect(paid?.textContent).toBe("Paid");
+    expect(mounted.container.textContent).not.toContain("26/09/2026");
     expect(
       document.querySelector(
         'button[aria-label="Edit Next payment due for PO-001"]',
       ),
     ).toBeNull();
-    await button("Manage Paid date for PO-001");
+    await button("Manage Payment history for PO-001");
     expect(
       document.querySelector('[role="dialog"] a')?.getAttribute("href"),
     ).toBe("/orders/order-id?tab=related#payments");
     expect(save).not.toHaveBeenCalled();
+  });
+  it("shows a source-aware Quote date instead of an empty Invoice date", async () => {
+    mounted = await mountForm(
+      <table>
+        <tbody>
+          <OrderRow
+            order={{ ...order, quoteDate: "2026-10-01", invoiceDate: null }}
+            view="general"
+            canEdit
+            statuses={["DRAFT"]}
+            isSelected={false}
+            onSelect={vi.fn()}
+          />
+        </tbody>
+      </table>,
+    );
+    const source = document.querySelector(
+      'button[aria-label="Edit Supplier document date · Quote for PO-001"]',
+    );
+    expect(source?.textContent).toContain("01/10/2026");
+    expect(source?.textContent).toContain("Quote");
+  });
+  it("keeps the Delivery table focused on delivery instead of the legacy ready milestone", async () => {
+    mounted = await mountForm(row("delivery", false));
+    expect(mounted.container.textContent).toContain("20/09/2026");
+    expect(mounted.container.textContent).not.toContain("10/09/2026");
+  });
+  it("opens delivery confirmation before changing an Order to Delivered", async () => {
+    mounted = await mountForm(
+      <table>
+        <tbody>
+          <OrderRow
+            order={order}
+            view="delivery"
+            canEdit
+            statuses={["DRAFT", "DELIVERED"]}
+            isSelected={false}
+            onSelect={vi.fn()}
+          />
+        </tbody>
+      </table>,
+    );
+    await button("Edit Delivery status for PO-001");
+    const select = document.querySelector<HTMLSelectElement>(
+      'select[aria-label="Delivery status for PO-001"]',
+    );
+    if (!select) throw new Error("Missing delivery status");
+    await act(async () => {
+      select.value = "DELIVERED";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await button("Save Delivery status for PO-001");
+    expect(save).not.toHaveBeenCalled();
+    expect(router.push).toHaveBeenCalledExactlyOnceWith(
+      "/orders/order-id?edit=1&delivery=1",
+    );
+    expect(document.querySelector("tbody")?.textContent).toContain("Draft");
+    expect(document.querySelector("tbody")?.textContent).not.toContain(
+      "Delivered",
+    );
   });
 });

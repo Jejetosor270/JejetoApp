@@ -63,13 +63,25 @@ describe("procurement calendar derivation", () => {
     expect(events.map((event) => event.type)).toEqual([
       "SUPPLIER_PAYMENT",
       "CLIENT_RECEIPT",
-      "EXPECTED_READY",
       "EXPECTED_DELIVERY",
     ]);
     expect(events[0]).toMatchObject({
       partyName: "Example Supplier",
       status: "UPCOMING",
     });
+  });
+
+  it("keeps delivery history without turning legacy ready dates into events", () => {
+    const events = buildCalendarEvents({
+      installments: [],
+      orders: [{ ...order, actualDeliveryDate: "2026-10-22" }],
+      today: "2026-10-23",
+    });
+    expect(events.map(({ type, date }) => ({ type, date }))).toEqual([
+      { type: "EXPECTED_DELIVERY", date: "2026-10-20" },
+      { type: "ACTUAL_DELIVERY", date: "2026-10-22" },
+    ]);
+    expect(order.expectedReadyDate).toBe("2026-10-01");
   });
 
   it("reflects a changed source date without a stale duplicate", () => {

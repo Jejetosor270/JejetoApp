@@ -234,6 +234,7 @@ it("uses one effective due date in list/calendar and edits only the earliest unp
       basis: "FIXED_AMOUNT",
       scheduledAmount: "50",
       currencyCode: "EUR",
+      dueDate: new Date("2099-01-01"),
     },
   });
   const second = await db.clientPaymentInstallment.create({

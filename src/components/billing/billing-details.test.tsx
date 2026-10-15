@@ -204,7 +204,7 @@ async function mount(
   );
 }
 
-it("keeps the Billing table layout and shows a paid date linked to the receipts", async () => {
+it("shows Paid linked to payment history without mixing actual dates into next due", async () => {
   view = await mountForm(
     <BillingTable
       canEdit
@@ -221,9 +221,13 @@ it("keeps the Billing table layout and shows a paid date linked to the receipts"
     />,
   );
   expect(
-    document.querySelector('button[aria-label="Manage Paid date for INV-001"]')
-      ?.textContent,
-  ).toBe("26/09/2026Paid");
+    document.querySelector(
+      'button[aria-label="Manage Payment history for INV-001"]',
+    )?.textContent,
+  ).toBe("Paid");
+  expect(document.querySelector("tbody")?.textContent).not.toContain(
+    "26/09/2026",
+  );
   expect(
     document.querySelector(
       'button[aria-label="Edit Next payment due for INV-001"]',
@@ -232,11 +236,12 @@ it("keeps the Billing table layout and shows a paid date linked to the receipts"
   const headings = [...document.querySelectorAll("thead th")].map(
     (el) => el.textContent,
   );
-  expect(headings).toContain("Due / paid");
+  expect(headings).toContain("Next payment due");
+  expect(headings).toContain("Document date");
   await act(async () =>
     document
       .querySelector<HTMLButtonElement>(
-        'button[aria-label="Manage Paid date for INV-001"]',
+        'button[aria-label="Manage Payment history for INV-001"]',
       )
       ?.click(),
   );
@@ -258,8 +263,39 @@ it("continues showing the due date for partially paid Billing", async () => {
     )?.textContent,
   ).toContain("01/01/2099");
   expect(
-    document.querySelector('button[aria-label="Manage Paid date for INV-001"]'),
+    document.querySelector(
+      'button[aria-label="Manage Payment history for INV-001"]',
+    ),
   ).toBeNull();
+});
+
+it.each([
+  ["QUOTE", "DRAFT", "Quote date"],
+  ["INVOICE", "TO_BE_INVOICED", "Planned invoice date"],
+  ["INVOICE", "INVOICED", "Invoice date"],
+] as const)(
+  "uses the contextual document date for %s %s",
+  async (documentType, workflowStatus, label) => {
+    await mount({ ...record, documentType, workflowStatus });
+    expect(value(label)).toBe("01/09/2026");
+    expect(value("Next payment due")).toBe("01/01/2099");
+    await clickText("Edit");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      label,
+    );
+    expect(document.querySelector('[name="dueDate"]')).toBeNull();
+  },
+);
+
+it("keeps payment terms out of the submitted general Billing edit", async () => {
+  actions.save.mockResolvedValue({ status: "error", message: "Review notes" });
+  await mount();
+  await clickText("Edit");
+  await enter("notes", "Retain this draft");
+  await clickText("Save Billing document");
+  const values = actions.save.mock.calls[0]?.[1] as FormData;
+  expect(values.has("dueDate")).toBe(false);
+  expect(control("notes").value).toBe("Retain this draft");
 });
 
 it("shows allocation and freight figures in Details, separately from Client outstanding", async () => {

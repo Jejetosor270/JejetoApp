@@ -45,8 +45,10 @@ function StatusOptions({
 
 export function BillingCreationStatus({
   documentType,
+  onStatusChange,
 }: {
   documentType: string;
+  onStatusChange?: (status: string) => void;
 }) {
   const [status, setStatus] = useState("");
   return (
@@ -57,7 +59,10 @@ export function BillingCreationStatus({
           name="workflowStatus"
           className={inputClassName}
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            onStatusChange?.(e.target.value);
+          }}
         >
           <option value="">Choose status</option>
           <StatusOptions documentType={documentType} creation />
@@ -94,6 +99,7 @@ export function BillingStatusControl({
   id,
   status,
   documentType,
+  documentDate,
   remaining,
   currency,
   canEdit,
@@ -101,12 +107,14 @@ export function BillingStatusControl({
   id: string;
   status: string;
   documentType: string;
+  documentDate: string;
   remaining: string;
   currency: string;
   canEdit: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(status);
+  const [invoiceDate, setInvoiceDate] = useState(documentDate);
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -116,6 +124,10 @@ export function BillingStatusControl({
       workflowStatus: status,
       isCancelled: status === "CANCELLED",
     });
+  const confirmInvoiceDate =
+    documentType === "INVOICE" &&
+    status === "TO_BE_INVOICED" &&
+    draft === "INVOICED";
   const save = (value: string, fields = new FormData()) =>
     startTransition(async () => {
       try {
@@ -153,6 +165,7 @@ export function BillingStatusControl({
         size="sm"
         onClick={() => {
           setDraft(status === "OVERDUE" ? "INVOICED" : status);
+          setInvoiceDate(documentDate);
           setFeedback("");
           setOpen(true);
         }}
@@ -200,6 +213,7 @@ export function BillingStatusControl({
                   paymentDate: String(fields.get("paymentDate") ?? ""),
                   paymentFx: String(fields.get("paymentFx") ?? ""),
                   amount: String(fields.get("amount") ?? ""),
+                  ...(confirmInvoiceDate ? { documentDate: invoiceDate } : {}),
                 });
                 setFeedback(result.message);
                 if (result.status === "success") {
@@ -235,6 +249,22 @@ export function BillingStatusControl({
               Set the status to Invoiced and save first. Then record the
               receipt. Changing to Invoiced does not record a payment.
             </p>
+          )}
+          {confirmInvoiceDate && (
+            <div className="space-y-2">
+              <p className="text-muted-foreground text-sm">
+                Confirm the date on the issued Invoice. The planned date is
+                shown below; update it if the actual Invoice date differs.
+              </p>
+              <Field label="Invoice date" required>
+                <DateInput
+                  name="documentDate"
+                  value={invoiceDate}
+                  onChange={(event) => setInvoiceDate(event.target.value)}
+                  required
+                />
+              </Field>
+            </div>
           )}
           {draft === "PARTIALLY_PAID" && (
             <Field label={`Actual received TTC (${currency})`}>

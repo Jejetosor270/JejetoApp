@@ -5,6 +5,7 @@ export const orderCellFields = [
   "orderNumber",
   "status",
   "invoiceDate",
+  "quoteDate",
   "expectedReadyDate",
   "expectedDeliveryDate",
   "trackingReference",

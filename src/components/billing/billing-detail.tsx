@@ -1,5 +1,7 @@
 "use client";
 import { BillingStatusControl } from "./billing-status";
+import { billingDocumentDateLabel } from "./billing-date-label";
+import Link from "next/link";
 import { BillingProfitability } from "./billing-profitability";
 import {
   billingProfitability,
@@ -123,7 +125,6 @@ type BillingDraft = {
   currencyCode: string;
   documentDate: string;
   documentType: "QUOTE" | "INVOICE";
-  dueDate: string;
   fxRate: string;
   isCancelled: boolean;
   isProjectRemainderApproved: boolean;
@@ -178,7 +179,6 @@ function initialDraft(document: ClientBillingView): BillingDraft {
     expectedFields: document.editFields ?? "",
     documentDate: document.documentDate,
     documentType: document.documentType,
-    dueDate: document.dueDate ?? "",
     fxRate: document.fxRate ?? "",
     isCancelled: document.isCancelled,
     isProjectRemainderApproved: document.isProjectRemainderApproved,
@@ -281,7 +281,7 @@ export function BillingDetail({
   );
   const collection = calculateClientBillingAmounts({
     documentType: saved.documentType,
-    dueDate: saved.dueDate || null,
+    dueDate: document.dueDate,
     isCancelled: saved.isCancelled,
     paidAmounts: [document.paid],
     today: businessToday(),
@@ -456,6 +456,7 @@ export function BillingDetail({
         }
         statusControl={
           <BillingStatusControl
+            documentDate={saved.documentDate}
             id={document.id}
             status={document.status}
             documentType={document.documentType}
@@ -597,7 +598,13 @@ export function BillingDetail({
                       value={draft.reference}
                     />
                   </Field>
-                  <Field error={fieldErrors.documentDate} label="Document date">
+                  <Field
+                    error={fieldErrors.documentDate}
+                    label={billingDocumentDateLabel(
+                      draft.documentType,
+                      document.workflowStatus,
+                    )}
+                  >
                     <DateInput
                       className={inputClassName}
                       name="documentDate"
@@ -612,27 +619,9 @@ export function BillingDetail({
                       value={draft.documentDate}
                     />
                   </Field>
-                  <Field
-                    error={fieldErrors.dueDate}
-                    label={
-                      draft.documentType === "INVOICE"
-                        ? "Invoice due date"
-                        : "Quote due date"
-                    }
-                  >
-                    <DateInput
-                      className={inputClassName}
-                      name="dueDate"
-                      onChange={(event) =>
-                        setDraft((current) => ({
-                          ...current,
-                          dueDate: event.target.value,
-                        }))
-                      }
-
-                      value={draft.dueDate}
-                    />
-                  </Field>
+                  <p className="text-muted-foreground text-xs">
+                    Payment due dates are edited in Related → Payment terms.
+                  </p>
                   <Field error={fieldErrors.currencyCode} label="Currency">
                     <select
                       className={inputClassName}
@@ -1159,17 +1148,29 @@ export function BillingDetail({
                   <RecordSectionHeading title="Dates" />
                   <dl className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <DetailValue
-                      label="Document date"
+                      label={billingDocumentDateLabel(
+                        saved.documentType,
+                        document.workflowStatus,
+                      )}
                       value={formatDateOnly(saved.documentDate)}
                     />
-                    <DetailValue
-                      label={
-                        saved.documentType === "INVOICE"
-                          ? "Invoice due date"
-                          : "Quote due date"
-                      }
-                      value={formatDateOnly(saved.dueDate)}
-                    />
+                    <div>
+                      <dt className="text-muted-foreground text-xs">
+                        Next payment due
+                      </dt>
+                      <dd className="mt-1 text-sm tabular-nums">
+                        <Link
+                          className="underline underline-offset-4"
+                          href={`/billing/${document.id}?tab=related#schedule`}
+                        >
+                          {document.status === "PAID"
+                            ? "Paid"
+                            : document.dueDate
+                              ? formatDateOnly(document.dueDate)
+                              : "Date needed"}
+                        </Link>
+                      </dd>
+                    </div>
                   </dl>
                 </section>
                 <article className="bg-card rounded-lg border p-4">

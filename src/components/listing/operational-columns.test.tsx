@@ -60,7 +60,7 @@ it.each(Object.keys(orderViewColumns) as OrderViewMode[])(
     }
   },
 );
-it("shows Billing invoice dates and HT without a TTC column; keeps cash amounts", async () => {
+it("shows Billing document and next-payment dates while preserving HT and cash columns", async () => {
   const record = {
     id: "bill",
     reference: "INV-01",
@@ -84,7 +84,8 @@ it("shows Billing invoice dates and HT without a TTC column; keeps cash amounts"
   const labels = [...document.querySelectorAll("thead th")].map(
     (cell) => cell.textContent,
   );
-  expect(labels).toContain("Invoice date");
+  expect(labels).toContain("Document date");
+  expect(labels).toContain("Next payment due");
   expect(labels).not.toContain("TTC");
   expect(labels).toContain("Client received TTC");
   expect(labels).toContain("Remaining TTC");

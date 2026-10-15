@@ -10,6 +10,7 @@ import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { RecordSummary } from "@/components/layout/record-presentation";
 import { OrderFreightCoverage } from "@/components/billing/order-freight-coverage";
 import { carrierName } from "@/config/carriers";
+import { supplierDocumentDate } from "@/domain/procurement/document-date";
 import { OrderBudgetComparison } from "@/components/procurement/order-budget-comparison";
 import Link from "next/link";
 import { RecordWorkspace } from "@/components/layout/record-workspace";
@@ -49,7 +50,7 @@ export default async function OrderPage({
   searchParams,
 }: {
   params: Promise<{ orderId: string }>;
-  searchParams: Promise<{ edit?: string }>;
+  searchParams: Promise<{ edit?: string; delivery?: string }>;
 }) {
   const { orderId } = await params;
   const query = await searchParams;
@@ -76,10 +77,12 @@ export default async function OrderPage({
     getCreditWorkspace({ side: "SUPPLIER", sourceId: orderId }),
   ]);
   const cost = order.costs;
+  const documentDate = supplierDocumentDate(order);
   return (
     <div className="space-y-6">
       <OrderDetailShell
-        startEditing={query.edit === "1"}
+        startEditing={query.edit === "1" || query.delivery === "1"}
+        recordDelivery={query.delivery === "1"}
         canEdit={canEditMasterData(user.role)}
         options={options}
         order={order}
@@ -406,10 +409,39 @@ export default async function OrderPage({
             {
               id: "delivery",
               group: "details",
-              label: "Delivery",
+              label: "Dates & delivery",
               content: (
                 <section className="bg-card rounded-lg border p-4">
-                  <h2 className="text-sm font-semibold">Delivery & tracking</h2>
+                  <h2 className="text-sm font-semibold">Dates & delivery</h2>
+                  <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                    <div>
+                      <dt className="text-muted-foreground text-xs">
+                        Supplier document date ·{" "}
+                        {documentDate.kind === "INVOICE" ? "Invoice" : "Quote"}
+                      </dt>
+                      <dd className="mt-1">
+                        {formatDateOnly(documentDate.date)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground text-xs">
+                        Expected delivery
+                      </dt>
+                      <dd className="mt-1">
+                        {formatDateOnly(order.expectedDeliveryDate)}
+                      </dd>
+                    </div>
+                    {order.actualDeliveryDate && (
+                      <div>
+                        <dt className="text-muted-foreground text-xs">
+                          Delivered on
+                        </dt>
+                        <dd className="mt-1">
+                          {formatDateOnly(order.actualDeliveryDate)}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
                   <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                     <div>
                       <dt className="text-muted-foreground text-xs">Carrier</dt>
@@ -426,66 +458,52 @@ export default async function OrderPage({
                       </dd>
                     </div>
                   </dl>
-                  <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-6">
-                    <div>
-                      <dt className="text-muted-foreground text-xs">
-                        Quote date
-                      </dt>
-                      <dd className="mt-1">
-                        {formatDateOnly(order.quoteDate)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground text-xs">
-                        Order date
-                      </dt>
-                      <dd className="mt-1">
-                        {formatDateOnly(order.orderDate)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground text-xs">
-                        Invoice date
-                      </dt>
-                      <dd className="mt-1">
-                        {formatDateOnly(order.invoiceDate)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground text-xs">
-                        Lead time
-                      </dt>
-                      <dd className="mt-1">
-                        {order.leadTimeWeeks === null
-                          ? "—"
-                          : `${order.leadTimeWeeks} weeks`}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground text-xs">
-                        Expected ready
-                      </dt>
-                      <dd className="mt-1">
-                        {formatDateOnly(order.expectedReadyDate)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground text-xs">
-                        Expected delivery
-                      </dt>
-                      <dd className="mt-1">
-                        {formatDateOnly(order.expectedDeliveryDate)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground text-xs">
-                        Actual delivery
-                      </dt>
-                      <dd className="mt-1">
-                        {formatDateOnly(order.actualDeliveryDate)}
-                      </dd>
-                    </div>
-                  </dl>
+                  <details className="mt-4 border-t pt-3">
+                    <summary className="cursor-pointer text-sm font-medium">
+                      Additional date details
+                    </summary>
+                    <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                      {documentDate.kind === "INVOICE" && order.quoteDate && (
+                        <div>
+                          <dt className="text-muted-foreground text-xs">
+                            Earlier Quote date
+                          </dt>
+                          <dd className="mt-1">
+                            {formatDateOnly(order.quoteDate)}
+                          </dd>
+                        </div>
+                      )}
+                      <div>
+                        <dt className="text-muted-foreground text-xs">
+                          Order date
+                        </dt>
+                        <dd className="mt-1">
+                          {formatDateOnly(order.orderDate)}
+                        </dd>
+                      </div>
+                      {order.leadTimeWeeks !== null &&
+                        order.leadTimeWeeks !== undefined && (
+                          <div>
+                            <dt className="text-muted-foreground text-xs">
+                              Previous lead time
+                            </dt>
+                            <dd className="mt-1">
+                              {`${order.leadTimeWeeks} weeks`}
+                            </dd>
+                          </div>
+                        )}
+                      {order.expectedReadyDate && (
+                        <div>
+                          <dt className="text-muted-foreground text-xs">
+                            Previous ready date
+                          </dt>
+                          <dd className="mt-1">
+                            {formatDateOnly(order.expectedReadyDate)}
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  </details>
                 </section>
               ),
             },

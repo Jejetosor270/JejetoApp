@@ -170,6 +170,10 @@ describe("Supplier document review rendering", () => {
     );
 
     expect(html).toContain('name="importRequestId"');
+    expect(html).toContain('name="sourceDocumentType"');
+    expect(html).toContain('value="INVOICE"');
+    expect(html).toContain("Supplier document date · Quote");
+    expect(html).not.toContain('name="applyLeadTime"');
     expect(html).toContain("Optional Billing reconciliation");
     expect(html).toContain("Skip for now");
     expect(html).toContain("Optional payment proposal");
