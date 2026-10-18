@@ -85,7 +85,7 @@ describe("financial attention", () => {
       expect(issues.some((issue) => issue.key === "schedule:doc")).toBe(false);
       expect(
         issues.some((issue) => issue.key === "cash-incomplete:project"),
-      ).toBe(true);
+      ).toBe(false);
     },
   );
   it("caps retained original terms after a credit without a false mismatch", () => {
@@ -116,8 +116,43 @@ describe("financial attention", () => {
     expect(issues.find((issue) => issue.key === "term-due:term")?.amount).toBe(
       "600.0000",
     );
-    // Schedule reconciliation remains visible; the projection never promises the extra 400.
-    expect(issues.map((issue) => issue.key)).toContain("schedule:doc");
+    // Invoice-level receipts reduce term expectations without creating a financial gap.
+    expect(issues.map((issue) => issue.key)).not.toContain("schedule:doc");
+  });
+  it("does not call a fully paid Invoice overdue or financially incomplete when cash is not term-assigned", () => {
+    const issues = build([
+      {
+        ...doc,
+        side: "client",
+        totalTtc: "100",
+        paid: "100",
+        terms: [
+          { ...term, scheduled: "100", paid: "0", dueDate: "2020-01-01" },
+        ],
+      },
+    ]);
+    expect(
+      issues.some((issue) =>
+        /^(schedule:|term-date:|term-due:|cash-incomplete:)/.test(issue.key),
+      ),
+    ).toBe(false);
+  });
+  it("retains an over-scheduled Client warning without treating direct receipts as missing cash", () => {
+    const issues = build([
+      {
+        ...doc,
+        side: "client",
+        totalTtc: "100",
+        paid: "100",
+        terms: [{ ...term, scheduled: "120", paid: "0" }],
+      },
+    ]);
+    expect(
+      issues.find((issue) => issue.key === "schedule-overflow:doc"),
+    ).toMatchObject({ priority: "Review", amount: "20.0000" });
+    expect(
+      issues.some((issue) => issue.key === "cash-incomplete:project"),
+    ).toBe(false);
   });
   it.each([7, 30, 90] as const)(
     "shares the inclusive %s-day window and excludes the next day",
@@ -155,7 +190,7 @@ describe("financial attention", () => {
         { ...doc, side, dueDate: today, terms: [{ ...term, dueDate: null }] },
       ]);
       expect(issues.map((issue) => issue.key)).toContain("term-date:term");
-      expect(issues.map((issue) => issue.key)).toContain(
+      expect(issues.map((issue) => issue.key)).not.toContain(
         "cash-incomplete:project",
       );
       expect(
@@ -182,7 +217,7 @@ describe("financial attention", () => {
         href: doc.href,
         title: "Supplier payment outstanding",
       });
-      expect(issues.map((issue) => issue.key)).toContain(
+      expect(issues.map((issue) => issue.key)).not.toContain(
         "cash-incomplete:project",
       );
       expect(issues.some((issue) => issue.key.startsWith("cash-gap"))).toBe(
@@ -213,7 +248,7 @@ describe("financial attention", () => {
       false,
     );
     const extended = build([doc, future], 30);
-    expect(extended.map((issue) => issue.key)).toContain(
+    expect(extended.map((issue) => issue.key)).not.toContain(
       "cash-incomplete:project",
     );
     expect(extended.some((issue) => issue.key.startsWith("cash-gap"))).toBe(
@@ -254,7 +289,7 @@ describe("financial attention", () => {
       expect(
         issues.find((issue) => issue.key === "missing-date:unknown")?.amount,
       ).toBeNull();
-      expect(issues.map((issue) => issue.key)).toContain(
+      expect(issues.map((issue) => issue.key)).not.toContain(
         "cash-incomplete:project",
       );
       expect(issues.some((issue) => issue.key.startsWith("cash-gap"))).toBe(
@@ -401,7 +436,6 @@ describe("financial attention", () => {
         "term-date:term",
         "document-fx:doc",
         "term-fx:term",
-        "cash-incomplete:project",
       ]),
     );
     expect(issues.some((row) => row.key.startsWith("cash-gap"))).toBe(false);

@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { difference, requiredRecovery, sumKnown } from "./project-control";
+import { difference, sumKnown } from "./project-control";
 
 /** Reporting attribution only: a receipt pays each Invoice HT category proportionally. */
 export function freightReceiptHt(
@@ -18,17 +18,16 @@ export function freightReceiptHt(
 
 export function projectFreightCoverage(input: {
   supplierHt: string | null;
-  projectMarkup: string;
+  economicCost: string | null;
+  recoveryTarget: string | null;
   clientInvoicedHt: string | null;
   clientPaidHt: string | null;
 }) {
-  const supplierSellHt = requiredRecovery(
-    input.supplierHt,
-    input.projectMarkup,
-  );
+  const supplierSellHt = input.recoveryTarget;
   return {
     ...input,
-    supplierMarkupHt: difference(supplierSellHt, input.supplierHt),
+    nonDeductibleVat: difference(input.economicCost, input.supplierHt),
+    supplierMarkupHt: difference(supplierSellHt, input.economicCost),
     supplierSellHt,
     invoicedCoverageHt: difference(input.clientInvoicedHt, supplierSellHt),
     paidCoverageHt: difference(input.clientPaidHt, supplierSellHt),

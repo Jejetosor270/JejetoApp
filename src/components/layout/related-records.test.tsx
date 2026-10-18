@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useState } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { mountForm, clickText } from "@/test/dom-form";
 import { RelatedRecordTable } from "./related-records";
@@ -256,4 +256,60 @@ it("keeps money and date drafts together after a rejected financial edit", async
   expect(actions.financial.mock.calls[1]?.[2].get("amount")).toBe("15.1256");
   expect(actions.financial.mock.calls[1]?.[2].get("date")).toBe("2026-09-25");
   expect(push).not.toHaveBeenCalled();
+});
+
+it("keeps the opening financial version when refreshed rows arrive during an edit", async () => {
+  actions.financial.mockResolvedValue({
+    status: "error",
+    message: "Changed since editing began. Your draft is retained.",
+  });
+  function RefreshedTable() {
+    const [version, setVersion] = useState("a".repeat(64));
+    return (
+      <>
+        <button onClick={() => setVersion("b".repeat(64))}>Refresh rows</button>
+        <RelatedRecordTable
+          table={{
+            ...table,
+            editKind: "payment",
+            columns: ["Payment", "Amount"],
+            rows: [
+              {
+                id: "cash",
+                editVersion: version,
+                cells: ["Payment", "10.00 EUR"],
+                editFields: [
+                  {
+                    column: 1,
+                    name: "amount",
+                    type: "money",
+                    value: "10",
+                    currency: "EUR",
+                  },
+                ],
+              },
+            ],
+          }}
+        />
+      </>
+    );
+  }
+  view = await mountForm(<RefreshedTable />);
+  await clickText("Edit");
+  await clickText("Refresh rows");
+  await clickText("Save");
+  expect(actions.financial.mock.calls[0]?.[2].get("expectedVersion")).toBe(
+    "a".repeat(64),
+  );
+  await clickText("Save");
+  expect(actions.financial.mock.calls[1]?.[2].get("expectedVersion")).toBe(
+    "a".repeat(64),
+  );
+  expect(document.body.textContent).toContain("Your draft is retained");
+  await clickText("Cancel");
+  await clickText("Edit");
+  await clickText("Save");
+  expect(actions.financial.mock.calls[2]?.[2].get("expectedVersion")).toBe(
+    "b".repeat(64),
+  );
 });

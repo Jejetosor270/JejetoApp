@@ -22,6 +22,7 @@ describe("attention follow-up identity and view rules", () => {
       "document-fx",
       "term-date",
       "schedule",
+      "schedule-overflow",
       "cash-match",
       "duplicate",
       "unassigned-cash",

@@ -27,6 +27,12 @@ import {
   assertEditVersion,
 } from "@/lib/edit-version";
 import { nextInstallmentSequence } from "@/lib/payments/sequence";
+import {
+  cashEditVersion,
+  paymentTermEditVersion,
+  paymentVersionMatches,
+  stalePaymentMessage,
+} from "@/lib/payments/edit-version";
 import { trashInTransaction } from "@/lib/trash/service";
 
 import Decimal from "decimal.js";
@@ -176,12 +182,14 @@ const billingInclude = {
   client: { select: { displayName: true, id: true } },
   matchedInstallment: {
     include: {
+      matchedInvoices: { where: { isCancelled: false }, select: { id: true } },
       billingDocument: { select: { reference: true, totalTtc: true } },
       receipts: { orderBy: { receivedAt: "asc" } },
     },
   },
   paymentInstallments: {
     include: {
+      matchedInvoices: { where: { isCancelled: false }, select: { id: true } },
       billingDocument: { select: { reference: true, totalTtc: true } },
       receipts: { orderBy: { receivedAt: "asc" } },
     },
@@ -352,6 +360,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
       receipts.map((receipt) => dateToDateOnly(receipt.receivedAt)),
     ),
     receipts: record.receipts.map((receipt) => ({
+      editVersion: cashEditVersion(receipt),
       amount: receipt.amount.toString(),
       fxRate: receipt.fxRateToReporting?.toString() ?? null,
       id: receipt.id,
@@ -362,7 +371,21 @@ function billingView(record: BillingRecord, today = businessToday()) {
       reference: receipt.reference,
     })),
     paymentInstallments: visibleInstallments.map((installment) => ({
-      ...(activeBillingCredits(record).length
+      editVersion: paymentTermEditVersion(
+        installment,
+        installment.billingDocument?.totalTtc ?? installment.scheduledAmount,
+      ),
+      balanceReviewRequired:
+        installment.currencyCode !== record.currencyCode ||
+        (installment.matchedInvoices?.length ?? 0) > 1 ||
+        (record.documentType === "QUOTE" &&
+          (installment.matchedInvoices?.length ?? 0) > 0),
+      ...(installment.currencyCode === record.currencyCode &&
+      (installment.matchedInvoices?.length ?? 0) <= 1 &&
+      !(
+        record.documentType === "QUOTE" &&
+        (installment.matchedInvoices?.length ?? 0) > 0
+      )
         ? {
             creditOutstandingAmount: termBalances.get(installment.id) ?? "0",
           }
@@ -381,6 +404,7 @@ function billingView(record: BillingRecord, today = businessToday()) {
       notes: installment.notes,
       percentageRate: installment.percentageRate?.toString() ?? null,
       receipts: installment.receipts.map((receipt) => ({
+        editVersion: cashEditVersion(receipt),
         amount: receipt.amount.toString(),
         fxRate: receipt.fxRateToReporting?.toString() ?? null,
         id: receipt.id,
@@ -1116,12 +1140,12 @@ export async function updateClientReceipt(
     async (transaction) => {
       const current = await transaction.clientReceipt.findUnique({
         where: { id: input.id },
-        select: {
-          billingDocumentId: true,
-          installmentId: true,
-        },
       });
       if (!current) throw new ClientBillingNotFoundError();
+      if (
+        !paymentVersionMatches(input.expectedVersion, cashEditVersion(current))
+      )
+        throw new ClientBillingValidationError(stalePaymentMessage);
       if (current.billingDocumentId !== input.billingDocumentId)
         throw new ClientBillingValidationError(
           "This receipt belongs to another Billing document.",
@@ -1146,16 +1170,46 @@ export async function updateClientReceipt(
       });
       if (!document) throw new ClientBillingNotFoundError();
 
+      const assignmentChanged =
+        (input.installmentId ?? null) !== current.installmentId;
+      if (
+        assignmentChanged &&
+        (document.documentType !== "INVOICE" || !billingIsIssued(document))
+      )
+        throw new ClientBillingValidationError(
+          "Assign receipts from an active Invoice. Historical receipt amounts and dates remain editable.",
+        );
+
       const installment = input.installmentId
         ? await transaction.clientPaymentInstallment.findUnique({
             where: { id: input.installmentId },
             include: {
+              matchedInvoices: {
+                where: { isCancelled: false },
+                select: { id: true },
+              },
               receipts: { select: { amount: true, id: true } },
             },
           })
         : null;
       if (input.installmentId && !installment)
         throw new ClientBillingNotFoundError();
+      if (assignmentChanged && (installment?.matchedInvoices?.length ?? 0) > 1)
+        throw new ClientBillingValidationError(
+          "This payment term is linked to multiple Invoices. Review the links before assigning cash.",
+        );
+      if (assignmentChanged && installment?.isCancelled)
+        throw new ClientBillingValidationError(
+          "Choose an active payment term.",
+        );
+      if (
+        assignmentChanged &&
+        installment &&
+        installment.currencyCode !== document.currencyCode
+      )
+        throw new ClientBillingValidationError(
+          "The receipt and payment term must use the same currency.",
+        );
       if (
         installment &&
         installment.billingDocumentId !== input.billingDocumentId &&
@@ -1229,6 +1283,9 @@ export async function updateClientReceipt(
           updatedById: actorId,
         },
         select: {
+          id: true,
+          updatedAt: true,
+          billingDocumentId: true,
           amount: true,
           fxRateToReporting: true,
           installmentId: true,
@@ -1256,6 +1313,7 @@ export async function updateClientReceipt(
         summary: "Updated an actual Client receipt.",
       });
       return {
+        editVersion: cashEditVersion(receipt),
         amount: receipt.amount.toString(),
         fxRate: receipt.fxRateToReporting?.toString() ?? "",
         installmentId: receipt.installmentId ?? "",
@@ -1387,125 +1445,148 @@ export async function updateClientBillingInstallment(
   actorId: string,
   input: ClientBillingInstallmentUpdateInput,
 ) {
-  return getDatabase().$transaction(async (transaction) => {
-    const current = await transaction.clientPaymentInstallment.findUnique({
-      where: { id: input.id },
-      include: {
-        billingDocument: {
-          select: {
-            id: true,
-            reference: true,
-            totalTtc: true,
-            credits: activeCreditsInclude,
+  return getDatabase().$transaction(
+    async (transaction) => {
+      const current = await transaction.clientPaymentInstallment.findUnique({
+        where: { id: input.id },
+        include: {
+          billingDocument: {
+            select: {
+              id: true,
+              reference: true,
+              totalTtc: true,
+              credits: activeCreditsInclude,
+            },
           },
+          matchedInvoices: { select: { id: true } },
+          receipts: true,
         },
-        matchedInvoices: { select: { id: true } },
-        receipts: { select: { amount: true } },
-      },
-    });
-    if (!current?.billingDocument)
-      throw new ClientBillingValidationError(
-        "Use the unassigned installment editor for this record.",
-      );
-    const belongsToView =
-      current.billingDocumentId === input.billingDocumentId ||
-      current.matchedInvoices.some(
-        (document) => document.id === input.billingDocumentId,
-      );
-    if (!belongsToView)
-      throw new ClientBillingValidationError(
-        "This installment does not belong to the selected Billing document.",
-      );
-
-    const amount =
-      input.basis === InstallmentBasis.PERCENTAGE
-        ? scheduledAmountFromPercentage(
-            current.billingDocument.totalTtc,
-            input.percentageRate ?? "0",
-          )
-        : new Decimal(input.scheduledAmount);
-    const settled = current.receipts.reduce(
-      (total, receipt) => total.plus(receipt.amount),
-      new Decimal(0),
-    );
-    if (amount.lessThan(settled))
-      throw new ClientBillingValidationError(
-        "Scheduled amount cannot be reduced below the amount already received.",
-      );
-
-    const otherScheduled = await transaction.clientPaymentInstallment.aggregate(
-      {
-        where: {
-          billingDocumentId: current.billingDocumentId,
-          id: { not: current.id },
-          isCancelled: false,
-        },
-        _sum: { scheduledAmount: true },
-      },
-    );
-    if (
-      !amount.equals(current.scheduledAmount) &&
-      new Decimal(otherScheduled._sum.scheduledAmount?.toString() ?? "0")
-        .plus(amount)
-        .greaterThan(
-          new Decimal(current.billingDocument.totalTtc).minus(
-            billingCreditTotals(current.billingDocument).creditedTtc,
-          ),
+      });
+      if (!current?.billingDocument)
+        throw new ClientBillingValidationError(
+          "Use the unassigned installment editor for this record.",
+        );
+      if (
+        !paymentVersionMatches(
+          input.expectedVersion,
+          paymentTermEditVersion(current, current.billingDocument.totalTtc),
         )
-    )
-      throw new ClientBillingValidationError(
-        "The Client payment schedule cannot exceed the Billing TTC after credits.",
-      );
+      )
+        throw new ClientBillingValidationError(stalePaymentMessage);
+      const belongsToView =
+        current.billingDocumentId === input.billingDocumentId ||
+        current.matchedInvoices.some(
+          (document) => document.id === input.billingDocumentId,
+        );
+      if (!belongsToView)
+        throw new ClientBillingValidationError(
+          "This installment does not belong to the selected Billing document.",
+        );
 
-    const installment = await transaction.clientPaymentInstallment.update({
-      where: { id: current.id },
-      data: {
-        basis: input.basis,
-        dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
-        label: input.label,
-        notes: input.notes ?? null,
-        percentageRate:
-          input.basis === InstallmentBasis.PERCENTAGE
-            ? (input.percentageRate ?? "0")
-            : null,
-        scheduledAmount: amount.toFixed(4),
-        updatedById: actorId,
-      },
-      select: {
-        basis: true,
-        dueDate: true,
-        label: true,
-        notes: true,
-        percentageRate: true,
-        scheduledAmount: true,
-      },
-    });
-    await writeAuditEvent(transaction, actorId, {
-      action: "UPDATED",
-      entityId: current.id,
-      entityReference: `${current.billingDocument?.reference ?? "Unassigned"} · ${installment.label}`,
-      entityType: "INSTALLMENT",
-      metadata: {
-        fields: [
-          "basis",
-          "percentageRate",
-          "scheduledAmount",
-          "dueDate",
-          "label",
-          "notes",
-        ],
-      },
-      summary: "Updated a Billing payment installment.",
-    });
-    return {
-      basis: installment.basis,
-      dueDate: dateToDateOnly(installment.dueDate),
-      label: installment.label,
-      notes: installment.notes ?? "",
-      percentageRate: installment.percentageRate?.toString() ?? "",
-      scheduledAmount: installment.scheduledAmount.toString(),
-    };
-  });
+      const preservesAmount =
+        input.basis === current.basis &&
+        new Decimal(input.scheduledAmount).eq(current.scheduledAmount) &&
+        (input.basis !== InstallmentBasis.PERCENTAGE ||
+          new Decimal(input.percentageRate ?? "0").eq(
+            current.percentageRate ?? "0",
+          ));
+      const amount = preservesAmount
+        ? new Decimal(current.scheduledAmount)
+        : input.basis === InstallmentBasis.PERCENTAGE
+          ? scheduledAmountFromPercentage(
+              current.billingDocument.totalTtc,
+              input.percentageRate ?? "0",
+            )
+          : new Decimal(input.scheduledAmount);
+      const settled = current.receipts.reduce(
+        (total, receipt) => total.plus(receipt.amount),
+        new Decimal(0),
+      );
+      if (amount.lessThan(settled))
+        throw new ClientBillingValidationError(
+          "Scheduled amount cannot be reduced below the amount already received.",
+        );
+
+      const otherScheduled =
+        await transaction.clientPaymentInstallment.aggregate({
+          where: {
+            billingDocumentId: current.billingDocumentId,
+            id: { not: current.id },
+            isCancelled: false,
+          },
+          _sum: { scheduledAmount: true },
+        });
+      if (
+        !amount.equals(current.scheduledAmount) &&
+        new Decimal(otherScheduled._sum.scheduledAmount?.toString() ?? "0")
+          .plus(amount)
+          .greaterThan(
+            new Decimal(current.billingDocument.totalTtc).minus(
+              billingCreditTotals(current.billingDocument).creditedTtc,
+            ),
+          )
+      )
+        throw new ClientBillingValidationError(
+          "The Client payment schedule cannot exceed the Billing TTC after credits.",
+        );
+
+      const installment = await transaction.clientPaymentInstallment.update({
+        where: { id: current.id },
+        data: {
+          basis: input.basis,
+          dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
+          label: input.label,
+          notes: input.notes ?? null,
+          percentageRate:
+            input.basis === InstallmentBasis.PERCENTAGE
+              ? (input.percentageRate ?? "0")
+              : null,
+          scheduledAmount: amount.toFixed(4),
+          updatedById: actorId,
+        },
+        select: {
+          id: true,
+          updatedAt: true,
+          basis: true,
+          dueDate: true,
+          label: true,
+          notes: true,
+          percentageRate: true,
+          scheduledAmount: true,
+        },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: current.id,
+        entityReference: `${current.billingDocument?.reference ?? "Unassigned"} · ${installment.label}`,
+        entityType: "INSTALLMENT",
+        metadata: {
+          fields: [
+            "basis",
+            "percentageRate",
+            "scheduledAmount",
+            "dueDate",
+            "label",
+            "notes",
+          ],
+        },
+        summary: "Updated a Billing payment installment.",
+      });
+      return {
+        editVersion: paymentTermEditVersion(
+          { ...current, ...installment },
+          current.billingDocument.totalTtc,
+        ),
+        basis: installment.basis,
+        dueDate: dateToDateOnly(installment.dueDate),
+        label: installment.label,
+        notes: installment.notes ?? "",
+        percentageRate: installment.percentageRate?.toString() ?? "",
+        scheduledAmount: installment.scheduledAmount.toString(),
+      };
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }
 
 export async function createClientBillingInstallment(

@@ -791,12 +791,14 @@ it("counts matched Quote receipts once, using Invoice freight and each receipt's
   expect(report.excludedReceiptCount).toBe(1);
   expect(report.freightCoverage).toMatchObject({
     supplierHt: "100.0000",
-    supplierMarkupHt: "15.0000",
-    supplierSellHt: "115.0000",
+    economicCost: "120.0000",
+    nonDeductibleVat: "20.0000",
+    supplierMarkupHt: "18.0000",
+    supplierSellHt: "138.0000",
     clientInvoicedHt: "80.0000",
     clientPaidHt: "70.0000",
-    invoicedCoverageHt: "-35.0000",
-    paidCoverageHt: "-45.0000",
+    invoicedCoverageHt: "-58.0000",
+    paidCoverageHt: "-68.0000",
   });
   expect(report.totals.billed).toBe("800.0000");
   expect(

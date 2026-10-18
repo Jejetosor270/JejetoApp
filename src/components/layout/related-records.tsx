@@ -275,14 +275,17 @@ export function RelatedRecordTable({
                         onEdit={() => {
                           if (editingId) return;
                           setDraft(row.editValue ?? row.cells[0] ?? "");
-                          setFieldDraft(
-                            Object.fromEntries(
+                          setFieldDraft({
+                            ...Object.fromEntries(
                               (row.editFields ?? []).map((field) => [
                                 field.name,
                                 field.value,
                               ]),
                             ),
-                          );
+                            ...(row.editVersion
+                              ? { expectedVersion: row.editVersion }
+                              : {}),
+                          });
                           setFeedback("");
                           setEditingId(row.id);
                         }}

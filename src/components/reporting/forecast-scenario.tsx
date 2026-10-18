@@ -60,6 +60,8 @@ export function ForecastScenario({
         currency={currency}
         title="Cash scenario"
         href={href}
+        range={result.scenario}
+        monthDrilldown={false}
         partial="Hypothetical timing · TTC"
       />
     </details>

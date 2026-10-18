@@ -37,6 +37,7 @@ import {
 } from "@/components/listing/table-styles";
 
 interface PaymentInstallmentRow {
+  editVersion?: string;
   actualDate: string | null;
   currencyCode: string;
   dueDate: string | null;
@@ -71,6 +72,7 @@ function InstallmentRow({
   onSelect: () => void;
 }) {
   const initial = () => ({
+    editVersion: installment.editVersion ?? "",
     dueDate: dateOnlyToEuropeanInput(installment.dueDate),
     label: installment.label,
     notes: installment.notes ?? "",
@@ -88,6 +90,7 @@ function InstallmentRow({
   const save = () => {
     const data = new FormData();
     data.set("id", installment.id);
+    data.set("expectedVersion", draft.editVersion);
     data.set("dueDate", serverDate(draft.dueDate));
     data.set("label", draft.label);
     data.set("notes", draft.notes);
@@ -97,6 +100,7 @@ function InstallmentRow({
       setFeedback(result.message);
       if (result.status === "success" && result.values) {
         const next = {
+          editVersion: result.values.editVersion,
           dueDate: dateOnlyToEuropeanInput(result.values.dueDate),
           label: result.values.label,
           notes: result.values.notes ?? "",

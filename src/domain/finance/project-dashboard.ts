@@ -37,6 +37,8 @@ export const projectMetricKeys = [
   "expectedCost",
   "expectedProfit",
   "freightCost",
+  "freightNonDeductibleVat",
+  "freightEconomicCost",
   "freightTarget",
   "freightInvoiced",
   "freightReceived",
@@ -69,11 +71,12 @@ export interface ProjectDashboardInput {
   budget: ProjectMetricRow[];
   nonDeductibleVat: ProjectMetricRow[];
   freightCost: ProjectMetricRow[];
+  freightNonDeductibleVat: ProjectMetricRow[];
+  freightTarget: ProjectMetricRow[];
   freightInvoiced: ProjectMetricRow[];
   freightReceived: ProjectMetricRow[];
   vatOutput: ProjectMetricRow[];
   vatInput: ProjectMetricRow[];
-  freightMarkupRate: string;
   alerts: ProjectDashboardAlert[];
 }
 
@@ -90,6 +93,8 @@ const sourceKeys = [
   "budget",
   "nonDeductibleVat",
   "freightCost",
+  "freightNonDeductibleVat",
+  "freightTarget",
   "freightInvoiced",
   "freightReceived",
   "vatOutput",
@@ -176,16 +181,7 @@ export function projectDashboard(
   ];
   const planned = [...input.invoiced, ...input.toInvoice];
   const expectedCost = [...input.budget, ...input.nonDeductibleVat];
-  const freightTarget = input.freightCost.map((row) => ({
-    ...row,
-    amount:
-      row.amount === null
-        ? null
-        : new Decimal(row.amount)
-            .times(new Decimal(1).plus(input.freightMarkupRate))
-            .toString(),
-    note: "Freight HT cost with the Project freight markup applied.",
-  }));
+  const freightTarget = input.freightTarget;
   const metrics: ProjectDashboard["metrics"] = {
     cost: pricing.cost,
     sell: pricing.sell,
@@ -238,9 +234,17 @@ export function projectDashboard(
       input.freightCost,
       "Order freight HT plus separate Project freight expense HT once, excluding input VAT.",
     ),
+    freightNonDeductibleVat: projectMetric(
+      input.freightNonDeductibleVat,
+      "Non-deductible input VAT on separate Project freight expenses. Order input VAT remains in whole-Order economic cost rather than being arbitrarily assigned to freight.",
+    ),
+    freightEconomicCost: projectMetric(
+      [...input.freightCost, ...input.freightNonDeductibleVat],
+      "Order freight HT plus separate Project freight expenses including their non-deductible input VAT, matching Freight reconciliation.",
+    ),
     freightTarget: projectMetric(
       freightTarget,
-      "Recorded freight HT cost with the Project default freight markup applied. This reporting target does not change Order prices or Billing.",
+      "Effective freight recovery target: Order freight HT and separate freight economic cost, each using its applicable inherited or overridden freight markup. Matches Reports; does not change Order prices or Billing.",
     ),
     freightInvoiced: projectMetric(
       input.freightInvoiced,
@@ -252,11 +256,11 @@ export function projectDashboard(
     ),
     freightInvoicedGap: projectMetric(
       [...input.freightInvoiced, ...subtractProjectRows(freightTarget)],
-      "Net Client freight invoiced HT minus the Project-default freight recovery target.",
+      "Net Client freight invoiced HT minus the effective freight recovery target.",
     ),
     freightPaidGap: projectMetric(
       [...input.freightReceived, ...subtractProjectRows(freightTarget)],
-      "Attributed Client freight received HT minus the Project-default freight recovery target.",
+      "Attributed Client freight received HT minus the effective freight recovery target.",
     ),
     vatOutput: projectMetric(
       input.vatOutput,

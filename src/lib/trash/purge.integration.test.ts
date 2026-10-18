@@ -172,6 +172,9 @@ it("records and corrects partial payments on a matched Quote term once, then pur
     ...input,
     id: receipt.id,
     amount: "45",
+    expectedVersion: (
+      await getClientBillingDocument(invoice.id)
+    )?.receipts.find((row) => row.id === receipt.id)?.editVersion,
   });
   expect((await getClientBillingDocument(invoice.id))?.paid).toBe("95.0000");
   await expect(

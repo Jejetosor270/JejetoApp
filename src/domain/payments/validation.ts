@@ -114,9 +114,20 @@ function validateInstallment(
 export const createInstallmentSchema =
   baseInstallmentSchema.superRefine(validateInstallment);
 export const updateInstallmentSchema = z
-  .object({ id: z.uuid("Invalid installment."), ...installmentFields })
+  .object({
+    id: z.uuid("Invalid installment."),
+    expectedVersion: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
+    ...installmentFields,
+  })
   .superRefine(validateInstallment);
 export const inlineInstallmentSchema = z.object({
+  expectedVersion: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   dueDate: optionalDate,
   id: z.uuid("Invalid installment."),
   label: z.string().trim().min(1).max(200),
@@ -131,7 +142,13 @@ export const settlementSchema = z.object({
   reference: optionalText(120),
   settledAt: dateOnly,
 });
-export const updateSettlementSchema = settlementSchema.extend({ id: z.uuid() });
+export const updateSettlementSchema = settlementSchema.extend({
+  id: z.uuid(),
+  expectedVersion: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+});
 export type UpdateSettlementInput = z.infer<typeof updateSettlementSchema>;
 export const installmentIdSchema = z.object({
   installmentId: z.uuid("Invalid installment."),

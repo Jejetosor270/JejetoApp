@@ -1,4 +1,5 @@
 import { TermStatusAction } from "./term-status-action";
+import Decimal from "decimal.js";
 import { RelatedRecordTable } from "@/components/layout/related-records";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
 import { formatDateOnly } from "@/domain/payments/dates";
@@ -136,6 +137,10 @@ export function PaymentSchedule({
               <EditorDrawer title="Add payment term">
                 <InstallmentForm
                   baseAmount={summary.baseAmount}
+                  {...(summary.reconciliationComplete &&
+                  new Decimal(summary.unscheduled).gt(0)
+                    ? { suggestedAmount: summary.unscheduled }
+                    : {})}
                   currencies={currencies}
                   defaultCurrencyCode={summary.baseCurrencyCode}
                   direction={direction}

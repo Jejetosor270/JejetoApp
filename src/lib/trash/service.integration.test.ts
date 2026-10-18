@@ -16,12 +16,19 @@ import {
   getProjectClientBillingSummary,
 } from "@/lib/billing/reporting";
 import { nextInstallmentSequence } from "@/lib/payments/sequence";
-import { updateSettlement } from "@/lib/payments/payments";
+import {
+  getOrderPaymentSummary,
+  updateSettlement,
+} from "@/lib/payments/payments";
+import { paymentTermEditVersion } from "@/lib/payments/edit-version";
 import { unassignCash } from "@/lib/payments/unassigned-cash";
 import { listCashRecords } from "@/lib/payments/cash-list";
 import { removeAssignments } from "@/lib/related-records/unassign";
 import { getOrder, listProjectOrders } from "@/lib/procurement/orders";
-import { getOrderBillingReconciliation } from "@/lib/billing/billing";
+import {
+  getClientBillingDocument,
+  getOrderBillingReconciliation,
+} from "@/lib/billing/billing";
 import { editRelatedFinancialRowAction } from "@/app/(app)/related-records/inline-actions";
 
 let memory: Awaited<ReturnType<typeof prismaMemoryDatabase>>;
@@ -336,7 +343,12 @@ it("does not partially delete a selection containing a missing record", async ()
 });
 it("edits a payment in place, audits it, and excludes its old amount from the overpayment check", async () => {
   const f = await fixture();
+  const currentVersion = async () =>
+    (await getOrderPaymentSummary(f.order.id)).supplier.installments
+      .find((term) => term.id === f.installment.id)
+      ?.settlements.find((cash) => cash.id === f.payment.id)?.editVersion;
   await updateSettlement(actorId, {
+    expectedVersion: await currentVersion(),
     id: f.payment.id,
     installmentId: f.installment.id,
     amount: "90.1256",
@@ -365,6 +377,7 @@ it("edits a payment in place, audits it, and excludes its old amount from the ov
   });
   await expect(
     updateSettlement(actorId, {
+      expectedVersion: await currentVersion(),
       id: f.payment.id,
       installmentId: f.installment.id,
       amount: "92",
@@ -380,6 +393,7 @@ it("edits a payment in place, audits it, and excludes its old amount from the ov
   ).toBe("90.1256");
   await expect(
     updateSettlement(actorId, {
+      expectedVersion: await currentVersion(),
       id: f.payment.id,
       installmentId: randomUUID(),
       amount: "80",
@@ -717,7 +731,12 @@ it("rolls back all relationship removals when a selected row belongs to a differ
 
 it("inline cash edits preserve FX and reject amounts above the original schedule", async () => {
   const f = await fixture();
+  const currentVersion = async () =>
+    (await getOrderPaymentSummary(f.order.id)).supplier.installments
+      .find((term) => term.id === f.installment.id)
+      ?.settlements.find((cash) => cash.id === f.payment.id)?.editVersion ?? "";
   const form = new FormData();
+  form.set("expectedVersion", await currentVersion());
   form.set("id", f.payment.id);
   form.set("value", "Reviewed payment");
   form.set("date", "2026-09-12");
@@ -731,7 +750,14 @@ it("inline cash edits preserve FX and reject amounts above the original schedule
   expect(saved.amount.toString()).toBe("45.6789");
   expect(saved.reference).toBe("Reviewed payment");
   expect(saved.fxRateToReporting).toBeNull();
+  expect(
+    await editRelatedFinancialRowAction("payment", undefined, form),
+  ).toEqual({
+    status: "error",
+    message: expect.stringContaining("Changed since editing"),
+  });
   form.set("amount", "100.0001");
+  form.set("expectedVersion", await currentVersion());
   expect(
     (await editRelatedFinancialRowAction("payment", undefined, form)).status,
   ).toBe("error");
@@ -742,6 +768,43 @@ it("inline cash edits preserve FX and reject amounts above the original schedule
       })
     ).amount.toString(),
   ).toBe("45.6789");
+});
+
+it("retains a percentage term's agreed amount and rate on an inline date correction", async () => {
+  const f = await fixture();
+  const term = await memory.raw.clientPaymentInstallment.create({
+    data: {
+      billingDocumentId: f.invoice.id,
+      sequence: 1,
+      label: "Deposit",
+      basis: "PERCENTAGE",
+      percentageRate: "0.3",
+      scheduledAmount: "30",
+      currencyCode: "EUR",
+    },
+  });
+  const view = await getClientBillingDocument(f.invoice.id);
+  const form = new FormData();
+  form.set("id", term.id);
+  form.set("value", "Reviewed deposit");
+  form.set("date", "2026-11-15");
+  form.set("amount", "30");
+  form.set(
+    "expectedVersion",
+    view?.paymentInstallments.find((row) => row.id === term.id)?.editVersion ??
+      "",
+  );
+  expect(
+    (await editRelatedFinancialRowAction("client-installment", undefined, form))
+      .status,
+  ).toBe("success");
+  const saved = await memory.raw.clientPaymentInstallment.findUniqueOrThrow({
+    where: { id: term.id },
+  });
+  expect(saved.basis).toBe("PERCENTAGE");
+  expect(saved.percentageRate?.toString()).toBe("0.3");
+  expect(saved.scheduledAmount.toString()).toBe("30");
+  expect(saved.dueDate?.toISOString().slice(0, 10)).toBe("2026-11-15");
 });
 
 it("edits unassigned installments without requiring a replacement parent", async () => {
@@ -756,6 +819,26 @@ it("edits unassigned installments without requiring a replacement parent", async
   form.set("value", "Retained plan");
   form.set("date", "2026-11-15");
   form.set("amount", "95.4321");
+  expect(
+    await editRelatedFinancialRowAction(
+      "supplier-installment",
+      undefined,
+      form,
+    ),
+  ).toEqual({
+    status: "error",
+    message: expect.stringContaining("Changed since editing"),
+  });
+  form.set(
+    "expectedVersion",
+    paymentTermEditVersion(
+      await memory.active.paymentInstallment.findUniqueOrThrow({
+        where: { id: f.installment.id },
+        include: { settlements: true },
+      }),
+      null,
+    ),
+  );
   expect(
     (
       await editRelatedFinancialRowAction(

@@ -205,6 +205,7 @@ export function ReportsDashboard({
             currency={currency}
             href={links.transactions}
             partial="Current month to date"
+            range={history}
           />
         </section>
         <section
@@ -230,6 +231,7 @@ export function ReportsDashboard({
                 title="Upcoming cash"
                 currency={currency}
                 href={links.forecast}
+                range={forecast}
                 partial={`${formatDateOnly(forecast.start)}–${formatDateOnly(forecast.end)}`}
               />
               <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 border-t pt-3 text-xs">

@@ -239,6 +239,10 @@ export const clientReceiptSchema = z.object({
 });
 
 export const clientReceiptUpdateSchema = clientReceiptSchema.extend({
+  expectedVersion: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   id: requiredUuid("Select a valid Client receipt."),
 });
 
@@ -279,6 +283,10 @@ export const clientBillingInstallmentDeleteSchema = z.object({
 
 export const clientBillingInstallmentUpdateSchema = z
   .object({
+    expectedVersion: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
     basis: z.enum(InstallmentBasis),
     billingDocumentId: requiredUuid("Select a valid Billing document."),
     dueDate: optionalDate,

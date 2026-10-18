@@ -40,6 +40,7 @@ import type { ClientBillingView } from "@/lib/billing/billing";
 type Installment = ClientBillingView["paymentInstallments"][number];
 
 interface InstallmentDraft {
+  expectedVersion: string;
   amount: string;
   basis: "PERCENTAGE" | "FIXED_AMOUNT";
   dueDate: string;
@@ -55,6 +56,7 @@ const initialActionState: BillingActionState = {
 
 function installmentDraft(installment: Installment): InstallmentDraft {
   return {
+    expectedVersion: installment.editVersion ?? "",
     amount: installment.scheduledAmount,
     basis: installment.basis,
     dueDate: installment.dueDate ?? "",
@@ -114,6 +116,7 @@ export function BillingInstallmentEditor({
     const values = state.values;
     const submitted = submittedDraft.current;
     const next: InstallmentDraft = {
+      expectedVersion: values?.editVersion ?? submitted.expectedVersion,
       amount: values?.scheduledAmount ?? submitted.amount,
       basis:
         values?.basis === "PERCENTAGE" || values?.basis === "FIXED_AMOUNT"
@@ -174,6 +177,11 @@ export function BillingInstallmentEditor({
               value={billingDocumentId}
             />
             <input name="id" type="hidden" value={installment.id} />
+            <input
+              name="expectedVersion"
+              type="hidden"
+              value={draft.expectedVersion}
+            />
             <Field error={fieldErrors.label} label="Label" required>
               <input
                 className={inputClassName}
@@ -291,7 +299,7 @@ export function BillingInstallmentEditor({
         <Button
           variant="outline"
           onClick={() => {
-            setDraft(saved);
+            setDraft(installmentDraft(installment));
             setEditing(true);
           }}
         >
@@ -323,7 +331,7 @@ export function BillingInstallmentEditor({
                   <Button
                     onClick={() => {
                       setDeleteMessage("");
-                      setDraft(saved);
+                      setDraft(installmentDraft(installment));
                       setEditing(true);
                     }}
                     size="xs"

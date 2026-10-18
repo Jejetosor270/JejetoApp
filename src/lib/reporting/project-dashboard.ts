@@ -13,7 +13,10 @@ import {
 } from "@/domain/finance/project-dashboard";
 import { difference, sumKnown } from "@/domain/finance/project-control";
 import { reportingAmount } from "@/domain/finance/calculations";
-import { projectFreightBudget } from "@/domain/freight/calculations";
+import {
+  freightRecoveryTarget,
+  projectFreightBudget,
+} from "@/domain/freight/calculations";
 import { calculateInputVatRecovery } from "@/domain/vat/recoverability";
 import { freightExpenseEconomicCost } from "@/lib/freight/expenses";
 import { billingIsIssued } from "@/domain/billing/status";
@@ -163,6 +166,61 @@ export function buildProjectDashboard(input: {
       ),
       note: "Separate Project freight HT.",
     })),
+  ];
+  const freightNonDeductibleVat = freightExpenses.map((expense) => ({
+    label: expense.description,
+    href: expenseHref(expense.id),
+    amount: convert(
+      difference(
+        freightExpenseEconomicCost(expense),
+        expense.costAmountHt.toString(),
+      ),
+      expense.currencyCode,
+      expense.fxRateToReporting,
+    ),
+    note: "Separate freight non-deductible input VAT; added once to the recovery cost basis.",
+  }));
+  // Freight reconciliation converts each source to storage precision before applying its rate.
+  const freightTarget = [
+    ...orders.map((order) => {
+      const cost = convert(
+        order.costs.freight ?? "0",
+        order.orderCurrencyCode,
+        order.costs.purchaseFxRate,
+      );
+      return {
+        label: order.orderNumber,
+        href: `/orders/${order.id}`,
+        amount:
+          cost === null
+            ? null
+            : freightRecoveryTarget(
+                new Decimal(cost).toFixed(4),
+                order.componentPricing.freightMarkupRate,
+              ).toString(),
+        note: "Order freight HT with its effective inherited or overridden freight markup.",
+      };
+    }),
+    ...freightExpenses.map((expense) => {
+      const cost = convert(
+        freightExpenseEconomicCost(expense),
+        expense.currencyCode,
+        expense.fxRateToReporting,
+      );
+      return {
+        label: expense.description,
+        href: expenseHref(expense.id),
+        amount:
+          cost === null
+            ? null
+            : freightRecoveryTarget(
+                new Decimal(cost).toFixed(4),
+                expense.freightMarkupOverrideRate?.toString() ??
+                  project.defaultFreightMarkupRate.toString(),
+              ).toString(),
+        note: "Separate freight economic cost, including non-deductible VAT, with its override or Project freight markup.",
+      };
+    }),
   ];
   const nonDeductibleVat = [
     ...orderRows((order) => {
@@ -387,7 +445,8 @@ export function buildProjectDashboard(input: {
     budget,
     nonDeductibleVat,
     freightCost,
-    freightMarkupRate: project.defaultFreightMarkupRate.toString(),
+    freightNonDeductibleVat,
+    freightTarget,
     freightInvoiced: billingRows(invoices, "freightCoverageHt"),
     freightReceived: input.freightReceived,
     vatOutput: billingRows(invoices, "vatAmount"),

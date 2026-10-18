@@ -15,11 +15,12 @@ it("attributes partial TTC receipts to Invoice freight HT without counting VAT a
   expect(freightReceiptHt("100", "0", "10")).toBeNull();
 });
 
-it("compares freight Invoice and proportionally paid amounts with Project-marked-up HT", () => {
+it("compares freight Invoice and proportionally paid amounts with effective recovery", () => {
   expect(
     projectFreightCoverage({
       supplierHt: "3400",
-      projectMarkup: "0.15",
+      economicCost: "3400",
+      recoveryTarget: "3910.0000",
       clientInvoicedHt: "7245",
       clientPaidHt: "3622.5",
     }),
@@ -32,7 +33,8 @@ it("compares freight Invoice and proportionally paid amounts with Project-marked
   expect(
     projectFreightCoverage({
       supplierHt: null,
-      projectMarkup: "0.15",
+      economicCost: null,
+      recoveryTarget: null,
       clientInvoicedHt: "7245",
       clientPaidHt: null,
     }),

@@ -85,6 +85,10 @@ import {
   updateOrderBillingLink,
 } from "./billing";
 import { getProjectsClientBillingSummaries } from "./reporting";
+import {
+  cashEditVersion,
+  paymentTermEditVersion,
+} from "@/lib/payments/edit-version";
 
 const clientId = "a12b6b9b-10e9-4e42-b93f-38796de4f65a";
 const projectId = "b12b6b9b-10e9-4e42-b93f-38796de4f65a";
@@ -1002,6 +1006,10 @@ describe("Billing persistence", () => {
     });
 
     const result = await updateClientReceipt("actor-1", {
+      expectedVersion: cashEditVersion({
+        billingDocumentId: projectId,
+        installmentId,
+      }),
       amount: "40000.0000",
       billingDocumentId: projectId,
       id: receiptId,
@@ -1083,7 +1091,7 @@ describe("Billing persistence", () => {
   });
 
   it("updates an existing Billing installment in both directions without creating a duplicate", async () => {
-    transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
+    const current = {
       currencyCode: "EUR",
       billingDocument: {
         id: "document-1",
@@ -1095,7 +1103,8 @@ describe("Billing persistence", () => {
       scheduledAmount: new Decimal("30000"),
       matchedInvoices: [],
       receipts: [],
-    });
+    };
+    transaction.clientPaymentInstallment.findUnique.mockResolvedValue(current);
     transaction.clientPaymentInstallment.update
       .mockResolvedValueOnce({
         basis: InstallmentBasis.PERCENTAGE,
@@ -1115,6 +1124,7 @@ describe("Billing persistence", () => {
       });
 
     const percentageResult = await updateClientBillingInstallment("actor-1", {
+      expectedVersion: paymentTermEditVersion(current, "100000"),
       basis: InstallmentBasis.PERCENTAGE,
       billingDocumentId: "document-1",
       dueDate: "2026-09-30",
@@ -1124,6 +1134,7 @@ describe("Billing persistence", () => {
       scheduledAmount: "35000.0000",
     });
     const amountResult = await updateClientBillingInstallment("actor-1", {
+      expectedVersion: paymentTermEditVersion(current, "100000"),
       basis: InstallmentBasis.FIXED_AMOUNT,
       billingDocumentId: "document-1",
       dueDate: "2026-09-30",
@@ -1280,7 +1291,7 @@ describe("Billing persistence", () => {
   });
 
   it("rejects reducing a Billing installment below receipts without an audit write", async () => {
-    transaction.clientPaymentInstallment.findUnique.mockResolvedValue({
+    const current = {
       currencyCode: "EUR",
       billingDocument: {
         id: "document-1",
@@ -1291,10 +1302,12 @@ describe("Billing persistence", () => {
       id: installmentId,
       matchedInvoices: [],
       receipts: [{ amount: new Decimal("20000") }],
-    });
+    };
+    transaction.clientPaymentInstallment.findUnique.mockResolvedValue(current);
 
     await expect(
       updateClientBillingInstallment("actor-1", {
+        expectedVersion: paymentTermEditVersion(current, "100000"),
         basis: InstallmentBasis.FIXED_AMOUNT,
         billingDocumentId: "document-1",
         dueDate: "2026-09-30",

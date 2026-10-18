@@ -41,6 +41,7 @@ import {
   getOrderBillingAllocations,
 } from "./billing";
 import { summarizeClientBillingRecords } from "./reporting";
+import { cashEditVersion } from "@/lib/payments/edit-version";
 
 const credit = {
   id: "credit",
@@ -240,6 +241,11 @@ describe("Billing credits and independent FX", () => {
       const operation =
         action === "edit"
           ? updateClientReceipt("actor", {
+              expectedVersion: cashEditVersion({
+                id: "cash",
+                billingDocumentId: "quote",
+                installmentId: "matched-term",
+              }),
               id: "cash",
               billingDocumentId: "quote",
               installmentId: null,

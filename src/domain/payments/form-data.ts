@@ -10,6 +10,7 @@ export function installmentFormValues(formData: FormData) {
     direction: value(formData, "direction"),
     dueDate: value(formData, "dueDate"),
     expectedFxRate: value(formData, "expectedFxRate"),
+    expectedVersion: value(formData, "expectedVersion"),
     fixedAmount: value(formData, "fixedAmount"),
     id: value(formData, "id"),
     label: value(formData, "label"),
@@ -23,6 +24,7 @@ export function settlementFormValues(formData: FormData) {
   return {
     amount: value(formData, "amount"),
     fxRate: value(formData, "fxRate"),
+    expectedVersion: value(formData, "expectedVersion"),
     installmentId: value(formData, "installmentId"),
     notes: value(formData, "notes"),
     reference: value(formData, "reference"),

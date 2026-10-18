@@ -57,6 +57,9 @@ vi.mock("@/components/billing/billing-term-form", () => ({
 vi.mock("@/components/billing/billing-receipt-editor", () => ({
   BillingReceiptEditor: () => <button>Correct receipt</button>,
 }));
+vi.mock("@/components/billing/receipt-term-assignment", () => ({
+  ReceiptTermAssignment: () => <button>Assign to term</button>,
+}));
 import { PaymentSchedule } from "./payment-schedule";
 import { BillingScheduleManager } from "@/components/billing/billing-schedule-manager";
 

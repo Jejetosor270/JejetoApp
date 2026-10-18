@@ -47,6 +47,7 @@ import { writeAuditEvent } from "@/lib/audit/events";
 import { paginationSkip, type PageInput } from "@/domain/listing/validation";
 import {
   getOrder,
+  getOrderInTransaction,
   listProjectOrders,
   type OrderSummary,
 } from "@/lib/procurement/orders";
@@ -58,6 +59,12 @@ import {
   creditPaymentLimit,
 } from "@/lib/credits/mutation-guards";
 import { hasActiveCredits } from "@/lib/credits/guards";
+import {
+  cashEditVersion,
+  paymentTermEditVersion,
+  paymentVersionMatches,
+  stalePaymentMessage,
+} from "./edit-version";
 
 const installmentInclude = {
   order: {
@@ -86,6 +93,7 @@ type InstallmentRecord = Prisma.PaymentInstallmentGetPayload<{
 }>;
 
 export interface PaymentSettlementView {
+  editVersion?: string;
   amount: string;
   fxRate: string | null;
   id: string;
@@ -95,6 +103,7 @@ export interface PaymentSettlementView {
 }
 
 export interface PaymentInstallmentView {
+  editVersion?: string;
   actualDate: string | null;
   basis: InstallmentBasis;
   clientName: string;
@@ -195,6 +204,7 @@ function installmentView(
     : installmentOutstanding(scheduled, paid);
   const lastSettlement = record.settlements.at(-1);
   return {
+    editVersion: paymentTermEditVersion(record, baseAmount),
     actualDate: lastSettlement
       ? dateToDateOnly(lastSettlement.settledAt)
       : null,
@@ -227,6 +237,7 @@ function installmentView(
     scheduledAmount: scheduled.toString(),
     sequence: record.sequence,
     settlements: record.settlements.map((settlement) => ({
+      editVersion: cashEditVersion(settlement),
       amount: settlement.amount.toString(),
       fxRate: settlement.fxRateToReporting?.toString() ?? null,
       id: settlement.id,
@@ -412,12 +423,99 @@ function amountForInput(
   return new Decimal(input.fixedAmount);
 }
 
-async function assertCurrency(code: string): Promise<void> {
-  const currency = await getDatabase().currency.findFirst({
+async function assertCurrency(
+  code: string,
+  database: Pick<Prisma.TransactionClient, "currency"> = getDatabase(),
+): Promise<void> {
+  const currency = await database.currency.findFirst({
     where: { code, isActive: true },
     select: { code: true },
   });
   if (!currency) throw new PaymentValidationError("Choose an active currency.");
+}
+
+async function requiredTransactionalOrder(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+) {
+  const order = await getOrderInTransaction(tx, orderId);
+  if (!order) throw new PaymentNotFoundError();
+  if (order.status === "CANCELLED")
+    throw new PaymentValidationError(
+      "Reactivate the Order before changing its payment terms.",
+    );
+  return order;
+}
+
+async function assertSupplierSchedule(
+  tx: Prisma.TransactionClient,
+  input: CreateInstallmentInput | UpdateInstallmentInput,
+  base: ReturnType<typeof paymentBase>,
+  amount: Decimal,
+  reportingCurrencyCode: string,
+  current?: InstallmentRecord,
+) {
+  if (input.direction !== "SUPPLIER_PAYMENT" || current?.isCancelled) return;
+  // Historical schedules remain editable without silently rescheduling them.
+  if (
+    current &&
+    amount.eq(current.scheduledAmount) &&
+    input.currencyCode === current.currencyCode &&
+    (input.expectedFxRate
+      ? new Decimal(input.expectedFxRate).eq(
+          current.expectedFxRateToReporting ?? 0,
+        )
+      : current.expectedFxRateToReporting === null)
+  )
+    return;
+  const terms = await tx.paymentInstallment.findMany({
+    where: {
+      orderId: input.orderId,
+      direction: "SUPPLIER_PAYMENT",
+      ...(current ? { id: { not: current.id } } : {}),
+    },
+    include: { settlements: { select: { amount: true } } },
+  });
+  const toBase = (
+    value: Decimal.Value,
+    currency: string,
+    rate: Decimal.Value | null,
+  ) => {
+    if (currency === base.currencyCode) return new Decimal(value);
+    if (new Decimal(value).isZero()) return new Decimal(0);
+    const sourceRate = currency === reportingCurrencyCode ? "1" : rate;
+    const baseRate =
+      base.currencyCode === reportingCurrencyCode ? "1" : base.expectedFxRate;
+    if (!sourceRate || !baseRate)
+      throw new PaymentValidationError(
+        "Review payment currencies and expected FX before extending this schedule.",
+      );
+    return new Decimal(value).mul(sourceRate).div(baseRate);
+  };
+  const scheduled = terms.reduce(
+    (sum, term) =>
+      sum.plus(
+        toBase(
+          term.isCancelled
+            ? term.settlements.reduce(
+                (paid, cash) => paid.plus(cash.amount),
+                new Decimal(0),
+              )
+            : term.scheduledAmount,
+          term.currencyCode,
+          term.expectedFxRateToReporting,
+        ),
+      ),
+    new Decimal(0),
+  );
+  if (
+    scheduled
+      .plus(toBase(amount, input.currencyCode, input.expectedFxRate ?? null))
+      .gt(base.amount)
+  )
+    throw new PaymentValidationError(
+      "The Supplier payment schedule cannot exceed the Order payable. Reduce an existing term before adding more.",
+    );
 }
 
 async function assertCreditedSupplierTermCurrency(
@@ -443,16 +541,24 @@ export async function createInstallment(
   actorId: string,
   input: CreateInstallmentInput,
 ): Promise<void> {
-  const [order] = await Promise.all([
-    requiredOrder(input.orderId),
-    assertCurrency(input.currencyCode),
-  ]);
-  const base = paymentBase(order, input.direction);
-  const amount = amountForInput(input, base);
   const database = getDatabase();
   await database.$transaction(
     async (transaction) => {
+      const order = await requiredTransactionalOrder(
+        transaction,
+        input.orderId,
+      );
+      await assertCurrency(input.currencyCode, transaction);
+      const base = paymentBase(order, input.direction);
+      const amount = amountForInput(input, base);
       await assertCreditedSupplierTermCurrency(transaction, input);
+      await assertSupplierSchedule(
+        transaction,
+        input,
+        base,
+        amount,
+        order.project.reportingCurrencyCode,
+      );
       const nextSequence = await nextInstallmentSequence(
         transaction,
         input.orderId,
@@ -497,44 +603,70 @@ export async function updateInstallment(
   actorId: string,
   input: UpdateInstallmentInput,
 ): Promise<void> {
-  const current = await getDatabase().paymentInstallment.findUnique({
-    where: { id: input.id },
-    include: { settlements: { select: { amount: true } } },
-  });
-  if (!current) throw new PaymentNotFoundError();
-  if (
-    current.orderId !== input.orderId ||
-    current.direction !== input.direction
-  ) {
-    throw new PaymentValidationError(
-      "An installment cannot move to another payment flow.",
-    );
-  }
-  if (
-    current.settlements.length > 0 &&
-    current.currencyCode !== input.currencyCode
-  ) {
-    throw new PaymentValidationError(
-      "Currency cannot change after a payment or receipt is recorded.",
-    );
-  }
-  const [order] = await Promise.all([
-    requiredOrder(input.orderId),
-    assertCurrency(input.currencyCode),
-  ]);
-  const amount = amountForInput(input, paymentBase(order, input.direction));
-  const paid = current.settlements.reduce(
-    (total, settlement) => total.plus(settlement.amount),
-    new Decimal(0),
-  );
-  if (paid.greaterThan(amount)) {
-    throw new PaymentValidationError(
-      "Scheduled amount cannot be reduced below the amount already paid or received.",
-    );
-  }
   await getDatabase().$transaction(
     async (transaction) => {
+      const current = await transaction.paymentInstallment.findUnique({
+        where: { id: input.id },
+        include: installmentInclude,
+      });
+      if (!current) throw new PaymentNotFoundError();
+      if (
+        current.orderId !== input.orderId ||
+        current.direction !== input.direction
+      ) {
+        throw new PaymentValidationError(
+          "An installment cannot move to another payment flow.",
+        );
+      }
+      if (
+        current.settlements.length > 0 &&
+        current.currencyCode !== input.currencyCode
+      ) {
+        throw new PaymentValidationError(
+          "Currency cannot change after a payment or receipt is recorded.",
+        );
+      }
+      const order = await requiredTransactionalOrder(
+        transaction,
+        input.orderId,
+      );
+      await assertCurrency(input.currencyCode, transaction);
+      const base = paymentBase(order, input.direction);
+      if (
+        !paymentVersionMatches(
+          input.expectedVersion,
+          paymentTermEditVersion(current, base.amount),
+        )
+      )
+        throw new PaymentValidationError(stalePaymentMessage);
+      const preservesPercentageAmount =
+        input.basis === InstallmentBasis.PERCENTAGE &&
+        current.basis === InstallmentBasis.PERCENTAGE &&
+        input.currencyCode === current.currencyCode &&
+        new Decimal(input.percentageRate ?? "0").eq(
+          current.percentageRate ?? "0",
+        );
+      const amount = preservesPercentageAmount
+        ? new Decimal(current.scheduledAmount)
+        : amountForInput(input, base);
+      const paid = current.settlements.reduce(
+        (total, settlement) => total.plus(settlement.amount),
+        new Decimal(0),
+      );
+      if (paid.greaterThan(amount)) {
+        throw new PaymentValidationError(
+          "Scheduled amount cannot be reduced below the amount already paid or received.",
+        );
+      }
       await assertCreditedSupplierTermCurrency(transaction, input);
+      await assertSupplierSchedule(
+        transaction,
+        input,
+        base,
+        amount,
+        order.project.reportingCurrencyCode,
+        current,
+      );
       await transaction.paymentInstallment.update({
         where: { id: input.id },
         data: {
@@ -571,73 +703,110 @@ export async function updateInstallmentInline(
   actorId: string,
   input: InlineInstallmentInput,
 ) {
-  const current = await getDatabase().paymentInstallment.findUnique({
-    where: { id: input.id },
-    include: {
-      order: { select: { orderNumber: true } },
-      settlements: { select: { amount: true } },
-    },
-  });
-  if (!current) throw new PaymentNotFoundError();
-  const amount = new Decimal(input.scheduledAmount);
-  const paid = current.settlements.reduce(
-    (total, settlement) => total.plus(settlement.amount),
-    new Decimal(0),
-  );
-  if (paid.greaterThan(amount))
-    throw new PaymentValidationError(
-      "Scheduled amount cannot be reduced below the amount already paid or received.",
-    );
-  const amountChanged = !amount.equals(current.scheduledAmount);
-  return getDatabase().$transaction(async (transaction) => {
-    const installment = await transaction.paymentInstallment.update({
-      where: { id: input.id },
-      data: {
-        ...(amountChanged
-          ? { basis: InstallmentBasis.FIXED_AMOUNT, percentageRate: null }
-          : {}),
-        dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
-        label: input.label,
-        notes: input.notes ?? null,
-        scheduledAmount: amount.toFixed(4),
-        updatedById: actorId,
-      },
-      select: {
-        dueDate: true,
-        id: true,
-        isCancelled: true,
-        label: true,
-        notes: true,
-        scheduledAmount: true,
-      },
-    });
-    await writeAuditEvent(transaction, actorId, {
-      action: "UPDATED",
-      entityId: installment.id,
-      entityReference: `${current.order?.orderNumber ?? "Unassigned"} · ${installment.label}`,
-      entityType: "INSTALLMENT",
-      metadata: { fields: ["dueDate", "label", "notes", "scheduledAmount"] },
-      summary:
-        "Updated a payment or receipt installment from the Payments table.",
-    });
-    const outstanding = installment.isCancelled
-      ? new Decimal(0)
-      : installmentOutstanding(installment.scheduledAmount, paid);
-    return {
-      dueDate: dateToDateOnly(installment.dueDate),
-      label: installment.label,
-      notes: installment.notes,
-      outstandingAmount: outstanding.toString(),
-      scheduledAmount: installment.scheduledAmount.toString(),
-      status: derivePaymentStatus({
+  return getDatabase().$transaction(
+    async (transaction) => {
+      const current = await transaction.paymentInstallment.findUnique({
+        where: { id: input.id },
+        include: installmentInclude,
+      });
+      if (!current) throw new PaymentNotFoundError();
+      const order = current.orderId
+        ? await requiredTransactionalOrder(transaction, current.orderId)
+        : null;
+      const base = order ? paymentBase(order, current.direction) : null;
+      if (
+        !paymentVersionMatches(
+          input.expectedVersion,
+          paymentTermEditVersion(current, null),
+        )
+      )
+        throw new PaymentValidationError(stalePaymentMessage);
+      const amount = new Decimal(input.scheduledAmount);
+      const paid = current.settlements.reduce(
+        (total, settlement) => total.plus(settlement.amount),
+        new Decimal(0),
+      );
+      if (paid.greaterThan(amount))
+        throw new PaymentValidationError(
+          "Scheduled amount cannot be reduced below the amount already paid or received.",
+        );
+      const amountChanged = !amount.equals(current.scheduledAmount);
+      if (base && current.orderId)
+        await assertSupplierSchedule(
+          transaction,
+          {
+            basis: "FIXED_AMOUNT",
+            currencyCode: current.currencyCode,
+            direction: current.direction,
+            fixedAmount: amount.toString(),
+            label: input.label,
+            orderId: current.orderId,
+            ...(current.expectedFxRateToReporting
+              ? { expectedFxRate: current.expectedFxRateToReporting.toString() }
+              : {}),
+          },
+          base,
+          amount,
+          order?.project.reportingCurrencyCode ?? "",
+          current,
+        );
+      const installment = await transaction.paymentInstallment.update({
+        where: { id: input.id },
+        data: {
+          ...(amountChanged
+            ? { basis: InstallmentBasis.FIXED_AMOUNT, percentageRate: null }
+            : {}),
+          dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
+          label: input.label,
+          notes: input.notes ?? null,
+          scheduledAmount: amount.toFixed(4),
+          updatedById: actorId,
+        },
+        select: {
+          basis: true,
+          percentageRate: true,
+          updatedAt: true,
+          dueDate: true,
+          id: true,
+          isCancelled: true,
+          label: true,
+          notes: true,
+          scheduledAmount: true,
+        },
+      });
+      await writeAuditEvent(transaction, actorId, {
+        action: "UPDATED",
+        entityId: installment.id,
+        entityReference: `${current.order?.orderNumber ?? "Unassigned"} · ${installment.label}`,
+        entityType: "INSTALLMENT",
+        metadata: { fields: ["dueDate", "label", "notes", "scheduledAmount"] },
+        summary:
+          "Updated a payment or receipt installment from the Payments table.",
+      });
+      const outstanding = installment.isCancelled
+        ? new Decimal(0)
+        : installmentOutstanding(installment.scheduledAmount, paid);
+      return {
+        editVersion: paymentTermEditVersion(
+          { ...current, ...installment },
+          null,
+        ),
         dueDate: dateToDateOnly(installment.dueDate),
-        isCancelled: installment.isCancelled,
-        paidAmount: paid,
-        scheduledAmount: installment.scheduledAmount,
-        today: businessToday(),
-      }),
-    };
-  });
+        label: installment.label,
+        notes: installment.notes,
+        outstandingAmount: outstanding.toString(),
+        scheduledAmount: installment.scheduledAmount.toString(),
+        status: derivePaymentStatus({
+          dueDate: dateToDateOnly(installment.dueDate),
+          isCancelled: installment.isCancelled,
+          paidAmount: paid,
+          scheduledAmount: installment.scheduledAmount,
+          today: businessToday(),
+        }),
+      };
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }
 
 export async function recordSettlement(
@@ -769,6 +938,10 @@ export async function updateSettlement(
         },
       });
       if (!record) throw new PaymentNotFoundError();
+      if (
+        !paymentVersionMatches(input.expectedVersion, cashEditVersion(record))
+      )
+        throw new PaymentValidationError(stalePaymentMessage);
       await assertCreditSafeMutation(transaction, "PaymentSettlement", [
         record.id,
       ]);
@@ -951,16 +1124,36 @@ export async function applyPaymentPreset(
     preset: keyof typeof paymentSchedulePresets;
   },
 ): Promise<void> {
-  const order = await requiredOrder(input.orderId);
-  const base = paymentBase(order, input.direction);
-  if (base.amount.isZero()) {
-    throw new PaymentValidationError(
-      "A preset requires a non-zero payment base.",
-    );
-  }
   const rates = paymentSchedulePresets[input.preset];
   await getDatabase().$transaction(
     async (transaction) => {
+      const order = await requiredTransactionalOrder(
+        transaction,
+        input.orderId,
+      );
+      const base = paymentBase(order, input.direction);
+      if (base.amount.isZero())
+        throw new PaymentValidationError(
+          "A preset requires a non-zero payment base.",
+        );
+      await assertSupplierSchedule(
+        transaction,
+        {
+          basis: "FIXED_AMOUNT",
+          currencyCode: base.currencyCode,
+          direction: input.direction,
+          fixedAmount: base.amount.toString(),
+          label: "Schedule",
+          orderId: input.orderId,
+        },
+        base,
+        rates.reduce(
+          (sum, rate) =>
+            sum.plus(scheduledAmountFromPercentage(base.amount, rate)),
+          new Decimal(0),
+        ),
+        order.project.reportingCurrencyCode,
+      );
       const firstSequence = await nextInstallmentSequence(
         transaction,
         input.orderId,

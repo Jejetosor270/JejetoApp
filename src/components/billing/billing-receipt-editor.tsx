@@ -27,6 +27,7 @@ type Receipt = ClientBillingView["receipts"][number];
 type Installment = ClientBillingView["paymentInstallments"][number];
 
 interface ReceiptDraft {
+  expectedVersion: string;
   amount: string;
   fxRate: string;
   installmentId: string;
@@ -42,6 +43,7 @@ const initialActionState: BillingActionState = {
 
 function receiptDraft(receipt: Receipt): ReceiptDraft {
   return {
+    expectedVersion: receipt.editVersion ?? "",
     amount: receipt.amount,
     fxRate: receipt.fxRate ?? "",
     installmentId: receipt.installmentId ?? "",
@@ -85,6 +87,7 @@ export function BillingReceiptEditor({
     const values = state.values;
     const submitted = submittedDraft.current;
     const next: ReceiptDraft = {
+      expectedVersion: values?.editVersion ?? submitted.expectedVersion,
       amount: values?.amount ?? submitted.amount,
       fxRate: values?.fxRate ?? submitted.fxRate,
       installmentId: values?.installmentId ?? submitted.installmentId,
@@ -131,6 +134,11 @@ export function BillingReceiptEditor({
               value={billingDocumentId}
             />
             <input name="id" type="hidden" value={receipt.id} />
+            <input
+              name="expectedVersion"
+              type="hidden"
+              value={draft.expectedVersion}
+            />
             <Field error={fieldErrors.receivedAt} label="Receipt date" required>
               <DateInput
                 className={inputClassName}
@@ -220,7 +228,7 @@ export function BillingReceiptEditor({
               <Button
                 variant="outline"
                 onClick={() => {
-                  setDraft(saved);
+                  setDraft(receiptDraft(receipt));
                   setEditing(true);
                 }}
               >
@@ -297,7 +305,7 @@ export function BillingReceiptEditor({
                 <Button
                   onClick={() => {
                     setDeleteMessage("");
-                    setDraft(saved);
+                    setDraft(receiptDraft(receipt));
                     setEditing(true);
                   }}
                   size="xs"

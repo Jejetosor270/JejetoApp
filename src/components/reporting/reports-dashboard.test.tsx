@@ -46,6 +46,12 @@ describe("Reports dashboard", () => {
     expect(html).toContain("01/05/2026–07/10/2026");
     expect(html).toContain("Current month to date");
     expect(html).toContain(
+      'href="/reports?view=payments&amp;projectId=example&amp;dateFrom=2026-10-01&amp;dateTo=2026-10-07"',
+    );
+    expect(html).toContain(
+      'href="/reports?view=cash-flow&amp;projectId=example&amp;dateFrom=2026-10-07&amp;dateTo=2026-10-31"',
+    );
+    expect(html).toContain(
       'href="/reports?view=payments&amp;projectId=example"',
     );
     expect(html).toContain("-20 000.00 EUR");

@@ -54,8 +54,15 @@ import {
 } from "@/domain/finance/order-pricing";
 import {
   type OrderDraft,
+  manualPurchaseVatNeedsReview,
   updateOrderDraftField,
 } from "@/domain/procurement/order-draft";
+import {
+  proposePurchaseVatBase,
+  purchaseVatCostKeys,
+  purchaseVatCostReviewKey,
+  type PurchaseVatCostKey,
+} from "@/domain/finance/purchase-vat-base";
 import { humanPercentageToFraction } from "@/domain/validation/percentage";
 import { normalizeDecimalInput } from "@/domain/validation/numeric";
 import {
@@ -262,9 +269,44 @@ function InputVatFields({
   );
   const errorClass = (name: string) =>
     `${inputClassName}${fieldErrors[name] ? " border-destructive focus-visible:border-destructive" : ""}`;
+  const taxableCosts = draft.inputVatTaxableCosts ?? [...purchaseVatCostKeys];
+  const costLabels: Record<PurchaseVatCostKey, string> = {
+    purchaseCost: "Product",
+    freight: "Freight",
+    customsDuties: "Customs / duties",
+    miscellaneous: "Other costs",
+  };
   return (
     <section className="bg-background/60 rounded-md border p-3">
       <h4 className="text-xs font-semibold">Purchase VAT</h4>
+      <fieldset className="mt-3 space-y-2">
+        <legend className="text-xs font-medium">Taxable costs</legend>
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+          {purchaseVatCostKeys.map((key) => (
+            <label className="flex items-center gap-2 text-xs" key={key}>
+              <input
+                type="checkbox"
+                checked={taxableCosts.includes(key)}
+                onChange={(event) =>
+                  onChange(
+                    "inputVatTaxableCosts",
+                    event.target.checked
+                      ? [...taxableCosts, key]
+                      : taxableCosts.filter((item) => item !== key),
+                  )
+                }
+              />
+              {costLabels[key]}
+            </label>
+          ))}
+        </div>
+        <p className="text-muted-foreground text-xs">
+          Review the costs taxed on this invoice.
+          {draft.inputVatBaseIsManual
+            ? " Selections apply only with Use selected costs."
+            : " The suggested base follows the selected costs."}
+        </p>
+      </fieldset>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <Field error={fieldErrors.inputVatTreatment} label="Treatment">
           <select
@@ -330,11 +372,16 @@ function InputVatFields({
               className="h-auto p-0 text-xs"
               onClick={() => onChange("inputVatBaseIsManual", false)}
             >
-              Use purchase HT
+              Use selected costs
             </Button>
           ) : (
             <p className="text-muted-foreground text-xs">
-              Follows Product purchase HT until manually edited.
+              Follows selected costs until manually edited.
+            </p>
+          )}
+          {manualPurchaseVatNeedsReview(draft) && (
+            <p className="text-warning-foreground text-xs" role="status">
+              Costs changed. Review the manual VAT base before saving.
             </p>
           )}
         </div>
@@ -486,8 +533,12 @@ export function OrderForm({
             : null),
     ),
     inputVatTaxableBase:
-      order?.costs.inputVat?.taxableBase ?? order?.costs.purchaseCost ?? "",
+      order?.costs.inputVat?.taxableBase ??
+      proposePurchaseVatBase(order?.costs ?? {}) ??
+      "",
     inputVatBaseIsManual: order?.costs.inputVat?.taxableBase != null,
+    inputVatTaxableCosts: [...purchaseVatCostKeys],
+    inputVatReviewedCosts: purchaseVatCostReviewKey(order?.costs ?? {}),
     inputVatTreatment: order?.costs.inputVat?.treatment ?? "",
     leadTimeWeeks: order?.leadTimeWeeks?.toString() ?? "",
     miscellaneous: order?.costs.miscellaneous ?? "",

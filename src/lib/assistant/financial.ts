@@ -77,7 +77,7 @@ const topics: Record<
       "freightPaidGap",
     ],
     paragraphs: [
-      "Freight cost includes Order freight and separate Project freight HT once. The target applies the Project default freight markup; it does not change Order prices or Billing.",
+      "Freight cost is pure HT. The recovery target includes separate freight-expense non-deductible VAT and applies each Order or expense's effective freight markup, including overrides. It matches Reports and does not change Order prices or Billing.",
       "Invoiced and paid coverage compare Client freight HT with that target. Freight received is a capped reporting attribution of net actual cash after credits and refunds, using actual cash FX; it is not an extra receipt or revenue.",
     ],
   },
@@ -97,6 +97,8 @@ const labels: Partial<Record<ProjectMetricKey, string>> = {
   toCollect: "To collect TTC",
   toPay: "To pay TTC",
   freightCost: "Freight cost HT",
+  freightNonDeductibleVat: "Non-deductible freight VAT",
+  freightEconomicCost: "Freight economic cost",
   freightTarget: "Freight target HT",
   freightInvoiced: "Freight invoiced HT",
   freightReceived: "Freight received HT",

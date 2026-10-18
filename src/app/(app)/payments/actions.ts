@@ -1,6 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import {
+  isPaymentWriteConflict,
+  stalePaymentMessage,
+} from "@/lib/payments/edit-version";
 
 import type { PaymentActionState } from "@/domain/payments/action-state";
 import type { BulkActionState } from "@/domain/deletion/action-state";
@@ -46,6 +50,12 @@ function refreshPaymentViews(): void {
 }
 
 function errorState(error: unknown): PaymentActionState {
+  if (isPaymentWriteConflict(error))
+    return {
+      formError: stalePaymentMessage,
+      message: stalePaymentMessage,
+      status: "error",
+    };
   if (isExpectedPaymentError(error)) {
     return {
       formError: error.message,

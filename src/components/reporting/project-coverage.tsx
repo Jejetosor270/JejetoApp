@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { ProjectControl } from "@/lib/reporting/project-control";
 import {
   formatMoney,
-  formatRate,
   formatSignedMoney,
 } from "@/domain/procurement/presentation";
 
@@ -79,15 +78,15 @@ export function ProjectCoverage({
       <section className="record-surface">
         <h2 className="text-sm font-semibold">Freight recovery surplus</h2>
         <p className="text-muted-foreground mt-1 text-xs">
-          Order freight plus Project freight expenses, excluding VAT. Project
-          freight markup: {formatRate(freight.projectMarkup)}.
+          Effective recovery includes each Order and freight expense&apos;s
+          applicable markup, including overrides.
         </p>
         <CoverageFigures
           currency={data.currency}
           values={[
-            ["Recorded Supplier freight HT", freight.supplierHt],
-            ["Supplier Freight Project markup HT", freight.supplierMarkupHt],
-            ["Project-default freight target HT", freight.supplierSellHt],
+            ["Freight cost HT", freight.supplierHt],
+            ["Freight markup HT", freight.supplierMarkupHt],
+            ["Freight target HT", freight.supplierSellHt],
           ]}
         />
         <CoverageFigures
@@ -106,19 +105,23 @@ export function ProjectCoverage({
           <CoverageFigures
             currency={data.currency}
             values={[
-              [
-                "Invoiced less Project-default target HT",
-                freight.invoicedCoverageHt,
-                true,
-              ],
-              [
-                "Received less Project-default target HT",
-                freight.paidCoverageHt,
-                true,
-              ],
+              ["Invoiced coverage HT", freight.invoicedCoverageHt, true],
+              ["Paid coverage HT", freight.paidCoverageHt, true],
             ]}
           />
         </div>
+        <details className="mt-4 border-t pt-3">
+          <summary className="cursor-pointer text-xs font-medium">
+            Recovery cost basis
+          </summary>
+          <CoverageFigures
+            currency={data.currency}
+            values={[
+              ["Non-deductible freight VAT", freight.nonDeductibleVat],
+              ["Freight economic cost", freight.economicCost],
+            ]}
+          />
+        </details>
         {(freight.invoicedCoverageHt === null ||
           freight.paidCoverageHt === null) && (
           <p role="status" className="text-warning-foreground mt-3 text-xs">

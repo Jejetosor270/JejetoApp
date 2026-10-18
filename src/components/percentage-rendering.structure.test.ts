@@ -42,9 +42,17 @@ describe("financial percentage presentation boundaries", () => {
     ).toContain(marker.replace(/\s+/g, ""));
   });
 
-  it("keeps freight coverage markup on the shared rate formatter", () => {
+  it("shows effective freight recovery money without implying one Project markup rate", () => {
     const coverage = source("src/components/reporting/project-coverage.tsx");
-    expect(coverage).toContain("formatRate(freight.projectMarkup)");
+    expect(coverage).toContain("formatMoney(value, currency)");
+    expect(coverage).toContain(
+      '["Freight markup HT", freight.supplierMarkupHt]',
+    );
+    expect(coverage).toContain('["Freight target HT", freight.supplierSellHt]');
+    expect(coverage).toContain(
+      '["Freight economic cost", freight.economicCost]',
+    );
+    expect(coverage).not.toContain("freight.projectMarkup");
     expect(coverage).toContain("Client Freight paid HT (proportional)");
   });
 });

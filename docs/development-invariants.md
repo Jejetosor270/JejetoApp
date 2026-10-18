@@ -119,9 +119,11 @@
 
 ## Reviewed amount autofill
 
-- The full Order editor proposes Product purchase HT as the Purchase VAT taxable
-  base and follows purchase edits until the employee edits the base. Saved bases,
-  including explicit zero, are retained; Use purchase HT explicitly resumes autofill.
+- The full Order editor proposes the sum of reviewed Product, Freight,
+  Customs/duties and Other HT costs as the Purchase VAT taxable base. Employees can
+  exclude non-taxable components; selected cost edits update the suggestion once.
+  Saved/manual bases, including explicit zero, are retained; Use selected costs
+  explicitly resumes autofill. Changes to costs flag a manual base for review.
   Suggested bases do not submit VAT data while treatment remains Not recorded.
   No VAT treatment, rate, recoverability or amount override is inferred or changed.
 - New Billing allocation drawers propose the selected Order's existing Sell HT basis
@@ -129,6 +131,34 @@
   proposal blank. Explicitly choosing another Order proposes its amount; unrelated
   edits and failed saves preserve the draft. Existing allocations are never replaced
   by defaults, and saving remains an explicit, validated action. No migration needed.
+
+## Financial reliability — Batch 1
+
+- Billing term remaining balances are capped by the authoritative Invoice balance,
+  including Invoice-level receipts. Only receipts actually assigned to a term count
+  as that term's received cash. Invoice-level coverage and credit adjustments remain
+  distinguishable from Paid; partial coverage is shown without inventing a receipt.
+  Unlike-currency or ambiguous matched terms require review rather than a zero balance.
+- ADMIN/MANAGER can assign an existing Invoice-level receipt to one eligible term
+  through Assign to term. Amount, receipt date, FX and history remain unchanged, with
+  ownership, currency, cancellation, term capacity and Invoice limits rechecked in an
+  audited transaction. One receipt is not split across terms; it can remain Invoice-level.
+- Supplier/Billing term and actual cash corrections require the opening record version.
+  Stale or concurrent saves fail safely and preserve the draft. Refreshing data does
+  not silently update an open draft's version; closing/reopening loads the latest values.
+  Financial reads and dependent writes share serializable transactions.
+- New or increased Supplier schedules cannot exceed the current payable. Add payment
+  term proposes the comparable unscheduled balance; presets do not append a duplicate
+  full schedule. Historical terms are not silently rescheduled after cost changes.
+- Project freight recovery uses the same effective source markups and economic freight
+  cost as Reports. Raw freight HT and non-deductible expense VAT remain distinguishable;
+  the Project planning allowance is unchanged. Source details reconcile to the headline.
+- Related Billing lists show Document date, Next payment due or Paid. Actual and baseline
+  forecast chart links retain business filters and narrow to the clicked month, clipped
+  to the chart period. Timing scenarios retain the original scheduled-source context.
+- Attention shows actionable source warnings instead of redundant aggregate warnings.
+  Invoice-level receipts do not generate false unpaid-date or schedule-gap alerts;
+  genuine saved schedule excess remains a review item. No schema/migration is required.
 
 ## Operational financial control — Phase 3
 
@@ -810,7 +840,7 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 - Financials category costs and cost-plus targets are strictly HT. The separate economic bridge adds Order and Project-freight non-deductible VAT once. Existing economic profit/VAT calculations remain authoritative.
 - Project budget requires explicit Merchandise, calculated Freight and Other/services amounts. Nullable `estimatedOtherCostHt` is unknown until reviewed; an entered zero is an explicit zero budget. No historical backfill. Migration `20260922000000_project_other_budget` is prepared; deployment is a separate action.
 - Overall Budgeted Sell follows `targetMode`: EXPECTED_SELL uses the approved overall value with category targets marked Not allocated; MARKUP uses complete approved category budgets and component rates.
-- Distinct names identify different bases: Billing less cost, Billing less Order sell, Unallocated Invoice HT, Cash balance and Freight recovery surplus. Project-default freight target, applicable-markup recovery target and allocated billing minus freight cost remain different established formulas.
+- Distinct names identify different bases: Billing less cost, Billing less Order sell, Unallocated Invoice HT, Cash balance and Freight recovery surplus. Project and Reports use one effective freight recovery target: applicable Order freight markup plus Project-expense markup on economic freight cost. The breakdown distinguishes raw HT, non-deductible expense VAT and markup. The Project planning allowance and allocated Billing less freight cost remain distinct.
 - Full Order/Billing financial editors and Billing allocation drawers carry a version of the record and financial dependencies. Stale saves are rejected with changed field/group names while retaining drafts. Transactions are serializable. Closing/reopening refreshes the edit snapshot; a refreshed page must not silently bless a stale draft.
 - Simple text/date cells remain inline; money and relationship choices use contextual drawers. Derived totals link to their authoritative source editor. Billing has one status control in its header; Reference is primary and short description is secondary. Legacy Order title stays secondary to Reference and separate from Project Package grouping.
 - Due-date display uses the earliest unpaid term, with no Client document fallback. Date edits affect that term only, never the whole schedule. Cash calendars use remaining TTC, show original scheduled TTC separately, identify Quote planning and Invoice expectations, and list Issue invoice reminders separately.

@@ -44,11 +44,12 @@ const data: ProjectControl = {
     budget: [],
     nonDeductibleVat: [],
     freightCost: [],
+    freightNonDeductibleVat: [],
+    freightTarget: [],
     freightInvoiced: [],
     freightReceived: [],
     vatOutput: [],
     vatInput: [],
-    freightMarkupRate: "0.15",
     alerts: [],
   }),
   overview: projectOverview({
@@ -100,7 +101,8 @@ const data: ProjectControl = {
   }),
   freightCoverage: projectFreightCoverage({
     supplierHt: "100",
-    projectMarkup: "0.15",
+    economicCost: "100",
+    recoveryTarget: "115.0000",
     clientInvoicedHt: "150",
     clientPaidHt: "75",
   }),
@@ -157,4 +159,37 @@ it("separates actual TTC cash from proportional HT freight coverage and exposes 
   expect(warning).toContain("Cash coverage is incomplete");
   expect(warning).toContain("Freight coverage is incomplete");
   expect(warning).toContain("Review receipts");
+});
+
+it("renders the effective mixed-markup target with its VAT cost bridge", () => {
+  const html = renderToStaticMarkup(
+    <ProjectCoverage
+      projectId="test"
+      showCash={false}
+      data={{
+        ...data,
+        freightCoverage: projectFreightCoverage({
+          supplierHt: "200",
+          economicCost: "220",
+          // Order: 100 × 1.30; freight expense: (100 + 20 VAT) × 1.15.
+          recoveryTarget: "268",
+          clientInvoicedHt: "300",
+          clientPaidHt: "250",
+        }),
+      }}
+    />,
+  );
+  for (const value of [
+    "200.00 EUR",
+    "48.00 EUR",
+    "268.00 EUR",
+    "20.00 EUR",
+    "220.00 EUR",
+    "+32.00 EUR",
+    "-18.00 EUR",
+    "Recovery cost basis",
+  ])
+    expect(html).toContain(value);
+  expect(html).not.toContain("15%");
+  expect(html).not.toContain("30%");
 });

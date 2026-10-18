@@ -29,7 +29,11 @@ import {
   getCreditWorkspace,
   recordCreditRefund,
 } from "./service";
-import { createInstallment, updateInstallment } from "@/lib/payments/payments";
+import {
+  createInstallment,
+  getOrderPaymentSummary,
+  updateInstallment,
+} from "@/lib/payments/payments";
 
 let memory: Awaited<ReturnType<typeof prismaMemoryDatabase>>;
 let projectId: string;
@@ -638,6 +642,9 @@ describe("reviewed credits and actual refunds through real Prisma", () => {
       },
     });
     await createCredit(await creditInput(scope, "20"));
+    const expectedVersion = (
+      await getOrderPaymentSummary(source.id)
+    ).supplier.installments.find((row) => row.id === term.id)?.editVersion;
     const input = {
       orderId: source.id,
       direction: "SUPPLIER_PAYMENT" as const,
@@ -646,6 +653,7 @@ describe("reviewed credits and actual refunds through real Prisma", () => {
       currencyCode: "USD",
       label: "Reviewed payment",
       dueDate: "2026-11-01",
+      expectedVersion,
     };
     await expect(createInstallment(state.actorId, input)).rejects.toThrow(
       /original Order currency/,
@@ -664,14 +672,21 @@ describe("reviewed credits and actual refunds through real Prisma", () => {
       ...input,
       id: term.id,
       currencyCode: "EUR",
-      fixedAmount: "100",
+      fixedAmount: "80",
     });
     const edited = await memory.raw.paymentInstallment.findUniqueOrThrow({
       where: { id: term.id },
     });
-    expect(edited.scheduledAmount.toString()).toBe("100");
+    expect(edited.scheduledAmount.toString()).toBe("80");
     expect(edited.dueDate?.toISOString().slice(0, 10)).toBe("2026-11-01");
-    await createInstallment(state.actorId, { ...input, currencyCode: "EUR" });
+    await expect(
+      createInstallment(state.actorId, { ...input, currencyCode: "EUR" }),
+    ).rejects.toThrow(/cannot exceed the Order payable/);
+    await createInstallment(state.actorId, {
+      ...input,
+      currencyCode: "EUR",
+      fixedAmount: "20",
+    });
     expect(
       await memory.raw.paymentInstallment.count({
         where: { orderId: source.id },

@@ -12,6 +12,10 @@ import { billingIsIssued } from "@/domain/billing/status";
 import { recordPaymentStatusLabel } from "@/domain/payments/record-status";
 import type { OrderSummary } from "@/lib/procurement/orders";
 import type { ClientBillingView } from "@/lib/billing/billing";
+import {
+  cashEditVersion,
+  paymentTermEditVersion,
+} from "@/lib/payments/edit-version";
 import { relatedHref, type RelatedRow, type RelatedTableData } from "./types";
 
 export const projectSelect = {
@@ -48,33 +52,69 @@ export const billingSelect = {
   totalTtc: true,
   isCancelled: true,
 } satisfies Prisma.ClientBillingDocumentSelect;
+const cashVersionSelect = {
+  id: true,
+  updatedAt: true,
+  amount: true,
+  installmentId: true,
+  fxRateToReporting: true,
+  reference: true,
+  notes: true,
+} as const;
+const supplierCashVersionSelect = {
+  ...cashVersionSelect,
+  settledAt: true,
+} satisfies Prisma.PaymentSettlementSelect;
+const clientCashVersionSelect = {
+  ...cashVersionSelect,
+  billingDocumentId: true,
+  receivedAt: true,
+} satisfies Prisma.ClientReceiptSelect;
 export const supplierInstallmentSelect = {
   id: true,
+  updatedAt: true,
+  orderId: true,
+  basis: true,
+  expectedFxRateToReporting: true,
+  percentageRate: true,
+  notes: true,
   label: true,
   direction: true,
   dueDate: true,
   scheduledAmount: true,
   currencyCode: true,
   isCancelled: true,
+  settlements: { select: supplierCashVersionSelect },
   order: { select: orderSelect },
 } satisfies Prisma.PaymentInstallmentSelect;
 export const clientInstallmentSelect = {
   id: true,
+  updatedAt: true,
+  billingDocumentId: true,
+  basis: true,
+  expectedFxRateToReporting: true,
+  percentageRate: true,
+  notes: true,
   label: true,
   dueDate: true,
   scheduledAmount: true,
   currencyCode: true,
   isCancelled: true,
+  receipts: { select: clientCashVersionSelect },
   billingDocument: { select: billingSelect },
 } satisfies Prisma.ClientPaymentInstallmentSelect;
 export const paymentSelect = {
+  ...supplierCashVersionSelect,
   id: true,
   amount: true,
   settledAt: true,
   reference: true,
-  installment: { select: supplierInstallmentSelect },
+  installment: {
+    select: { ...supplierInstallmentSelect, settlements: false },
+  },
 } satisfies Prisma.PaymentSettlementSelect;
 export const receiptSelect = {
+  ...clientCashVersionSelect,
   id: true,
   amount: true,
   receivedAt: true,
@@ -255,8 +295,8 @@ export function projectBillingsTable(rows: ClientBillingView[]) {
     [
       "Reference",
       "Type",
-      "Invoice date",
-      "Due date",
+      "Document date",
+      "Next payment due",
       "Invoiced HT",
       "Received TTC",
       "Remaining TTC",
@@ -272,14 +312,14 @@ export function projectBillingsTable(rows: ClientBillingView[]) {
         cells: [
           document.reference,
           formatEnumLabel(document.documentType),
-          document.documentType === "INVOICE"
-            ? formatDateOnly(document.documentDate)
-            : "Not applicable",
-          document.isCancelled || document.status === "PAID"
+          formatDateOnly(document.documentDate),
+          document.isCancelled
             ? "Not applicable"
-            : document.dueDate
-              ? formatDateOnly(document.dueDate)
-              : "Date needed",
+            : document.status === "PAID"
+              ? "Paid"
+              : document.dueDate
+                ? formatDateOnly(document.dueDate)
+                : "Date needed",
           issued
             ? formatMoney(document.totalHt, document.currencyCode)
             : "Not invoiced",
@@ -293,7 +333,7 @@ export function projectBillingsTable(rows: ClientBillingView[]) {
         ],
       };
     }),
-    "Issued Invoices show document HT and collection balances TTC. Quotes and unissued documents remain plans.",
+    "Document date is the Quote, planned Invoice or issued Invoice date. Next payment due comes only from unpaid terms; paid dates remain in payment history. Quotes and unissued documents remain plans.",
     [4, 5, 6],
   );
 }
@@ -305,6 +345,7 @@ export function supplierInstallmentsTable(rows: SupplierInstallment[]) {
     rows.filter(present).map((r) => ({
       id: r.id,
       href: relatedHref("supplier-installment", r.id),
+      editVersion: paymentTermEditVersion(r, null),
       editFields: cashEditFields(
         2,
         3,
@@ -332,6 +373,10 @@ export function clientInstallmentsTable(rows: ClientInstallment[]) {
     rows.filter(present).map((r) => ({
       id: r.id,
       href: relatedHref("client-installment", r.id),
+      editVersion: paymentTermEditVersion(
+        r,
+        r.billingDocument?.totalTtc ?? null,
+      ),
       editFields: cashEditFields(
         2,
         3,
@@ -359,6 +404,7 @@ export function paymentsTable(rows: Payment[]) {
     rows.filter(present).map((r) => ({
       id: r.id,
       href: relatedHref("payment", r.id),
+      editVersion: cashEditVersion(r),
       editValue: r.reference ?? "",
       editFields: cashEditFields(
         3,
@@ -387,6 +433,7 @@ export function receiptsTable(rows: Receipt[]) {
     rows.filter(present).map((r) => ({
       id: r.id,
       href: relatedHref("receipt", r.id),
+      editVersion: cashEditVersion(r),
       editValue: r.reference ?? "",
       editFields: cashEditFields(
         2,

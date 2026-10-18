@@ -1,6 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import {
+  isPaymentWriteConflict,
+  stalePaymentMessage,
+} from "@/lib/payments/edit-version";
 
 import {
   billingFreightEditSchema,
@@ -406,6 +410,12 @@ export async function updateClientBillingInlineAction(
 }
 
 function expectedBillingError(error: unknown): BillingActionState | null {
+  if (isPaymentWriteConflict(error))
+    return {
+      formError: stalePaymentMessage,
+      message: stalePaymentMessage,
+      status: "error",
+    };
   if (
     error instanceof ClientBillingValidationError ||
     error instanceof ClientBillingNotFoundError

@@ -31,6 +31,7 @@ import {
   getOrderRelations,
   getBillingRelations,
 } from "./records";
+import { paymentSelect, supplierInstallmentSelect } from "./projections";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const project = {
@@ -48,6 +49,17 @@ beforeEach(() => {
   mock.projectBilling.mockResolvedValue([]);
   for (const model of Object.values(mock.db))
     if ("findMany" in model) model.findMany.mockResolvedValue([]);
+});
+
+it("loads sibling cash once for a term snapshot, not again for every payment row", () => {
+  expect(supplierInstallmentSelect.settlements).toEqual({
+    select: expect.objectContaining({
+      id: true,
+      updatedAt: true,
+      amount: true,
+    }),
+  });
+  expect(paymentSelect.installment.select.settlements).toBe(false);
 });
 
 it("scopes Project tables to its Orders, Billing, installments and actual cash with no aggregation", async () => {
@@ -195,6 +207,18 @@ it("keeps Project Billing descriptions, explicit missing dates and plans outside
       "Not collectible",
     ]);
   }
+  expect(result?.columns.slice(2, 4)).toEqual([
+    "Document date",
+    "Next payment due",
+  ]);
+  expect(result?.rows[2]?.cells[2]).toBe("01/10/2026");
+  mock.projectBilling.mockResolvedValue([
+    { ...invoice, status: "PAID", paid: "120", outstanding: "0" },
+  ]);
+  const paid = (await getProjectRelations(id, { includeCash: false })).find(
+    (table) => table.id === "billing",
+  );
+  expect(paid?.rows[0]?.cells[3]).toBe("Paid");
 });
 
 it("never places linked Billing receipts or Client installments on Orders", async () => {

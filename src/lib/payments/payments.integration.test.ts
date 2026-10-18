@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const transaction = vi.hoisted(() => ({
+  currency: { findFirst: vi.fn() },
   financialCredit: { count: vi.fn().mockResolvedValue(0) },
   paymentInstallment: {
     create: vi.fn(),
     count: vi.fn(),
     deleteMany: vi.fn(),
     findFirst: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     findUnique: vi.fn(),
     update: vi.fn(),
   },
@@ -33,7 +35,11 @@ vi.mock("@/lib/payments/sequence", () => ({
 }));
 import { trashInTransaction } from "@/lib/trash/service";
 vi.mock("@/lib/db", () => ({ getDatabase: () => database }));
-vi.mock("@/lib/procurement/orders", () => ({ getOrder }));
+vi.mock("@/lib/procurement/orders", () => ({
+  getOrder,
+  getOrderInTransaction: getOrder,
+}));
+import { paymentTermEditVersion } from "./edit-version";
 vi.mock("@/lib/audit/events", () => ({ writeAuditEvent: vi.fn() }));
 
 import {
@@ -64,6 +70,7 @@ describe("payment persistence", () => {
     vi.clearAllMocks();
     getOrder.mockResolvedValue(order);
     database.currency.findFirst.mockResolvedValue({ code: "USD" });
+    transaction.currency.findFirst.mockResolvedValue({ code: "USD" });
     transaction.paymentInstallment.findFirst.mockResolvedValue(null);
     transaction.paymentInstallment.create.mockResolvedValue({
       id: "installment-1",
@@ -125,12 +132,15 @@ describe("payment persistence", () => {
   });
 
   it("moves the authoritative due date when an installment is edited", async () => {
-    database.paymentInstallment.findUnique.mockResolvedValue({
+    const current = {
       currencyCode: "USD",
       direction: "SUPPLIER_PAYMENT",
+      scheduledAmount: "30000",
+      expectedFxRateToReporting: null,
       orderId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
       settlements: [],
-    });
+    };
+    transaction.paymentInstallment.findUnique.mockResolvedValue(current);
     await updateInstallment("actor-1", {
       basis: "FIXED_AMOUNT",
       currencyCode: "USD",
@@ -139,6 +149,7 @@ describe("payment persistence", () => {
       fixedAmount: "30000",
       id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
       label: "Moved deposit",
+      expectedVersion: paymentTermEditVersion(current, "100000"),
       orderId: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
     });
     expect(transaction.paymentInstallment.update).toHaveBeenCalledWith({
@@ -151,17 +162,19 @@ describe("payment persistence", () => {
   });
 
   it("rejects an inline amount below recorded settlements", async () => {
-    database.paymentInstallment.findUnique.mockResolvedValue({
+    const current = {
       basis: "FIXED_AMOUNT",
       order: { orderNumber: "PO-001" },
       scheduledAmount: "30000",
       settlements: [{ amount: "20000" }],
-    });
+    };
+    transaction.paymentInstallment.findUnique.mockResolvedValue(current);
     await expect(
       updateInstallmentInline("actor-1", {
         dueDate: "2026-09-20",
         id: "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
         label: "Deposit",
+        expectedVersion: paymentTermEditVersion(current, null),
         scheduledAmount: "19999.9999",
       }),
     ).rejects.toThrow("below the amount already paid");

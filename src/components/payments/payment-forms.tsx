@@ -70,6 +70,7 @@ function Feedback({ state }: { state: PaymentActionState }) {
 export function InstallmentForm({
   action,
   hideExpectedFx = false,
+  suggestedAmount,
   baseAmount,
   currencies,
   defaultCurrencyCode,
@@ -81,6 +82,7 @@ export function InstallmentForm({
 }: {
   action?: PaymentAction;
   hideExpectedFx?: boolean;
+  suggestedAmount?: string;
   onSaved?: () => void;
   baseAmount: string;
   currencies: readonly { code: string }[];
@@ -98,7 +100,10 @@ export function InstallmentForm({
     | "notes"
   > &
     Partial<
-      Pick<PaymentInstallmentView, "impliedPercentageRate" | "expectedFxRate">
+      Pick<
+        PaymentInstallmentView,
+        "impliedPercentageRate" | "expectedFxRate" | "editVersion"
+      >
     >;
   orderId: string;
   reportingCurrencyCode: string;
@@ -112,7 +117,10 @@ export function InstallmentForm({
   useEffect(() => {
     if (state.status === "success") onSaved?.();
   }, [state, onSaved]);
-  const [basis, setBasis] = useState(installment?.basis ?? "PERCENTAGE");
+  const [expectedVersion] = useState(installment?.editVersion ?? "");
+  const [basis, setBasis] = useState(
+    installment?.basis ?? (suggestedAmount ? "FIXED_AMOUNT" : "PERCENTAGE"),
+  );
   const [currencyCode, setCurrencyCode] = useState(
     installment?.currencyCode ?? defaultCurrencyCode,
   );
@@ -123,9 +131,13 @@ export function InstallmentForm({
     ) ||
       (installment
         ? (percentageFromAmount(baseAmount, installment.scheduledAmount) ?? "")
-        : ""),
+        : suggestedAmount
+          ? (percentageFromAmount(baseAmount, suggestedAmount) ?? "")
+          : ""),
   );
-  const [amount, setAmount] = useState(installment?.scheduledAmount ?? "");
+  const [amount, setAmount] = useState(
+    installment?.scheduledAmount ?? suggestedAmount ?? "",
+  );
   const [dueDate, setDueDate] = useState(installment?.dueDate ?? "");
   const [expectedFxRate, setExpectedFxRate] = useState(
     installment?.expectedFxRate ?? "",
@@ -138,6 +150,9 @@ export function InstallmentForm({
       onSubmit={onSubmit}
     >
       <input name="direction" type="hidden" value={direction} />
+      {installment && (
+        <input name="expectedVersion" type="hidden" value={expectedVersion} />
+      )}
       <input name="orderId" type="hidden" value={orderId} />
       <input name="basis" type="hidden" value={basis} />
       <input
@@ -311,6 +326,7 @@ export function SettlementForm({
   const [amount, setAmount] = useState(
     settlement?.amount ?? initialAmount ?? installment.outstandingAmount,
   );
+  const [expectedVersion] = useState(settlement?.editVersion ?? "");
   const [settledAt, setSettledAt] = useState(settlement?.settledAt ?? today);
   const [fxRate, setFxRate] = useState(settlement?.fxRate ?? "");
   const [reference, setReference] = useState(settlement?.reference ?? "");
@@ -322,6 +338,9 @@ export function SettlementForm({
       onSubmit={onSubmit}
     >
       <input name="installmentId" type="hidden" value={installment.id} />
+      {settlement && (
+        <input name="expectedVersion" type="hidden" value={expectedVersion} />
+      )}
       {settlement && <input name="id" type="hidden" value={settlement.id} />}
       <Field
         error={fieldErrors.amount}

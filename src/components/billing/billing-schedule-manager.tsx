@@ -6,12 +6,11 @@ import { RelatedCashCreate } from "@/components/payments/related-cash-create";
 import { TermPaymentActions } from "@/components/payments/term-payment-actions";
 import { BillingReceiptEditor } from "./billing-receipt-editor";
 import { BillingTermForm } from "./billing-term-form";
+import { ReceiptTermAssignment } from "./receipt-term-assignment";
+import { billingTermPresentation } from "@/domain/billing/term-presentation";
 import { businessToday, formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
-import {
-  paymentTermState,
-  paymentAmountToRecord,
-} from "@/domain/payments/terms";
+import { paymentAmountToRecord } from "@/domain/payments/terms";
 import type { ClientBillingView } from "@/lib/billing/billing";
 import type { RelatedTableData } from "@/lib/related-records/types";
 
@@ -51,28 +50,37 @@ export function BillingScheduleManager({
     ],
     numericColumns: [2, 3, 4],
     rows: document.paymentInstallments.map((term) => {
-      const state = paymentTermState({
+      const state = billingTermPresentation({
         amount: term.scheduledAmount,
         payments: term.receipts,
         dueDate: term.dueDate,
         cancelled: term.isCancelled || document.isCancelled,
         today,
+        cappedRemaining: term.creditOutstandingAmount,
+        balanceReviewRequired: term.balanceReviewRequired,
+        hasCredits: Boolean(document.creditPosition),
       });
       return {
         id: term.id,
         editValue: term.label,
+        ...(state.partialInvoiceCoverage && state.invoiceCoverage
+          ? {
+              secondaryText: `${formatMoney(state.invoiceCoverage, term.currencyCode)} ${document.creditPosition ? "Invoice/credit adjustment" : "covered at Invoice level"}`,
+            }
+          : {}),
         cells: [
           term.label,
-          term.dueDate ? formatDateOnly(term.dueDate) : "Date needed",
+          term.dueDate
+            ? formatDateOnly(term.dueDate)
+            : state.needsDueDate
+              ? "Date needed"
+              : "Not set",
           formatMoney(term.scheduledAmount, term.currencyCode),
           formatMoney(state.paid, term.currencyCode),
-          formatMoney(
-            term.creditOutstandingAmount ?? state.remaining,
-            term.currencyCode,
-          ),
-          state.remaining !== "0" && term.creditOutstandingAmount === "0"
-            ? "No balance due"
-            : state.label,
+          state.remaining === null
+            ? "Review balance"
+            : formatMoney(state.remaining, term.currencyCode),
+          state.label,
           term.percentageRate
             ? formatRate(term.percentageRate)
             : "Fixed amount",
@@ -96,15 +104,29 @@ export function BillingScheduleManager({
         Payment history ({receipts.length})
       </summary>
       {receipts.map((receipt) => (
-        <BillingReceiptEditor
-          key={receipt.id}
-          canEdit={canEdit}
-          billingDocumentId={receipt.billingDocumentId ?? document.id}
-          currencyCode={document.currencyCode}
-          reportingCurrencyCode={document.project.reportingCurrencyCode}
-          installments={document.paymentInstallments}
-          receipt={receipt}
-        />
+        <div key={receipt.id} className="mt-2 space-y-2">
+          <BillingReceiptEditor
+            canEdit={canEdit}
+            billingDocumentId={receipt.billingDocumentId ?? document.id}
+            currencyCode={document.currencyCode}
+            reportingCurrencyCode={document.project.reportingCurrencyCode}
+            installments={document.paymentInstallments}
+            receipt={receipt}
+          />
+          {canEdit &&
+            !receipt.installmentId &&
+            !document.isCancelled &&
+            document.documentType === "INVOICE" &&
+            !["DRAFT", "TO_BE_INVOICED", "CANCELLED"].includes(
+              document.status,
+            ) && (
+              <ReceiptTermAssignment
+                receipt={receipt}
+                terms={document.paymentInstallments}
+                currencyCode={document.currencyCode}
+              />
+            )}
+        </div>
       ))}
     </details>
   );
@@ -127,15 +149,18 @@ export function BillingScheduleManager({
         }
         rowActions={Object.fromEntries(
           document.paymentInstallments.map((term) => {
-            const state = paymentTermState({
+            const state = billingTermPresentation({
               amount: term.scheduledAmount,
               payments: term.receipts,
               dueDate: term.dueDate,
-              cancelled: term.isCancelled,
+              cancelled: term.isCancelled || document.isCancelled,
               today,
+              cappedRemaining: term.creditOutstandingAmount,
+              balanceReviewRequired: term.balanceReviewRequired,
+              hasCredits: Boolean(document.creditPosition),
             });
             const remaining = paymentAmountToRecord(
-              term.creditOutstandingAmount ?? state.remaining,
+              state.remaining ?? "0",
               document.outstanding,
             );
             return [
@@ -177,9 +202,7 @@ export function BillingScheduleManager({
       />
       {document.receipts.some((row) => !row.installmentId) && (
         <div className="rounded border p-3">
-          <p className="mb-2 text-sm">
-            Existing payments recorded against the whole document
-          </p>
+          <p className="mb-2 text-sm">Invoice-level receipts</p>
           {history(document.receipts.filter((row) => !row.installmentId))}
         </div>
       )}

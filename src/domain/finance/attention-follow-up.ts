@@ -41,6 +41,7 @@ const dataQualityKinds = new Set([
   "term-fx",
   "term-actual-fx",
   "schedule",
+  "schedule-overflow",
   "missing-date",
   "term-date",
   "cash-incomplete",

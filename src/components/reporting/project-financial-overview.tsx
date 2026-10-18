@@ -42,6 +42,8 @@ export const projectMetricLabels: Record<ProjectMetricKey, string> = {
   expectedCost: "Budgeted cost",
   expectedProfit: "Expected profit",
   freightCost: "Freight cost HT",
+  freightNonDeductibleVat: "Non-deductible freight VAT",
+  freightEconomicCost: "Freight economic cost",
   freightTarget: "Freight target HT",
   freightInvoiced: "Freight invoiced HT",
   freightReceived: "Freight received HT",
@@ -349,6 +351,19 @@ export function ProjectFinancialOverview({
             Received freight is a proportional share of actual receipts, after
             credits and refunds.
           </p>
+          <details className="mt-4 border-t pt-3">
+            <summary className="cursor-pointer text-xs font-medium">
+              Recovery cost basis
+            </summary>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              {metric("freightNonDeductibleVat")}
+              {metric("freightEconomicCost")}
+            </div>
+            <p className="text-muted-foreground mt-3 text-xs">
+              Target uses effective Order and freight-expense markups, including
+              overrides.
+            </p>
+          </details>
         </details>
       </div>
       <ProjectReviewAlerts dashboard={dashboard} />

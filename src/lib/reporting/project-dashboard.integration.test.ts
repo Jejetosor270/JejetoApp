@@ -6,6 +6,7 @@ vi.mock("@/lib/db", () => ({ getDatabase: () => state.db }));
 import { prismaMemoryDatabase } from "@/test/prisma-memory-database";
 import { getProjectControl } from "./project-control";
 import { getProjectClientBillingSummary } from "@/lib/billing/reporting";
+import { getProjectFreightReconciliation } from "@/lib/freight/expenses";
 import { sumKnown, difference } from "@/domain/finance/project-control";
 import { businessToday, dateOnlyToDate } from "@/domain/payments/dates";
 let memory: Awaited<ReturnType<typeof prismaMemoryDatabase>>;
@@ -21,6 +22,67 @@ beforeAll(async () => {
 }, 30000);
 afterAll(async () => {
   await memory.close();
+});
+
+it("uses one freight recovery target across Project sources and Reports with overrides, VAT and missing FX", async () => {
+  const project = await memory.raw.project.create({
+    data: {
+      code: "FREIGHT-CONSISTENT",
+      name: "Freight consistency",
+      reportingCurrencyCode: "EUR",
+      defaultFreightMarkupRate: "0.15",
+    },
+  });
+  await memory.raw.procurementOrder.create({
+    data: {
+      projectId: project.id,
+      orderNumber: "FREIGHT-OVERRIDE",
+      packageName: "Package",
+      orderCurrencyCode: "EUR",
+      sellingCurrencyCode: "EUR",
+      pricingMode: "ORDER_MARKUP",
+      productMarkupOverrideRate: "0.15",
+      freightMarkupOverrideRate: "0.3",
+      otherCostMarkupOverrideRate: "0",
+      costLines: { create: [{ category: "FREIGHT", originalAmount: "100" }] },
+    },
+  });
+  const expense = await memory.raw.projectFreightExpense.create({
+    data: {
+      projectId: project.id,
+      description: "Freight with VAT",
+      expenseDate: dateOnlyToDate("2026-10-01"),
+      currencyCode: "EUR",
+      costAmountHt: "100",
+      vatAmount: "20",
+      vatTreatment: "DOMESTIC",
+      recoverability: "NON_RECOVERABLE",
+      recoverableRate: "0",
+      freightMarkupOverrideRate: "0.15",
+    },
+  });
+  const control = await getProjectControl(project.id);
+  const freight = await getProjectFreightReconciliation(project.id);
+  expect(control.dashboard.metrics.freightCost.value).toBe("200.0000");
+  expect(control.dashboard.metrics.freightNonDeductibleVat.value).toBe(
+    "20.0000",
+  );
+  expect(control.dashboard.metrics.freightEconomicCost.value).toBe("220.0000");
+  expect(control.dashboard.metrics.freightTarget.value).toBe("268.0000");
+  expect(control.dashboard.metrics.freightTarget.value).toBe(
+    freight?.recoveryTargetHt,
+  );
+  expect(control.freightCoverage.supplierSellHt).toBe(
+    freight?.recoveryTargetHt,
+  );
+  expect(control.freightCoverage.supplierMarkupHt).toBe("48.0000");
+  await memory.raw.projectFreightExpense.update({
+    where: { id: expense.id },
+    data: { currencyCode: "USD", fxRateToReporting: null },
+  });
+  const incomplete = await getProjectControl(project.id);
+  expect(incomplete.dashboard.metrics.freightTarget.value).toBeNull();
+  expect(incomplete.freightCoverage.supplierSellHt).toBeNull();
 });
 
 it("flags an uncovered payable as Unscheduled balance, not a missing term date", async () => {
@@ -226,7 +288,9 @@ it("reconciles complete Project economics, approved budget, credits, refunds and
     expectedCost: "142.0000",
     expectedProfit: "88.0000",
     freightCost: "30.0000",
-    freightTarget: "36.0000",
+    freightNonDeductibleVat: "2.0000",
+    freightEconomicCost: "32.0000",
+    freightTarget: "38.4000",
     freightInvoiced: "20.0000",
     freightReceived: "20.0000",
     vatOutput: "36.0000",
@@ -236,6 +300,12 @@ it("reconciles complete Project economics, approved budget, credits, refunds and
     expect(metrics[key as keyof typeof metrics].value, key).toBe(value);
   for (const metric of Object.values(metrics))
     expect(sumKnown(metric.rows.map((row) => row.amount))).toBe(metric.value);
+  expect(metrics.freightTarget.value).toBe(
+    (await getProjectFreightReconciliation(project.id))?.recoveryTargetHt,
+  );
+  expect(control.freightCoverage.supplierSellHt).toBe(
+    metrics.freightTarget.value,
+  );
   expect(
     metrics.cost.rows.some((row) =>
       row.href.endsWith(`#freight-${expense.id}`),

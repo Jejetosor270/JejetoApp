@@ -81,7 +81,9 @@ function fx(
 async function paymentRecord(id: string): Promise<CashRecordView | null> {
   const record = await getDatabase().paymentSettlement.findUnique({
     where: { id },
-    include: { installment: { include: { order: orderContext } } },
+    include: {
+      installment: { include: { order: orderContext, settlements: true } },
+    },
   });
   if (!record) return null;
   const { installment } = record;

@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from "vitest";
+import { act } from "react";
 import { mountForm, enter, clickText } from "@/test/dom-form";
 import { businessToday } from "@/domain/payments/dates";
+import { updateOrderAction } from "@/app/(app)/orders/actions";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/app/(app)/orders/actions", () => ({
   createOrderAction: vi.fn(),
@@ -87,11 +89,19 @@ const order: EditableOrder = {
 let view: Awaited<ReturnType<typeof mountForm>>;
 afterEach(async () => {
   await view?.unmount();
+  vi.clearAllMocks();
 });
 function value(name: string) {
   const form = document.querySelector("form");
   if (!form) throw new Error("Missing Order form");
   return new FormData(form).get(name);
+}
+async function toggleTaxableCost(label: string) {
+  const input = [...document.querySelectorAll("fieldset label")]
+    .find((element) => element.textContent?.trim() === label)
+    ?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+  if (!input) throw new Error(`Missing taxable cost ${label}`);
+  await act(async () => input.click());
 }
 it("preserves separate source dates and legacy timing while changing the main document kind", async () => {
   view = await mountForm(
@@ -185,14 +195,37 @@ it("autofills new-order purchase VAT without forcing a VAT treatment or changing
   await enter("inputVatAmount", "10");
   await enter("purchaseCost", "300");
   expect(value("inputVatTaxableBase")).toBe("50");
-  await clickText("Use purchase HT");
+  expect(view.container.textContent).toContain(
+    "Costs changed. Review the manual VAT base before saving.",
+  );
+  await clickText("Use selected costs");
   expect(value("inputVatTaxableBase")).toBe("300");
   expect(value("inputVatAmount")).toBe("10");
+  expect(view.container.textContent).not.toContain(
+    "Costs changed. Review the manual VAT base before saving.",
+  );
 });
-it("prefills editing an Order without VAT from purchase HT, not freight or selling HT", async () => {
+it("prefills an Order without VAT from all entered HT costs, not selling HT", async () => {
   view = await mountForm(<OrderForm options={options} order={order} />);
   await enter("inputVatTreatment", "DOMESTIC");
+  expect(value("inputVatTaxableBase")).toBe("125");
+  await enter("customsDuties", "3.4567");
+  await enter("miscellaneous", "0.0001");
+  expect(value("inputVatTaxableBase")).toBe("128.4568");
+});
+it("lets the employee exclude non-taxable costs and follows only selected costs", async () => {
+  view = await mountForm(<OrderForm options={options} order={order} />);
+  await enter("inputVatTreatment", "DOMESTIC");
+  await toggleTaxableCost("Freight");
   expect(value("inputVatTaxableBase")).toBe("100");
+  await enter("freight", "50");
+  expect(value("inputVatTaxableBase")).toBe("100");
+  await enter("purchaseCost", "200");
+  expect(value("inputVatTaxableBase")).toBe("200");
+  await toggleTaxableCost("Freight");
+  expect(value("inputVatTaxableBase")).toBe("250");
+  expect(value("inputVatRate")).toBe("");
+  expect(value("inputVatAmount")).toBe("");
 });
 it("preserves an existing explicit zero VAT base on edit until reset", async () => {
   view = await mountForm(
@@ -219,6 +252,44 @@ it("preserves an existing explicit zero VAT base on edit until reset", async () 
   );
   await enter("purchaseCost", "250");
   expect(value("inputVatTaxableBase")).toBe("0");
-  await clickText("Use purchase HT");
+  await toggleTaxableCost("Freight");
+  expect(value("inputVatTaxableBase")).toBe("0");
+  expect(view.container.textContent).toContain(
+    "Costs changed. Review the manual VAT base before saving.",
+  );
+  await clickText("Use selected costs");
   expect(value("inputVatTaxableBase")).toBe("250");
+});
+it("keeps the reviewed cost selection, manual base and amount override after a failed save", async () => {
+  vi.mocked(updateOrderAction).mockResolvedValueOnce({
+    status: "error",
+    message: "Review the Order before saving.",
+    formError: "Review the Order before saving.",
+    fieldErrors: { purchaseCost: "Review this cost." },
+  });
+  view = await mountForm(<OrderForm options={options} order={order} />);
+  await enter("inputVatTreatment", "DOMESTIC");
+  await toggleTaxableCost("Freight");
+  await enter("inputVatTaxableBase", "80");
+  await enter("inputVatAmount", "16");
+  await enter("purchaseCost", "200");
+  const form = document.querySelector("form");
+  if (!form) throw new Error("Missing Order form");
+  await act(async () => {
+    form.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+  });
+  expect(updateOrderAction).toHaveBeenCalledOnce();
+  expect(value("inputVatTaxableBase")).toBe("80");
+  expect(value("inputVatAmount")).toBe("16");
+  expect(view.container.textContent).toContain(
+    "Review the Order before saving.",
+  );
+  expect(view.container.textContent).toContain(
+    "Costs changed. Review the manual VAT base before saving.",
+  );
+  await clickText("Use selected costs");
+  expect(value("inputVatTaxableBase")).toBe("200");
+  expect(value("inputVatAmount")).toBe("16");
 });

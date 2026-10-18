@@ -74,7 +74,12 @@ const priorityOrder = [
 const sum = (values: string[]) =>
   values.reduce((total, value) => total.plus(value), new Decimal(0));
 
-type CashPosition = { incoming: Decimal; outgoing: Decimal; complete: boolean };
+type CashPosition = {
+  incoming: Decimal;
+  outgoing: Decimal;
+  complete: boolean;
+  explained: boolean;
+};
 type DuplicateGroups = Map<string, AttentionDocument[]>;
 
 function createIssueAdder(issues: AttentionIssue[]) {
@@ -194,13 +199,14 @@ function paymentSchedule(doc: AttentionDocument) {
   const mismatch =
     remaining !== null &&
     comparable &&
-    (doc.creditAdjusted
+    (doc.creditAdjusted || doc.side === "client"
       ? scheduledRemaining.lessThan(remaining)
       : !remaining.equals(scheduledRemaining));
   const hasBalance =
     remaining === null ||
     remaining.greaterThan(0) ||
     (!doc.creditAdjusted &&
+      doc.side !== "client" &&
       terms.some((term) =>
         installmentOutstanding(term.scheduled, term.paid).greaterThan(0),
       ));
@@ -245,6 +251,24 @@ function checkScheduleInformation(
         : null,
       "TTC",
     );
+  if (
+    doc.side === "client" &&
+    !doc.creditAdjusted &&
+    comparable &&
+    doc.totalTtc !== null
+  ) {
+    const excess = sum(terms.map((term) => term.scheduled)).minus(doc.totalTtc);
+    if (excess.greaterThan(0))
+      add(
+        doc,
+        "schedule-overflow",
+        "Review payment schedule",
+        "Review",
+        "Saved terms exceed the Invoice total. Cash expectations remain capped by the Invoice balance; review the original schedule.",
+        excess.toFixed(4),
+        "TTC",
+      );
+  }
   if (
     hasBalance &&
     terms.length === 0 &&
@@ -520,7 +544,7 @@ function checkFundingShortfall(
       amount: position.outgoing.minus(position.incoming).toFixed(4),
       basis: "TTC",
     });
-  else if (position && !position.complete)
+  else if (position && !position.complete && !position.explained)
     issues.push({
       ...base,
       key: `cash-incomplete:${project.id}`,
@@ -554,26 +578,47 @@ export function buildFinancialAttention(
         "Incomplete",
         doc.reviewReason,
       );
+      const previous = cash.get(doc.projectId);
       cash.set(doc.projectId, {
-        incoming: new Decimal(0),
-        outgoing: new Decimal(0),
+        incoming: previous?.incoming ?? new Decimal(0),
+        outgoing: previous?.outgoing ?? new Decimal(0),
         complete: false,
+        explained: previous?.explained ?? true,
       });
       continue;
     }
+    const issueStart = issues.length;
     checkDocumentFx(doc, add);
     const refund = refundDueIssue(doc);
     if (refund) issues.push(refund);
     const schedule = paymentSchedule(doc);
     checkScheduleInformation(doc, schedule, add);
     checkDocumentDue(doc, schedule, today, end, add);
-    const position = cash.get(doc.projectId) ?? {
+    const previous = cash.get(doc.projectId);
+    const position: CashPosition = {
       incoming: new Decimal(0),
       outgoing: new Decimal(0),
       complete: true,
+      explained: true,
     };
     if (refund) position.complete = false;
     checkPaymentTerms(doc, schedule, today, end, add, position);
+    // Omit the aggregate warning only when this incomplete source has a specific
+    // actionable issue. An unexplained failure must remain visible.
+    if (!position.complete)
+      position.explained = issues
+        .slice(issueStart)
+        .some((issue) =>
+          /^(schedule|missing-date|term-date|term-fx|refund-due-(?:supplier|client|freight)):/.test(
+            issue.key,
+          ),
+        );
+    if (previous) {
+      position.incoming = position.incoming.plus(previous.incoming);
+      position.outgoing = position.outgoing.plus(previous.outgoing);
+      position.complete &&= previous.complete;
+      position.explained &&= previous.explained;
+    }
     cash.set(doc.projectId, position);
     collectDuplicateCandidate(doc, duplicates);
   }

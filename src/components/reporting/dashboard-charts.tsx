@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { dashboardMonthHref } from "@/domain/reporting/dashboard-navigation";
 import {
   formatMoney,
   formatSignedMoney,
@@ -25,12 +26,16 @@ export function CashBars({
   title,
   href,
   partial,
+  range,
+  monthDrilldown = true,
 }: {
   chart: ReturnType<typeof cashChart>;
   currency: string;
   title: string;
   href: string;
   partial: string;
+  range: { start: string; end: string };
+  monthDrilldown?: boolean;
 }) {
   return (
     <>
@@ -65,9 +70,13 @@ export function CashBars({
             <div className="flex gap-2 border-b">
               {chart.rows.map((row) => (
                 <Link
-                  href={href}
+                  href={
+                    monthDrilldown
+                      ? dashboardMonthHref(href, row.month, range)
+                      : href
+                  }
                   key={row.month}
-                  aria-label={`${monthLabel(row.month)}: in ${row.incoming === null ? "Incomplete" : formatMoney(row.incoming, currency)}, out ${row.outgoing === null ? "Incomplete" : formatMoney(row.outgoing, currency)}. Open details.`}
+                  aria-label={`${monthLabel(row.month)}: in ${row.incoming === null ? "Incomplete" : formatMoney(row.incoming, currency)}, out ${row.outgoing === null ? "Incomplete" : formatMoney(row.outgoing, currency)}. ${monthDrilldown ? "Open month details." : "Open full scheduled forecast."}`}
                   className="hover:bg-muted/30 relative flex min-w-0 flex-1 items-end justify-center gap-1 rounded-t-sm pt-4 focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
                   <div

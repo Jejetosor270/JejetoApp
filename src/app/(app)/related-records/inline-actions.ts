@@ -6,16 +6,29 @@ import { Prisma } from "@/generated/prisma/client";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import { getDatabase } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit/events";
-import { updateSettlement } from "@/lib/payments/payments";
 import {
+  updateInstallmentInline,
+  updateSettlement,
+} from "@/lib/payments/payments";
+import { PaymentValidationError } from "@/lib/payments/errors";
+import {
+  ClientBillingValidationError,
+  updateClientBillingInstallment,
   updateClientReceipt,
   updateOrderBillingLink,
 } from "@/lib/billing/billing";
+import {
+  isPaymentWriteConflict,
+  paymentTermEditVersion,
+  paymentVersionMatches,
+  stalePaymentMessage,
+} from "@/lib/payments/edit-version";
 import {
   updateSettlementSchema,
   inlineInstallmentSchema,
 } from "@/domain/payments/validation";
 import {
+  clientBillingInstallmentUpdateSchema,
   clientReceiptUpdateSchema,
   orderBillingLinkSchema,
 } from "@/domain/billing/validation";
@@ -36,11 +49,15 @@ export async function editRelatedFinancialRowAction(
       date: z.string().optional(),
       amount: z.string(),
       freight: z.string().optional(),
+      expectedVersion: z
+        .string()
+        .regex(/^[a-f0-9]{64}$/)
+        .optional(),
     })
     .safeParse(Object.fromEntries(formData));
   if (!input.success)
     return { status: "error", message: "Check the row fields." };
-  const { id, value, date, amount } = input.data;
+  const { id, value, date, amount, expectedVersion } = input.data;
   try {
     const db = getDatabase();
     if (kind === "payment") {
@@ -51,6 +68,7 @@ export async function editRelatedFinancialRowAction(
         actor.id,
         updateSettlementSchema.parse({
           id,
+          expectedVersion,
           installmentId: row.installmentId,
           reference: value,
           amount,
@@ -65,6 +83,7 @@ export async function editRelatedFinancialRowAction(
         actor.id,
         clientReceiptUpdateSchema.parse({
           id,
+          expectedVersion,
           billingDocumentId: row.billingDocumentId,
           installmentId: row.installmentId ?? undefined,
           reference: value,
@@ -92,91 +111,93 @@ export async function editRelatedFinancialRowAction(
           isProjectRemainderApproved: billing.isProjectRemainderApproved,
         }),
       );
-    } else if (
-      kind === "supplier-installment" ||
-      kind === "client-installment"
-    ) {
+    } else if (kind === "supplier-installment") {
+      const row = await db.paymentInstallment.findUniqueOrThrow({
+        where: { id },
+      });
+      await updateInstallmentInline(
+        actor.id,
+        inlineInstallmentSchema.parse({
+          id,
+          expectedVersion,
+          label: value,
+          dueDate: date,
+          scheduledAmount: amount,
+          notes: row.notes ?? undefined,
+        }),
+      );
+    } else if (kind === "client-installment") {
       const draft = inlineInstallmentSchema.parse({
         id,
+        expectedVersion,
         label: value,
         dueDate: date,
         scheduledAmount: amount,
       });
-      await db.$transaction(
-        async (tx) => {
-          const supplier =
-            kind === "supplier-installment"
-              ? await tx.paymentInstallment.findUniqueOrThrow({
-                  where: { id },
-                  include: { settlements: true },
-                })
-              : null;
-          const client =
-            kind === "client-installment"
-              ? await tx.clientPaymentInstallment.findUniqueOrThrow({
-                  where: { id },
-                  include: {
-                    receipts: true,
-                    billingDocument: true,
-                    matchedInvoices: true,
-                  },
-                })
-              : null;
-          const row = supplier ?? client;
-          if (!row) throw new Error("Record not found.");
-          const settled = (
-            supplier?.settlements ??
-            client?.receipts ??
-            []
-          ).reduce(
-            (sum, cash) => sum.plus(cash.amount.toString()),
-            new Decimal(0),
-          );
-          const nextAmount = new Decimal(draft.scheduledAmount);
-          if (nextAmount.lessThan(settled))
-            throw new Error(
-              "Scheduled amount cannot be lower than recorded cash.",
-            );
-          if (client?.billingDocument && !client.isCancelled) {
-            const other = await tx.clientPaymentInstallment.aggregate({
-              where: {
-                billingDocumentId: client.billingDocumentId,
-                id: { not: id },
-                isCancelled: false,
-              },
-              _sum: { scheduledAmount: true },
+      const current = await db.clientPaymentInstallment.findUniqueOrThrow({
+        where: { id },
+      });
+      if (current.billingDocumentId) {
+        const amountChanged = !new Decimal(amount).equals(
+          current.scheduledAmount.toString(),
+        );
+        await updateClientBillingInstallment(
+          actor.id,
+          clientBillingInstallmentUpdateSchema.parse({
+            ...draft,
+            billingDocumentId: current.billingDocumentId,
+            basis: amountChanged ? "FIXED_AMOUNT" : current.basis,
+            percentageRate: amountChanged
+              ? undefined
+              : current.percentageRate?.mul(100).toString(),
+            notes: current.notes ?? undefined,
+          }),
+        );
+      } else
+        await db.$transaction(
+          async (tx) => {
+            const row = await tx.clientPaymentInstallment.findUniqueOrThrow({
+              where: { id },
+              include: { receipts: true },
             });
             if (
-              nextAmount
-                .plus(other._sum.scheduledAmount?.toString() ?? "0")
-                .greaterThan(client.billingDocument.totalTtc.toString())
+              row.billingDocumentId ||
+              !paymentVersionMatches(
+                expectedVersion,
+                paymentTermEditVersion(row, null),
+              )
             )
-              throw new Error("The schedule cannot exceed Billing TTC.");
-          }
-          const data = {
-            label: draft.label,
-            dueDate: draft.dueDate ? dateOnlyToDate(draft.dueDate) : null,
-            scheduledAmount: draft.scheduledAmount,
-            updatedById: actor.id,
-            ...(!nextAmount.equals(row.scheduledAmount.toString())
-              ? { basis: "FIXED_AMOUNT" as const, percentageRate: null }
-              : {}),
-          };
-          if (supplier)
-            await tx.paymentInstallment.update({ where: { id }, data });
-          else
+              throw new ClientBillingValidationError(stalePaymentMessage);
+            const settled = row.receipts.reduce(
+              (sum, cash) => sum.plus(cash.amount.toString()),
+              new Decimal(0),
+            );
+            const nextAmount = new Decimal(draft.scheduledAmount);
+            if (nextAmount.lessThan(settled))
+              throw new ClientBillingValidationError(
+                "Scheduled amount cannot be lower than recorded cash.",
+              );
+            const data = {
+              label: draft.label,
+              dueDate: draft.dueDate ? dateOnlyToDate(draft.dueDate) : null,
+              scheduledAmount: draft.scheduledAmount,
+              updatedById: actor.id,
+              ...(!nextAmount.equals(row.scheduledAmount.toString())
+                ? { basis: "FIXED_AMOUNT" as const, percentageRate: null }
+                : {}),
+            };
             await tx.clientPaymentInstallment.update({ where: { id }, data });
-          await writeAuditEvent(tx, actor.id, {
-            action: "UPDATED",
-            entityId: id,
-            entityType: "INSTALLMENT",
-            entityReference: value,
-            summary:
-              "Edited installment label, due date and scheduled amount inline.",
-          });
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      );
+            await writeAuditEvent(tx, actor.id, {
+              action: "UPDATED",
+              entityId: id,
+              entityType: "INSTALLMENT",
+              entityReference: value,
+              summary:
+                "Edited installment label, due date and scheduled amount inline.",
+            });
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
     } else
       return { status: "error", message: "Choose an editable record type." };
     revalidatePath("/", "layout");
@@ -187,7 +208,12 @@ export async function editRelatedFinancialRowAction(
       message:
         error instanceof z.ZodError
           ? (error.issues[0]?.message ?? "Check the row fields.")
-          : "The row could not be saved. Check amounts against the document and recorded cash. Your draft is retained.",
+          : isPaymentWriteConflict(error)
+            ? stalePaymentMessage
+            : error instanceof PaymentValidationError ||
+                error instanceof ClientBillingValidationError
+              ? error.message
+              : "The row could not be saved. Check amounts against the document and recorded cash. Your draft is retained.",
     };
   }
 }
