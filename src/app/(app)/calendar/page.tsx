@@ -22,6 +22,8 @@ import { getProcurementCalendarEvents } from "@/lib/payments/payments";
 export const metadata: Metadata = { title: "Procurement calendar" };
 
 function eventLabel(event: ProcurementCalendarEvent) {
+  if (event.type === "SUPPLIER_REFUND") return "Supplier refund";
+  if (event.type === "CLIENT_REFUND") return "Client refund";
   if (event.type === "ISSUE_INVOICE") return "Issue invoice";
   if (event.type === "SUPPLIER_PAYMENT") return "Cash out";
   if (event.type === "CLIENT_RECEIPT")
@@ -37,10 +39,15 @@ function eventLabel(event: ProcurementCalendarEvent) {
 }
 
 function eventVariant(event: ProcurementCalendarEvent) {
-  if (event.status === "OVERDUE" || event.type === "SUPPLIER_PAYMENT") {
+  if (
+    event.status === "OVERDUE" ||
+    event.type === "SUPPLIER_PAYMENT" ||
+    event.type === "CLIENT_REFUND"
+  ) {
     return "destructive" as const;
   }
-  if (event.type === "CLIENT_RECEIPT") return "default" as const;
+  if (event.type === "CLIENT_RECEIPT" || event.type === "SUPPLIER_REFUND")
+    return "default" as const;
   return "outline" as const;
 }
 
@@ -70,7 +77,12 @@ export default async function CalendarPage({
   }
   const paymentEvents = operationalEvents.filter(
     (event) =>
-      (event.type === "SUPPLIER_PAYMENT" || event.type === "CLIENT_RECEIPT") &&
+      [
+        "SUPPLIER_PAYMENT",
+        "CLIENT_RECEIPT",
+        "SUPPLIER_REFUND",
+        "CLIENT_REFUND",
+      ].includes(event.type) &&
       event.status !== "PAID" &&
       event.status !== "CANCELLED",
   );

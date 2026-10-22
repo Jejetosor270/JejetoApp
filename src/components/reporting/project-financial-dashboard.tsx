@@ -352,6 +352,7 @@ export function ProjectFinancialDashboard({
                   ["Freight", report.financial.totals.freight],
                   ["Customs / duties", report.financial.totals.customsDuties],
                   ["Miscellaneous", report.financial.totals.miscellaneous],
+                  ["Other credits HT", report.financial.totals.otherCredits],
                   [
                     "Economic Landed Cost HT",
                     report.financial.totals.economicLandedCost,

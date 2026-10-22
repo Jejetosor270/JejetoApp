@@ -59,6 +59,36 @@ const build = (rows: AttentionDocument[], horizon: 7 | 30 | 90 = 7) =>
   buildFinancialAttention(rows, [project], today, horizon);
 
 describe("financial attention", () => {
+  it("uses scheduled refund dates for horizon and cash direction, retaining missing-FX warnings", () => {
+    const refundDoc: AttentionDocument = {
+      ...doc,
+      totalTtc: "60",
+      paid: "100",
+      creditAdjusted: true,
+      refundDue: "40",
+      terms: [],
+      refundExpectations: [
+        {
+          id: "credit",
+          reference: "CN",
+          amount: "40",
+          dueDate: "2026-10-15",
+          expectedFxRate: null,
+          reportingCurrencyCode: "EUR",
+        },
+      ],
+    };
+    expect(
+      build([refundDoc], 7).some((row) => row.key.startsWith("refund-due")),
+    ).toBe(false);
+    expect(
+      build([refundDoc], 30).find((row) => row.key.startsWith("refund-due")),
+    ).toMatchObject({ priority: "Upcoming", date: "2026-10-15", amount: "40" });
+    const missing = build([{ ...refundDoc, currency: "USD" }], 7);
+    expect(
+      missing.find((row) => row.key.startsWith("refund-due")),
+    ).toMatchObject({ priority: "Incomplete" });
+  });
   it.each(["supplier", "client"] as const)(
     "keeps %s refund obligations all-date and does not call credited terms corrupt",
     (side) => {

@@ -17,6 +17,7 @@ import {
   cancelCreditSchema,
   createCreditSchema,
   creditRefundSchema,
+  creditRefundExpectationSchema,
   creditSourceSchema,
 } from "@/domain/credits/validation";
 import {
@@ -167,6 +168,11 @@ export async function getCreditWorkspace(raw: unknown) {
         id: credit.id,
         reference: credit.reference,
         creditDate: dateToDateOnly(credit.creditDate),
+        expectedRefundDate: credit.expectedRefundDate
+          ? dateToDateOnly(credit.expectedRefundDate)
+          : null,
+        expectedRefundFxRateToReporting:
+          credit.expectedRefundFxRateToReporting?.toString() ?? null,
         reason: credit.reason,
         currencyCode: credit.currencyCode,
         reportingCurrencyCode: credit.reportingCurrencyCode,
@@ -243,6 +249,13 @@ export async function createCredit(raw: unknown) {
         orderId: source.side === "SUPPLIER" ? source.sourceId : null,
         reference: input.reference,
         creditDate: dateOnlyToDate(input.creditDate),
+        expectedRefundDate: input.expectedRefundDate
+          ? dateOnlyToDate(input.expectedRefundDate)
+          : null,
+        expectedRefundFxRateToReporting:
+          source.currencyCode === source.reportingCurrencyCode
+            ? null
+            : (input.expectedRefundFxRateToReporting ?? null),
         reason: input.reason,
         totalHt: input.totalHt,
         vatAmount: input.vatAmount,
@@ -272,6 +285,11 @@ export async function createCredit(raw: unknown) {
         totalHt: input.totalHt,
         vatAmount: input.vatAmount,
         allocations: input.allocations,
+        freightCoverageHt: input.freightCoverageHt,
+        otherCoverageHt: input.otherCoverageHt,
+        expectedRefundDate: input.expectedRefundDate ?? null,
+        expectedRefundFxRateToReporting:
+          credit.expectedRefundFxRateToReporting?.toString() ?? null,
       },
     );
     return result(source, credit.id);
@@ -288,6 +306,61 @@ function scopeFromCredit(credit: {
   if (credit.side === "SUPPLIER" && credit.orderId)
     return { side: "SUPPLIER", sourceId: credit.orderId };
   throw new CreditError("The credit's original document link needs review.");
+}
+
+/** Timing only: no cash creation or change to the immutable commercial FX snapshot. */
+export async function updateCreditRefundExpectation(raw: unknown) {
+  const input = creditRefundExpectationSchema.parse(raw);
+  return inTransaction(async (tx, actorId) => {
+    const credit = await tx.financialCredit.findUnique({
+      where: { id: input.creditId },
+    });
+    if (!credit || credit.isCancelled)
+      throw new CreditError("Choose an active credit to edit refund timing.");
+    const source = await loadCreditSource(tx, scopeFromCredit(credit));
+    assertCreditSourceReady(source, input.expectedVersion);
+    if (
+      credit.currencyCode !== source.currencyCode ||
+      credit.reportingCurrencyCode !== source.reportingCurrencyCode
+    )
+      throw new CreditError(
+        "The original currency context changed. Review the credit before editing refund timing.",
+      );
+    const data = {
+      expectedRefundDate: input.expectedRefundDate
+        ? dateOnlyToDate(input.expectedRefundDate)
+        : null,
+      expectedRefundFxRateToReporting:
+        credit.currencyCode === credit.reportingCurrencyCode
+          ? null
+          : (input.expectedRefundFxRateToReporting ?? null),
+    };
+    await tx.financialCredit.update({
+      where: { id: credit.id },
+      data: { ...data, updatedById: actorId },
+    });
+    await audit(
+      tx,
+      actorId,
+      source,
+      "Updated expected refund timing; no cash recorded.",
+      {
+        creditId: credit.id,
+        before: {
+          expectedRefundDate: credit.expectedRefundDate
+            ? dateToDateOnly(credit.expectedRefundDate)
+            : null,
+          expectedRefundFxRateToReporting:
+            credit.expectedRefundFxRateToReporting?.toString() ?? null,
+        },
+        after: {
+          expectedRefundDate: input.expectedRefundDate ?? null,
+          expectedRefundFxRateToReporting: data.expectedRefundFxRateToReporting,
+        },
+      },
+    );
+    return result(source, credit.id);
+  });
 }
 
 export async function recordCreditRefund(raw: unknown) {

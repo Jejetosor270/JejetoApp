@@ -28,6 +28,7 @@ import {
   createCredit,
   getCreditWorkspace,
   recordCreditRefund,
+  updateCreditRefundExpectation,
 } from "./service";
 import {
   createInstallment,
@@ -179,6 +180,152 @@ async function creditInput(
 }
 
 describe("reviewed credits and actual refunds through real Prisma", () => {
+  it("credits Product, Freight and Other separately without changing original costs or agreed selling", async () => {
+    const { scope, source } = await order();
+    await memory.raw.procurementOrderCostLine.createMany({
+      data: [
+        { orderId: source.id, category: "FREIGHT", originalAmount: "30" },
+        {
+          orderId: source.id,
+          category: "CUSTOMS_DUTIES",
+          originalAmount: "10",
+        },
+        { orderId: source.id, category: "MISCELLANEOUS", originalAmount: "5" },
+      ],
+    });
+    const input = {
+      ...(await creditInput(scope, "40")),
+      freightCoverageHt: "20",
+      otherCoverageHt: "5",
+    };
+    const saved = await createCredit(input);
+    const current = await workspace(scope);
+    expect(current.original).toMatchObject({
+      totalHt: "145.0000",
+      totalTtc: "165.0000",
+      freightCoverageHt: "30",
+      otherCoverageHt: "15.0000",
+    });
+    expect(current.remaining).toMatchObject({
+      totalHt: "105.0000",
+      merchandiseHt: "85.0000",
+      freightCoverageHt: "10.0000",
+      otherCoverageHt: "10.0000",
+    });
+    expect(current.cash?.outstanding).toBe("125.0000");
+    for (const patch of [
+      { totalHt: "11", freightCoverageHt: "11", otherCoverageHt: "0" },
+      { totalHt: "11", freightCoverageHt: "0", otherCoverageHt: "11" },
+      { totalHt: "86", freightCoverageHt: "0", otherCoverageHt: "0" },
+    ])
+      await expect(
+        createCredit({ ...(await creditInput(scope)), ...patch }),
+      ).rejects.toThrow(/original/);
+    const original = await memory.raw.procurementOrder.findUniqueOrThrow({
+      where: { id: source.id },
+      include: { costLines: true },
+    });
+    expect(original.sellingPriceAmount?.toString()).toBe("200");
+    expect(
+      original.costLines.map((row) => row.originalAmount.toString()).sort(),
+    ).toEqual(["10", "100", "30", "5"]);
+    expect(
+      await memory.raw.financialCreditRefund.count({
+        where: { creditId: saved.id },
+      }),
+    ).toBe(0);
+  });
+
+  it("stores refund expectations independently, preserves drafts' versions, and never creates actual cash", async () => {
+    const scope = await invoice({ currencyCode: "USD", paid: "1000" });
+    const saved = await createCredit({
+      ...(await creditInput(scope)),
+      expectedRefundDate: "2026-11-01",
+      expectedRefundFxRateToReporting: "0.9123456789",
+    });
+    const opening = await workspace(scope);
+    expect(opening.credits[0]).toMatchObject({
+      expectedRefundDate: "2026-11-01",
+      expectedRefundFxRateToReporting: "0.9123456789",
+    });
+    await updateCreditRefundExpectation({
+      creditId: saved.id,
+      expectedVersion: opening.expectedVersion,
+      expectedRefundDate: "2026-11-15",
+      expectedRefundFxRateToReporting: "0.95",
+    });
+    await expect(
+      updateCreditRefundExpectation({
+        creditId: saved.id,
+        expectedVersion: opening.expectedVersion,
+        expectedRefundDate: "2026-12-01",
+      }),
+    ).rejects.toThrow(/changed/);
+    let record = await memory.raw.financialCredit.findUniqueOrThrow({
+      where: { id: saved.id },
+      include: { refunds: true },
+    });
+    expect(record.fxRateToReporting?.toString()).toBe("0.8");
+    expect(record.expectedRefundFxRateToReporting?.toString()).toBe("0.95");
+    expect(record.refunds).toEqual([]);
+    await updateCreditRefundExpectation({
+      creditId: saved.id,
+      expectedVersion: (await workspace(scope)).expectedVersion,
+      expectedRefundDate: "",
+      expectedRefundFxRateToReporting: "",
+    });
+    record = await memory.raw.financialCredit.findUniqueOrThrow({
+      where: { id: saved.id },
+      include: { refunds: true },
+    });
+    expect(record.expectedRefundDate).toBeNull();
+    expect(record.expectedRefundFxRateToReporting).toBeNull();
+    expect((await workspace(scope)).cash?.refundDue).toBe("200.0000");
+    expect(
+      await memory.raw.auditEvent.count({
+        where: { entityId: scope.sourceId },
+      }),
+    ).toBe(3);
+  });
+
+  it("rejects refund timing changes to cancelled credits and denied actors; same-currency FX stays null", async () => {
+    const { scope } = await order();
+    const saved = await createCredit({
+      ...(await creditInput(scope, "10")),
+      expectedRefundFxRateToReporting: "2",
+    });
+    expect(
+      (await workspace(scope)).credits[0]?.expectedRefundFxRateToReporting,
+    ).toBeNull();
+    const input = {
+      creditId: saved.id,
+      expectedVersion: (await workspace(scope)).expectedVersion,
+      expectedRefundDate: "2026-11-01",
+    };
+    await memory.raw.user.update({
+      where: { id: state.actorId },
+      data: { role: "USER" },
+    });
+    await expect(updateCreditRefundExpectation(input)).rejects.toThrow(
+      /Administrator or Manager/,
+    );
+    await memory.raw.user.update({
+      where: { id: state.actorId },
+      data: { role: "MANAGER" },
+    });
+    await cancelCredit({
+      creditId: saved.id,
+      expectedVersion: input.expectedVersion,
+      reason: "Correction",
+    });
+    await expect(
+      updateCreditRefundExpectation({
+        ...input,
+        expectedVersion: (await workspace(scope)).expectedVersion,
+      }),
+    ).rejects.toThrow(/active credit/);
+  });
+
   it("applies only the credit to debt, preserves originals and cash, and audits the original record", async () => {
     const scope = await invoice({ paid: "400" });
     const created = await createCredit(await creditInput(scope));

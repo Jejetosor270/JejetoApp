@@ -149,12 +149,15 @@ export function buildProjectDashboard(input: {
   const freightCost = [
     ...orderRows(
       (order) =>
-        convert(
-          order.costs.freight ?? "0",
-          order.orderCurrencyCode,
-          order.costs.purchaseFxRate,
+        difference(
+          convert(
+            order.costs.freight ?? "0",
+            order.orderCurrencyCode,
+            order.costs.purchaseFxRate,
+          ),
+          order.credits?.reportingFreightHt ?? (order.credits ? null : "0"),
         ),
-      "Order freight HT; already included in Order cost.",
+      "Order freight HT after Supplier credits; included in Order cost.",
     ),
     ...freightExpenses.map((expense) => ({
       label: expense.description,
@@ -183,10 +186,13 @@ export function buildProjectDashboard(input: {
   // Freight reconciliation converts each source to storage precision before applying its rate.
   const freightTarget = [
     ...orders.map((order) => {
-      const cost = convert(
-        order.costs.freight ?? "0",
-        order.orderCurrencyCode,
-        order.costs.purchaseFxRate,
+      const cost = difference(
+        convert(
+          order.costs.freight ?? "0",
+          order.orderCurrencyCode,
+          order.costs.purchaseFxRate,
+        ),
+        order.credits?.reportingFreightHt ?? (order.credits ? null : "0"),
       );
       return {
         label: order.orderNumber,

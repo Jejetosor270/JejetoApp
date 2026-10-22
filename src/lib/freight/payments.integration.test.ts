@@ -10,6 +10,11 @@ import {
   unassignFreightPayments,
 } from "./payments";
 import { updateProjectFreightExpense } from "./expenses";
+import {
+  freightExpenseEditInclude,
+  freightExpenseEditVersion,
+} from "./expense-edit-version";
+import { updateProjectFreightExpenseSchema } from "@/domain/freight/validation";
 import { restoreTrash } from "@/lib/trash/service";
 import { getProjectControl } from "@/lib/reporting/project-control";
 import { getProjectReportingSnapshot } from "@/lib/reporting/reports";
@@ -142,8 +147,23 @@ it("protects paid freight balances when editing VAT", async () => {
     reference: "Balance",
     notes: "",
   });
+  const expense = await memory.active.projectFreightExpense.findUniqueOrThrow({
+    where: { id: expenseId },
+    include: freightExpenseEditInclude,
+  });
   await expect(
-    updateProjectFreightExpense(actorId, { id: expenseId, projectId }),
+    updateProjectFreightExpense(
+      actorId,
+      updateProjectFreightExpenseSchema.parse({
+        id: expenseId,
+        projectId,
+        expectedVersion: freightExpenseEditVersion(expense),
+        costAmountHt: expense.costAmountHt.toString(),
+        currencyCode: expense.currencyCode,
+        description: expense.description,
+        expenseDate: "2026-09-01",
+      }),
+    ),
   ).rejects.toThrow("below payments");
 });
 it("includes freight payments once in Project and global actual cash reporting", async () => {

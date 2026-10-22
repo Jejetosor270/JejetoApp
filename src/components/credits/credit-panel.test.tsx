@@ -150,6 +150,82 @@ it("records a separate actual refund with its entered date and FX", async () => 
     }),
   );
 });
+it("submits Supplier Freight and Other portions without allocating Client Orders", async () => {
+  view = await mountForm(
+    <CreditForm
+      workspace={{ ...workspace, side: "SUPPLIER", orderAllocations: [] }}
+      kind="credit"
+    />,
+  );
+  await enter("totalHt", "100");
+  await enter("freightCoverageHt", "20");
+  await enter("otherCoverageHt", "15");
+  await submit();
+  expect(mocks.save).toHaveBeenCalledWith(
+    "credit",
+    expect.objectContaining({
+      side: "SUPPLIER",
+      totalHt: "100",
+      freightCoverageHt: "20",
+      otherCoverageHt: "15",
+      allocations: [],
+    }),
+  );
+  expect(view.container.textContent).toContain(
+    "not agreed Client selling prices",
+  );
+});
+it("retains refund timing and opening version after a stale save without recording actual cash", async () => {
+  const credit: CreditWorkspace["credits"][number] = {
+    id: "credit",
+    reference: "CN-1",
+    creditDate: "2026-10-01",
+    expectedRefundDate: "2026-11-01",
+    expectedRefundFxRateToReporting: "0.92",
+    reason: "Return",
+    currencyCode: "USD",
+    reportingCurrencyCode: "EUR",
+    totalHt: "20",
+    vatAmount: "0",
+    totalTtc: "20",
+    merchandiseHt: "20",
+    freightCoverageHt: "0",
+    otherCoverageHt: "0",
+    isCancelled: false,
+    allocations: [],
+    refunds: [],
+  };
+  let refresh: () => void = () => undefined;
+  function Wrapper() {
+    const [value, setValue] = useState({
+      ...workspace,
+      currencyCode: "USD",
+      credits: [credit],
+    });
+    refresh = () => setValue({ ...value, expectedVersion: "new-version" });
+    return (
+      <CreditForm
+        workspace={value}
+        kind="refund-expectation"
+        creditId="credit"
+      />
+    );
+  }
+  view = await mountForm(<Wrapper />);
+  expect(control("expectedRefundFxRateToReporting").value).toBe("0.92");
+  await enter("expectedRefundFxRateToReporting", "0.95");
+  await act(async () => refresh());
+  await submit();
+  expect(mocks.save).toHaveBeenCalledWith("refund-expectation", {
+    creditId: "credit",
+    expectedVersion: "original-version",
+    expectedRefundDate: "2026-11-01",
+    expectedRefundFxRateToReporting: "0.95",
+  });
+  expect(control("expectedRefundFxRateToReporting").value).toBe("0.95");
+  expect(view.container.textContent).toContain("Draft retained");
+  expect(view.container.textContent).not.toContain("Record actual refund");
+});
 it("preserves historical credit and refund currencies after correcting the original", async () => {
   view = await mountForm(
     <CreditPanel
@@ -161,6 +237,8 @@ it("preserves historical credit and refund currencies after correcting the origi
             id: "old-credit",
             reference: "CN-USD",
             creditDate: "2026-10-01",
+            expectedRefundDate: null,
+            expectedRefundFxRateToReporting: null,
             reason: "Correction",
             currencyCode: "USD",
             reportingCurrencyCode: "EUR",

@@ -148,6 +148,47 @@ it("reduces reporting cost and deductible VAT at credit FX without repricing the
 });
 
 describe("project financial reporting", () => {
+  it("nets Product/Freight/Other credits once without arbitrarily splitting Other or repricing revenue", () => {
+    const input = order("categories", {
+      purchaseCost: "100",
+      economicCost: "150",
+      sales: "200",
+    });
+    input.cost = {
+      ...input.cost,
+      freight: "20",
+      customsDuties: "10",
+      miscellaneous: "20",
+      landedCost: "150",
+    };
+    input.supplierCredits = summarizeSupplierCredits(
+      [
+        {
+          totalHt: "40",
+          freightCoverageHt: "10",
+          otherCoverageHt: "20",
+          vatAmount: "0",
+          supplierRecoverableRate: null,
+          isCancelled: false,
+          currencyCode: "EUR",
+          reportingCurrencyCode: "EUR",
+          fxRateToReporting: null,
+          refunds: [],
+        },
+      ],
+      "EUR",
+    );
+    const result = calculateReportingOrder(input);
+    expect(result.purchaseCost?.toString()).toBe("90");
+    expect(result.freight?.toString()).toBe("10");
+    expect(result.otherCredits?.toString()).toBe("-20");
+    expect(result.customsDuties?.toString()).toBe("10");
+    expect(result.miscellaneous?.toString()).toBe("20");
+    expect(result.landedCost?.toString()).toBe("110");
+    expect(result.grossProfit?.toString()).toBe("90");
+    expect(result.salesRevenue?.toString()).toBe("200");
+    expect(result.supplierPayable?.toString()).toBe("110");
+  });
   it("calculates margin from aggregate values instead of averaging order rates", () => {
     const result = calculateProjectFinancialSummary([
       order("a", { economicCost: "80", purchaseCost: "80", sales: "100" }),

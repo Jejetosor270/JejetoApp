@@ -57,6 +57,8 @@ export function CreditForm({
   const form = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const cancellation = kind.startsWith("cancel-");
+  const expectation = kind === "refund-expectation";
+  const credit = snapshot.credits.find((row) => row.id === creditId);
   return (
     <form
       ref={form}
@@ -79,6 +81,10 @@ export function CreditForm({
             vatAmount: text("vatAmount"),
             freightCoverageHt: text("freightCoverageHt") || "0",
             otherCoverageHt: text("otherCoverageHt") || "0",
+            expectedRefundDate: text("expectedRefundDate"),
+            expectedRefundFxRateToReporting: text(
+              "expectedRefundFxRateToReporting",
+            ),
             ...(snapshot.side === "SUPPLIER" && snapshot.supplierVatEntry
               ? { supplierVatEntryId: snapshot.supplierVatEntry.id }
               : {}),
@@ -90,6 +96,15 @@ export function CreditForm({
                 freightCoverageHt: text(`freight-${row.orderId}`),
                 otherCoverageHt: text(`other-${row.orderId}`),
               })),
+          };
+        else if (expectation)
+          input = {
+            creditId,
+            expectedVersion: snapshot.expectedVersion,
+            expectedRefundDate: text("expectedRefundDate"),
+            expectedRefundFxRateToReporting: text(
+              "expectedRefundFxRateToReporting",
+            ),
           };
         else if (kind === "refund")
           input = {
@@ -127,7 +142,7 @@ export function CreditForm({
       }}
     >
       <fieldset disabled={pending || done} className="space-y-4">
-        {!cancellation && (
+        {!cancellation && !expectation && (
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Reference">
               <input
@@ -151,37 +166,24 @@ export function CreditForm({
               cash. Original Invoice/Order values remain unchanged.
             </p>
             <div className="grid gap-4 sm:grid-cols-2">
-              <MoneyInput
-                name="totalHt"
-                label={
-                  snapshot.side === "SUPPLIER"
-                    ? "Product purchase credit HT"
-                    : "Credit HT"
-                }
-              />
+              <MoneyInput name="totalHt" label="Credit HT" />
               <MoneyInput name="vatAmount" label="Credit VAT" />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <MoneyInput name="freightCoverageHt" label="Freight portion HT" />
+              <MoneyInput name="otherCoverageHt" label="Other portion HT" />
             </div>
             {snapshot.side === "SUPPLIER" ? (
               <p className="text-muted-foreground text-xs">
-                Supplier credits reduce product purchase cost and eligible
-                invoice VAT. Client selling prices, freight and other cost lines
-                stay unchanged.{" "}
+                Product is credit HT less Freight and Other. Credits reduce
+                these costs and eligible invoice VAT, not agreed Client selling
+                prices.{" "}
                 {snapshot.supplierVatEntry
                   ? "VAT uses the original input VAT treatment and recoverability."
                   : "No eligible payable input VAT; enter zero VAT."}
               </p>
             ) : (
               <>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <MoneyInput
-                    name="freightCoverageHt"
-                    label="Freight portion HT"
-                  />
-                  <MoneyInput
-                    name="otherCoverageHt"
-                    label="Other/services portion HT"
-                  />
-                </div>
                 <p className="text-muted-foreground text-xs">
                   Merchandise is the remaining portion of credit HT. Choose
                   credited Orders explicitly. Any unallocated credit remains at
@@ -216,6 +218,35 @@ export function CreditForm({
               </>
             )}
           </>
+        )}
+        {(kind === "credit" || expectation) && (
+          <fieldset className="space-y-3 rounded-md border p-3">
+            <legend className="px-1 text-sm font-medium">Refund timing</legend>
+            <Field label="Expected refund date">
+              <DateInput
+                name="expectedRefundDate"
+                defaultValue={credit?.expectedRefundDate ?? ""}
+              />
+            </Field>
+            {snapshot.currencyCode !== snapshot.reportingCurrencyCode && (
+              <>
+                <MoneyInput
+                  name="expectedRefundFxRateToReporting"
+                  label="Expected refund FX"
+                  value={credit?.expectedRefundFxRateToReporting ?? ""}
+                  required={false}
+                />
+                <p className="text-muted-foreground text-xs">
+                  1 {snapshot.currencyCode} = … {snapshot.reportingCurrencyCode}
+                  . Separate from credit and actual refund FX.
+                </p>
+              </>
+            )}
+            <p className="text-muted-foreground text-xs">
+              Optional. Only refundable cash enters forecasts. Missing dates or
+              FX remain incomplete; this records no cash.
+            </p>
+          </fieldset>
         )}
         {kind === "refund" && (
           <>
@@ -265,7 +296,8 @@ export function CreditForm({
         )}
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" required />I have reviewed this{" "}
-          {cancellation ? "correction" : kind} and confirm it is accurate.
+          {cancellation ? "correction" : expectation ? "refund timing" : kind}{" "}
+          and confirm it is accurate.
         </label>
         <EditorActions>
           <Button type="submit">
@@ -275,7 +307,9 @@ export function CreditForm({
                 ? "Confirm correction"
                 : kind === "credit"
                   ? "Record credit"
-                  : "Record actual refund"}
+                  : expectation
+                    ? "Save refund timing"
+                    : "Record actual refund"}
           </Button>
         </EditorActions>
       </fieldset>
@@ -384,6 +418,25 @@ export function CreditPanel({
                   </td>
                   <td className="p-2 text-right whitespace-nowrap tabular-nums">
                     {money(credit.totalHt, credit.currencyCode)}
+                    <dl className="text-muted-foreground mt-1 text-xs">
+                      {(
+                        [
+                          [
+                            workspace.side === "SUPPLIER"
+                              ? "Product"
+                              : "Merchandise",
+                            credit.merchandiseHt,
+                          ],
+                          ["Freight", credit.freightCoverageHt],
+                          ["Other", credit.otherCoverageHt],
+                        ] as const
+                      ).map(([label, amount]) => (
+                        <div key={label} className="flex justify-end gap-2">
+                          <dt>{label}</dt>
+                          <dd>{money(amount, credit.currencyCode)}</dd>
+                        </div>
+                      ))}
+                    </dl>
                   </td>
                   <td className="p-2 text-right whitespace-nowrap tabular-nums">
                     {money(credit.vatAmount, credit.currencyCode)}
@@ -392,8 +445,26 @@ export function CreditPanel({
                     <Badge variant={credit.isCancelled ? "neutral" : "info"}>
                       {credit.isCancelled ? "Cancelled" : "Recorded"}
                     </Badge>
+                    {!credit.isCancelled && (
+                      <p className="text-muted-foreground text-xs">
+                        Expected refund:{" "}
+                        {credit.expectedRefundDate
+                          ? formatDateOnly(credit.expectedRefundDate)
+                          : "Date not set"}
+                        {credit.currencyCode !== credit.reportingCurrencyCode &&
+                          !credit.expectedRefundFxRateToReporting &&
+                          " · Missing FX"}
+                      </p>
+                    )}
                     {editable && !credit.isCancelled && (
                       <div className="flex flex-wrap gap-2">
+                        <EditorDrawer title="Refund timing">
+                          <CreditForm
+                            workspace={workspace}
+                            kind="refund-expectation"
+                            creditId={credit.id}
+                          />
+                        </EditorDrawer>
                         {workspace.cash &&
                           new Decimal(workspace.cash.refundDue).gt(0) && (
                             <EditorDrawer title="Record actual refund">

@@ -59,6 +59,7 @@ import {
   creditPaymentLimit,
 } from "@/lib/credits/mutation-guards";
 import { hasActiveCredits } from "@/lib/credits/guards";
+import { getRefundCalendarEvents } from "@/lib/credits/refund-calendar";
 import {
   cashEditVersion,
   paymentTermEditVersion,
@@ -1483,179 +1484,191 @@ export async function getProcurementCalendarEvents(
   from: string,
   to: string,
 ): Promise<ProcurementCalendarEvent[]> {
-  const [installments, clientInstallments, orders, items, invoiceReminders] =
-    await Promise.all([
-      listPaymentInstallments({
-        direction: PaymentDirection.SUPPLIER_PAYMENT,
-        dueFrom: from,
-        dueTo: to,
-      }),
-      listClientCashInstallments(),
-      getDatabase().procurementOrder.findMany({
-        where: {
-          OR: [
-            {
-              expectedDeliveryDate: {
-                gte: dateOnlyToDate(from),
-                lte: dateOnlyToDate(to),
-              },
+  const [
+    installments,
+    clientInstallments,
+    orders,
+    items,
+    invoiceReminders,
+    refundEvents,
+  ] = await Promise.all([
+    listPaymentInstallments({
+      direction: PaymentDirection.SUPPLIER_PAYMENT,
+      dueFrom: from,
+      dueTo: to,
+    }),
+    listClientCashInstallments(),
+    getDatabase().procurementOrder.findMany({
+      where: {
+        OR: [
+          {
+            expectedDeliveryDate: {
+              gte: dateOnlyToDate(from),
+              lte: dateOnlyToDate(to),
             },
-            {
-              actualDeliveryDate: {
-                gte: dateOnlyToDate(from),
-                lte: dateOnlyToDate(to),
-              },
+          },
+          {
+            actualDeliveryDate: {
+              gte: dateOnlyToDate(from),
+              lte: dateOnlyToDate(to),
             },
-          ],
-        },
-        select: {
-          actualDeliveryDate: true,
-          expectedDeliveryDate: true,
-          id: true,
-          orderNumber: true,
-          project: { select: { name: true } },
-        },
-      }),
-      getDatabase().item.findMany({
-        where: {
-          OR: [
-            {
-              estimatedWarehouseDate: {
-                gte: dateOnlyToDate(from),
-                lte: dateOnlyToDate(to),
-              },
+          },
+        ],
+      },
+      select: {
+        actualDeliveryDate: true,
+        expectedDeliveryDate: true,
+        id: true,
+        orderNumber: true,
+        project: { select: { name: true } },
+      },
+    }),
+    getDatabase().item.findMany({
+      where: {
+        OR: [
+          {
+            estimatedWarehouseDate: {
+              gte: dateOnlyToDate(from),
+              lte: dateOnlyToDate(to),
             },
-            {
-              estimatedFabricatorDate: {
-                gte: dateOnlyToDate(from),
-                lte: dateOnlyToDate(to),
-              },
+          },
+          {
+            estimatedFabricatorDate: {
+              gte: dateOnlyToDate(from),
+              lte: dateOnlyToDate(to),
             },
-            {
-              estimatedResidenceDate: {
-                gte: dateOnlyToDate(from),
-                lte: dateOnlyToDate(to),
-              },
+          },
+          {
+            estimatedResidenceDate: {
+              gte: dateOnlyToDate(from),
+              lte: dateOnlyToDate(to),
             },
-            {
-              installedDate: {
-                gte: dateOnlyToDate(from),
-                lte: dateOnlyToDate(to),
-              },
+          },
+          {
+            installedDate: {
+              gte: dateOnlyToDate(from),
+              lte: dateOnlyToDate(to),
             },
-          ],
-        },
-        select: {
-          estimatedFabricatorDate: true,
-          estimatedResidenceDate: true,
-          estimatedWarehouseDate: true,
-          id: true,
-          installedDate: true,
-          itemReference: true,
-          name: true,
-          project: { select: { name: true } },
-        },
-      }),
-      getDatabase().clientBillingDocument.findMany({
-        where: {
-          documentType: "INVOICE",
-          workflowStatus: "TO_BE_INVOICED",
-          isCancelled: false,
-          documentDate: { gte: dateOnlyToDate(from), lte: dateOnlyToDate(to) },
-        },
-        select: {
-          id: true,
-          reference: true,
-          documentDate: true,
-          project: { select: { name: true } },
-          client: { select: { displayName: true } },
-        },
-      }),
-    ]);
-  return buildCalendarEvents({
-    invoiceReminders: invoiceReminders.map((invoice) => ({
-      id: invoice.id,
-      reference: invoice.reference,
-      date: dateToDateOnly(invoice.documentDate),
-      projectName: invoice.project?.name ?? "Unassigned",
-      partyName: invoice.client?.displayName ?? "Unassigned",
-    })),
-    installments: [
-      ...installments.map((item) => ({
-        currencyCode: item.currencyCode,
-        direction: item.direction,
-        dueDate: item.dueDate,
-        id: item.id,
-        isCancelled: item.isCancelled,
-        label: item.label,
-        orderId: item.orderId,
-        orderNumber: item.orderNumber,
-        partyName: item.supplierName,
-        paidAmount: item.paidAmount,
-        projectName: item.projectName,
-        scheduledAmount: item.scheduledAmount,
+          },
+        ],
+      },
+      select: {
+        estimatedFabricatorDate: true,
+        estimatedResidenceDate: true,
+        estimatedWarehouseDate: true,
+        id: true,
+        installedDate: true,
+        itemReference: true,
+        name: true,
+        project: { select: { name: true } },
+      },
+    }),
+    getDatabase().clientBillingDocument.findMany({
+      where: {
+        documentType: "INVOICE",
+        workflowStatus: "TO_BE_INVOICED",
+        isCancelled: false,
+        documentDate: { gte: dateOnlyToDate(from), lte: dateOnlyToDate(to) },
+      },
+      select: {
+        id: true,
+        reference: true,
+        documentDate: true,
+        project: { select: { name: true } },
+        client: { select: { displayName: true } },
+      },
+    }),
+    getRefundCalendarEvents(from, to),
+  ]);
+  return [
+    ...buildCalendarEvents({
+      invoiceReminders: invoiceReminders.map((invoice) => ({
+        id: invoice.id,
+        reference: invoice.reference,
+        date: dateToDateOnly(invoice.documentDate),
+        projectName: invoice.project?.name ?? "Unassigned",
+        partyName: invoice.client?.displayName ?? "Unassigned",
       })),
-      ...clientInstallments
-        .filter(
-          (item) =>
-            (item.reviewReason ||
-              item.cashKind !== "planned" ||
-              item.documentType === "QUOTE") &&
-            item.dueDate !== null &&
-            item.dueDate >= from &&
-            item.dueDate <= to,
-        )
-        .map((item) => ({
+      installments: [
+        ...installments.map((item) => ({
           currencyCode: item.currencyCode,
-          direction: PaymentDirection.CLIENT_RECEIPT,
-          documentType: item.documentType as "QUOTE" | "INVOICE",
-          ...(item.reviewReason ? { reviewReason: item.reviewReason } : {}),
+          direction: item.direction,
           dueDate: item.dueDate,
-          href: `/billing/${item.billingDocumentId}`,
           id: item.id,
           isCancelled: item.isCancelled,
           label: item.label,
-          orderId: item.billingDocumentId,
-          orderNumber: item.billingReference,
-          partyName: item.clientName,
-          paidAmount: new Decimal(item.scheduledAmount)
-            .minus(item.outstandingAmount)
-            .toString(),
+          orderId: item.orderId,
+          orderNumber: item.orderNumber,
+          partyName: item.supplierName,
+          paidAmount: item.paidAmount,
           projectName: item.projectName,
           scheduledAmount: item.scheduledAmount,
         })),
-    ],
-    orders: orders.map((order) => ({
-      actualDeliveryDate: order.actualDeliveryDate
-        ? dateToDateOnly(order.actualDeliveryDate)
-        : null,
-      expectedDeliveryDate: order.expectedDeliveryDate
-        ? dateToDateOnly(order.expectedDeliveryDate)
-        : null,
-      id: order.id,
-      orderNumber: order.orderNumber,
-      projectName: order.project?.name ?? "Unassigned",
-    })),
-    items: items.map((item) => ({
-      estimatedFabricatorDate: item.estimatedFabricatorDate
-        ? dateToDateOnly(item.estimatedFabricatorDate)
-        : null,
-      estimatedResidenceDate: item.estimatedResidenceDate
-        ? dateToDateOnly(item.estimatedResidenceDate)
-        : null,
-      estimatedWarehouseDate: item.estimatedWarehouseDate
-        ? dateToDateOnly(item.estimatedWarehouseDate)
-        : null,
-      id: item.id,
-      installedDate: item.installedDate
-        ? dateToDateOnly(item.installedDate)
-        : null,
-      itemReference: item.itemReference,
-      name: item.name,
-      projectName: item.project?.name ?? "Unassigned",
-    })),
-    today: businessToday(),
-  });
+        ...clientInstallments
+          .filter(
+            (item) =>
+              (item.reviewReason ||
+                item.cashKind !== "planned" ||
+                item.documentType === "QUOTE") &&
+              item.dueDate !== null &&
+              item.dueDate >= from &&
+              item.dueDate <= to,
+          )
+          .map((item) => ({
+            currencyCode: item.currencyCode,
+            direction: PaymentDirection.CLIENT_RECEIPT,
+            documentType: item.documentType as "QUOTE" | "INVOICE",
+            ...(item.reviewReason ? { reviewReason: item.reviewReason } : {}),
+            dueDate: item.dueDate,
+            href: `/billing/${item.billingDocumentId}`,
+            id: item.id,
+            isCancelled: item.isCancelled,
+            label: item.label,
+            orderId: item.billingDocumentId,
+            orderNumber: item.billingReference,
+            partyName: item.clientName,
+            paidAmount: new Decimal(item.scheduledAmount)
+              .minus(item.outstandingAmount)
+              .toString(),
+            projectName: item.projectName,
+            scheduledAmount: item.scheduledAmount,
+          })),
+      ],
+      orders: orders.map((order) => ({
+        actualDeliveryDate: order.actualDeliveryDate
+          ? dateToDateOnly(order.actualDeliveryDate)
+          : null,
+        expectedDeliveryDate: order.expectedDeliveryDate
+          ? dateToDateOnly(order.expectedDeliveryDate)
+          : null,
+        id: order.id,
+        orderNumber: order.orderNumber,
+        projectName: order.project?.name ?? "Unassigned",
+      })),
+      items: items.map((item) => ({
+        estimatedFabricatorDate: item.estimatedFabricatorDate
+          ? dateToDateOnly(item.estimatedFabricatorDate)
+          : null,
+        estimatedResidenceDate: item.estimatedResidenceDate
+          ? dateToDateOnly(item.estimatedResidenceDate)
+          : null,
+        estimatedWarehouseDate: item.estimatedWarehouseDate
+          ? dateToDateOnly(item.estimatedWarehouseDate)
+          : null,
+        id: item.id,
+        installedDate: item.installedDate
+          ? dateToDateOnly(item.installedDate)
+          : null,
+        itemReference: item.itemReference,
+        name: item.name,
+        projectName: item.project?.name ?? "Unassigned",
+      })),
+      today: businessToday(),
+    }),
+    ...refundEvents,
+  ].toSorted(
+    (a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title),
+  );
 }
 
 // React cache is request-scoped: no financial data survives into a later request.

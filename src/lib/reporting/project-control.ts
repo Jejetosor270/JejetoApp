@@ -355,31 +355,37 @@ export async function getProjectControl(projectId: string) {
         order.orderCurrencyCode,
         order.costs.purchaseFxRate,
       ),
-      order.credits?.reportingPurchaseHt ?? (order.credits ? null : "0"),
+      order.credits?.reportingMerchandiseHt ?? (order.credits ? null : "0"),
     ),
   );
   const otherCosts = activeOrders.map((order) =>
-    sumKnown([
-      convert(
-        order.costs.customsDuties ?? "0",
-        order.orderCurrencyCode,
-        order.costs.purchaseFxRate,
-      ),
-      convert(
-        order.costs.miscellaneous ?? "0",
-        order.orderCurrencyCode,
-        order.costs.purchaseFxRate,
-      ),
-    ]),
+    difference(
+      sumKnown([
+        convert(
+          order.costs.customsDuties ?? "0",
+          order.orderCurrencyCode,
+          order.costs.purchaseFxRate,
+        ),
+        convert(
+          order.costs.miscellaneous ?? "0",
+          order.orderCurrencyCode,
+          order.costs.purchaseFxRate,
+        ),
+      ]),
+      order.credits?.reportingOtherHt ?? (order.credits ? null : "0"),
+    ),
   );
-  const freightHt = sumKnown([
-    ...activeOrders.map((order) =>
+  const orderFreight = (order: (typeof activeOrders)[number]) =>
+    difference(
       convert(
         order.costs.freight ?? "0",
         order.orderCurrencyCode,
         order.costs.purchaseFxRate,
       ),
-    ),
+      order.credits?.reportingFreightHt ?? (order.credits ? null : "0"),
+    );
+  const freightHt = sumKnown([
+    ...activeOrders.map(orderFreight),
     ...project.freightExpenses.map((expense) =>
       convert(
         expense.costAmountHt.toString(),
@@ -418,11 +424,7 @@ export async function getProjectControl(projectId: string) {
     freight: sumKnown([
       ...activeOrders.map((order) =>
         requiredRecovery(
-          convert(
-            order.costs.freight ?? "0",
-            order.orderCurrencyCode,
-            order.costs.purchaseFxRate,
-          ),
+          orderFreight(order),
           order.componentPricing.freightMarkupRate,
         ),
       ),
@@ -736,13 +738,7 @@ export async function getProjectControl(projectId: string) {
     },
     freightCoverage: projectFreightCoverage({
       supplierHt: sumKnown([
-        ...activeOrders.map((order) =>
-          convert(
-            order.costs.freight ?? "0",
-            order.orderCurrencyCode,
-            order.costs.purchaseFxRate,
-          ),
-        ),
+        ...activeOrders.map(orderFreight),
         ...project.freightExpenses.map((expense) =>
           convert(
             expense.costAmountHt.toString(),

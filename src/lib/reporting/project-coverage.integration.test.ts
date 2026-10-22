@@ -25,9 +25,101 @@ afterAll(async () => {
   await memory.close();
 });
 
+it("keeps category credits and freight recovery consistent across Project and Reports", async () => {
+  const db = memory.raw;
+  const project = await db.project.create({
+    data: {
+      code: "CREDIT-CATEGORIES",
+      name: "Category credits",
+      reportingCurrencyCode: "EUR",
+      status: "ACTIVE",
+      defaultFreightMarkupRate: "0.15",
+    },
+  });
+  const supplier = await db.supplier.create({
+    data: {
+      legalName: "Category Supplier",
+      displayName: "Category Supplier",
+      defaultCurrencyCode: "EUR",
+    },
+  });
+  await db.procurementOrder.create({
+    data: {
+      orderNumber: "CATEGORY-ORDER",
+      packageName: "Package",
+      projectId: project.id,
+      supplierId: supplier.id,
+      orderCurrencyCode: "EUR",
+      sellingCurrencyCode: "EUR",
+      status: "ORDERED",
+      pricingMode: "DIRECT_SELLING_PRICE",
+      sellingPriceAmount: "200",
+      costLines: {
+        create: [
+          { category: "SUPPLIER_PURCHASE", originalAmount: "100" },
+          { category: "FREIGHT", originalAmount: "20" },
+          { category: "MISCELLANEOUS", originalAmount: "30" },
+        ],
+      },
+      credits: {
+        create: {
+          side: "SUPPLIER",
+          reference: "CATEGORY-CN",
+          reason: "Reviewed correction",
+          creditDate: dateOnlyToDate(businessToday()),
+          totalHt: "40",
+          freightCoverageHt: "10",
+          otherCoverageHt: "20",
+          vatAmount: "0",
+          currencyCode: "EUR",
+          reportingCurrencyCode: "EUR",
+        },
+      },
+    },
+  });
+  const projectView = await getProjectControl(project.id);
+  expect(
+    projectView.categories.map(({ category, recordedCost }) => ({
+      category,
+      recordedCost,
+    })),
+  ).toEqual([
+    { category: "merchandise", recordedCost: "90.0000" },
+    { category: "freight", recordedCost: "10.0000" },
+    { category: "other", recordedCost: "10.0000" },
+  ]);
+  expect(projectView.freightCoverage).toMatchObject({
+    supplierHt: "10.0000",
+    recoveryTarget: "11.5000",
+    supplierMarkupHt: "1.5000",
+  });
+  expect(projectView.overview.orders).toMatchObject({
+    costHt: "110.0000",
+    sellHt: "200.0000",
+    profitHt: "90.0000",
+  });
+  const report = await getProjectReportingSnapshot(project.id, {
+    horizon: "30d",
+  });
+  expect(report?.financial.totals).toMatchObject({
+    purchaseCost: { value: "90" },
+    freight: { value: "10" },
+    otherCredits: { value: "-20" },
+    economicLandedCost: { value: "110" },
+    salesRevenue: { value: "200" },
+  });
+});
+
 it("keeps credited paid invoices as undated refund obligations until actual refunds settle", async () => {
   const db = memory.raw;
   const today = businessToday();
+  const client = await db.client.create({
+    data: {
+      legalName: "Refund Client",
+      displayName: "Refund Client",
+      defaultCurrencyCode: "EUR",
+    },
+  });
   const project = await db.project.create({
     data: {
       code: "CREDIT-CASH",
@@ -39,6 +131,7 @@ it("keeps credited paid invoices as undated refund obligations until actual refu
   const bill = await db.clientBillingDocument.create({
     data: {
       projectId: project.id,
+      clientId: client.id,
       documentType: "INVOICE",
       workflowStatus: "INVOICED",
       reference: "CREDIT-INV",
@@ -76,10 +169,29 @@ it("keeps credited paid invoices as undated refund obligations until actual refu
   expect(monthly?.cashFlow.totals.expectedComplete).toBe(false);
   expect(monthly?.cashFlow.totals.missingExpectedCount).toBe(1);
   expect(
-    (await getFinancialAttention(7, today, project.id)).issues.find(
-      (issue) => issue.key === `refund-due-client:${bill.id}`,
+    (await getFinancialAttention(7, today, project.id)).issues.find((issue) =>
+      issue.key.startsWith(`refund-due-client:${bill.id}`),
     ),
   ).toMatchObject({ amount: "24.0000", date: null });
+  await db.financialCredit.update({
+    where: { id: credit.id },
+    data: { expectedRefundDate: dateOnlyToDate(today) },
+  });
+  const plannedRefund = await getProjectControl(project.id);
+  expect(plannedRefund.cashOutlook.undatedOut).toBe("0.0000");
+  expect(plannedRefund.cashOutlook.windows[0]).toMatchObject({
+    expectedOut: "24.0000",
+    projectedCash: "96.0000",
+  });
+  expect(
+    (await getProcurementCalendarEvents(today, today)).find((row) =>
+      row.id.endsWith(credit.id),
+    ),
+  ).toMatchObject({ type: "CLIENT_REFUND", amount: "24.0000", date: today });
+  const plannedReport = await getProjectReportingSnapshot(project.id, {
+    horizon: "30d",
+  });
+  expect(plannedReport?.cashFlow.totals.expectedComplete).toBe(true);
   await db.financialCreditRefund.create({
     data: {
       creditId: credit.id,
@@ -157,10 +269,22 @@ it("keeps credited paid invoices as undated refund obligations until actual refu
   expect(supplierOpen.cashOutlook.undatedIn).toBe("20.0000");
   expect(supplierOpen.cashOutlook.windows[0]?.projectedCash).toBeNull();
   expect(
-    (await getFinancialAttention(7, today, project.id)).issues.find(
-      (issue) => issue.key === `refund-due-supplier:${order.id}`,
+    (await getFinancialAttention(7, today, project.id)).issues.find((issue) =>
+      issue.key.startsWith(`refund-due-supplier:${order.id}`),
     ),
   ).toMatchObject({ amount: "20.0000", date: null });
+  await db.financialCredit.update({
+    where: { id: supplierCredit.id },
+    data: { expectedRefundDate: dateOnlyToDate(today) },
+  });
+  expect(
+    (await getProjectControl(project.id)).cashOutlook.windows[0]?.expectedIn,
+  ).toBe("20.0000");
+  expect(
+    (await getProcurementCalendarEvents(today, today)).find((row) =>
+      row.id.endsWith(supplierCredit.id),
+    ),
+  ).toMatchObject({ type: "SUPPLIER_REFUND", amount: "20.0000", date: today });
   await db.financialCreditRefund.create({
     data: {
       creditId: supplierCredit.id,

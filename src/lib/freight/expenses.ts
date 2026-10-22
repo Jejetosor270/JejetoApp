@@ -22,12 +22,23 @@ import { writeAuditEvent } from "@/lib/audit/events";
 import { getDatabase } from "@/lib/db";
 import { listProjectOrders } from "@/lib/procurement/orders";
 import {
+  freightExpenseEditInclude,
+  freightExpenseEditVersion,
+  staleFreightExpenseMessage,
+} from "@/lib/freight/expense-edit-version";
+import { isPaymentWriteConflict } from "@/lib/payments/edit-version";
+import {
   calculateInputVatRecovery,
   inputVatRecoverabilityApplies,
   recoverabilityFromRate,
 } from "@/domain/vat/recoverability";
 
 export class ProjectFreightExpenseError extends Error {}
+
+function auditValue(value: string | boolean | Date | Prisma.Decimal | null) {
+  if (value instanceof Date) return value.toISOString();
+  return value !== null && typeof value === "object" ? value.toString() : value;
+}
 
 function freightVat(
   input: Pick<
@@ -122,17 +133,23 @@ export async function listProjectFreightExpenses(projectId: string) {
   const expenses = await getDatabase().projectFreightExpense.findMany({
     where: { projectId },
     orderBy: [{ expenseDate: "desc" }, { createdAt: "desc" }],
-    include: { supplier: { select: { displayName: true } } },
+    include: {
+      ...freightExpenseEditInclude,
+      supplier: { select: { displayName: true } },
+    },
   });
   return expenses.map((expense) => ({
     costAmountHt: expense.costAmountHt.toString(),
     currencyCode: expense.currencyCode,
     description: expense.description,
+    dueDate: expense.dueDate ? dateToDateOnly(expense.dueDate) : null,
+    editVersion: freightExpenseEditVersion(expense),
     expenseDate: dateToDateOnly(expense.expenseDate),
     freightMarkupOverrideRate:
       expense.freightMarkupOverrideRate?.toString() ?? null,
     fxRate: expense.fxRateToReporting?.toString() ?? null,
     id: expense.id,
+    hasPayments: expense.payments.length > 0,
     notes: expense.notes,
     recoverability: expense.recoverability,
     recoverableRate: expense.recoverableRate?.toString() ?? null,
@@ -183,6 +200,7 @@ export async function createProjectFreightExpense(
         createdById: actorId,
         currencyCode: input.currencyCode,
         description: input.description,
+        dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
         expenseDate: dateOnlyToDate(input.expenseDate),
         freightMarkupOverrideRate: input.freightMarkupOverrideRate ?? null,
         fxRateToReporting:
@@ -225,60 +243,130 @@ export async function updateProjectFreightExpense(
   input: UpdateProjectFreightExpenseInput,
 ): Promise<void> {
   const database = getDatabase();
-  await database.$transaction(
-    async (transaction) => {
-      const existing = await transaction.projectFreightExpense.findUnique({
-        where: { id: input.id },
-        select: {
-          payments: { select: { amount: true } },
-          costAmountHt: true,
-          description: true,
-          projectId: true,
-          reference: true,
-        },
-      });
-      if (!existing || existing.projectId !== input.projectId)
-        throw new ProjectFreightExpenseError("Freight expense not found.");
-      const vat = freightVat({
-        ...input,
-        costAmountHt: existing.costAmountHt.toString(),
-      });
-      const paid = (existing.payments ?? []).reduce(
-        (sum, payment) => sum.plus(payment.amount),
-        new Decimal(0),
-      );
-      if (
-        paid.greaterThan(
-          freightPayable(
-            existing.costAmountHt.toString(),
-            vat.vatAmount,
-            vat.vatTreatment,
-          ),
+  try {
+    await database.$transaction(
+      async (transaction) => {
+        const actor = await transaction.user.findUnique({
+          where: { id: actorId },
+          select: { isActive: true, role: true },
+        });
+        if (!actor?.isActive || !["ADMIN", "MANAGER"].includes(actor.role))
+          throw new ProjectFreightExpenseError(
+            "You cannot edit freight expenses.",
+          );
+        const existing = await transaction.projectFreightExpense.findUnique({
+          where: { id: input.id },
+          include: freightExpenseEditInclude,
+        });
+        if (!existing?.project || existing.projectId !== input.projectId)
+          throw new ProjectFreightExpenseError("Freight expense not found.");
+        if (
+          !input.expectedVersion ||
+          input.expectedVersion !== freightExpenseEditVersion(existing)
         )
-      )
-        throw new ProjectFreightExpenseError(
-          "Freight payable cannot be reduced below payments already recorded.",
+          throw new ProjectFreightExpenseError(staleFreightExpenseMessage);
+        if (
+          existing.payments.length &&
+          (input.currencyCode !== existing.currencyCode ||
+            (input.supplierId ?? null) !== existing.supplierId)
+        )
+          throw new ProjectFreightExpenseError(
+            "Currency and Supplier cannot change while this expense has payments. Correct the cash assignment first.",
+          );
+        const [currency, supplier] = await Promise.all([
+          transaction.currency.findFirst({
+            where: {
+              code: input.currencyCode,
+              ...(input.currencyCode === existing.currencyCode
+                ? {}
+                : { isActive: true }),
+            },
+            select: { code: true },
+          }),
+          input.supplierId
+            ? transaction.supplier.findUnique({
+                where: { id: input.supplierId },
+                select: { id: true },
+              })
+            : Promise.resolve(null),
+        ]);
+        if (!currency || (input.supplierId && !supplier))
+          throw new ProjectFreightExpenseError(
+            "Select a valid Supplier and currency.",
+          );
+        if (
+          input.currencyCode !== existing.project.reportingCurrencyCode &&
+          !input.fxRate
+        )
+          throw new ProjectFreightExpenseError(
+            "Enter the manual FX rate to the Project reporting currency.",
+          );
+        const vat = freightVat(input);
+        const paid = existing.payments.reduce(
+          (sum, payment) => sum.plus(payment.amount),
+          new Decimal(0),
         );
-      await transaction.projectFreightExpense.update({
-        where: { id: input.id },
-        data: {
-          updatedById: actorId,
+        if (
+          paid.greaterThan(
+            freightPayable(input.costAmountHt, vat.vatAmount, vat.vatTreatment),
+          )
+        )
+          throw new ProjectFreightExpenseError(
+            "Freight payable cannot be reduced below payments already recorded.",
+          );
+        const data = {
+          costAmountHt: input.costAmountHt,
+          currencyCode: input.currencyCode,
+          description: input.description,
+          dueDate: input.dueDate ? dateOnlyToDate(input.dueDate) : null,
+          expenseDate: dateOnlyToDate(input.expenseDate),
+          freightMarkupOverrideRate: input.freightMarkupOverrideRate ?? null,
+          fxRateToReporting:
+            input.currencyCode === existing.project.reportingCurrencyCode
+              ? null
+              : (input.fxRate ?? null),
+          notes: input.notes ?? null,
+          reference: input.reference ?? null,
+          supplierId: input.supplierId ?? null,
           ...vat,
-        },
-      });
-      await writeAuditEvent(transaction, actorId, {
-        action: "UPDATED",
-        entityId: input.id,
-        entityReference: existing.reference ?? existing.description,
-        entityType: "FREIGHT_EXPENSE",
-        metadata: {
-          fields: ["vatTreatment", "vatRate", "vatAmount", "recoverableRate"],
-        },
-        summary: "Updated a Project-level freight expense.",
-      });
-    },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  );
+        };
+        await transaction.projectFreightExpense.update({
+          where: { id: input.id },
+          data: {
+            updatedById: actorId,
+            ...data,
+          },
+        });
+        await writeAuditEvent(transaction, actorId, {
+          action: "UPDATED",
+          entityId: input.id,
+          entityReference: existing.reference ?? existing.description,
+          entityType: "FREIGHT_EXPENSE",
+          metadata: {
+            fields: Object.keys(data),
+            before: Object.fromEntries(
+              Object.keys(data).map((key) => [
+                key,
+                auditValue(existing[key as keyof typeof data]),
+              ]),
+            ),
+            after: Object.fromEntries(
+              Object.entries(data).map(([key, value]) => [
+                key,
+                auditValue(value),
+              ]),
+            ),
+          },
+          summary: "Updated a Project-level freight expense.",
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (error) {
+    if (isPaymentWriteConflict(error))
+      throw new ProjectFreightExpenseError(staleFreightExpenseMessage);
+    throw error;
+  }
 }
 
 export async function deleteProjectFreightExpense(
@@ -334,14 +422,17 @@ export const getProjectFreightReconciliation = cache(
     if (!project) return null;
     const activeOrders = orders.filter((order) => order.status !== "CANCELLED");
     const convertedOrders = activeOrders.map((order) => ({
-      freightCostHt: order.costs.freight
-        ? convertedAmount({
-            amount: order.costs.freight,
-            currencyCode: order.orderCurrencyCode,
-            fxRate: order.costs.purchaseFxRate,
-            reportingCurrencyCode: project.reportingCurrencyCode,
-          })
-        : "0.0000",
+      freightCostHt: freightDifference(
+        order.costs.freight
+          ? convertedAmount({
+              amount: order.costs.freight,
+              currencyCode: order.orderCurrencyCode,
+              fxRate: order.costs.purchaseFxRate,
+              reportingCurrencyCode: project.reportingCurrencyCode,
+            })
+          : "0.0000",
+        order.credits?.reportingFreightHt ?? (order.credits ? null : "0"),
+      ),
       freightMarkupRate: order.componentPricing.freightMarkupRate,
     }));
     const convertedExpenses = expenses.map((expense) => {

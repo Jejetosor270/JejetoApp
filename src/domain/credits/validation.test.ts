@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createCreditSchema, creditRefundSchema } from "./validation";
+import {
+  createCreditSchema,
+  creditRefundSchema,
+  creditRefundExpectationSchema,
+} from "./validation";
 
 const credit = {
   side: "CLIENT",
@@ -43,10 +47,10 @@ describe("reviewed credit inputs", () => {
         createCreditSchema.safeParse({ ...credit, ...patch }).success,
       ).toBe(false);
   });
-  it("limits Supplier credits to product HT and invoice VAT", () => {
+  it("accepts reviewed Supplier categories but no Client allocation attribution", () => {
     expect(
       createCreditSchema.safeParse({ ...credit, side: "SUPPLIER" }).success,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       createCreditSchema.safeParse({
         ...credit,
@@ -54,6 +58,61 @@ describe("reviewed credit inputs", () => {
         freightCoverageHt: "0",
       }).success,
     ).toBe(true);
+    expect(
+      createCreditSchema.safeParse({
+        ...credit,
+        side: "SUPPLIER",
+        allocations: [
+          {
+            orderId: credit.sourceId,
+            amountHt: "1",
+            freightCoverageHt: "0",
+            otherCoverageHt: "0",
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+  it("accepts optional refund timing with independent precise FX and clearing", () => {
+    const input = {
+      creditId: credit.sourceId,
+      expectedVersion: credit.expectedVersion,
+    };
+    expect(
+      creditRefundExpectationSchema.parse({
+        ...input,
+        expectedRefundDate: "",
+        expectedRefundFxRateToReporting: "",
+      }),
+    ).toMatchObject({
+      expectedRefundDate: undefined,
+      expectedRefundFxRateToReporting: undefined,
+    });
+    expect(
+      creditRefundExpectationSchema.parse({
+        ...input,
+        expectedRefundDate: "2026-11-01",
+        expectedRefundFxRateToReporting: "0,9123456789",
+      }),
+    ).toMatchObject({
+      expectedRefundDate: "2026-11-01",
+      expectedRefundFxRateToReporting: "0.9123456789",
+    });
+    for (const patch of [
+      { expectedRefundDate: "2026-02-30" },
+      { expectedRefundFxRateToReporting: "0" },
+      { expectedRefundFxRateToReporting: "-1" },
+      { expectedVersion: "" },
+      { amount: "100" },
+    ]) {
+      expect(
+        creditRefundExpectationSchema.safeParse({ ...input, ...patch }).success,
+      ).toBe(false);
+    }
+    expect(
+      createCreditSchema.parse({ ...credit, expectedRefundDate: "2026-11-01" })
+        .expectedRefundDate,
+    ).toBe("2026-11-01");
   });
   it("refunds require positive cash and manual positive FX when entered", () => {
     const refund = {

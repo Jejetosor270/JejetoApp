@@ -19,12 +19,18 @@ it("separates credit cost/VAT reduction from original cash and actual refund FX"
   expect(summarizeSupplierCredits([credit], "EUR")).toEqual({
     count: 1,
     purchaseHt: "20.0000",
+    merchandiseHt: "20.0000",
+    freightHt: "0.0000",
+    otherHt: "0.0000",
     vat: "4.0000",
     economic: "22.0000",
     payable: "24.0000",
     deductibleVat: "2.0000",
     refunded: "24.0000",
     reportingPurchaseHt: "16.0000",
+    reportingMerchandiseHt: "16.0000",
+    reportingFreightHt: "0.0000",
+    reportingOtherHt: "0.0000",
     reportingVat: "3.2000",
     reportingEconomic: "17.6000",
     reportingPayable: "19.2000",
@@ -68,6 +74,22 @@ it("preserves explicit incompleteness for independent missing credit and refund 
   expect(
     summarizeSupplierCredits([credit], "GBP").reportingEconomic,
   ).toBeNull();
+});
+it("keeps each credited cost category distinct without changing the aggregate reduction", () => {
+  const summary = summarizeSupplierCredits(
+    [{ ...credit, freightCoverageHt: "5", otherCoverageHt: "3" }],
+    "EUR",
+  );
+  expect(summary).toMatchObject({
+    purchaseHt: "20.0000",
+    merchandiseHt: "12.0000",
+    freightHt: "5.0000",
+    otherHt: "3.0000",
+    reportingMerchandiseHt: "9.6000",
+    reportingFreightHt: "4.0000",
+    reportingOtherHt: "2.4000",
+    reportingEconomic: "17.6000",
+  });
 });
 it("ignores cancelled credits/refunds and handles zero VAT without a recovery classification", () => {
   expect(

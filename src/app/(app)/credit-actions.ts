@@ -9,23 +9,31 @@ import {
   cancelCredit,
   cancelRefund,
   CreditError,
+  updateCreditRefundExpectation,
 } from "@/lib/credits/service";
 
 export async function saveCreditAction(
-  kind: "credit" | "refund" | "cancel-credit" | "cancel-refund",
+  kind:
+    | "credit"
+    | "refund"
+    | "refund-expectation"
+    | "cancel-credit"
+    | "cancel-refund",
   input: unknown,
 ) {
   try {
     const result =
       kind === "credit"
         ? await createCredit(input)
-        : kind === "refund"
-          ? await recordCreditRefund(input)
-          : kind === "cancel-credit"
-            ? await cancelCredit(input)
-            : kind === "cancel-refund"
-              ? await cancelRefund(input)
-              : null;
+        : kind === "refund-expectation"
+          ? await updateCreditRefundExpectation(input)
+          : kind === "refund"
+            ? await recordCreditRefund(input)
+            : kind === "cancel-credit"
+              ? await cancelCredit(input)
+              : kind === "cancel-refund"
+                ? await cancelRefund(input)
+                : null;
     if (!result) return { ok: false, message: "Choose a valid credit action." };
     revalidatePath("/", "layout");
     return {

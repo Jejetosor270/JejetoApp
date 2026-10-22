@@ -164,6 +164,18 @@ export async function loadCreditSource(
     source.costLines
       .find((row) => row.category === "SUPPLIER_PURCHASE")
       ?.originalAmount.toString() ?? "0";
+  const freight =
+    source.costLines
+      .find((row) => row.category === "FREIGHT")
+      ?.originalAmount.toString() ?? "0";
+  const customs =
+    source.costLines
+      .find((row) => row.category === "CUSTOMS_DUTIES")
+      ?.originalAmount.toString() ?? "0";
+  const miscellaneous =
+    source.costLines
+      .find((row) => row.category === "MISCELLANEOUS")
+      ?.originalAmount.toString() ?? "0";
   const inputVatEntries = source.vatEntries.filter(
     (row) => row.direction === "INPUT",
   );
@@ -205,25 +217,22 @@ export async function loadCreditSource(
           : null,
     snapshot: source,
     original: {
-      totalHt: purchase,
+      totalHt: new Decimal(purchase)
+        .plus(freight)
+        .plus(customs)
+        .plus(miscellaneous)
+        .toFixed(4),
       vatAmount: payableVat,
-      // Credit HT remains limited to products; cash obligations include all Order costs.
       totalTtc: supplierPayableBase({
         supplierPurchase: purchase,
-        freight: source.costLines
-          .find((row) => row.category === "FREIGHT")
-          ?.originalAmount.toString(),
-        customsDuties: source.costLines
-          .find((row) => row.category === "CUSTOMS_DUTIES")
-          ?.originalAmount.toString(),
-        miscellaneous: source.costLines
-          .find((row) => row.category === "MISCELLANEOUS")
-          ?.originalAmount.toString(),
+        freight,
+        customsDuties: customs,
+        miscellaneous,
         inputVatAmount: payableVat,
         inputVatTreatment: vat?.treatment,
       }).toFixed(4),
-      freightCoverageHt: "0",
-      otherCoverageHt: "0",
+      freightCoverageHt: freight,
+      otherCoverageHt: new Decimal(customs).plus(miscellaneous).toFixed(4),
     },
     paidTtc: mixed
       ? "0"

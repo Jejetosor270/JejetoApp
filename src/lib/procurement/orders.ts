@@ -61,6 +61,10 @@ import { activeCreditsInclude } from "@/lib/credits/select";
 import { assertNoActiveCredits } from "@/lib/credits/guards";
 import { creditCashPosition } from "@/domain/credits/calculations";
 import {
+  refundExpectations,
+  type RefundExpectation,
+} from "@/domain/credits/refund-expectations";
+import {
   summarizeSupplierCredits,
   type SupplierCreditSummary,
 } from "@/domain/finance/supplier-credit-reporting";
@@ -293,6 +297,7 @@ export interface OrderSummary {
     netPaid?: string;
     refunded?: string;
     refundDue?: string;
+    refundExpectations?: RefundExpectation[];
     originalPayable?: string | null;
     paidAt: string | null;
     nextDueDate: string | null;
@@ -1060,6 +1065,10 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
       netPaid: cashPosition?.netPaid ?? paidSupplier.toString(),
       refunded: credits.refunded,
       refundDue: cashPosition?.refundDue ?? "0",
+      refundExpectations: refundExpectations(
+        order.credits ?? [],
+        cashPosition?.refundDue ?? "0",
+      ),
       paidAt: completedPaymentDate(
         order.status !== "CANCELLED" && supplierPaymentStatus === "PAID",
         order.paymentInstallments.flatMap((installment) =>

@@ -63,6 +63,7 @@ const report: PortfolioReportingSnapshot = {
       inputVat: amount("0"),
       landedCost: amount("100"),
       miscellaneous: amount("0"),
+      otherCredits: amount("0"),
       nonRecoverableInputVat: amount("0"),
       outputVat: amount("0"),
       packageSellingPrice: amount("150"),

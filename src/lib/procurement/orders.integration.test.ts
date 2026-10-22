@@ -190,6 +190,8 @@ it.each([
         supplierVatEntryId: vat.id,
         reference: "CR-1",
         creditDate: timestamp,
+        expectedRefundDate: null,
+        expectedRefundFxRateToReporting: null,
         reason: "Price correction",
         totalHt: new Decimal("20"),
         vatAmount: new Decimal("4"),

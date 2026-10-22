@@ -13,6 +13,10 @@ import { freightPayable } from "@/domain/finance/project-control";
 import { dateToDateOnly } from "@/domain/payments/dates";
 import type { PaymentInstallmentView } from "@/lib/payments/payments";
 import type { OrderSummary } from "@/lib/procurement/orders";
+import {
+  refundExpectations,
+  type RefundExpectation,
+} from "@/domain/credits/refund-expectations";
 
 type Money = { toString(): string };
 type BillingCashDocument = Parameters<typeof billingCashContexts>[0][number];
@@ -26,7 +30,7 @@ export interface CashOutlookSources {
     costs: Pick<OrderSummary["costs"], "purchaseFxRate">;
     supplierPayment: Pick<
       OrderSummary["supplierPayment"],
-      "totalPayable" | "netPaid" | "paid" | "refundDue"
+      "totalPayable" | "netPaid" | "paid" | "refundDue" | "refundExpectations"
     >;
     credits?: Pick<NonNullable<OrderSummary["credits"]>, "count">;
   })[];
@@ -111,18 +115,20 @@ export function buildCashOutlookDocuments({
     if (!order.credits?.count || reviewReason) continue;
     const refundDue = order.supplierPayment.refundDue ?? "0";
     if (new Decimal(refundDue).greaterThan(0))
-      documents.push({
-        source: {
-          label: `Supplier refund · ${order.orderNumber}`,
-          href: `/orders/${order.id}?tab=related#credits`,
-        },
-        kind: "issued",
-        currency: order.orderCurrencyCode,
-        total: refundDue,
-        paid: "0",
-        fx: null,
-        terms: [],
-      });
+      documents.push(
+        ...refundDocuments(
+          order.supplierPayment.refundExpectations ??
+            refundExpectations([], refundDue),
+          {
+            source: {
+              label: `Supplier refund · ${order.orderNumber}`,
+              href: `/orders/${order.id}?tab=related#credits`,
+            },
+            kind: "issued",
+            currency: order.orderCurrencyCode,
+          },
+        ),
+      );
   }
   for (const context of billingCashContexts(billingDocuments)) {
     const { document: doc, terms } = context;
@@ -150,18 +156,16 @@ export function buildCashOutlookDocuments({
     ) {
       const refundDue = getClientCreditPosition(doc).refundDue;
       if (new Decimal(refundDue).greaterThan(0))
-        documents.push({
-          source: {
-            label: `Client refund · ${doc.reference}`,
-            href: `/billing/${doc.id}?tab=related#credits`,
-          },
-          kind: "payment",
-          currency: doc.currencyCode,
-          total: refundDue,
-          paid: "0",
-          fx: null,
-          terms: [],
-        });
+        documents.push(
+          ...refundDocuments(refundExpectations(doc.credits, refundDue), {
+            source: {
+              label: `Client refund · ${doc.reference}`,
+              href: `/billing/${doc.id}?tab=related#credits`,
+            },
+            kind: "payment",
+            currency: doc.currencyCode,
+          }),
+        );
     }
   }
   for (const expense of freightExpenses) {
@@ -194,4 +198,37 @@ export function buildCashOutlookDocuments({
     });
   }
   return documents;
+}
+
+function refundDocuments(
+  expectations: readonly RefundExpectation[],
+  source: Pick<CashOutlookDocument, "source" | "kind" | "currency">,
+): CashOutlookDocument[] {
+  return expectations.map((row) => ({
+    ...source,
+    ...(source.source && row.reference
+      ? {
+          source: {
+            ...source.source,
+            label: `${source.source.label} · ${row.reference}`,
+          },
+        }
+      : {}),
+    total: row.amount,
+    reportingCurrencyCode: row.reportingCurrencyCode,
+    paid: "0",
+    fx: row.expectedFxRate,
+    // Undated legacy credits remain explicitly unscheduled.
+    terms: row.dueDate
+      ? [
+          {
+            amount: row.amount,
+            paid: "0",
+            due: row.dueDate,
+            fx: row.expectedFxRate,
+            cancelled: false,
+          },
+        ]
+      : [],
+  }));
 }

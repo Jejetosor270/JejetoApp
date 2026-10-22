@@ -2,11 +2,14 @@ import Decimal from "decimal.js";
 import { supplierCreditEffect } from "@/domain/credits/calculations";
 import { reportingAmount } from "./calculations";
 import { sumKnown } from "./project-control";
+import type { RefundExpectationCredit } from "@/domain/credits/refund-expectations";
 
 type Amount = { toString(): string };
-export interface SupplierReportingCredit {
+export interface SupplierReportingCredit extends RefundExpectationCredit {
   isCancelled: boolean;
   totalHt: Amount;
+  freightCoverageHt?: Amount;
+  otherCoverageHt?: Amount;
   vatAmount: Amount;
   supplierRecoverableRate: Amount | null;
   currencyCode: string;
@@ -43,13 +46,25 @@ export function summarizeSupplierCredits(
               fxRateToReporting: fx?.toString() ?? null,
             })?.toString() ?? null);
     const refunds = credit.refunds.filter((refund) => !refund.isCancelled);
+    const freight = credit.freightCoverageHt?.toString() ?? "0";
+    const other = credit.otherCoverageHt?.toString() ?? "0";
+    const merchandise = new Decimal(credit.totalHt.toString())
+      .minus(freight)
+      .minus(other)
+      .toString();
     return {
       purchaseHt: credit.totalHt.toString(),
+      merchandiseHt: merchandise,
+      freightHt: freight,
+      otherHt: other,
       vat: credit.vatAmount.toString(),
       economic: effect.economicCostReduction,
       payable: effect.payableReduction,
       deductibleVat: effect.deductibleVatAmount,
       reportingPurchaseHt: convert(credit.totalHt.toString()),
+      reportingMerchandiseHt: convert(merchandise),
+      reportingFreightHt: convert(freight),
+      reportingOtherHt: convert(other),
       reportingVat: convert(credit.vatAmount.toString()),
       reportingEconomic: convert(effect.economicCostReduction),
       reportingPayable: convert(effect.payableReduction),
@@ -72,12 +87,18 @@ export function summarizeSupplierCredits(
   return {
     count: active.length,
     purchaseHt: sum("purchaseHt") ?? "0",
+    merchandiseHt: sum("merchandiseHt") ?? "0",
+    freightHt: sum("freightHt") ?? "0",
+    otherHt: sum("otherHt") ?? "0",
     vat: sum("vat") ?? "0",
     economic: sum("economic") ?? "0",
     payable: sum("payable") ?? "0",
     deductibleVat: sum("deductibleVat") ?? "0",
     refunded: sum("refunded") ?? "0",
     reportingPurchaseHt: sum("reportingPurchaseHt"),
+    reportingMerchandiseHt: sum("reportingMerchandiseHt"),
+    reportingFreightHt: sum("reportingFreightHt"),
+    reportingOtherHt: sum("reportingOtherHt"),
     reportingVat: sum("reportingVat"),
     reportingEconomic: sum("reportingEconomic"),
     reportingPayable: sum("reportingPayable"),

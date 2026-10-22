@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { mountForm, enter, clickText } from "@/test/dom-form";
 import { InstallmentForm } from "./payment-forms";
 vi.mock("@/app/(app)/payments/actions", () => ({}));
+vi.mock("@/app/(app)/payments/move-actions", () => ({}));
 let view: Awaited<ReturnType<typeof mountForm>>;
 afterEach(async () => view?.unmount());
 

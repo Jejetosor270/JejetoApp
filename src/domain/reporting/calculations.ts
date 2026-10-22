@@ -77,6 +77,7 @@ export interface ReportingOrderResult {
   landedCost: Decimal | null;
   markupRate: Decimal | null;
   miscellaneous: Decimal | null;
+  otherCredits: Decimal | null;
   nonRecoverableInputVat: Decimal | null;
   outputVat: Decimal | null;
   packageSellingPrice: Decimal | null;
@@ -101,6 +102,7 @@ export interface ProjectFinancialResult {
     inputVat: AggregateAmount;
     landedCost: AggregateAmount;
     miscellaneous: AggregateAmount;
+    otherCredits: AggregateAmount;
     nonRecoverableInputVat: AggregateAmount;
     outputVat: AggregateAmount;
     packageSellingPrice: AggregateAmount;
@@ -304,7 +306,10 @@ export function calculateReportingOrder(
     clientReceivable,
     customsDuties: orderCostAmount(input, input.cost.customsDuties),
     economicLandedCost,
-    freight: orderCostAmount(input, input.cost.freight),
+    freight: subtractCredit(
+      orderCostAmount(input, input.cost.freight),
+      input.supplierCredits?.reportingFreightHt,
+    ),
     grossMarginRate: metrics?.grossMarginRate ?? null,
     grossProfit: metrics?.grossProfit ?? null,
     id: input.id,
@@ -315,6 +320,11 @@ export function calculateReportingOrder(
     ),
     markupRate: metrics?.markupRate ?? null,
     miscellaneous: orderCostAmount(input, input.cost.miscellaneous),
+    // Other credits are not arbitrarily split between customs and miscellaneous.
+    otherCredits:
+      input.supplierCredits?.reportingOtherHt === null
+        ? null
+        : new Decimal(input.supplierCredits?.reportingOtherHt ?? "0").negated(),
     nonRecoverableInputVat:
       inputVat === null
         ? null
@@ -333,7 +343,7 @@ export function calculateReportingOrder(
     packageSellingPrice: orderSellingAmount(input, input.packageSellingPrice),
     purchaseCost: subtractCredit(
       orderCostAmount(input, input.cost.purchaseCost),
-      input.supplierCredits?.reportingPurchaseHt,
+      input.supplierCredits?.reportingMerchandiseHt,
     ),
     recoverableInputVat:
       inputVat === null
@@ -376,6 +386,7 @@ export function calculateProjectFinancialSummary(
     inputVat: aggregateOrderField(orders, "inputVat"),
     landedCost: aggregateOrderField(orders, "landedCost"),
     miscellaneous: aggregateOrderField(orders, "miscellaneous"),
+    otherCredits: aggregateOrderField(orders, "otherCredits"),
     nonRecoverableInputVat: aggregateOrderField(
       orders,
       "nonRecoverableInputVat",

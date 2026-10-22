@@ -24,6 +24,7 @@ import { projectFreightBudget } from "@/domain/freight/calculations";
 import { billingIsIssued } from "@/domain/billing/status";
 import { billingCashContexts } from "@/domain/billing/cash-expectations";
 import { getClientCreditPosition } from "@/domain/billing/credits";
+import { refundExpectations } from "@/domain/credits/refund-expectations";
 import { businessToday, dateToDateOnly } from "@/domain/payments/dates";
 import {
   buildFinancialAttention,
@@ -125,6 +126,7 @@ export async function getFinancialAttention(
       paid: order.supplierPayment.netPaid ?? order.supplierPayment.paid,
       creditAdjusted: (order.credits?.count ?? 0) > 0,
       refundDue: order.supplierPayment.refundDue,
+      refundExpectations: order.supplierPayment.refundExpectations,
       issued: true,
       toInvoice: false,
       fxMissing: order.costs.missingFx.length > 0,
@@ -162,6 +164,12 @@ export async function getFinancialAttention(
         ].map((row) => [row.id, row]),
       ).values(),
     ];
+    const refundDue = context.reviewReason
+      ? undefined
+      : getClientCreditPosition(
+          bill,
+          receipts.map((receipt) => receipt.amount.toString()),
+        ).refundDue;
     documents.push({
       id: bill.id,
       side: "client",
@@ -179,12 +187,10 @@ export async function getFinancialAttention(
       totalTtc: context.total,
       paid: context.paid,
       creditAdjusted: bill.credits.length > 0,
-      refundDue: context.reviewReason
-        ? undefined
-        : getClientCreditPosition(
-            bill,
-            receipts.map((receipt) => receipt.amount.toString()),
-          ).refundDue,
+      refundDue,
+      refundExpectations: refundDue
+        ? refundExpectations(bill.credits, refundDue)
+        : [],
       issued: billingIsIssued(bill),
       toInvoice: bill.workflowStatus === "TO_BE_INVOICED",
       fxMissing:

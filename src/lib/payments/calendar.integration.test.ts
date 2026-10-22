@@ -5,6 +5,7 @@ const database = vi.hoisted(() => ({
   item: { findMany: vi.fn() },
   paymentInstallment: { findMany: vi.fn() },
   procurementOrder: { findMany: vi.fn() },
+  financialCredit: { findMany: vi.fn() },
 }));
 const billing = vi.hoisted(() => ({
   listClientCashInstallments: vi.fn(),
@@ -58,6 +59,7 @@ describe("calendar events from authoritative installments", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     database.procurementOrder.findMany.mockResolvedValue([]);
+    database.financialCredit.findMany.mockResolvedValue([]);
     database.item.findMany.mockResolvedValue([]);
     database.clientBillingDocument.findMany.mockResolvedValue([]);
     billing.listClientCashInstallments.mockResolvedValue([]);

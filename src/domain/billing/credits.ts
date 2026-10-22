@@ -1,8 +1,9 @@
 import Decimal from "decimal.js";
 import { creditCashPosition } from "@/domain/credits/calculations";
+import type { RefundExpectationCredit } from "@/domain/credits/refund-expectations";
 
 type Money = { toString(): string };
-export interface BillingCredit {
+export interface BillingCredit extends RefundExpectationCredit {
   totalHt: Money;
   vatAmount: Money;
   freightCoverageHt: Money;

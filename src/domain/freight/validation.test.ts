@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { projectFreightExpenseSchema } from "@/domain/freight/validation";
+import {
+  projectFreightExpenseSchema,
+  updateProjectFreightExpenseSchema,
+} from "@/domain/freight/validation";
 
 const base = {
   costAmountHt: "10000",
@@ -58,5 +61,39 @@ describe("Project freight expense VAT validation", () => {
         vatTreatment: "DOMESTIC",
       }),
     ).toThrow("Enter the recoverable percentage");
+  });
+
+  it("keeps missing due dates optional and validates entered dates", () => {
+    expect(
+      projectFreightExpenseSchema.parse({ ...base, dueDate: "" }).dueDate,
+    ).toBeUndefined();
+    expect(
+      projectFreightExpenseSchema.parse({ ...base, dueDate: "2026-10-22" })
+        .dueDate,
+    ).toBe("2026-10-22");
+    expect(() =>
+      projectFreightExpenseSchema.parse({ ...base, dueDate: "2026-02-30" }),
+    ).toThrow("valid due date");
+  });
+
+  it("requires the opening version and full reviewed fields for edits", () => {
+    const id = "b12b6b9b-10e9-4e42-b93f-38796de4f65a";
+    expect(() =>
+      updateProjectFreightExpenseSchema.parse({ ...base, id }),
+    ).toThrow();
+    expect(() =>
+      updateProjectFreightExpenseSchema.parse({
+        id,
+        projectId: base.projectId,
+        expectedVersion: "a".repeat(64),
+      }),
+    ).toThrow();
+    expect(
+      updateProjectFreightExpenseSchema.parse({
+        ...base,
+        id,
+        expectedVersion: "a".repeat(64),
+      }).costAmountHt,
+    ).toBe("10000.0000");
   });
 });

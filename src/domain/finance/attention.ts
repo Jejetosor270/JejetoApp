@@ -4,6 +4,7 @@ import { installmentOutstanding } from "@/domain/payments/calculations";
 import { cappedCashTerms } from "@/domain/payments/cash-expectations";
 import { reportingAmount } from "@/domain/finance/calculations";
 import { formatRate } from "@/domain/procurement/presentation";
+import type { RefundExpectation } from "@/domain/credits/refund-expectations";
 
 export const attentionHorizons = [7, 30, 90] as const;
 export type AttentionHorizon = (typeof attentionHorizons)[number];
@@ -36,6 +37,7 @@ export interface AttentionDocument {
   reviewReason?: string | null;
   creditAdjusted?: boolean;
   refundDue?: string | undefined;
+  refundExpectations?: readonly RefundExpectation[] | undefined;
   id: string;
   side: "supplier" | "client" | "freight";
   projectId: string;
@@ -114,7 +116,7 @@ function createIssueAdder(issues: AttentionIssue[]) {
 
 type AddIssue = ReturnType<typeof createIssueAdder>;
 
-/** Refunds have no promised dates; never borrow an invoice or payment due date. */
+/** Never borrow an Invoice or installment date for a refund. */
 export function refundDueIssue(doc: AttentionDocument): AttentionIssue | null {
   if (
     !doc.issued ||
@@ -128,8 +130,9 @@ export function refundDueIssue(doc: AttentionDocument): AttentionIssue | null {
     priority: "Action needed",
     title:
       doc.side === "client" ? "Client refund due" : "Supplier refund expected",
-    detail:
-      "A credit left cash to refund. No refund date is scheduled; review Credits & refunds before relying on expected cash.",
+    detail: doc.refundExpectations?.some((row) => row.dueDate)
+      ? "A credit left cash to refund. Review its expected dates and manual FX in Credits & refunds."
+      : "A credit left cash to refund. No refund date is scheduled; review Credits & refunds before relying on expected cash.",
     projectId: doc.projectId,
     projectName: doc.projectName,
     reference: doc.reference,
@@ -139,6 +142,61 @@ export function refundDueIssue(doc: AttentionDocument): AttentionIssue | null {
     basis: "TTC",
     date: null,
   };
+}
+
+function checkRefunds(
+  doc: AttentionDocument,
+  today: string,
+  end: string,
+  issues: AttentionIssue[],
+  position: CashPosition,
+) {
+  const base = refundDueIssue(doc);
+  if (!base) return;
+  if (!doc.refundExpectations?.length) {
+    issues.push(base);
+    position.complete = false;
+    return;
+  }
+  for (const row of doc.refundExpectations) {
+    const converted =
+      row.reportingCurrencyCode &&
+      row.reportingCurrencyCode !== doc.reportingCurrency
+        ? null
+        : reportingAmount({
+            originalAmount: row.amount,
+            originalCurrencyCode: doc.currency,
+            reportingCurrencyCode: doc.reportingCurrency,
+            fxRateToReporting: row.expectedFxRate,
+          });
+    const incomplete = !row.dueDate || converted === null;
+    if (incomplete || (row.dueDate && row.dueDate <= end))
+      issues.push({
+        ...base,
+        key: `${base.key}:${row.id}`,
+        reference: row.reference
+          ? `${doc.reference} · ${row.reference}`
+          : doc.reference,
+        amount: row.amount,
+        date: row.dueDate,
+        priority: incomplete
+          ? "Incomplete"
+          : row.dueDate && row.dueDate < today
+            ? "Overdue"
+            : "Upcoming",
+        detail: !row.dueDate
+          ? "Set the expected refund date in Credits & refunds."
+          : converted === null
+            ? "Review expected refund FX in Credits & refunds."
+            : "Expected refund, separate from recorded cash. Open Credits & refunds to record or revise it.",
+      });
+    if (incomplete) position.complete = false;
+    else if (row.dueDate && row.dueDate <= end) {
+      if (doc.side === "client")
+        position.outgoing = position.outgoing.plus(converted);
+      else position.incoming = position.incoming.plus(converted);
+    }
+  }
 }
 
 function checkInvoiceIssuing(
@@ -589,8 +647,6 @@ export function buildFinancialAttention(
     }
     const issueStart = issues.length;
     checkDocumentFx(doc, add);
-    const refund = refundDueIssue(doc);
-    if (refund) issues.push(refund);
     const schedule = paymentSchedule(doc);
     checkScheduleInformation(doc, schedule, add);
     checkDocumentDue(doc, schedule, today, end, add);
@@ -601,7 +657,7 @@ export function buildFinancialAttention(
       complete: true,
       explained: true,
     };
-    if (refund) position.complete = false;
+    checkRefunds(doc, today, end, issues, position);
     checkPaymentTerms(doc, schedule, today, end, add, position);
     // Omit the aggregate warning only when this incomplete source has a specific
     // actionable issue. An unexplained failure must remain visible.

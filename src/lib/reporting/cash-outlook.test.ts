@@ -68,6 +68,48 @@ const outlook = (input: CashOutlookSources, actualCash: string | null = "0") =>
   );
 
 describe("shared cash outlook source adapter", () => {
+  it("uses reviewed refund dates and independent expected FX without changing actual cash", () => {
+    const credit = {
+      id: "credit",
+      totalHt: "40",
+      vatAmount: "0",
+      freightCoverageHt: "0",
+      otherCoverageHt: "0",
+      expectedRefundDate: dueDate,
+      expectedRefundFxRateToReporting: "0.9",
+      reportingCurrencyCode: "EUR",
+      refunds: [{ amount: "10" }],
+    };
+    const input = sources({
+      billingDocuments: [
+        billing({
+          currencyCode: "USD",
+          totalTtc: "100",
+          receipts: [{ id: "cash", amount: "80" }],
+          credits: [credit],
+          fxRateToReporting: "0.7",
+        }),
+      ],
+    });
+    const result = outlook(input, "30");
+    expect(result.windows[0]).toMatchObject({
+      expectedOut: "9.0000",
+      projectedCash: "21.0000",
+    });
+    expect(result.undatedCount).toBe(0);
+    const missing = outlook(
+      sources({
+        billingDocuments: [
+          billing({
+            ...input.billingDocuments[0],
+            credits: [{ ...credit, expectedRefundFxRateToReporting: null }],
+          }),
+        ],
+      }),
+    );
+    expect(missing).toMatchObject({ outstandingOut: null, missingFxCount: 1 });
+    expect(missing.windows[0]?.projectedCash).toBeNull();
+  });
   it("keeps undated Client terms undated despite a historical document due date", () => {
     const documents = buildCashOutlookDocuments(
       sources({

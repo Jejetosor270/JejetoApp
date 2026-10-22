@@ -85,7 +85,12 @@ it("reconciles full Order payable, credit cash limits and payment completion wit
     sourceId: order.id,
   });
   expect(creditSource.original.totalTtc).toBe("4476.0000");
-  expect(creditSource.original.totalHt).toBe("3450");
+  expect(creditSource.original.totalHt).toBe("3730.0000");
+  expect(creditSource.original.freightCoverageHt).toBe("280");
+  expect(creditSource.original.otherCoverageHt).toBe("0.0000");
+  expect(sourceCreditPosition(creditSource).remaining.merchandiseHt).toBe(
+    "3450.0000",
+  );
   expect(sourceCreditPosition(creditSource).cash.outstanding).toBe("2238.0000");
   await saveRecordStatus(actor.id, {
     kind: "order",

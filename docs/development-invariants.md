@@ -160,6 +160,41 @@
   Invoice-level receipts do not generate false unpaid-date or schedule-gap alerts;
   genuine saved schedule excess remains a review item. No schema/migration is required.
 
+## Financial reliability — Batch 2
+
+- Actual Supplier payments and Client receipts expose a protected **Move payment** /
+  **Move receipt** drawer from their existing cash editor. A move preserves UUID,
+  amount, transaction date, currency, actual FX and creation history. It changes only
+  the owning payment term or Invoice, with explicit confirmation/reason, server role
+  checks, opening source/destination versions and a serializable audited transaction.
+  Source and destination must share transaction/reporting currencies. Destination
+  balances, cancellation, Trash, ambiguous matches and active-credit guards apply.
+  Client moves land at Invoice level; Assign to term remains a separate same-Invoice
+  action. Bank reconciliation fingerprints flag a changed assignment for review.
+- Project freight expenses share one full create/edit drawer: amount, Supplier,
+  currency/FX, expense/due dates, markup, VAT/recoverability, reference and notes.
+  Updates retain opening versions/drafts, reject outdated or concurrent changes and
+  cannot reduce payable below existing payments. Supplier/currency are locked once
+  payments exist. Actual cash and its independent FX are never rewritten.
+- Supplier credits support Product, Freight and Other HT; Other covers customs and
+  miscellaneous together without inventing a split. Each reduction is capped by its
+  original category. Total economic cost/payable and VAT reduce once; the agreed
+  Client selling price does not change. Project and Reports freight costs/targets
+  use net freight after credits. Separate Project freight-expense credits remain
+  outside this scope. Client allocation reductions stay explicitly selected.
+- Each credit may have one reviewed expected refund date and independent manual
+  expected FX. These are optional and editable with the same stale-save safeguards;
+  no historical dates/rates are inferred. Forecasts cap credit expectations to the
+  source's actual refundable cash balance, oldest credit date/ID first, subtracting
+  each credit's actual refunds. This is read-only forecast attribution, not a cash
+  reassignment. Project/Reports, attention and calendar use the resulting balance;
+  missing dates/FX remain incomplete. Actual refunds retain separate date/FX records.
+- Migration `20261022000000_credit_categories_refund_expectations` permits Supplier
+  category credits and adds nullable expected-refund date/FX plus validation/index.
+  It is prepared and tested in isolated in-memory PostgreSQL only, **not applied**
+  to any configured database. Apply with `npm run db:deploy` separately before
+  deploying this application version. No dependency change is needed.
+
 ## Operational financial control — Phase 3
 
 - Home's shared follow-ups add an active employee owner, next follow-up date and
@@ -194,10 +229,10 @@
   reviewed credits and actual refunds; USER can read. Credits retain the original
   Invoice/Order, payment terms and cash history. Every mutation is audited,
   transactionally authorized and checked against the original editor version.
-- Supplier credits reduce product purchase cost and explicitly linked payable input
+- Supplier credits reduce reviewed Product/Freight/Other cost and explicitly linked payable input
   VAT, preserving recoverability and the agreed Client selling price in every pricing
   mode. Ambiguous multiple input-VAT entries require review rather than averaging.
-  This slice does not model credits against separate freight expenses or freight costs.
+  Credits against separate Project freight expenses remain outside this slice.
 - Client credits reduce Invoice HT/VAT and only explicitly selected linked Order
   allocations. Category reductions are bounded by remaining Invoice and allocation
   merchandise/freight/other balances; unassigned credit remains at Project level.
@@ -424,8 +459,8 @@ reporting; recoverable VAT is still cash payable, never added twice through econ
 cost. Separate Project freight expenses must not duplicate an Order cost. Existing
 terms retain their saved amounts; any uncovered difference is unscheduled until an
 employee edits/adds a term or explicitly records the full remaining Order payment.
-Actual payments and credits are preserved. Supplier credit HT remains limited to
-product purchase cost; credit/refund cash limits use the full Order payable.
+Actual payments and credits are preserved. Supplier credit HT is capped by the
+reviewed Product/Freight/Other categories; cash limits use the full Order payable.
 Actual cash uses receipt/settlement dates and their own FX. Forecasts use outstanding
 Billing/Supplier installments, due dates, and expected FX. Cash position is Client
 cash received minus Supplier cash paid. Cash timing never determines profitability.

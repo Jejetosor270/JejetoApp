@@ -18,6 +18,10 @@ vi.mock("@/app/(app)/settings/trash/actions", () => ({
 vi.mock("@/app/(app)/payments/actions", () => ({
   updateSettlementAction: mocks.update,
 }));
+vi.mock("@/app/(app)/payments/move-actions", () => ({
+  loadCashMoveOptions: vi.fn(),
+  moveCashAction: vi.fn(),
+}));
 import { CashListTable } from "./cash-list-table";
 import { SupplierRecordEditor } from "./supplier-record-editor";
 import type { PaymentInstallmentView } from "@/lib/payments/payments";

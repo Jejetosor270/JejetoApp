@@ -23,6 +23,10 @@ const positiveMoney = money.refine(
   "Enter an amount greater than zero.",
 );
 const date = z.string().refine(isDateOnly, "Enter a valid business date.");
+const optionalDate = z.preprocess(
+  (value) => (value === "" || value == null ? undefined : value),
+  date.optional(),
+);
 const version = z
   .string()
   .regex(/^[a-f0-9]{64}$/, "Reopen this form to refresh the financial record.");
@@ -44,7 +48,7 @@ const optionalFx = z.preprocess(
     .regex(/^(?:0|[1-9]\d{0,9})(?:\.\d{1,10})?$/)
     .refine(
       (value) => new Decimal(value).gt(0),
-      "Enter a positive actual refund FX rate.",
+      "Enter a positive refund FX rate.",
     )
     .optional(),
 );
@@ -83,6 +87,8 @@ export const createCreditSchema = creditSourceSchema
     vatAmount: money,
     freightCoverageHt: money,
     otherCoverageHt: money,
+    expectedRefundDate: optionalDate,
+    expectedRefundFxRateToReporting: optionalFx,
     reason: z.string().trim().min(1).max(4000),
     supplierVatEntryId: z.uuid().optional(),
     allocations: z.array(allocationSchema).max(100).default([]),
@@ -126,18 +132,16 @@ export const createCreditSchema = creditSourceSchema
         path: ["freightCoverageHt"],
         message: "Freight and other/services cannot exceed credit HT.",
       });
-    if (
-      input.side === "SUPPLIER" &&
-      (!new Decimal(input.freightCoverageHt).isZero() ||
-        !new Decimal(input.otherCoverageHt).isZero())
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["totalHt"],
-        message:
-          "Supplier credits cover the original product purchase and invoice VAT only.",
-      });
   });
+
+export const creditRefundExpectationSchema = z
+  .object({
+    creditId: z.uuid(),
+    expectedVersion: version,
+    expectedRefundDate: optionalDate,
+    expectedRefundFxRateToReporting: optionalFx,
+  })
+  .strict();
 
 export const creditRefundSchema = z
   .object({

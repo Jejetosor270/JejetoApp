@@ -5,6 +5,7 @@ import { cashWindowEnd } from "@/domain/payments/dates";
 import { sumKnown, difference } from "./project-control";
 
 export interface CashOutlookDocument {
+  reportingCurrencyCode?: string | null;
   creditAdjusted?: boolean;
   reviewReason?: string | null;
   source?: { label: string; href: string };
@@ -40,14 +41,20 @@ export function projectCashOutlook(
   let unscheduledCount = 0;
   let plannedUnscheduledCount = 0;
   for (const document of documents) {
-    if (document.reviewReason) {
+    const reviewReason =
+      document.reviewReason ??
+      (document.reportingCurrencyCode &&
+      document.reportingCurrencyCode !== currency
+        ? "Refund reporting currency differs from its Project. Review the refund expectation."
+        : null);
+    if (reviewReason) {
       const activeTerms = document.terms.filter((term) => !term.cancelled);
       for (const term of activeTerms.length ? activeTerms : [{ due: null }]) {
         entries.push({
           kind: document.kind,
           due: term.due,
           amount: null,
-          reviewReason: document.reviewReason,
+          reviewReason,
           ...(document.source ? { source: document.source } : {}),
         });
       }

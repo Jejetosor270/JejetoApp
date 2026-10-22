@@ -18,6 +18,7 @@ import {
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
+import { CashMoveEditor } from "@/components/payments/cash-move-editor";
 import type { BillingActionState } from "@/domain/billing/action-state";
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatFxRate, formatMoney } from "@/domain/procurement/presentation";
@@ -301,7 +302,8 @@ export function BillingReceiptEditor({
               {formatMoney(saved.amount, currencyCode)}
             </p>
             {canEdit ? (
-              <div className="mt-2 flex justify-end gap-1">
+              <div className="mt-2 flex flex-wrap justify-end gap-1">
+                <CashMoveEditor kind="CLIENT_RECEIPT" id={receipt.id} />
                 <Button
                   onClick={() => {
                     setDeleteMessage("");

@@ -26,6 +26,10 @@ vi.mock("@/app/(app)/billing/actions", () => ({
 vi.mock("@/app/(app)/payments/actions", () => ({
   createInstallmentAction: mock.supplier,
 }));
+vi.mock("@/app/(app)/payments/move-actions", () => ({
+  loadCashMoveOptions: vi.fn(),
+  moveCashAction: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: mock.refresh }),
 }));

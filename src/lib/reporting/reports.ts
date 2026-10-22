@@ -104,6 +104,7 @@ export interface SerializedFinancialSummary {
     inputVat: SerializedAggregateAmount;
     landedCost: SerializedAggregateAmount;
     miscellaneous: SerializedAggregateAmount;
+    otherCredits: SerializedAggregateAmount;
     nonRecoverableInputVat: SerializedAggregateAmount;
     outputVat: SerializedAggregateAmount;
     packageSellingPrice: SerializedAggregateAmount;
@@ -386,6 +387,7 @@ function serializedFinancial(
       inputVat: aggregate(financial.totals.inputVat),
       landedCost: aggregate(financial.totals.landedCost),
       miscellaneous: aggregate(financial.totals.miscellaneous),
+      otherCredits: aggregate(financial.totals.otherCredits),
       nonRecoverableInputVat: aggregate(
         financial.totals.nonRecoverableInputVat,
       ),

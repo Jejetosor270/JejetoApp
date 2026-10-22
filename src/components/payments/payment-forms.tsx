@@ -22,6 +22,7 @@ import {
   SubmitButton,
 } from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
+import { CashMoveEditor } from "./cash-move-editor";
 import { usePersistentActionState } from "@/components/forms/use-persistent-action-state";
 import {
   amountFromPercentage,
@@ -333,78 +334,99 @@ export function SettlementForm({
   const [notes, setNotes] = useState(settlement?.notes ?? "");
   const fieldErrors = state.fieldErrors ?? {};
   return (
-    <form
-      className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2 lg:grid-cols-2"
-      onSubmit={onSubmit}
-    >
-      <input name="installmentId" type="hidden" value={installment.id} />
-      {settlement && (
-        <input name="expectedVersion" type="hidden" value={expectedVersion} />
-      )}
-      {settlement && <input name="id" type="hidden" value={settlement.id} />}
-      <Field
-        error={fieldErrors.amount}
-        label={`${wording === "payment" ? "Paid" : "Received"} amount`}
-        required
+    <>
+      <form
+        className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2 lg:grid-cols-2"
+        onSubmit={onSubmit}
       >
-        <MoneyInput
-          name="amount"
-          onValueChange={setAmount}
+        <input name="installmentId" type="hidden" value={installment.id} />
+        {settlement && (
+          <input name="expectedVersion" type="hidden" value={expectedVersion} />
+        )}
+        {settlement && <input name="id" type="hidden" value={settlement.id} />}
+        <Field
+          error={fieldErrors.amount}
+          label={`${wording === "payment" ? "Paid" : "Received"} amount`}
           required
-          value={amount}
-        />
-      </Field>
-      <Field error={fieldErrors.settledAt} label="Actual payment date" required>
-        <DateInput
-          className={inputClassName}
-          name="settledAt"
-          onChange={(event) => setSettledAt(event.target.value)}
+        >
+          <MoneyInput
+            name="amount"
+            onValueChange={setAmount}
+            required
+            value={amount}
+          />
+        </Field>
+        <Field
+          error={fieldErrors.settledAt}
+          label="Actual payment date"
           required
+        >
+          <DateInput
+            className={inputClassName}
+            name="settledAt"
+            onChange={(event) => setSettledAt(event.target.value)}
+            required
 
-          value={settledAt}
-        />
-      </Field>
-      <Field
-        error={fieldErrors.fxRate}
-        label={`Actual FX to ${installment.reportingCurrencyCode}`}
-        required={
-          installment.currencyCode !== installment.reportingCurrencyCode
-        }
-      >
-        <input
-          className={inputClassName}
-          disabled={
-            installment.currencyCode === installment.reportingCurrencyCode
+            value={settledAt}
+          />
+        </Field>
+        <Field
+          error={fieldErrors.fxRate}
+          label={`Actual FX to ${installment.reportingCurrencyCode}`}
+          required={
+            installment.currencyCode !== installment.reportingCurrencyCode
           }
-          inputMode="decimal"
-          name="fxRate"
-          onChange={(event) => setFxRate(event.target.value)}
-          value={fxRate}
+        >
+          <input
+            className={inputClassName}
+            disabled={
+              installment.currencyCode === installment.reportingCurrencyCode
+            }
+            inputMode="decimal"
+            name="fxRate"
+            onChange={(event) => setFxRate(event.target.value)}
+            value={fxRate}
+          />
+        </Field>
+        <Field error={fieldErrors.reference} label="Payment reference">
+          <input
+            className={inputClassName}
+            name="reference"
+            onChange={(event) => setReference(event.target.value)}
+            value={reference}
+          />
+        </Field>
+        <Field error={fieldErrors.notes} label="Notes">
+          <input
+            className={inputClassName}
+            name="notes"
+            onChange={(event) => setNotes(event.target.value)}
+            value={notes}
+          />
+        </Field>
+        <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-2">
+          <SubmitButton pending={pending}>
+            {settlement ? "Save payment" : `Record ${wording}`}
+          </SubmitButton>
+          <Feedback state={state} />
+        </div>
+      </form>
+      {settlement && installment.direction === "SUPPLIER_PAYMENT" && (
+        <CashMoveEditor
+          kind="SUPPLIER_PAYMENT"
+          id={settlement.id}
+          onMoved={onSaved}
+          disabled={
+            pending ||
+            amount !== settlement.amount ||
+            settledAt !== settlement.settledAt ||
+            fxRate !== (settlement.fxRate ?? "") ||
+            reference !== (settlement.reference ?? "") ||
+            notes !== (settlement.notes ?? "")
+          }
         />
-      </Field>
-      <Field error={fieldErrors.reference} label="Payment reference">
-        <input
-          className={inputClassName}
-          name="reference"
-          onChange={(event) => setReference(event.target.value)}
-          value={reference}
-        />
-      </Field>
-      <Field error={fieldErrors.notes} label="Notes">
-        <input
-          className={inputClassName}
-          name="notes"
-          onChange={(event) => setNotes(event.target.value)}
-          value={notes}
-        />
-      </Field>
-      <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-2">
-        <SubmitButton pending={pending}>
-          {settlement ? "Save payment" : `Record ${wording}`}
-        </SubmitButton>
-        <Feedback state={state} />
-      </div>
-    </form>
+      )}
+    </>
   );
 }
 

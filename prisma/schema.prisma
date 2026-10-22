@@ -941,6 +941,8 @@ model FinancialCredit {
   currencyCode String @db.Char(3)
   reportingCurrencyCode String @db.Char(3)
   fxRateToReporting Decimal? @db.Decimal(20,10)
+  expectedRefundDate DateTime? @db.Date
+  expectedRefundFxRateToReporting Decimal? @db.Decimal(20,10)
   supplierRecoverableRate Decimal? @db.Decimal(9,6)
   isCancelled Boolean @default(false)
   createdAt DateTime @default(now())
@@ -960,6 +962,7 @@ model FinancialCredit {
   @@unique([orderId,reference])
   @@index([billingDocumentId,isCancelled])
   @@index([orderId,isCancelled])
+  @@index([isCancelled,expectedRefundDate])
   @@index([supplierVatEntryId])
   @@index([currencyCode])
   @@index([reportingCurrencyCode])

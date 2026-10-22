@@ -93,6 +93,10 @@ const freightExpenseFields = {
     .toUpperCase()
     .regex(/^[A-Z]{3}$/),
   description: z.string().trim().min(1, "Enter a description.").max(200),
+  dueDate: z.preprocess(
+    (value) => (value === "" || value === null ? undefined : value),
+    z.string().refine(isDateOnly, "Enter a valid due date.").optional(),
+  ),
   expenseDate: z.string().refine(isDateOnly, "Enter a valid expense date."),
   freightMarkupOverrideRate: optionalPercentageFraction({
     label: "Freight markup",
@@ -149,9 +153,11 @@ export const projectFreightExpenseSchema = z
 
 export const updateProjectFreightExpenseSchema = z
   .object({
+    ...freightExpenseFields,
     id: requiredUuid("Select a valid freight expense."),
-    projectId: requiredUuid("Select a valid Project."),
-    ...freightVatFields,
+    expectedVersion: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/, "Reopen the expense before saving."),
   })
   .superRefine(validateFreightVat);
 
