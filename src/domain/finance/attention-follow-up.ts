@@ -35,31 +35,63 @@ export function attentionFollowUpKey(key: string): string | null {
   return key.replace(/^cash-gap-(7|30|90):/, "cash-gap:");
 }
 
-const dataQualityKinds = new Set([
-  "document-fx",
-  "actual-fx",
-  "term-fx",
-  "term-actual-fx",
+const paymentKinds = new Set(["term-due", "document-due", "issue-invoice"]);
+const paymentSetupKinds = new Set([
   "schedule",
   "schedule-overflow",
   "missing-date",
   "term-date",
   "cash-incomplete",
   "cash-match",
-  "duplicate",
 ]);
 
-export function isAttentionDataQuality(issue: Pick<AttentionIssue, "key">) {
+export type AttentionOwnerFilter = "all" | "mine" | "unassigned";
+export type AttentionScope =
+  "payments" | "payment-setup" | "data-quality" | "all";
+
+/** Home presentation only; the source issue and financial calculations are unchanged. */
+export function attentionScopeForIssue(
+  issue: Pick<AttentionIssue, "key">,
+): Exclude<AttentionScope, "all"> {
   const kind = issue.key.split(":")[0] ?? "";
-  return (
-    dataQualityKinds.has(kind) ||
-    kind.startsWith("unassigned-") ||
-    kind.startsWith("archived-")
-  );
+  if (paymentKinds.has(kind) || kind.startsWith("refund-due-"))
+    return "payments";
+  if (paymentSetupKinds.has(kind)) return "payment-setup";
+  // Retain reporting, archival and future/unknown checks in an explicit review view.
+  return "data-quality";
 }
 
-export type AttentionOwnerFilter = "all" | "mine" | "unassigned";
-export type AttentionScope = "all" | "data-quality";
+export function isAttentionDataQuality(issue: Pick<AttentionIssue, "key">) {
+  return attentionScopeForIssue(issue) === "data-quality";
+}
+
+export function matchesAttentionScope(
+  issue: Pick<AttentionIssue, "key">,
+  scope: AttentionScope,
+) {
+  return scope === "all" || attentionScopeForIssue(issue) === scope;
+}
+
+/** Remove only the duplicate no-terms warning; never discard employee follow-ups. */
+export function consolidateHomeAttention<
+  T extends Pick<AttentionIssue, "key"> & {
+    followUp?: unknown;
+    snooze?: unknown;
+  },
+>(issues: readonly T[]): T[] {
+  const schedules = new Set(
+    issues
+      .filter((issue) => issue.key.startsWith("schedule:"))
+      .map((issue) => issue.key.slice("schedule:".length)),
+  );
+  return issues.filter(
+    (issue) =>
+      !issue.key.startsWith("missing-date:") ||
+      !schedules.has(issue.key.slice("missing-date:".length)) ||
+      issue.followUp != null ||
+      issue.snooze != null,
+  );
+}
 
 export function matchesAttentionOwner(
   followUp: Pick<AttentionFollowUp, "assigneeId"> | null | undefined,

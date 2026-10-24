@@ -115,6 +115,24 @@ it("provides an explicit empty state", async () => {
   );
 });
 
+it("describes an empty payment view without claiming supporting checks are resolved", async () => {
+  view = await mountForm(
+    <FinancialAttentionTable
+      rows={[]}
+      today="2026-09-22"
+      horizon={30}
+      snoozed={false}
+      emptyMessage="No payment or invoice reminders in this view."
+    />,
+  );
+  expect(document.body.textContent).toContain(
+    "No payment or invoice reminders in this view.",
+  );
+  expect(document.body.textContent).not.toContain(
+    "No financial issues need attention",
+  );
+});
+
 it("shows shared ownership to readers without edit controls", async () => {
   view = await mountForm(
     <FinancialAttentionTable

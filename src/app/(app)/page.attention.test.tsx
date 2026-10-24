@@ -105,7 +105,7 @@ it("filters data quality and owner together and preserves them across horizon li
     }),
   );
   expect(html).toContain("Missing FX: Alex");
-  expect(html).not.toContain("Cash gap: Alex");
+  expect(html).toContain("Cash gap: Alex");
   expect(html).not.toContain("Unassigned cash: Unassigned");
   expect(html).toContain(
     "horizon=7&amp;attention=active&amp;owner=mine&amp;scope=data-quality&amp;pageSize=50",
@@ -127,6 +127,7 @@ it("keeps shared ownership independent of personal snoozes and canonicalizes hor
         horizon: "90",
         owner: "mine",
         attention: "snoozed",
+        scope: "data-quality",
       }),
     }),
   );
@@ -144,10 +145,116 @@ it("keeps shared ownership independent of personal snoozes and canonicalizes hor
 it("shows unassigned review items to USER without loading edit options", async () => {
   mocks.user.mockResolvedValue({ id: "employee", role: "USER" });
   const html = renderToStaticMarkup(
-    await Home({ searchParams: Promise.resolve({ owner: "unassigned" }) }),
+    await Home({
+      searchParams: Promise.resolve({
+        owner: "unassigned",
+        scope: "data-quality",
+      }),
+    }),
   );
   expect(html).toContain("Unassigned cash: Unassigned");
   expect(html).not.toContain("Missing FX: Alex");
   expect(html).toContain('data-can-edit="false"');
   expect(mocks.employees).not.toHaveBeenCalled();
+});
+
+it("defaults to cash and invoice actions, with counted links to supporting checks", async () => {
+  mocks.workspace.mockResolvedValue({
+    projects: [],
+    issues: [
+      row,
+      {
+        ...row,
+        key: `term-due:${id}`,
+        title: "Supplier payment due",
+        priority: "Overdue",
+        amount: "100.00",
+        basis: "TTC",
+      },
+      {
+        ...row,
+        key: "term-due:client-term",
+        title: "Client payment outstanding",
+        priority: "Upcoming",
+        amount: "120.00",
+        basis: "TTC",
+      },
+      {
+        ...row,
+        key: `issue-invoice:${id}`,
+        title: "Invoice needs issuing",
+        priority: "Action needed",
+      },
+      {
+        ...row,
+        key: `refund-due-client:${id}`,
+        title: "Client refund due",
+        priority: "Action needed",
+      },
+      { ...row, key: `schedule:${id}`, title: "Review payment schedule" },
+      { ...row, key: `missing-date:${id}`, title: "Missing payment due date" },
+    ],
+  });
+  const html = renderToStaticMarkup(
+    await Home({ searchParams: Promise.resolve({}) }),
+  );
+  expect(html).toContain('value="payments" selected=""');
+  expect(html).toContain("Supplier payment due: Unassigned");
+  expect(html).toContain("Client payment outstanding: Unassigned");
+  expect(html).toContain("Invoice needs issuing: Unassigned");
+  expect(html).toContain("Client refund due: Unassigned");
+  expect(html).not.toContain("Missing FX: Alex");
+  expect(html).not.toContain("Review payment schedule: Unassigned");
+  expect(html).not.toContain("Missing payment due date: Unassigned");
+  expect(html).toContain("Needs attention (4)");
+  expect(html).toContain("Payment setup (1)");
+  expect(html).toContain("Data checks (1)");
+  expect(html).toContain(
+    "horizon=7&amp;attention=active&amp;owner=all&amp;scope=payments&amp;pageSize=25",
+  );
+});
+
+it("keeps undated balances reachable in Payment setup and removes only redundant missing dates", async () => {
+  mocks.workspace.mockResolvedValue({
+    projects: [],
+    issues: [
+      { ...row, key: `schedule:${id}`, title: "Review payment schedule" },
+      { ...row, key: `missing-date:${id}`, title: "Redundant missing date" },
+      { ...row, key: "term-date:other-term", title: "Set a payment date" },
+    ],
+  });
+  const html = renderToStaticMarkup(
+    await Home({ searchParams: Promise.resolve({ scope: "payment-setup" }) }),
+  );
+  expect(html).toContain("Review payment schedule: Unassigned");
+  expect(html).toContain("Set a payment date: Unassigned");
+  expect(html).not.toContain("Redundant missing date: Unassigned");
+  expect(html).toContain("Needs attention (2)");
+});
+
+it("preserves personal snoozes within the default payment view", async () => {
+  const payment = {
+    ...row,
+    key: `term-due:${id}`,
+    title: "Supplier payment due",
+  };
+  mocks.workspace.mockResolvedValue({ projects: [], issues: [payment, row] });
+  mocks.snoozes.mockResolvedValue([
+    {
+      issueKey: payment.key,
+      fingerprint: payment.fingerprint,
+      until: new Date("2026-10-10"),
+      reason: "Awaiting approval",
+    },
+  ]);
+  const active = renderToStaticMarkup(
+    await Home({ searchParams: Promise.resolve({}) }),
+  );
+  expect(active).not.toContain("Supplier payment due: Unassigned");
+  expect(active).toContain("Snoozed by me (1)");
+  const snoozed = renderToStaticMarkup(
+    await Home({ searchParams: Promise.resolve({ attention: "snoozed" }) }),
+  );
+  expect(snoozed).toContain("Supplier payment due: Unassigned");
+  expect(snoozed).not.toContain("Missing FX: Alex");
 });

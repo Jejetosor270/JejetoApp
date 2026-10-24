@@ -12,7 +12,8 @@ import { getAttentionWorkspace } from "@/lib/reporting/attention-workspace";
 import {
   attentionFollowUpKey,
   attentionWorkspaceQuery,
-  isAttentionDataQuality,
+  consolidateHomeAttention,
+  matchesAttentionScope,
   matchesAttentionOwner,
   type AttentionOwnerFilter,
   type AttentionScope,
@@ -47,7 +48,11 @@ export default async function DashboardPage({
         ? "unassigned"
         : "all";
   const scope: AttentionScope =
-    query.scope === "data-quality" ? "data-quality" : "all";
+    query.scope === "data-quality" ||
+    query.scope === "payment-setup" ||
+    query.scope === "all"
+      ? query.scope
+      : "payments";
   const canEdit = canEditMasterData(user.role);
   const today = businessToday();
   const [snapshot, preferences, employees] = await Promise.all([
@@ -112,11 +117,10 @@ export default async function DashboardPage({
       ? (snoozes.get(issue.key) ?? null)
       : null,
   }));
-  const scoped = all.filter(
-    (issue) =>
-      (scope === "all" || isAttentionDataQuality(issue)) &&
-      matchesAttentionOwner(issue.followUp, owner, user.id),
+  const owned = consolidateHomeAttention(all).filter((issue) =>
+    matchesAttentionOwner(issue.followUp, owner, user.id),
   );
+  const scoped = owned.filter((issue) => matchesAttentionScope(issue, scope));
   const filtered = scoped.filter(
     (issue) => snoozed === (issue.snooze !== null),
   );
@@ -130,20 +134,51 @@ export default async function DashboardPage({
     requestedPage,
     Math.max(1, Math.ceil(filtered.length / pageSize)),
   );
-  const href = (days: number, state = snoozed ? "snoozed" : "active") =>
+  const href = (
+    days: number,
+    state = snoozed ? "snoozed" : "active",
+    selectedScope = scope,
+  ) =>
     "/?" +
     attentionWorkspaceQuery({
       horizon: days,
       snoozed: state === "snoozed",
       owner,
-      scope,
+      scope: selectedScope,
       pageSize,
     });
+  const views: { value: AttentionScope; label: string }[] = [
+    { value: "payments", label: "Payments & invoices" },
+    { value: "payment-setup", label: "Payment setup" },
+    { value: "data-quality", label: "Data checks" },
+    { value: "all", label: "All alerts" },
+  ];
+  const count = (selectedScope: AttentionScope) =>
+    owned.filter(
+      (issue) =>
+        matchesAttentionScope(issue, selectedScope) &&
+        snoozed === (issue.snooze !== null),
+    ).length;
+  const descriptions: Record<AttentionScope, string> = {
+    payments:
+      "Payments out, receipts in and invoices to send. Overdue items stay visible in every window.",
+    "payment-setup":
+      "Balances needing payment dates, terms or receipt matching. Open the record to review.",
+    "data-quality":
+      "Reporting, FX and record checks. These are separate from payment reminders.",
+    all: "Payment reminders and supporting checks. Amounts keep their original currency and HT/TTC basis.",
+  };
+  const emptyMessages: Record<AttentionScope, string> = {
+    payments: "No payment or invoice reminders in this view.",
+    "payment-setup": "No payment setup checks in this view.",
+    "data-quality": "No data checks in this view.",
+    all: "No financial issues need attention in this view.",
+  };
   return (
     <div className="space-y-6">
       <PageHeader
         title="Home"
-        description="Financial attention, shared follow-ups and data quality."
+        description="Payments, receipts and invoices to send."
         actions={
           <Button asChild variant="outline">
             <Link href="/reports">Open Reports</Link>
@@ -156,7 +191,7 @@ export default async function DashboardPage({
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="financial-attention-heading" className="section-title">
-            Financial attention
+            {views.find((view) => view.value === scope)?.label}
           </h2>
           <nav aria-label="Attention horizon" className="flex flex-wrap gap-2">
             {attentionHorizons.map((days) => (
@@ -177,13 +212,7 @@ export default async function DashboardPage({
             ))}
           </nav>
         </div>
-        <p className="text-muted-foreground text-xs">
-          Overdue and incomplete-data issues always appear. Future due dates
-          follow the selected horizon. Amounts retain their own currency and
-          HT/TTC basis; no combined money total. Data quality also highlights
-          unassigned financial records and archived Projects with open balances.
-          A filter hiding an issue does not mean it is resolved.
-        </p>
+        <p className="text-muted-foreground text-xs">{descriptions[scope]}</p>
         <form className="flex flex-wrap items-end gap-3" action="/">
           <input type="hidden" name="horizon" value={horizon} />
           <input
@@ -192,14 +221,17 @@ export default async function DashboardPage({
             value={snoozed ? "snoozed" : "active"}
           />
           <input type="hidden" name="pageSize" value={pageSize} />
-          <Field label="Scope">
+          <Field label="View">
             <select
               name="scope"
               defaultValue={scope}
               className={inputClassName}
             >
-              <option value="all">All attention</option>
-              <option value="data-quality">Data quality</option>
+              {views.map((view) => (
+                <option key={view.value} value={view.value}>
+                  {view.label} ({count(view.value)})
+                </option>
+              ))}
             </select>
           </Field>
           <Field label="Owner">
@@ -217,6 +249,28 @@ export default async function DashboardPage({
             Apply
           </Button>
         </form>
+        {scope === "payments" &&
+          (count("payment-setup") > 0 || count("data-quality") > 0) && (
+            <nav
+              aria-label="Supporting checks"
+              className="flex flex-wrap gap-x-4 gap-y-1 text-xs"
+            >
+              {(["payment-setup", "data-quality"] as const).map((value) =>
+                count(value) > 0 ? (
+                  <Link
+                    key={value}
+                    className="text-muted-foreground hover:text-primary underline"
+                    href={href(horizon, snoozed ? "snoozed" : "active", value)}
+                  >
+                    {value === "payment-setup"
+                      ? "Payment setup"
+                      : "Data checks"}{" "}
+                    ({count(value)})
+                  </Link>
+                ) : null,
+              )}
+            </nav>
+          )}
         <NavigationTabs
           label="Attention visibility"
           tabs={[
@@ -242,6 +296,7 @@ export default async function DashboardPage({
             snoozed={snoozed}
             canEdit={canEdit}
             employees={employees}
+            emptyMessage={emptyMessages[scope]}
           />
           <Pagination
             page={page}

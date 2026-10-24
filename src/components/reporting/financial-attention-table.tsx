@@ -45,6 +45,7 @@ export function FinancialAttentionTable({
   snoozed,
   canEdit = false,
   employees = [],
+  emptyMessage = "No financial issues need attention in this view.",
 }: {
   rows: AttentionRow[];
   today: string;
@@ -52,6 +53,7 @@ export function FinancialAttentionTable({
   snoozed: boolean;
   canEdit?: boolean;
   employees?: readonly { id: string; name: string }[];
+  emptyMessage?: string;
 }) {
   const [editing, setEditing] = useState<AttentionRow | null>(null);
   const [followUpEditing, setFollowUpEditing] = useState<AttentionRow | null>(
@@ -235,11 +237,7 @@ export function FinancialAttentionTable({
       </div>
       {rows.length === 0 && (
         <EmptyState
-          title={
-            snoozed
-              ? "No current issues are snoozed."
-              : "No financial issues need attention in this view."
-          }
+          title={snoozed ? "No current issues are snoozed." : emptyMessage}
         />
       )}
       {editing && (

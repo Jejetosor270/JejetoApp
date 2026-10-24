@@ -229,8 +229,8 @@
   drafts. USER can read. Ownership survives balance and horizon changes; personal
   snoozes remain separate. Possible duplicate groups have no shared owner because
   their group identity can change. A hidden/disappearing issue is not marked resolved.
-- The same attention list offers All/Mine/Unassigned and Data quality filters.
-  Data quality also exposes unassigned financial records and archived Projects with
+- The same attention list offers All/Mine/Unassigned ownership and Payments & invoices,
+  Payment setup, Data checks and All alerts views. Data checks also exposes unassigned financial records and archived Projects with
   open issued-document balances. These original-currency review rows never enter
   active-Project totals or forecasts. Direct receipts can settle an Invoice without
   settling each term; the authoritative document balance decides closure. Ambiguous
@@ -920,7 +920,19 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 
 ## Financial attention list
 
-- Home presents one derived, paginated attention list. Active-Project financial checks use non-archived Projects; additional data-quality rows expose unassigned records and archived obligations without adding them to active totals. Next 7/30/90 days controls upcoming events; overdue and incomplete-data issues remain visible regardless of horizon.
+- Home defaults to Payments & invoices: Supplier/Freight payments, Client collections,
+  invoices to send and refunds. Next 7/30/90 days controls upcoming events; overdue
+  remains visible in every window. Payment setup contains missing dates, schedule
+  differences and receipt-matching checks. Data checks contains reporting/payment FX,
+  provisional profitability, duplicates, funding comparisons and unassigned/archived
+  records. Counts and direct links keep these supporting checks discoverable without
+  crowding the daily action list. All alerts remains available; filtering resolves nothing.
+- Home consolidates a redundant document-level missing-date warning when that same
+  document already has a schedule warning, unless the date warning holds a shared
+  follow-up or personal snooze. Source keys, fingerprints, financial calculations,
+  Project attention and incomplete-forecast flags remain unchanged. Unknown issue
+  kinds stay visible in Data checks/All. Active-Project totals still exclude archived
+  and unassigned records. No schema, migration or data backfill is required.
 - Checks cover Supplier and Client outstanding terms, issue-invoice reminders, missing dates/FX, incomplete schedules, provisional invoiced markup below target, possible duplicate invoices and scheduled cash shortfalls. Duplicate detection is advisory, using party, side, currency, invoice date and TTC amount; it never merges records.
 - Actual cash, remaining terms, matched Quote/Invoice receipts and profitability reuse authoritative financial helpers. Cash outlook excludes opening bank balances and becomes incomplete when required dates, schedules or FX are missing. Unlike currencies are never combined without valid conversion.
 - Attention actions open existing records. Personal snoozes require a reason and a future date, expire on that business date, and stop hiding an issue when its displayed financial details or urgency change. Snoozing never changes financial records or hides issues from other employees.
