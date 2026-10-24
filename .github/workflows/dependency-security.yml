@@ -1,0 +1,53 @@
+name: Dependency security
+
+on:
+  pull_request:
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/dependabot.yml
+      - .github/workflows/dependency-security.yml
+  push:
+    branches:
+      - main
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/dependabot.yml
+      - .github/workflows/dependency-security.yml
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # Read the lockfile only: no install/lifecycle scripts, database or secrets.
+      - name: Check production High and Critical advisories
+        run: npm audit --package-lock-only --omit=dev --audit-level=high
+
+      # The full report keeps development advisories visible. braces currently has
+      # no patched release (GHSA-vfj7-8cjw-p6xm); do not downgrade Next to silence it.
+      - name: Report all advisories and block Critical findings
+        if: ${{ !cancelled() }}
+        run: npm audit --package-lock-only --audit-level=critical

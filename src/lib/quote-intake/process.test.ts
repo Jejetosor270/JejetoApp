@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { QuoteExtractionProvider } from "@/lib/quote-intake/provider";
 import { ItemExtractionProviderError } from "@/lib/items/extraction-provider";
@@ -19,6 +19,10 @@ import {
 } from "@/lib/quote-intake/process";
 
 describe("supplier quote processing lifecycle", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
   it("keeps internal Item reference blank for descriptions, SKUs, and line numbers", () => {
     const base = {
       description: "Dining Chair",
@@ -259,6 +263,103 @@ describe("supplier quote processing lifecycle", () => {
     expect(result.proposal.warnings).toContain(
       "Item-line extraction was unavailable. Aggregate Order review remains available; Items can be added later.",
     );
+  });
+
+  it("returns aggregate review after the optional deadline and clears temporary bytes", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    database.project.findUnique.mockResolvedValue({
+      id: "project-1",
+      orders: [],
+    });
+    database.supplier.findMany.mockResolvedValue([]);
+    let providerBytes: Uint8Array | undefined;
+    const provider: QuoteExtractionProvider = {
+      extract: vi.fn(async (file) => {
+        providerBytes = file.bytes;
+        return {
+          extraction: quoteExtractionFixture(),
+          model: "mock",
+          provider: "mock",
+        };
+      }),
+    };
+    const itemProvider = {
+      extractQuoteItems: vi.fn(() => new Promise<never>(() => {})),
+      suggestSpreadsheetMapping: vi.fn(),
+    };
+    const pending = processSupplierQuote(
+      "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      new File(["%PDF-1"], "test.pdf", { type: "application/pdf" }),
+      provider,
+      itemProvider,
+    );
+    await vi.advanceTimersByTimeAsync(30_000);
+    const result = await pending;
+    expect(result.proposal.financial.purchaseCost).not.toBeNull();
+    expect(result.itemReview).toBeNull();
+    expect(result.proposal.warnings).toContain(
+      "Item-line extraction timed out. Aggregate Order review remains available; Items can be added later.",
+    );
+    expect(providerBytes ? [...providerBytes] : null).toEqual([
+      0, 0, 0, 0, 0, 0,
+    ]);
+    expect(provider.extract).toHaveBeenCalledTimes(1);
+    expect(itemProvider.extractQuoteItems).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("does not wait for optional Items when aggregate extraction fails", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    database.project.findUnique.mockResolvedValue({
+      id: "project-1",
+      orders: [],
+    });
+    database.supplier.findMany.mockResolvedValue([]);
+    let providerBytes: Uint8Array | undefined;
+    const failure = new Error("Aggregate extraction failed");
+    const provider: QuoteExtractionProvider = {
+      extract: vi.fn(async (file) => {
+        providerBytes = file.bytes;
+        throw failure;
+      }),
+    };
+    const itemProvider = {
+      extractQuoteItems: vi.fn(() => new Promise<never>(() => {})),
+      suggestSpreadsheetMapping: vi.fn(),
+    };
+    const pending = processSupplierQuote(
+      "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      new File(["%PDF-1"], "test.pdf", { type: "application/pdf" }),
+      provider,
+      itemProvider,
+    );
+    await expect(pending).rejects.toBe(failure);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(providerBytes ? [...providerBytes] : null).toEqual([
+      0, 0, 0, 0, 0, 0,
+    ]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("clears validated bytes when source loading fails before extraction", async () => {
+    const failure = new Error("Database unavailable");
+    database.project.findUnique.mockRejectedValueOnce(failure);
+    database.supplier.findMany.mockResolvedValue([]);
+    const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31]);
+    const file = new File([bytes], "test.pdf", { type: "application/pdf" });
+    vi.spyOn(file, "arrayBuffer").mockResolvedValue(bytes.buffer);
+    const provider = { extract: vi.fn() };
+    await expect(
+      processSupplierQuote(
+        "a12b6b9b-10e9-4e42-b93f-38796de4f65a",
+        file,
+        provider,
+      ),
+    ).rejects.toBe(failure);
+    expect([...bytes]).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(provider.extract).not.toHaveBeenCalled();
   });
 
   it("proposes but does not require a schedule when payment terms are missing", async () => {

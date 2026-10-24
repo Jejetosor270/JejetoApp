@@ -108,6 +108,7 @@ describe("Order processing action lifecycle", () => {
         expect.any(File),
         { provider: true },
         undefined,
+        expect.any(String),
       );
       expect(lifecycle.logSupplierOrderImportLifecycle).toHaveBeenCalledWith(
         "supplier_order_import.review_built",
@@ -160,6 +161,7 @@ describe("Order processing action lifecycle", () => {
       expect.any(File),
       { provider: true },
       { items: true },
+      expect.any(String),
     );
   });
 });

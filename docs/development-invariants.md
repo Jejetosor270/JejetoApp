@@ -195,6 +195,33 @@
   to any configured database. Apply with `npm run db:deploy` separately before
   deploying this application version. No dependency change is needed.
 
+## Financial reliability — Batch 3
+
+- Supplier intake keeps aggregate Order extraction and optional Item extraction in
+  parallel. Optional Items have a hard 30-second budget, including configuration
+  and response-body reads; timeout/failure preserves successful aggregate review
+  with a warning. Aggregate failure cancels the optional request immediately.
+  There are no automatic retries or extra model calls. Standalone Item extraction
+  and spreadsheet mapping retain their existing 90-second provider budget.
+- Item diagnostics record bounded stage/category, duration, provider/model and
+  request/response correlation metadata. Raw provider errors, model output, quote
+  text, file names, spreadsheet samples, binaries and credentials are not logged.
+  Existing models, strict schemas, review/approval and temporary-file rules remain
+  authoritative. Tests use mocked providers and consume no API credits.
+- Dependency security uses targeted compatible patches, with Next and its ESLint
+  configuration updated together and Vitest paired with its coverage package.
+  shadcn is a development/build dependency; its existing stylesheet import remains.
+  Weekly Dependabot proposals cover npm and GitHub Actions, with bounded open PRs
+  and manual review; no automatic merge or deployment is introduced.
+- The dependency-security workflow audits the lockfile without installing/running
+  package scripts or using application credentials. It blocks High/Critical
+  production findings and Critical findings across all dependencies, and reports
+  all development findings. The unpatched development-only `braces` advisory
+  `GHSA-vfj7-8cjw-p6xm` remains visible; do not downgrade protected framework/tooling
+  versions or force incompatible overrides just to clear its report.
+- No Batch 3 schema change or migration is required. Earlier prepared migrations
+  remain separate rollout requirements; no database/deployment action is implied.
+
 ## Operational financial control — Phase 3
 
 - Home's shared follow-ups add an active employee owner, next follow-up date and

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
 import { z } from "zod";
 
@@ -12,12 +13,10 @@ import {
   type SupplierMatchResult,
 } from "@/domain/quote-intake/supplier-matching";
 import { getDatabase } from "@/lib/db";
-import {
-  ItemExtractionProviderError,
-  type ItemExtractionProvider,
-} from "@/lib/items/extraction-provider";
+import type { ItemExtractionProvider } from "@/lib/items/extraction-provider";
 
 import { validateTemporaryQuoteFile } from "./files";
+import { startOptionalItemExtraction } from "./optional-items";
 import type { QuoteExtractionProvider } from "./provider";
 
 export interface QuoteItemReviewRow {
@@ -95,13 +94,15 @@ export async function processSupplierQuote(
   fileValue: FormDataEntryValue | null,
   provider: QuoteExtractionProvider,
   itemProvider?: ItemExtractionProvider,
+  requestId = randomUUID(),
 ): Promise<ProcessedQuoteReview> {
   const projectId = z.uuid().safeParse(projectIdValue);
   if (!projectId.success) {
     throw new QuoteProcessingError("Choose a valid Project.");
   }
   const database = getDatabase();
-  const [project, suppliers, file] = await Promise.all([
+  const file = await validateTemporaryQuoteFile(fileValue);
+  const [project, suppliers] = await Promise.all([
     database.project.findUnique({
       where: { id: projectId.data },
       select: {
@@ -122,33 +123,31 @@ export async function processSupplierQuote(
         vatNumber: true,
       },
     }),
-    validateTemporaryQuoteFile(fileValue),
-  ]);
-  if (!project) throw new QuoteProcessingError("The Project no longer exists.");
-
+  ]).catch((error: unknown) => {
+    file.bytes.fill(0);
+    throw error;
+  });
   let result: Awaited<ReturnType<QuoteExtractionProvider["extract"]>>;
   let itemResult: Awaited<
     ReturnType<ItemExtractionProvider["extractQuoteItems"]>
   > | null = null;
   let itemExtractionWarning: string | null = null;
+  let optionalItems: ReturnType<typeof startOptionalItemExtraction> | undefined;
   try {
-    const [quoteOutcome, itemOutcome] = await Promise.allSettled([
+    if (!project)
+      throw new QuoteProcessingError("The Project no longer exists.");
+    optionalItems = itemProvider
+      ? startOptionalItemExtraction(file, itemProvider, requestId)
+      : undefined;
+    const [quoteOutcome, itemOutcome] = await Promise.all([
       provider.extract(file),
-      itemProvider
-        ? itemProvider.extractQuoteItems(file)
-        : Promise.resolve(null),
+      optionalItems?.result ?? Promise.resolve(null),
     ]);
-    if (quoteOutcome.status === "rejected") throw quoteOutcome.reason;
-    result = quoteOutcome.value;
-    if (itemOutcome.status === "fulfilled") {
-      itemResult = itemOutcome.value;
-    } else if (itemOutcome.reason instanceof ItemExtractionProviderError) {
-      itemExtractionWarning =
-        "Item-line extraction was unavailable. Aggregate Order review remains available; Items can be added later.";
-    } else {
-      throw itemOutcome.reason;
-    }
+    result = quoteOutcome;
+    itemResult = itemOutcome?.extraction ?? null;
+    itemExtractionWarning = itemOutcome?.warning ?? null;
   } finally {
+    optionalItems?.cancel();
     file.bytes.fill(0);
   }
   const supplierMatch = matchSupplierCandidates(

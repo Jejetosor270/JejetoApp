@@ -11,12 +11,39 @@ import {
   type SpreadsheetMappingSuggestion,
 } from "@/domain/items/extraction";
 import { getItemExtractionEnvironment } from "@/lib/env/item-extraction";
+import {
+  safeItemErrorType,
+  safeItemIncompleteReason,
+  safeItemOutputTypes,
+  safeItemRequestId,
+  safeItemResponseState,
+  safeItemSchemaIssues,
+  type ItemExtractionFailureCategory,
+} from "@/lib/items/extraction-diagnostics";
 import type { TemporaryQuoteFile } from "@/lib/quote-intake/provider";
 
-export class ItemExtractionProviderError extends Error {}
+export type { ItemExtractionFailureCategory } from "@/lib/items/extraction-diagnostics";
+
+export class ItemExtractionProviderError extends Error {
+  constructor(
+    message: string,
+    readonly category: ItemExtractionFailureCategory = "PROVIDER",
+  ) {
+    super(message);
+    this.name = "ItemExtractionProviderError";
+  }
+}
+
+export interface ItemExtractionRequestOptions {
+  signal?: AbortSignal;
+  requestId?: string;
+}
 
 export interface ItemExtractionProvider {
-  extractQuoteItems(file: TemporaryQuoteFile): Promise<{
+  extractQuoteItems(
+    file: TemporaryQuoteFile,
+    options?: ItemExtractionRequestOptions,
+  ): Promise<{
     extraction: QuoteItemExtraction;
     model: string;
     provider: string;
@@ -34,7 +61,7 @@ export interface ItemExtractionProvider {
 const responseSchema = z
   .object({
     error: z
-      .object({ message: z.string().optional() })
+      .object({ code: z.string().optional(), message: z.string().optional() })
       .passthrough()
       .nullable()
       .optional(),
@@ -60,6 +87,7 @@ const responseSchema = z
               )
               .optional(),
             type: z.string(),
+            status: z.string().optional(),
           })
           .passthrough(),
       )
@@ -80,11 +108,49 @@ function outputText(payload: z.infer<typeof responseSchema>): string | null {
   return value || null;
 }
 
-function refusal(payload: z.infer<typeof responseSchema>): string | null {
-  return (
-    (payload.output ?? [])
-      .flatMap((item) => item.content ?? [])
-      .find((content) => content.type === "refusal")?.refusal ?? null
+function refusal(payload: z.infer<typeof responseSchema>): boolean {
+  return (payload.output ?? [])
+    .flatMap((item) => item.content ?? [])
+    .some((content) => content.type === "refusal");
+}
+
+async function withAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
+  let onAbort = () => {};
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
+function transportFailure(error: unknown, signal: AbortSignal) {
+  if (
+    signal.aborted ||
+    (error instanceof Error &&
+      ["TimeoutError", "AbortError"].includes(error.name))
+  ) {
+    const timedOut =
+      (signal.reason instanceof Error &&
+        signal.reason.name === "TimeoutError") ||
+      (error instanceof Error && error.name === "TimeoutError");
+    return new ItemExtractionProviderError(
+      timedOut
+        ? "Item extraction timed out. Retry the upload."
+        : "Item extraction was cancelled. Retry when ready.",
+      timedOut ? "TIMEOUT" : "ABORTED",
+    );
+  }
+  return new ItemExtractionProviderError(
+    "The Item extraction provider could not be reached.",
+    "PROVIDER",
   );
 }
 
@@ -109,143 +175,199 @@ export class OpenAIItemExtractionProvider implements ItemExtractionProvider {
   private async structured<T>(
     input: unknown,
     instructions: string,
-    name: string,
+    name: "supplier_quote_items" | "item_spreadsheet_mapping",
     schema: z.ZodType<T>,
+    options: ItemExtractionRequestOptions = {},
   ): Promise<{ model: string; value: T }> {
-    let environment: ReturnType<typeof getItemExtractionEnvironment>;
-    try {
-      environment = getItemExtractionEnvironment(
-        await getAiProcessingModel("itemExtractionModel"),
-      );
-    } catch (error) {
-      console.error("Item extraction configuration failed.", {
-        error: error instanceof Error ? error.message : typeof error,
-        provider: ITEM_EXTRACTION_PROVIDER,
-      });
-      throw new ItemExtractionProviderError(
-        "Item extraction is not configured. Contact an administrator.",
-      );
-    }
-    const model = environment.ITEM_EXTRACTION_MODEL;
-    let response: Response;
-    try {
-      response = await this.request("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${environment.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          input,
-          instructions,
-          model,
-          store: false,
-          text: {
-            format: {
-              name,
-              schema: z.toJSONSchema(schema),
-              strict: true,
-              type: "json_schema",
-            },
-          },
-        }),
-        signal: AbortSignal.timeout(90_000),
-      });
-    } catch (error) {
-      console.error("Item extraction request failed.", {
-        error: error instanceof Error ? error.message : typeof error,
-        model,
-        provider: ITEM_EXTRACTION_PROVIDER,
-      });
-      throw new ItemExtractionProviderError(
-        error instanceof Error &&
-          (error.name === "TimeoutError" || error.name === "AbortError")
-          ? "Item extraction timed out. Retry the upload."
-          : "The Item extraction provider could not be reached.",
-      );
-    }
-    const raw: unknown = await response.json().catch(() => null);
-    const parsed = responseSchema.safeParse(raw);
-    if (!parsed.success) {
-      console.error("Item extraction response shape invalid.", {
-        model,
-        requestId: response.headers.get("x-request-id"),
-        status: response.status,
-        zodIssues: parsed.error.issues.map((issue) => ({
-          message: issue.message,
-          path: issue.path.join("."),
-        })),
-      });
-      throw new ItemExtractionProviderError(
-        "The Item extraction provider returned an invalid response.",
-      );
-    }
-    const diagnostic = {
-      model,
-      requestId: response.headers.get("x-request-id"),
-      responseId: parsed.data.id,
-      responseStatus: parsed.data.status,
+    const startedAt = Date.now();
+    const timeout = AbortSignal.timeout(90_000);
+    const signal = options.signal
+      ? AbortSignal.any([options.signal, timeout])
+      : timeout;
+    const diagnostic: {
+      provider: string;
+      operation: string;
+      requestId: string | null;
+      model: string | null;
+      providerRequestId?: string | null;
+      responseId?: string | null;
+      httpStatus?: number;
+      responseStatus?: string;
+      outputTextEmpty?: boolean;
+      outputItemTypes?: string[];
+      outputContentTypes?: string[];
+      reason?: string;
+      zodIssues?: ReturnType<typeof safeItemSchemaIssues>;
+    } = {
+      provider: ITEM_EXTRACTION_PROVIDER,
+      operation: name,
+      requestId: safeItemRequestId(options.requestId),
+      model: null,
     };
-    if (!response.ok || parsed.data.error) {
-      console.error("Item extraction provider error.", {
-        ...diagnostic,
-        httpStatus: response.status,
-        message: parsed.data.error?.message?.slice(0, 300),
-      });
-      throw new ItemExtractionProviderError(
-        "The Item extraction provider could not process this document.",
-      );
-    }
-    if (refusal(parsed.data)) {
-      console.error("Item extraction refused.", diagnostic);
-      throw new ItemExtractionProviderError(
-        "The model declined to extract Items from this document.",
-      );
-    }
-    if (parsed.data.status === "incomplete") {
-      console.error("Item extraction incomplete.", {
-        ...diagnostic,
-        reason: parsed.data.incomplete_details?.reason,
-      });
-      throw new ItemExtractionProviderError(
-        "Item extraction was incomplete. Retry the document.",
-      );
-    }
-    const text = outputText(parsed.data);
-    if (!text) {
-      console.error("Item extraction empty.", diagnostic);
-      throw new ItemExtractionProviderError(
-        "The Item extraction provider returned no line items.",
-      );
-    }
-    let json: unknown;
     try {
-      json = JSON.parse(text);
-    } catch {
-      console.error("Item extraction malformed JSON.", {
-        ...diagnostic,
-        fragment: text.slice(0, 120),
-      });
-      throw new ItemExtractionProviderError(
-        "The extracted Item data was malformed.",
+      signal.throwIfAborted();
+      let environment: ReturnType<typeof getItemExtractionEnvironment>;
+      try {
+        environment = getItemExtractionEnvironment(
+          await withAbort(getAiProcessingModel("itemExtractionModel"), signal),
+        );
+      } catch (error) {
+        if (signal.aborted) throw error;
+        throw new ItemExtractionProviderError(
+          "Item extraction is not configured. Contact an administrator.",
+          "CONFIGURATION",
+        );
+      }
+      const model = environment.ITEM_EXTRACTION_MODEL;
+      diagnostic.model = model;
+      signal.throwIfAborted();
+      const response = await withAbort(
+        this.request("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${environment.OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            input,
+            instructions,
+            model,
+            store: false,
+            text: {
+              format: {
+                name,
+                schema: z.toJSONSchema(schema),
+                strict: true,
+                type: "json_schema",
+              },
+            },
+          }),
+          signal,
+        }),
+        signal,
       );
-    }
-    const validated = schema.safeParse(json);
-    if (!validated.success) {
-      console.error("Item extraction schema validation failed.", {
-        ...diagnostic,
-        zodIssues: validated.error.issues
-          .map((issue) => ({
-            message: issue.message,
-            path: issue.path.join("."),
-          }))
-          .slice(0, 30),
-      });
-      throw new ItemExtractionProviderError(
-        "The extracted Item data failed validation.",
+      diagnostic.providerRequestId = safeItemRequestId(
+        response.headers.get("x-request-id"),
       );
+      diagnostic.httpStatus = response.status;
+      let raw: unknown;
+      try {
+        raw = await withAbort(response.json(), signal);
+      } catch (error) {
+        if (signal.aborted) throw error;
+        if (!response.ok)
+          throw new ItemExtractionProviderError(
+            "The Item extraction provider could not process this document.",
+            [401, 403, 404].includes(response.status)
+              ? "CONFIGURATION"
+              : "PROVIDER",
+          );
+        if (error instanceof SyntaxError)
+          throw new ItemExtractionProviderError(
+            "The Item extraction provider returned an invalid response.",
+            "INVALID_RESPONSE",
+          );
+        throw error;
+      }
+      signal.throwIfAborted();
+      const parsed = responseSchema.safeParse(raw);
+      if (!parsed.success) {
+        diagnostic.zodIssues = safeItemSchemaIssues(parsed.error.issues);
+        throw new ItemExtractionProviderError(
+          "The Item extraction provider returned an invalid response.",
+          response.ok ? "INVALID_RESPONSE" : "PROVIDER",
+        );
+      }
+      const payload = parsed.data;
+      const text = outputText(payload);
+      Object.assign(diagnostic, {
+        responseId: safeItemRequestId(payload.id),
+        responseStatus: safeItemResponseState(payload.status),
+        outputTextEmpty: !text,
+        outputItemTypes: safeItemOutputTypes(
+          (payload.output ?? []).map((item) => item.type),
+        ),
+        outputContentTypes: safeItemOutputTypes(
+          (payload.output ?? []).flatMap((item) =>
+            (item.content ?? []).map((content) => content.type),
+          ),
+        ),
+      });
+      if (
+        !response.ok ||
+        payload.error ||
+        payload.status === "failed" ||
+        payload.status === "cancelled"
+      ) {
+        const configuration =
+          [401, 403, 404].includes(response.status) ||
+          ["invalid_api_key", "model_not_found", "unsupported_model"].includes(
+            payload.error?.code ?? "",
+          );
+        throw new ItemExtractionProviderError(
+          configuration
+            ? "Item extraction is not configured correctly. Contact an administrator."
+            : "The Item extraction provider could not process this document.",
+          configuration ? "CONFIGURATION" : "PROVIDER",
+        );
+      }
+      if (refusal(payload))
+        throw new ItemExtractionProviderError(
+          "The model declined to extract Items from this document.",
+          "REFUSAL",
+        );
+      if (
+        ["incomplete", "queued", "in_progress"].includes(
+          payload.status ?? "",
+        ) ||
+        payload.output?.some((item) =>
+          ["incomplete", "in_progress"].includes(item.status ?? ""),
+        )
+      ) {
+        diagnostic.reason = safeItemIncompleteReason(
+          payload.incomplete_details?.reason,
+        );
+        throw new ItemExtractionProviderError(
+          "Item extraction was incomplete. Retry the document.",
+          "INCOMPLETE",
+        );
+      }
+      if (!text)
+        throw new ItemExtractionProviderError(
+          "The Item extraction provider returned no line items.",
+          "EMPTY_OUTPUT",
+        );
+      let json: unknown;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        throw new ItemExtractionProviderError(
+          "The extracted Item data was malformed.",
+          "MALFORMED_OUTPUT",
+        );
+      }
+      const validated = schema.safeParse(json);
+      if (!validated.success) {
+        diagnostic.zodIssues = safeItemSchemaIssues(validated.error.issues);
+        throw new ItemExtractionProviderError(
+          "The extracted Item data failed validation.",
+          "SCHEMA_VALIDATION",
+        );
+      }
+      return { model, value: validated.data };
+    } catch (error) {
+      const failure =
+        error instanceof ItemExtractionProviderError
+          ? error
+          : transportFailure(error, signal);
+      console.error("Item extraction failed.", {
+        ...diagnostic,
+        category: failure.category,
+        elapsedMs: Date.now() - startedAt,
+        errorType: safeItemErrorType(error),
+      });
+      throw failure;
     }
-    return { model, value: validated.data };
   }
 
   async suggestSpreadsheetMapping(input: {
@@ -270,7 +392,10 @@ export class OpenAIItemExtractionProvider implements ItemExtractionProvider {
     };
   }
 
-  async extractQuoteItems(file: TemporaryQuoteFile) {
+  async extractQuoteItems(
+    file: TemporaryQuoteFile,
+    options?: ItemExtractionRequestOptions,
+  ) {
     const result = await this.structured(
       [
         {
@@ -287,6 +412,7 @@ export class OpenAIItemExtractionProvider implements ItemExtractionProvider {
       "Extract all product lines from this supplier quote. Preserve source unit and total values even when they disagree. Return one Item per meaningful quote line.",
       "supplier_quote_items",
       quoteItemExtractionSchema,
+      options,
     );
     return {
       extraction: result.value,

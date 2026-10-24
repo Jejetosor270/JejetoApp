@@ -119,6 +119,7 @@ export async function processSupplierQuoteAction(
         formData.get("quoteFile"),
         getQuoteExtractionProvider(),
         itemsEnabled ? getItemExtractionProvider() : undefined,
+        requestId,
       ),
     );
     const lifecycle = {
@@ -165,7 +166,8 @@ export async function processSupplierQuoteAction(
     ) {
       return { message: error.message, status: "error" };
     }
-    console.error("Unable to process supplier quote.", error);
+    // The lifecycle event above records a safe category/correlation ID. Raw
+    // exceptions may contain document data, provider responses or credentials.
     return {
       message:
         "The Supplier document could not be processed. Check the file and try again.",
