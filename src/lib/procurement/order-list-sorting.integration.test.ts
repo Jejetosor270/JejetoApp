@@ -51,6 +51,8 @@ beforeAll(async () => {
         supplierId,
         orderCurrencyCode: "EUR",
         sellingCurrencyCode: "EUR",
+        addedDate: new Date(`2026-10-${String(index).padStart(2, "0")}`),
+        orderDate: new Date(`2026-09-${String(index).padStart(2, "0")}`),
         invoiceDate: new Date(`2026-09-${String(index).padStart(2, "0")}`),
         expectedDeliveryDate: new Date(
           `2026-10-${String(index).padStart(2, "0")}`,
@@ -131,8 +133,128 @@ it("sorts every advertised column, preserves filters and excludes Trash", async 
   }
 });
 
+it("filters by Added date and ignores retired Package filters", async () => {
+  const result = await listOrdersPage({
+    ...filters,
+    projectId,
+    sort: "addedDate",
+    direction: "desc",
+    dateFrom: "2026-10-02",
+    dateTo: "2026-10-03",
+    packageId: "00000000-0000-4000-8000-000000000000",
+  });
+  expect(result.items.map((row) => [row.orderNumber, row.addedDate])).toEqual([
+    ["SORT-03", "2026-10-03"],
+    ["SORT-02", "2026-10-02"],
+  ]);
+  expect(result.total).toBe(2);
+  const originalDates = await listOrdersPage({
+    ...filters,
+    projectId,
+    sort: "addedDate",
+    direction: "desc",
+    dateField: "orderDate",
+    dateFrom: "2026-09-02",
+    dateTo: "2026-09-03",
+  });
+  expect(originalDates.items.map((row) => row.orderNumber)).toEqual([
+    "SORT-03",
+    "SORT-02",
+  ]);
+  const addedDates = await listOrdersPage({
+    ...filters,
+    projectId,
+    sort: "addedDate",
+    dateFrom: "2026-09-02",
+    dateTo: "2026-09-03",
+  });
+  expect(addedDates.total).toBe(0);
+});
+
+it("defaults creation to Paris today and preserves Added date through edits", async () => {
+  const addedProject = await memory.raw.project.create({
+    data: {
+      code: "ADDED",
+      name: "Added date test",
+      reportingCurrencyCode: "EUR",
+    },
+  });
+  const base = {
+    projectId: addedProject.id,
+    supplierId,
+    orderNumber: "ADDED-DATE",
+    packageName: "Dates",
+    orderCurrencyCode: "EUR",
+    sellingCurrencyCode: "EUR",
+    purchaseCost: "100",
+    pricingMode: "PROJECT_MARKUP",
+    freightTreatment: "NOT_APPLICABLE",
+    status: "DRAFT",
+    buildingIds: [],
+  };
+  let id: string;
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-07-01T22:30:00Z"));
+  try {
+    id = await createOrder(actorId, createOrderInputSchema.parse(base));
+  } finally {
+    vi.useRealTimers();
+  }
+  const original = await memory.raw.procurementOrder.findUniqueOrThrow({
+    where: { id },
+  });
+  expect((await getOrder(id))?.addedDate).toBe("2026-07-02");
+  await updateOrder(
+    actorId,
+    updateOrderInputSchema.parse({ ...base, id, invoiceDate: "2026-06-29" }),
+  );
+  expect((await getOrder(id))?.addedDate).toBe("2026-07-02");
+  const opening = await getOrder(id);
+  await updateOrder(
+    actorId,
+    updateOrderInputSchema.parse({
+      ...base,
+      id,
+      addedDate: "2026-07-03",
+      expectedVersion: opening?.editVersion,
+    }),
+  );
+  expect((await getOrder(id))?.addedDate).toBe("2026-07-03");
+  await expect(
+    updateOrder(
+      actorId,
+      updateOrderInputSchema.parse({
+        ...base,
+        id,
+        addedDate: "2026-07-04",
+        expectedVersion: opening?.editVersion,
+      }),
+    ),
+  ).rejects.toThrow("Changed since editing began");
+  const edited = await memory.raw.procurementOrder.findUniqueOrThrow({
+    where: { id },
+  });
+  expect(edited.createdAt).toEqual(original.createdAt);
+  expect(edited.invoiceDate).toEqual(new Date("2026-06-29"));
+  expect(
+    (await memory.raw.auditEvent.findMany({ where: { entityId: id } })).map(
+      (event) => event.metadata,
+    ),
+  ).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ addedDate: "2026-07-02" }),
+      expect.objectContaining({ addedDate: "2026-07-03" }),
+    ]),
+  );
+});
+
 it("sorts dates and derived payment statuses, ignoring legacy overrides", async () => {
-  for (const sort of ["invoiceDate", "dueDate", "expectedDelivery"] as const) {
+  for (const sort of [
+    "addedDate",
+    "invoiceDate",
+    "dueDate",
+    "expectedDelivery",
+  ] as const) {
     const result = await listOrdersPage({
       ...filters,
       projectId,

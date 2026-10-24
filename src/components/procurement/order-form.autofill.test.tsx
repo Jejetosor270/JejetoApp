@@ -9,7 +9,6 @@ vi.mock("@/app/(app)/orders/actions", () => ({
   createOrderAction: vi.fn(),
   updateOrderAction: vi.fn(),
 }));
-vi.mock("./package-select", () => ({ PackageSelect: () => null }));
 import {
   OrderForm,
   type OrderFormOptions,
@@ -48,6 +47,7 @@ const options: OrderFormOptions = {
 const order: EditableOrder = {
   id: "order",
   orderNumber: "PO-001",
+  addedDate: "2026-10-01",
   packageName: "Package",
   category: null,
   description: null,
@@ -103,6 +103,32 @@ async function toggleTaxableCost(label: string) {
   if (!input) throw new Error(`Missing taxable cost ${label}`);
   await act(async () => input.click());
 }
+it("prefills Added date for new Orders without inventing a Supplier date", async () => {
+  view = await mountForm(<OrderForm options={options} />);
+  expect(value("addedDate")).toBe(businessToday());
+  expect(value("invoiceDate")).toBe("");
+  expect(value("quoteDate")).toBe("");
+});
+it("edits Added date independently and retains hidden historical grouping", async () => {
+  view = await mountForm(
+    <OrderForm
+      options={options}
+      order={{
+        ...order,
+        packageId: "historical-group",
+        invoiceDate: "2026-09-29",
+      }}
+    />,
+  );
+  expect(value("addedDate")).toBe("2026-10-01");
+  await enter("addedDate", "02/10/2026");
+  expect(value("addedDate")).toBe("2026-10-02");
+  expect(value("invoiceDate")).toBe("2026-09-29");
+  expect(value("packageId")).toBe("historical-group");
+  expect(value("packageName")).toBe("Package");
+  expect(view.container.textContent).not.toContain("Legacy Order title");
+  expect(document.querySelector('select[name="packageId"]')).toBeNull();
+});
 it("preserves separate source dates and legacy timing while changing the main document kind", async () => {
   view = await mountForm(
     <OrderForm

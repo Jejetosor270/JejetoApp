@@ -219,6 +219,50 @@ it("edits Quote dates independently and rejects invalid or stale dates", async (
   ).rejects.toThrow("date");
 });
 
+it("edits Added date without rewriting source or creation dates", async () => {
+  const original = await memory.raw.procurementOrder.findUniqueOrThrow({
+    where: { id: orderId },
+  });
+  const input = {
+    kind: "order",
+    id: orderId,
+    field: "addedDate",
+    previous: original.addedDate.toISOString().slice(0, 10),
+    value: "2026-10-24",
+  };
+  for (const actor of [userId, inactiveId])
+    await expect(saveTableCell(actor, input)).rejects.toThrow("Only active");
+  for (const value of ["", "2026-02-30"])
+    await expect(saveTableCell(actorId, { ...input, value })).rejects.toThrow(
+      "date",
+    );
+  // Pick a distinct value even when this test runs on its fixture date.
+  input.value = input.previous === "2026-10-24" ? "2026-10-23" : "2026-10-24";
+  await saveTableCell(actorId, input);
+  const edited = await memory.raw.procurementOrder.findUniqueOrThrow({
+    where: { id: orderId },
+  });
+  expect(edited.addedDate.toISOString().slice(0, 10)).toBe(input.value);
+  expect(edited.createdAt).toEqual(original.createdAt);
+  expect(edited.invoiceDate).toEqual(original.invoiceDate);
+  expect(edited.quoteDate).toEqual(original.quoteDate);
+  await expect(saveTableCell(actorId, input)).rejects.toThrow("changed since");
+  expect(
+    await memory.raw.auditEvent.findFirst({
+      where: {
+        entityId: orderId,
+        metadata: { path: ["field"], equals: "addedDate" },
+      },
+    }),
+  ).toMatchObject({
+    metadata: {
+      field: "addedDate",
+      previous: input.previous,
+      value: input.value,
+    },
+  });
+});
+
 it("recalculates purchase-based selling and output VAT without rescheduling or changing input VAT", async () => {
   const before = await getOrder(orderId);
   await saveTableCell(actorId, {
@@ -355,6 +399,76 @@ it("rejects edits to trashed records", async () => {
       value: "NEW",
     }),
   ).rejects.toThrow();
+});
+
+it("clears retired grouping only on an explicit safe Project move", async () => {
+  const db = memory.raw;
+  const destination = await db.project.create({
+    data: {
+      code: "MOVE-GROUP",
+      name: "Destination",
+      reportingCurrencyCode: "EUR",
+    },
+  });
+  const group = await db.orderPackage.create({
+    data: { projectId, name: "Historical group" },
+  });
+  const order = await db.procurementOrder.create({
+    data: {
+      orderNumber: "MOVE-GROUP",
+      packageName: "Historical title",
+      packageId: group.id,
+      projectId,
+      supplierId,
+      orderCurrencyCode: "EUR",
+      sellingCurrencyCode: "EUR",
+      addedDate: new Date("2026-10-20"),
+      costLines: {
+        create: { category: "SUPPLIER_PURCHASE", originalAmount: "100" },
+      },
+    },
+  });
+  const input = {
+    kind: "order",
+    id: order.id,
+    field: "projectId",
+    previous: projectId,
+    value: destination.id,
+  };
+  await expect(
+    saveTableCell(actorId, { ...input, previous: destination.id }),
+  ).rejects.toThrow("changed since");
+  expect(
+    (await db.procurementOrder.findUniqueOrThrow({ where: { id: order.id } }))
+      .packageId,
+  ).toBe(group.id);
+  await saveTableCell(actorId, { ...input, value: projectId });
+  expect(
+    (await db.procurementOrder.findUniqueOrThrow({ where: { id: order.id } }))
+      .packageId,
+  ).toBe(group.id);
+  await saveTableCell(actorId, input);
+  const moved = await db.procurementOrder.findUniqueOrThrow({
+    where: { id: order.id },
+  });
+  expect(moved).toMatchObject({
+    projectId: destination.id,
+    packageId: null,
+    packageName: "Historical title",
+    addedDate: order.addedDate,
+    createdAt: order.createdAt,
+  });
+  expect(
+    await db.orderPackage.findUnique({ where: { id: group.id } }),
+  ).not.toBeNull();
+  expect(
+    await db.auditEvent.findFirst({
+      where: {
+        entityId: order.id,
+        metadata: { path: ["projectId"], equals: destination.id },
+      },
+    }),
+  ).toMatchObject({ metadata: { projectId: destination.id, packageId: null } });
 });
 
 async function isolatedOrder(orderNumber: string) {

@@ -1,12 +1,12 @@
 import { financialLabels } from "@/domain/presentation/labels";
 export const orderSortLabels = {
   updated: "Updated date",
+  addedDate: "Added date",
   reference: "Reference",
   orderDate: "Order date",
   invoiceDate: "Invoice date",
   documentDate: "Supplier document date",
   project: "Project",
-  package: "Package",
   supplier: "Supplier",
   status: "Delivery status",
   purchase: "Purchase HT",
@@ -33,6 +33,7 @@ export const visibleOrderSortFields: readonly OrderSort[] =
     (field) =>
       field !== "orderDate" &&
       field !== "invoiceDate" &&
+      field !== "documentDate" &&
       field !== "expectedReady",
   );
 export type OrderViewMode =
@@ -41,12 +42,11 @@ export const orderViewColumns: Record<OrderViewMode, readonly OrderSort[]> = {
   general: [
     "reference",
     "project",
-    "package",
     "supplier",
     "status",
     "purchase",
     "paymentStatus",
-    "documentDate",
+    "addedDate",
     "dueDate",
     "expectedDelivery",
   ],
@@ -54,7 +54,6 @@ export const orderViewColumns: Record<OrderViewMode, readonly OrderSort[]> = {
     "reference",
     "supplier",
     "project",
-    "package",
     "purchase",
     "economicCost",
     "sell",
@@ -64,7 +63,6 @@ export const orderViewColumns: Record<OrderViewMode, readonly OrderSort[]> = {
     "supplier",
     "reference",
     "project",
-    "package",
     "payable",
     "scheduled",
     "paid",
@@ -78,7 +76,6 @@ export const orderViewColumns: Record<OrderViewMode, readonly OrderSort[]> = {
     "expectedDelivery",
     "supplier",
     "project",
-    "package",
     "carrier",
     "tracking",
   ],

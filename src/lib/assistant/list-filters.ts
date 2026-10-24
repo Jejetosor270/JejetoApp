@@ -102,8 +102,8 @@ export function assistantListHref(query: AssistantListQuery): string | null {
   if (
     query.paymentStatus ||
     query.status === "ISSUED" ||
-    ((query.dateFrom || query.dateTo) &&
-      !(query.kind === "Order" && query.dateField === "orderDate"))
+    query.dateFrom ||
+    query.dateTo
   )
     return null;
   const params = new URLSearchParams({

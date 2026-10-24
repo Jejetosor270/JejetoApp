@@ -32,7 +32,12 @@ const otherId = "22222222-2222-4222-8222-222222222222";
 beforeEach(() => {
   vi.resetAllMocks();
   mock.orders.mockResolvedValue([
-    { id, orderNumber: "O1", packageName: "Furniture" },
+    {
+      id,
+      orderNumber: "O1",
+      shortDescription: "Furniture",
+      packageName: "Historical title",
+    },
   ]);
   mock.billing.mockResolvedValue([
     { id, reference: "INV1", documentType: "INVOICE" },
@@ -64,6 +69,7 @@ it("preselects the current Order and its authoritative supplier basis", async ()
     orderId: id,
     summary: { baseAmount: "1200" },
   });
+  expect(result.data?.choices).toEqual([{ id, label: "O1 · Furniture" }]);
 });
 it("requires a choice when a Project has several Orders", async () => {
   mock.orders.mockResolvedValue([
@@ -77,6 +83,10 @@ it("requires a choice when a Project has several Orders", async () => {
     }),
   );
   expect(result.data?.form).toBeNull();
+  expect(result.data?.choices).toEqual([
+    { id, label: "O1" },
+    { id: otherId, label: "O2" },
+  ]);
   expect(mock.summary).not.toHaveBeenCalled();
 });
 it("rejects a selected document outside the Related scope", async () => {

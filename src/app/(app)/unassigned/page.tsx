@@ -51,7 +51,6 @@ export default async function UnassignedPage({
     client,
     buildings,
     rooms,
-    packages,
     items,
     freight,
     counts,
@@ -91,11 +90,6 @@ export default async function UnassignedPage({
       select: { id: true, name: true, code: true },
       ...page,
     }),
-    db.orderPackage.findMany({
-      where: { projectId: null },
-      select: { id: true, name: true },
-      ...page,
-    }),
     db.item.findMany({
       where: { projectId: null },
       select: { id: true, name: true, itemReference: true },
@@ -128,7 +122,6 @@ export default async function UnassignedPage({
       db.clientPaymentInstallment.count({ where: { billingDocumentId: null } }),
       db.building.count({ where: { projectId: null } }),
       db.room.count({ where: { buildingId: null } }),
-      db.orderPackage.count({ where: { projectId: null } }),
       db.item.count({ where: { projectId: null } }),
       db.projectFreightExpense.count({ where: { projectId: null } }),
     ]),
@@ -153,12 +146,6 @@ export default async function UnassignedPage({
       "Rooms",
       ["Room", "Code"],
       rooms.map((row) => ({ id: row.id, cells: [row.name, row.code ?? "—"] })),
-    ),
-    table(
-      "packages",
-      "Packages",
-      ["Package"],
-      packages.map((row) => ({ id: row.id, cells: [row.name] })),
     ),
     table(
       "items",

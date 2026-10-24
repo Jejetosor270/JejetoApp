@@ -2,10 +2,6 @@
 import { EditorActions } from "@/components/forms/editor-drawer";
 import { carriers } from "@/config/carriers";
 import { AllocationInputs } from "@/components/billing/allocation-inputs";
-import {
-  PackageSelect,
-  type PackageOption,
-} from "@/components/procurement/package-select";
 import { DateInput } from "@/components/forms/date-input";
 import { Button } from "@/components/ui/button";
 
@@ -78,7 +74,6 @@ interface BuildingOption {
   shortCode: string;
 }
 interface ProjectOption {
-  orderPackages?: PackageOption[];
   buildings: BuildingOption[];
   client: { defaultCurrencyCode: string };
   id: string;
@@ -138,6 +133,7 @@ export interface OrderFormOptions {
   vatTreatments: string[];
 }
 export interface EditableOrder {
+  addedDate?: string;
   actualDeliveryDate: string | null;
   buildingIds: string[];
   category: string | null;
@@ -186,7 +182,7 @@ const labels: Record<string, string> = {
   CLOSED: "Closed",
   DELIVERED: "Delivered",
   DRAFT: "Draft",
-  INCLUDED_IN_PACKAGE_PRICE: "Included in package price",
+  INCLUDED_IN_PACKAGE_PRICE: "Included in Order price",
   NOT_APPLICABLE: "Not applicable",
   RECHARGED_SEPARATELY: "Recharged separately",
   PROJECT_MARKUP: "Project Markup",
@@ -548,6 +544,7 @@ export function OrderForm({
       initialSupplier?.defaultCurrencyCode ??
       initialProject?.reportingCurrencyCode ??
       "EUR",
+    addedDate: order?.addedDate ?? businessToday(),
     orderDate: order?.orderDate ?? "",
     invoiceDate: order?.invoiceDate ?? "",
     orderNumber: order?.orderNumber ?? "",
@@ -873,34 +870,22 @@ export function OrderForm({
               maxLength={240}
             />
           </Field>
-          <Field error={fieldErrors.packageId} label="Package">
-            <PackageSelect
-              key={projectId}
-              projectId={projectId}
-              packages={
-                options.projects.find((project) => project.id === projectId)
-                  ?.orderPackages ?? []
-              }
-              value={packageId}
-              onChange={setPackageId}
+          <input type="hidden" name="packageId" value={packageId} />
+          <input
+            type="hidden"
+            name="packageName"
+            value={isEditing ? draft.packageName : draft.orderNumber}
+          />
+          <Field error={fieldErrors.addedDate} label="Added date">
+            <DateInput
+              aria-invalid={Boolean(fieldErrors.addedDate) || undefined}
+              className={errorClass("addedDate")}
+              name="addedDate"
+              required
+              value={draft.addedDate ?? ""}
+              onChange={(event) => changeDraft("addedDate", event.target.value)}
             />
           </Field>
-          {isEditing ? (
-            <Field error={fieldErrors.packageName} label="Legacy Order title">
-              <input
-                aria-invalid={Boolean(fieldErrors.packageName) || undefined}
-                className={errorClass("packageName")}
-                name="packageName"
-                onChange={(event) =>
-                  changeDraft("packageName", event.target.value)
-                }
-                required
-                value={draft.packageName}
-              />
-            </Field>
-          ) : (
-            <input type="hidden" name="packageName" value={draft.orderNumber} />
-          )}
           <Field error={fieldErrors.category} label="Category">
             <input
               aria-invalid={Boolean(fieldErrors.category) || undefined}
@@ -1878,7 +1863,7 @@ export function OrderForm({
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <Field
                 error={fieldErrors.sellingPriceAmount}
-                label={`Package Sell HT (${sellingCurrency})`}
+                label={`Order Sell HT (${sellingCurrency})`}
               >
                 <MoneyInput
                   invalid={Boolean(fieldErrors.sellingPriceAmount)}
@@ -1908,7 +1893,7 @@ export function OrderForm({
               )}
               <div className="rounded-md border p-3 text-sm">
                 <p className="text-muted-foreground text-xs">
-                  Effective package markup
+                  Effective Order markup
                 </p>
                 <p className="financial-figure mt-1">
                   {livePricing?.productMarkupRate

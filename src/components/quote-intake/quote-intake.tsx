@@ -658,7 +658,7 @@ export function QuoteReview({
                       <option value="">Choose Order</option>
                       {review.orders.map((order) => (
                         <option key={order.id} value={order.id}>
-                          {order.orderNumber} · {order.packageName}
+                          {order.orderNumber}
                         </option>
                       ))}
                     </select>

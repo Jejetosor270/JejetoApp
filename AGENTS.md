@@ -22,9 +22,9 @@ Before broad investigation, read the relevant repository skill: `skills/mb-erp-d
 
 Build MB Interiors' internal procurement-finance ERP incrementally. The business spine is:
 
-`Client → Project → House/Building → Supplier Procurement Package/Order → Payment Schedule`
+`Client → Project → House/Building → Supplier Procurement Order → Payment Schedule`
 
-One package can apply to several buildings. The package/order remains the authoritative commercial procurement object; Phase 10 Items are Project/location-specific supporting detail.
+One Order can apply to several buildings. The Order remains the authoritative commercial procurement object; Phase 10 Items are Project/location-specific supporting detail. Package grouping is retired from the UI; preserve historical grouping rows/links and internal compatibility fields without exposing Package selectors, columns or titles.
 
 Do not introduce a reusable product/SKU catalog, inventory, warehouse management, or statutory-accounting behavior. Rooms and Project-specific Items follow the Phase 10 rules below. Do not implement later roadmap phases unless the current task explicitly requests them.
 
@@ -214,4 +214,4 @@ No floating-point finance, mutable supplier defaults as historical order truth, 
 
 Billing, Purchasing and Projects expose editable payment terms with derived statuses and expandable actual cash history. Preserve the normalized settlement/receipt records underneath. New records default to reviewed terms or one 100% term; missing due dates remain null. Existing terms are never silently rewritten. Settings Empty Trash is an explicitly confirmed ADMIN-only permanent operation retaining audit history; normal business deletion remains recoverable.
 
-Payment terms alone own due dates; legacy Billing document due dates are historical only after the controlled date backfill. Everyday Purchasing shows the current Supplier document date (Quote or Invoice) and Expected delivery; preserve older dates in additional details. Tables show Next payment due or Paid, with actual payment dates in cash history. Never infer an Invoice date from a Quote or Order date.
+Payment terms alone own due dates; legacy Billing document due dates are historical only after the controlled date backfill. Purchasing tables show editable Added date (`addedDate`), newest first by default, alongside Expected delivery. Added date defaults to the Paris business date when the Order is first created/confirmed from intake; later imports/edits preserve it unless explicitly corrected. Historical rows backfill from the Paris calendar date of `createdAt`; never edit that immutable audit timestamp. Date-range filters and exports use Added date. Supplier Quote/Invoice dates remain independently editable in Details, never in Purchasing table columns. Tables show Next payment due or Paid, with actual payment dates in cash history. Never infer an Invoice date from a Quote or Order date.

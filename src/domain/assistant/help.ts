@@ -70,7 +70,7 @@ const helpEntries: Record<AssistantHelpTopic, AssistantHelpEntry> = {
   order_pricing: {
     title: "Order pricing",
     paragraphs: [
-      "Project markup uses the Project's Product, Freight and Other Cost defaults. Order markup uses explicit rates for that Order. Direct selling price uses the entered package selling price, with separately recharged freight added once.",
+      "Project markup uses the Project's Product, Freight and Other Cost defaults. Order markup uses explicit rates for that Order. Direct selling price uses the entered Order selling price, with separately recharged freight added once.",
       "Markup is profit divided by cost; margin is profit divided by selling revenue. They are different percentages. Recoverable input VAT is not economic cost; non-deductible input VAT is.",
     ],
     steps: [

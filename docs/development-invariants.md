@@ -339,7 +339,7 @@
 - Phase 3 keeps Details / Related, with mounted Related work areas for Billing, Purchasing,
   payment terms, freight, buildings/rooms, Client and enabled Beta Items. Switching work areas
   preserves drafts; the `section` query parameter retains selection and existing subsection
-  links still work. Package management is collapsed under Purchasing. Shared related tables
+  links still work. Package management is retired from the UI. Shared related tables
   retain visible-page selection, inline editing and relationship-only removal.
 - Project rendering reuses React request-scoped reads for Orders, Supplier terms, Billing and
   freight summaries; these are not persistent caches. Related omits unused legacy cash-table
@@ -689,10 +689,10 @@ checks. Report migration/deployment requirements explicitly.
 
 ## V2 product refinement
 
-- Project Packages are explicit relational Order groupings, never cost or revenue authorities.
-  One Order has zero or one same-Project Package. Preserve historical `packageName` text;
-  the forward migration intentionally creates no inferred assignments. Archive retains
-  existing assignments. Package mutations/reassignments use server authorization and audit.
+- Project Package grouping is retired from all visible workspaces, filters, selectors,
+  Related tables and CSV columns. Preserve historical grouping rows/links and `packageName`
+  compatibility fields; they remain neither cost nor revenue authorities. Ordinary edits
+  preserve these fields. Moving an Order to another Project clears its old grouping.
 - Allocation amount remains the authority. Fixed HT, percentage of Billing HT, and
   percentage of Order Sell HT are interchangeable UI inputs. Convert the Order basis
   into Billing currency with the existing manual-FX helper; incomplete FX disables that
@@ -734,15 +734,15 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
 ## Simplified workspaces
 
 - Project Related contains scoped record tables for Orders, Billing, Supplier payments,
-  Client receipts and both installment types, plus Packages, Buildings, Rooms and optional
-  Items. Canonical operational lists remain the filtering/export workspaces. Purchase budgets
-  and Order Packages never replace Order financial authority.
+  Client receipts and both installment types, plus Buildings, Rooms and optional Items.
+  Canonical operational lists remain the filtering/export workspaces. Purchase budgets
+  never replace Order financial authority.
 - Project, Order (including those opened from Purchasing), and Billing records have exactly
   two mounted tabs: Details and Related. Details owns fields, financial breakdowns, dates,
   delivery and notes; Related owns linked records, allocations, schedules, payments,
   receipts and document history. Switching tabs must preserve drafts. Project Details includes
   planning, pricing defaults and financial reporting; Project Related lists connected records
-  and owns Packages, Buildings/Rooms and freight-expense management. Settings retains its
+  and owns Buildings/Rooms and freight-expense management. Settings retains its
   existing section layout.
 - Purchasing is the record presentation reference: shared compact summaries, two-column financial
   label/value cards, and Related category headings with descriptions and adjacent actions. Use
@@ -779,7 +779,7 @@ Client and Supplier onboarding may keep a browser-only object URL for a side-by-
   `/payments/[paymentId]`, `/receipts/[receiptId]`, and `/installments/{supplier,client}/[installmentId]`.
   Their readers resolve the active user and validate IDs. Local Edit drawers
   reuse the authorized Order/Billing mutation services and preserve failed drafts. Buildings and Rooms remain managed within
-  their Project; Packages open scoped Orders, and Items open their existing record pages.
+  their Project; Items open their existing record pages.
 - An Order has one Project. Order Related includes Supplier payments/installments and linked Billing,
   but deliberately does not project Billing receipts or Client installments onto the Order. Open
   Billing to inspect Client cash. Billing receipts have one owning document and optional installment;
@@ -857,8 +857,14 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 ## Purchasing dates and list simplification
 
 - Purchasing labels the operational/fulfilment column Delivery status; Payment status remains
-  separate. Its standard table includes Supplier document date, Next payment due and Expected delivery.
-  The document date prefers a recorded Invoice date, otherwise Quote date, with its source labelled.
+  separate. Its standard table includes Added date, Next payment due and Expected delivery.
+  Added date is an editable business date, automatically set when first creating/confirming
+  an Order in Purchasing, independent of Supplier dates and the immutable creation timestamp.
+  Later imports and unrelated edits preserve it. Newest-added is the default list/export sort;
+  date-range filters also use Added date. Supplier document dates stay in Details/editors only.
+  Migration `20261024000000_purchasing_added_date` backfills existing rows using the Paris
+  calendar date of `createdAt`, then requires a non-null date with a Paris-business-date default.
+  Prepare and validate this migration locally; deployment requires its controlled application.
   Next payment due is the earliest outstanding non-cancelled Supplier term date.
 - Everyday Purchasing entry shows one selected Supplier document date and Expected delivery.
   Additional details preserve Order/older document dates and historical ready/lead-time values.
@@ -904,7 +910,7 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 - Overall Budgeted Sell follows `targetMode`: EXPECTED_SELL uses the approved overall value with category targets marked Not allocated; MARKUP uses complete approved category budgets and component rates.
 - Distinct names identify different bases: Billing less cost, Billing less Order sell, Unallocated Invoice HT, Cash balance and Freight recovery surplus. Project and Reports use one effective freight recovery target: applicable Order freight markup plus Project-expense markup on economic freight cost. The breakdown distinguishes raw HT, non-deductible expense VAT and markup. The Project planning allowance and allocated Billing less freight cost remain distinct.
 - Full Order/Billing financial editors and Billing allocation drawers carry a version of the record and financial dependencies. Stale saves are rejected with changed field/group names while retaining drafts. Transactions are serializable. Closing/reopening refreshes the edit snapshot; a refreshed page must not silently bless a stale draft.
-- Simple text/date cells remain inline; money and relationship choices use contextual drawers. Derived totals link to their authoritative source editor. Billing has one status control in its header; Reference is primary and short description is secondary. Legacy Order title stays secondary to Reference and separate from Project Package grouping.
+- Simple text/date cells remain inline; money and relationship choices use contextual drawers. Derived totals link to their authoritative source editor. Billing has one status control in its header; Reference is primary and short description is secondary. Legacy Order titles and Project Package grouping are no longer displayed.
 - Due-date display uses the earliest unpaid term, with no Client document fallback. Date edits affect that term only, never the whole schedule. Cash calendars use remaining TTC, show original scheduled TTC separately, identify Quote planning and Invoice expectations, and list Issue invoice reminders separately.
 - Billing and Purchasing list date columns show Next payment due, or Paid when settled. Sorting uses unpaid term dates only, with undated/paid rows last; settlement dates remain in expandable history. Payment corrections that reopen the balance restore the unpaid due-date display. No receipt/settlement date is invented when cash history is absent.
 - Supplier-scoped actual cash filters outflows at transaction level, includes freight-only Supplier relationships and suppresses Client inflows rather than inventing Supplier attribution.

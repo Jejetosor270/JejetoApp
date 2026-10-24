@@ -13,7 +13,6 @@ import { RelatedRecords } from "@/components/layout/related-records";
 import { getProjectRelations } from "@/lib/related-records/records";
 import { ProjectPurchaseBudget } from "@/components/procurement/project-purchase-budget";
 import { optionalUuid } from "@/domain/listing/validation";
-import { ProjectPackages } from "@/components/procurement/project-packages";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
@@ -131,13 +130,6 @@ export default async function ProjectPage({
               <ProjectPurchaseBudget projectId={projectId} />
             </div>
           </details>
-        ),
-        packages: (
-          <ProjectPackages
-            projectId={projectId}
-            currency={project.reportingCurrencyCode}
-            canEdit={canEditMasterData(user.role)}
-          />
         ),
         items: settings.itemManagementEnabled ? (
           <RelatedItems projectId={projectId} />

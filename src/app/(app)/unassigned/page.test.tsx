@@ -116,4 +116,12 @@ describe("unassigned freight review destination", () => {
     ).rejects.toThrow("unauthenticated");
     expect(state.db.projectFreightExpense.findMany).not.toHaveBeenCalled();
   });
+  it("omits retired Packages without reading or changing their historical rows", async () => {
+    renderToStaticMarkup(
+      await UnassignedPage({ searchParams: Promise.resolve({}) }),
+    );
+    expect(state.tables.map((table) => table.id)).not.toContain("packages");
+    expect(state.db.orderPackage.findMany).not.toHaveBeenCalled();
+    expect(state.db.orderPackage.count).not.toHaveBeenCalled();
+  });
 });

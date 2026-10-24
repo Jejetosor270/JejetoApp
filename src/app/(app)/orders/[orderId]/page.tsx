@@ -96,9 +96,6 @@ export default async function OrderPage({
               <>
                 {order.project.name} · {order.supplier.displayName}
                 {order.shortDescription && <p>{order.shortDescription}</p>}
-                {order.packageName !== order.orderNumber && (
-                  <p className="text-xs">Legacy title: {order.packageName}</p>
-                )}
               </>
             }
             title={order.orderNumber}
@@ -249,7 +246,7 @@ export default async function OrderPage({
                         </>
                       ) : (
                         <>
-                          <dt>Package Sell HT</dt>
+                          <dt>Order Sell HT</dt>
                           <dd className="financial-figure text-right">
                             {formatMoney(
                               order.packageSellingPrice,
@@ -414,6 +411,14 @@ export default async function OrderPage({
                 <section className="bg-card rounded-lg border p-4">
                   <h2 className="text-sm font-semibold">Dates & delivery</h2>
                   <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                    <div>
+                      <dt className="text-muted-foreground text-xs">
+                        Added date
+                      </dt>
+                      <dd className="mt-1">
+                        {formatDateOnly(order.addedDate)}
+                      </dd>
+                    </div>
                     <div>
                       <dt className="text-muted-foreground text-xs">
                         Supplier document date ·{" "}

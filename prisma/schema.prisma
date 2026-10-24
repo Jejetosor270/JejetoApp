@@ -564,6 +564,7 @@ model ProcurementOrder {
   freightAllowanceOverrideAmount     Decimal?               @db.Decimal(38, 20)
   otherCostMarkupOverrideRate        Decimal?               @db.Decimal(9, 6)
   outputVatTaxableBaseOverride       Decimal?               @db.Decimal(19, 4)
+  addedDate                          DateTime               @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Paris'::text)::date")) @db.Date
   quoteDate                          DateTime?              @db.Date
   orderDate                          DateTime?              @db.Date
   invoiceDate                        DateTime?              @db.Date
@@ -604,6 +605,7 @@ model ProcurementOrder {
   @@index([supplierId, status])
   @@index([orderCurrencyCode])
   @@index([updatedAt])
+  @@index([addedDate])
   @@index([expectedDeliveryDate], map: "procurement_orders_estimatedDeliveryAt_idx")
   @@map("procurement_orders")
   detachedReportingCurrencyCode String? @db.Char(3)

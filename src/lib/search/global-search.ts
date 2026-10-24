@@ -167,7 +167,13 @@ export async function globalSearch(
       type: "Supplier" as const,
     })),
     ...orders.map((order) => ({
-      context: `${order.project?.name ?? "Unassigned"} · ${order.supplier?.displayName ?? "Unassigned"} · ${order.shortDescription || order.packageName}`,
+      context: [
+        order.project?.name ?? "Unassigned",
+        order.supplier?.displayName ?? "Unassigned",
+        order.shortDescription,
+      ]
+        .filter(Boolean)
+        .join(" · "),
       href: `/orders/${order.id}`,
       id: order.id,
       label: order.orderNumber,

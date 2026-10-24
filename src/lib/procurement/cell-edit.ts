@@ -40,7 +40,8 @@ function storedCellValue(order: EditableOrder, field: StoredField) {
     ? (order.costLines
         .find((line) => line.category === "SUPPLIER_PURCHASE")
         ?.originalAmount.toString() ?? "")
-    : field === "invoiceDate" ||
+    : field === "addedDate" ||
+        field === "invoiceDate" ||
         field === "quoteDate" ||
         field === "expectedReadyDate" ||
         field === "expectedDeliveryDate"
@@ -105,7 +106,12 @@ async function updateFinancialCell(
 ) {
   const summary = await getOrderInTransaction(tx, input.id);
   if (!summary) throw new CellEditError("Order not found.");
-  const values = currentOrderValues(summary, { [field]: value });
+  const values = currentOrderValues(summary, {
+    [field]: value,
+    ...(field === "projectId" && value !== summary.project.id
+      ? { packageId: null }
+      : {}),
+  });
   await updateOrderInTransaction(tx, actorId, { ...values, id: input.id });
 }
 
@@ -158,10 +164,10 @@ async function validateProject(
     : null;
   if (
     value !== order.projectId &&
-    (order.packageId || Object.values(order._count).some((count) => count > 0))
+    Object.values(order._count).some((count) => count > 0)
   )
     throw new CellEditError(
-      "Reconcile this Order's Package, Buildings, Items, Billing and payment terms before changing Project.",
+      "Reconcile this Order's Buildings, Items, Billing and payment terms before changing Project.",
     );
   if (
     (oldProject?.reportingCurrencyCode ??
@@ -235,6 +241,11 @@ async function directCellUpdate(
       data.status = status;
       break;
     }
+    case "addedDate":
+      if (!isDateOnly(value))
+        throw new CellEditError("Enter a valid Added date.");
+      data.addedDate = dateOnlyToDate(value);
+      break;
     case "invoiceDate":
     case "quoteDate":
     case "expectedReadyDate":

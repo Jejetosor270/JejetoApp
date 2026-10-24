@@ -103,8 +103,10 @@ async function findRecords(
       context: [
         order.project?.name ?? "Unassigned",
         order.supplier?.displayName ?? "Unassigned",
-        order.shortDescription || order.packageName,
-      ].join(" · "),
+        order.shortDescription,
+      ]
+        .filter(Boolean)
+        .join(" · "),
       href: `/orders/${encodeURIComponent(order.id)}`,
     })),
     ...billing.map((document): AssistantRecord => ({

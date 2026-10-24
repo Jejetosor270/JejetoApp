@@ -18,6 +18,9 @@ function wordLabel(word: string): string {
 
 /** Converts a persisted enum/code into a consistent business-facing label. */
 export function formatEnumLabel(value: string): string {
+  if (value.trim() === "INCLUDED_IN_PACKAGE_PRICE") {
+    return "Included in Order price";
+  }
   return value
     .trim()
     .split(/[_\s-]+/)

@@ -60,6 +60,7 @@ function sellingOrder(
     category: null,
     costLines: [],
     createdAt: timestamp,
+    addedDate: new Date("2026-08-25"),
     createdById: null,
     description: null,
     estimatedDispatchAt: null,

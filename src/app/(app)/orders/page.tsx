@@ -64,7 +64,6 @@ export default async function OrdersPage({
       ? requestedView
       : "general";
   const projectId = optionalUuid(firstQueryValue(params, "projectId"));
-  const packageId = optionalUuid(firstQueryValue(params, "packageId"));
   const supplierId = optionalUuid(firstQueryValue(params, "supplierId"));
   const buildingId = optionalUuid(firstQueryValue(params, "buildingId"));
   const status = statusValue(firstQueryValue(params, "status"));
@@ -76,7 +75,7 @@ export default async function OrdersPage({
   const sort = parseSort(
     orderSortFields,
     firstQueryValue(params, "sort"),
-    "updated",
+    "addedDate",
   );
   const direction = parseSortDirection(firstQueryValue(params, "direction"));
   const dateFrom = firstQueryValue(params, "dateFrom");
@@ -84,7 +83,6 @@ export default async function OrdersPage({
   const optionsPromise = listOrderOptions();
   const [user, options] = await Promise.all([requireUser(), optionsPromise]);
   const result = await listOrdersPage({
-    packageId,
     buildingId,
     currencyCode: firstQueryValue(params, "currencyCode"),
     dateFrom: dateFrom && isDateOnly(dateFrom) ? dateFrom : undefined,
@@ -136,7 +134,7 @@ export default async function OrdersPage({
             className={filterControlClassName}
             defaultValue={query}
             name="query"
-            placeholder="Search reference, package, supplier"
+            placeholder="Search reference, supplier"
           />
         </FilterField>
         <FilterField label="Project">
@@ -167,25 +165,6 @@ export default async function OrdersPage({
                 </option>
               )),
             )}
-          </select>
-        </FilterField>
-        <FilterField label="Package">
-          <select
-            className={filterControlClassName}
-            name="packageId"
-            defaultValue={packageId ?? ""}
-          >
-            <option value="">All Packages</option>
-            {options.projects
-              .filter((project) => !projectId || project.id === projectId)
-              .flatMap((project) =>
-                project.orderPackages.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {project.name} · {item.name}
-                    {item.isActive ? "" : " (archived)"}
-                  </option>
-                )),
-              )}
           </select>
         </FilterField>
         <FilterField label="Supplier">
@@ -238,14 +217,14 @@ export default async function OrdersPage({
             Additional date filters
           </summary>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <FilterField label="Order date from">
+            <FilterField label="Added date from">
               <DateInput
                 className={filterControlClassName}
                 defaultValue={dateFrom ?? ""}
                 name="dateFrom"
               />
             </FilterField>
-            <FilterField label="Order date to">
+            <FilterField label="Added date to">
               <DateInput
                 className={filterControlClassName}
                 defaultValue={dateTo ?? ""}

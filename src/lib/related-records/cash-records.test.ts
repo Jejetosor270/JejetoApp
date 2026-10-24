@@ -35,7 +35,7 @@ const order = {
   projectId: id,
   status: "CONFIRMED",
   orderCurrencyCode: "USD",
-  orderDate: null,
+  addedDate: new Date("2026-10-24"),
   supplier: party,
   project,
 };

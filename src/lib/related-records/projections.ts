@@ -37,7 +37,7 @@ export const orderSelect = {
   projectId: true,
   status: true,
   orderCurrencyCode: true,
-  orderDate: true,
+  addedDate: true,
   supplier: { select: partySelect },
 } satisfies Prisma.ProcurementOrderSelect;
 export const billingSelect = {
@@ -196,24 +196,16 @@ export function ordersTable(rows: (Order | null | undefined)[]) {
   return table(
     "orders",
     "Orders",
-    [
-      "Order",
-      "Package",
-      "Supplier",
-      "Status",
-      "Purchase currency",
-      "Order date",
-    ],
+    ["Order", "Supplier", "Status", "Purchase currency", "Added date"],
     rows.filter(present).map((r) => ({
       id: r.id,
       href: relatedHref("order", r.id),
       cells: [
         r.orderNumber,
-        r.packageName,
         r.supplier?.displayName ?? "Unassigned",
         formatEnumLabel(r.status),
         r.orderCurrencyCode,
-        date(r.orderDate),
+        date(r.addedDate),
       ],
     })),
   );
@@ -246,7 +238,6 @@ export function projectOrdersTable(rows: OrderSummary[]) {
     "Orders",
     [
       "Order",
-      "Package",
       "Supplier",
       "Landed cost HT",
       "Sell HT",
@@ -265,7 +256,6 @@ export function projectOrdersTable(rows: OrderSummary[]) {
         secondaryText: order.shortDescription ?? null,
         cells: [
           order.orderNumber,
-          order.orderPackage?.name ?? order.packageName,
           order.supplier.displayName,
           formatMoney(order.costs.landedCost, order.orderCurrencyCode),
           formatMoney(order.totalSellingRevenue, order.sellingCurrencyCode),
@@ -284,7 +274,7 @@ export function projectOrdersTable(rows: OrderSummary[]) {
         ],
       })),
     "Order cost and agreed sell exclude VAT. Remaining TTC is the Supplier payable balance.",
-    [3, 4, 5],
+    [2, 3, 4],
   );
 }
 

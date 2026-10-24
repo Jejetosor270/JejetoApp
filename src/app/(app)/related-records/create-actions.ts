@@ -41,12 +41,14 @@ export async function loadRelatedCreation(
                   : { projectId: scope.id }),
                 status: { not: "CANCELLED" },
               },
-              select: { id: true, orderNumber: true, packageName: true },
+              select: { id: true, orderNumber: true, shortDescription: true },
               orderBy: [{ orderNumber: "asc" }, { id: "asc" }],
             })
         ).map((row) => ({
           id: row.id,
-          label: `${row.orderNumber} · ${row.packageName}`,
+          label: [row.orderNumber, row.shortDescription]
+            .filter(Boolean)
+            .join(" · "),
         }))
       : (
           await db.clientBillingDocument.findMany({

@@ -74,7 +74,7 @@ export function OrderTable({
                   className={`px-4 py-3 ${orderNumericColumns.includes(field) ? "text-right" : ""}`}
                   label={orderSortLabels[field]}
                   field={field}
-                  defaultSort="updated"
+                  defaultSort="addedDate"
                   defaultDirection="desc"
                 />
               ))}

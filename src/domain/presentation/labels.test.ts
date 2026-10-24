@@ -8,6 +8,7 @@ describe("business presentation labels", () => {
     ["ON_HOLD", "On Hold"],
     ["OUTPUT_VAT", "Output VAT"],
     ["direct-selling-price", "Direct Selling Price"],
+    ["INCLUDED_IN_PACKAGE_PRICE", "Included in Order price"],
   ])("formats %s", (value, expected) => {
     expect(formatEnumLabel(value)).toBe(expected);
   });

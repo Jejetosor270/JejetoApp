@@ -543,9 +543,18 @@ describe("JejetoBot lists", () => {
   );
 
   it("uses native Order date range and distinguishes Invoice date filtering", async () => {
-    await list({ dateField: "orderDate", dateFrom: "2026-10-01" });
+    const orderDates = await list({
+      dateField: "orderDate",
+      dateFrom: "2026-10-01",
+    });
+    // Purchasing filters Added dates; do not link to a different date scope.
+    expect(orderDates.moreHref).toBeNull();
     expect(mocks.orders).toHaveBeenLastCalledWith(
-      expect.objectContaining({ dateFrom: "2026-10-01", pageSize: 25 }),
+      expect.objectContaining({
+        dateField: "orderDate",
+        dateFrom: "2026-10-01",
+        pageSize: 25,
+      }),
     );
     mocks.orders.mockResolvedValue({
       items: [order(), order({ id: "other", invoiceDate: null })],

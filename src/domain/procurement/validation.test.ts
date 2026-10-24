@@ -20,6 +20,17 @@ const base = {
   supplierId: "b12b6b9b-10e9-4e42-b93f-38796de4f65a",
 };
 describe("single procurement order cost validation", () => {
+  it("validates an optional Added date without accepting blank or invalid dates", () => {
+    expect(createOrderInputSchema.parse(base).addedDate).toBeUndefined();
+    expect(
+      createOrderInputSchema.parse({ ...base, addedDate: "2026-10-24" })
+        .addedDate,
+    ).toBe("2026-10-24");
+    for (const addedDate of ["", null, "2026-02-30", "24/10/2026"])
+      expect(
+        createOrderInputSchema.safeParse({ ...base, addedDate }).success,
+      ).toBe(false);
+  });
   it("validates invoice dates and distinguishes omission from explicit clearing", () => {
     expect(
       createOrderInputSchema.parse({ ...base }).invoiceDate,

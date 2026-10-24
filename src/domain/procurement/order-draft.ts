@@ -7,6 +7,7 @@ import {
 } from "@/domain/finance/purchase-vat-base";
 
 export interface OrderDraft {
+  addedDate?: string;
   carrierCode?: string;
   carrierOtherName?: string;
   trackingReference?: string;

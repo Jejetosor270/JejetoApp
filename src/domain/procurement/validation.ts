@@ -94,6 +94,11 @@ const optionalLeadTime = z.preprocess(
 );
 
 const orderFields = {
+  addedDate: z
+    .string()
+    .trim()
+    .refine(isDateOnly, "Enter a valid Added date.")
+    .optional(),
   shortDescription: optionalText(240),
   buildingIds: z
     .array(z.uuid("Invalid building."))

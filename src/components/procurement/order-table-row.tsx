@@ -19,7 +19,6 @@ import {
 import { carriers, carrierName } from "@/config/carriers";
 import { formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
-import { supplierDocumentDate } from "@/domain/procurement/document-date";
 import { formatEnumLabel } from "@/domain/presentation/labels";
 import type { CellEditInput } from "@/domain/listing/cell-edit";
 import type { OrderSummary } from "@/lib/procurement/orders";
@@ -28,7 +27,6 @@ export interface OrderTableOptions {
   projects: {
     id: string;
     name: string;
-    orderPackages: { id: string; name: string; isActive: boolean }[];
   }[];
   suppliers: { id: string; displayName: string }[];
 }
@@ -54,7 +52,6 @@ export function OrderRow({
   const recordHref = `/orders/${order.id}`;
   const editorHref = `${recordHref}?edit=1`;
   const paymentsHref = `${recordHref}?tab=related#payments`;
-  const documentDate = supplierDocumentDate(order);
   type Field = Extract<CellEditInput, { kind: "order" }>["field"];
   function cell(
     field: Field,
@@ -157,26 +154,6 @@ export function OrderRow({
             })),
           },
         );
-      case "package":
-        return cell(
-          "packageId",
-          "Package",
-          order.packageId,
-          order.orderPackage?.name ?? "Unassigned",
-          {
-            type: "select",
-            options: [
-              { value: "", label: "Unassigned" },
-              ...(
-                options.projects.find(
-                  (project) => project.id === order.project.id,
-                )?.orderPackages ?? []
-              )
-                .filter((item) => item.isActive || item.id === order.packageId)
-                .map((item) => ({ value: item.id, label: item.name })),
-            ],
-          },
-        );
       case "status":
         return cell(
           "status",
@@ -194,20 +171,15 @@ export function OrderRow({
               })),
           },
         );
-      case "documentDate":
+      case "addedDate":
         return cell(
-          documentDate.field,
-          `Supplier document date · ${documentDate.kind === "INVOICE" ? "Invoice" : "Quote"}`,
-          documentDate.date,
-          <span>
-            {formatDateOnly(documentDate.date)}
-            <span className="text-muted-foreground ml-1.5 text-xs">
-              {documentDate.kind === "INVOICE" ? "Invoice" : "Quote"}
-            </span>
-          </span>,
+          "addedDate",
+          "Added date",
+          order.addedDate,
+          formatDateOnly(order.addedDate),
           {
             type: "date",
-            hint: "Quote and Invoice dates remain separate. Edit either source date in Edit order.",
+            hint: "When this record was added to Purchasing. Supplier document dates remain in Details.",
           },
         );
       case "invoiceDate":

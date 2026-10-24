@@ -54,7 +54,7 @@ function orderRecord(order: OrderSummary): AssistantRecord {
     context: recordContext([
       order.project.name,
       order.supplier.displayName,
-      order.shortDescription || order.packageName,
+      order.shortDescription,
       `Delivery: ${formatEnumLabel(order.status)}`,
       `Payment: ${recordPaymentStatusLabel(order.supplierPayment.status, null, order.status === "CANCELLED")}`,
       order.supplierPayment.nextDueDate
@@ -188,6 +188,7 @@ async function orderList(
     status,
     sort: "updated" as const,
     direction: "desc" as const,
+    dateField: "orderDate" as const,
     dateFrom:
       query.dateField === "orderDate"
         ? (query.dateFrom ?? undefined)

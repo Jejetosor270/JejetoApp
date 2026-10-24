@@ -19,6 +19,7 @@ const order = {
   id: "order-id",
   orderNumber: "PO-001",
   packageName: "Furniture",
+  addedDate: "2026-10-24",
   status: "DRAFT",
   expectedReadyDate: "2026-09-10",
   expectedDeliveryDate: "2026-09-20",
@@ -78,9 +79,9 @@ describe("Purchasing click-to-edit on every column set", () => {
     if (!element) throw new Error(label);
     await act(async () => element.click());
   };
-  async function change(value: string) {
+  async function change(value: string, label = "Reference for PO-001") {
     const input = document.querySelector<HTMLInputElement>(
-      'input[aria-label="Reference for PO-001"]',
+      `input[aria-label="${label}"]`,
     );
     if (!input) throw new Error("Missing reference");
     await act(async () => {
@@ -192,12 +193,16 @@ describe("Purchasing click-to-edit on every column set", () => {
     ).toBe("/orders/order-id?tab=related#payments");
     expect(save).not.toHaveBeenCalled();
   });
-  it("shows a source-aware Quote date instead of an empty Invoice date", async () => {
+  it("shows the editable Added date instead of Supplier source dates", async () => {
     mounted = await mountForm(
       <table>
         <tbody>
           <OrderRow
-            order={{ ...order, quoteDate: "2026-10-01", invoiceDate: null }}
+            order={{
+              ...order,
+              quoteDate: "2026-10-01",
+              invoiceDate: "2026-10-10",
+            }}
             view="general"
             canEdit
             statuses={["DRAFT"]}
@@ -208,10 +213,26 @@ describe("Purchasing click-to-edit on every column set", () => {
       </table>,
     );
     const source = document.querySelector(
-      'button[aria-label="Edit Supplier document date · Quote for PO-001"]',
+      'button[aria-label="Edit Added date for PO-001"]',
     );
-    expect(source?.textContent).toContain("01/10/2026");
-    expect(source?.textContent).toContain("Quote");
+    expect(source?.textContent).toContain("24/10/2026");
+    expect(mounted.container.textContent).not.toContain("01/10/2026");
+    expect(mounted.container.textContent).not.toContain("10/10/2026");
+    expect(mounted.container.textContent).not.toContain("Furniture");
+  });
+  it("saves only Added date when correcting the inline date", async () => {
+    save.mockResolvedValue({ status: "success" });
+    mounted = await mountForm(row("general"));
+    await button("Edit Added date for PO-001");
+    await change("23/10/2026", "Added date for PO-001");
+    await button("Save Added date for PO-001");
+    expect(save).toHaveBeenCalledExactlyOnceWith({
+      kind: "order",
+      id: "order-id",
+      field: "addedDate",
+      previous: "2026-10-24",
+      value: "2026-10-23",
+    });
   });
   it("keeps the Delivery table focused on delivery instead of the legacy ready milestone", async () => {
     mounted = await mountForm(row("delivery", false));

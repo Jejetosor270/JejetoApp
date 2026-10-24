@@ -16,6 +16,7 @@ export function currentOrderValues(
   changes: Record<string, unknown> = {},
 ): CreateOrderInput {
   const input = createOrderInputSchema.safeParse({
+    addedDate: order.addedDate,
     actualDeliveryDate: order.actualDeliveryDate ?? undefined,
     buildingIds: order.buildingIds,
     category: order.category ?? undefined,

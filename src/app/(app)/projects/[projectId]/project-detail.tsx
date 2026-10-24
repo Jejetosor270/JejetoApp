@@ -563,7 +563,6 @@ export function ProjectDetail({
     history?: ReactNode;
     overview: ReactNode;
     budget: ReactNode;
-    packages: ReactNode;
     freightExpenses: ReactNode;
     items: ReactNode;
   };
@@ -683,12 +682,6 @@ export function ProjectDetail({
                 </Link>
                 {workspace.purchasing}
                 {workspace.budget}
-                <details className="record-surface">
-                  <summary className="cursor-pointer text-sm font-semibold">
-                    Order packages
-                  </summary>
-                  <div className="mt-4">{workspace.packages}</div>
-                </details>
               </div>
             ),
           },

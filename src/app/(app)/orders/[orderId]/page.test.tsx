@@ -63,6 +63,7 @@ beforeEach(() => {
   mocks.order.mockResolvedValue({
     id,
     orderNumber: "ORDER-1",
+    addedDate: "2026-10-24",
     packageName: "ORDER-1",
     status: "CONFIRMED",
     pricingMode: "DIRECT_SELLING_PRICE",
@@ -106,6 +107,23 @@ beforeEach(() => {
     expectedDeliveryDate: null,
     actualDeliveryDate: null,
   });
+});
+
+it("keeps Added date and Supplier document dates in Details", async () => {
+  const current = await mocks.order();
+  mocks.order.mockResolvedValue({ ...current, invoiceDate: "2026-10-20" });
+  const page = await OrderPage({
+    params: Promise.resolve({ orderId: id }),
+    searchParams: Promise.resolve({}),
+  });
+  const dates = workspace(page)?.props.sections.find(
+    (section) => section.id === "delivery",
+  );
+  const html = renderToStaticMarkup(dates?.content);
+  expect(html).toContain("Added date");
+  expect(html).toContain("24/10/2026");
+  expect(html).toContain("Supplier document date");
+  expect(html).toContain("20/10/2026");
 });
 
 it.each([false, true])(

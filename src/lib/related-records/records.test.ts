@@ -31,7 +31,11 @@ import {
   getOrderRelations,
   getBillingRelations,
 } from "./records";
-import { paymentSelect, supplierInstallmentSelect } from "./projections";
+import {
+  ordersTable,
+  paymentSelect,
+  supplierInstallmentSelect,
+} from "./projections";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const project = {
@@ -60,6 +64,35 @@ it("loads sibling cash once for a term snapshot, not again for every payment row
     }),
   });
   expect(paymentSelect.installment.select.settlements).toBe(false);
+});
+
+it("shows Added date and no Package column in compact Related Orders", () => {
+  const result = ordersTable([
+    {
+      id,
+      orderNumber: "PO-1",
+      packageName: "Historical title",
+      projectId: id,
+      status: "ORDERED",
+      orderCurrencyCode: "EUR",
+      addedDate: new Date("2026-10-24"),
+      supplier: party,
+    },
+  ]);
+  expect(result.columns).toEqual([
+    "Order",
+    "Supplier",
+    "Status",
+    "Purchase currency",
+    "Added date",
+  ]);
+  expect(result.rows[0]?.cells).toEqual([
+    "PO-1",
+    "Party",
+    "Ordered",
+    "EUR",
+    "24/10/2026",
+  ]);
 });
 
 it("scopes Project tables to its Orders, Billing, installments and actual cash with no aggregation", async () => {
@@ -140,14 +173,13 @@ it("uses authoritative landed cost, sell and Supplier balances in Project Purcha
   expect(result).toMatchObject({
     editKind: "order",
     removal: { relation: "order-project", parentId: id },
-    numericColumns: [3, 4, 5],
+    numericColumns: [2, 3, 4],
   });
   expect(result?.rows[0]).toMatchObject({
     href: `/orders/${id}?tab=related`,
     secondaryText: "Lighting package",
     cells: [
       "PO-1",
-      "Reviewed package",
       "Party",
       "140.00 USD",
       "180.00 EUR",

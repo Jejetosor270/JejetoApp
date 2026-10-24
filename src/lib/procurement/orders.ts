@@ -264,6 +264,7 @@ export interface OrderSummary {
   orderCurrencyCode: string;
   orderNumber: string;
   orderDate: string | null;
+  addedDate: string;
   invoiceDate: string | null;
   packageId?: string | null;
   orderPackage?: { id: string; name: string; isActive: boolean } | null;
@@ -1032,6 +1033,7 @@ export function summarizeOrder(record: RawOrderRecord): OrderSummary {
     orderCurrencyCode: order.orderCurrencyCode,
     orderNumber: order.orderNumber,
     orderDate: order.orderDate ? dateToDateOnly(order.orderDate) : null,
+    addedDate: dateToDateOnly(order.addedDate),
     invoiceDate: order.invoiceDate ? dateToDateOnly(order.invoiceDate) : null,
     packageId: order.packageId,
     orderPackage: order.orderPackage,
@@ -1281,6 +1283,9 @@ async function assertRelations(
 }
 function orderData(input: CreateOrderInput, project: ProjectPricingContext) {
   return {
+    ...(input.addedDate === undefined
+      ? {}
+      : { addedDate: dateOnlyToDate(input.addedDate) }),
     actualDeliveryDate: input.actualDeliveryDate
       ? dateOnlyToDate(input.actualDeliveryDate)
       : null,
@@ -1578,6 +1583,7 @@ export async function listOrderOptions() {
 }
 export interface OrderFilters {
   packageId?: string | undefined;
+  dateField?: "addedDate" | "orderDate" | undefined;
   buildingId?: string | undefined;
   currencyCode?: string | undefined;
   dateFrom?: string | undefined;
@@ -1598,7 +1604,6 @@ export interface OrderListFilters extends OrderFilters, PageInput {
 function orderWhere(filters: OrderFilters): Prisma.ProcurementOrderWhereInput {
   const query = filters.query.trim();
   return {
-    ...(filters.packageId ? { packageId: filters.packageId } : {}),
     ...(filters.buildingId
       ? { buildings: { some: { buildingId: filters.buildingId } } }
       : {}),
@@ -1607,7 +1612,7 @@ function orderWhere(filters: OrderFilters): Prisma.ProcurementOrderWhereInput {
       : {}),
     ...(filters.dateFrom || filters.dateTo
       ? {
-          orderDate: {
+          [filters.dateField === "orderDate" ? "orderDate" : "addedDate"]: {
             ...(filters.dateFrom
               ? { gte: dateOnlyToDate(filters.dateFrom) }
               : {}),
@@ -1653,7 +1658,7 @@ export async function listOrders(
 ): Promise<OrderSummary[]> {
   const orders = await getDatabase().procurementOrder.findMany({
     include: orderInclude,
-    orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+    orderBy: [{ addedDate: "desc" }, { id: "asc" }],
     where: orderWhere(filters),
   });
   return orders.map(summarizeOrder);
@@ -1684,19 +1689,19 @@ export async function listOrdersPage(filters: OrderListFilters) {
     Record<OrderSort, Prisma.ProcurementOrderOrderByWithRelationInput>
   > = {
     reference: { orderNumber: direction },
+    addedDate: { addedDate: direction },
     orderDate: { orderDate: nullable },
     invoiceDate: { invoiceDate: nullable },
     status: { status: direction },
     updated: { updatedAt: direction },
     project: { project: { name: direction } },
-    package: { orderPackage: { name: direction } },
     supplier: { supplier: { displayName: direction } },
     expectedDelivery: { expectedDeliveryDate: nullable },
     expectedReady: { expectedReadyDate: nullable },
     tracking: { trackingReference: nullable },
   };
   const orderBy = [
-    columns[filters.sort] ?? { updatedAt: direction },
+    columns[filters.sort] ?? { addedDate: direction },
     { id: "asc" as const },
   ];
   const [records, total] = await Promise.all([
@@ -1741,9 +1746,11 @@ async function createOrderRecord(
   project: ProjectPricingContext,
   createDefaultTerm = false,
 ): Promise<string> {
+  const addedDate = input.addedDate ?? businessToday();
   const order = await transaction.procurementOrder.create({
     data: {
       ...orderData(input, project),
+      addedDate: dateOnlyToDate(addedDate),
       buildings: {
         create: input.buildingIds.map((buildingId) => ({
           buildingId,
@@ -1768,12 +1775,14 @@ async function createOrderRecord(
     entityReference: input.orderNumber,
     entityType: "ORDER",
     metadata: {
+      addedDate,
       ...(input.packageId === undefined ? {} : { packageId: input.packageId }),
       carrierCode: input.carrierCode ?? null,
       carrierOtherName: input.carrierOtherName ?? null,
       trackingReference: input.trackingReference ?? null,
       budgetPurchaseAmountHt: input.budgetPurchaseAmountHt ?? null,
       fields: [
+        "addedDate",
         "packageId",
         "supplierId",
         "pricingMode",
@@ -1992,7 +2001,11 @@ async function updateOrderRecord(
       ...(input.invoiceDate === undefined
         ? {}
         : { invoiceDate: input.invoiceDate }),
+      ...(input.addedDate === undefined ? {} : { addedDate: input.addedDate }),
+      projectId: input.projectId,
       fields: [
+        ...(input.addedDate === undefined ? [] : ["addedDate"]),
+        "projectId",
         "packageId",
         "supplierId",
         "pricingMode",

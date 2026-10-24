@@ -57,6 +57,7 @@ const buildingId = "d12b6b9b-10e9-4e42-b93f-38796de4f65a";
 
 function existingOrder(): OrderSummary {
   return {
+    addedDate: "2026-01-12",
     actualDeliveryDate: null,
     billing: {
       actualGrossProfit: null,
@@ -195,7 +196,7 @@ describe("reviewed quote confirmation persistence", () => {
     });
   });
 
-  it("preserves existing financial and Building values when AI fields are not applied", async () => {
+  it("preserves Added date, financial and Building values on later imports", async () => {
     const form = commonForm("UPDATE");
     form.set("orderId", orderId);
     form.set("supplierQuoteReference", "MISSING-AI-SHOULD-NOT-APPLY");
@@ -208,6 +209,7 @@ describe("reviewed quote confirmation persistence", () => {
       transaction,
       "actor-1",
       expect.objectContaining({
+        addedDate: "2026-01-12",
         buildingIds: [buildingId],
         freight: "10000.0000",
         id: orderId,

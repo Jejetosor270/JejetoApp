@@ -358,7 +358,7 @@ export function ProjectFinancialDashboard({
                     report.financial.totals.economicLandedCost,
                   ],
                   [
-                    "Package Sell HT",
+                    "Order Sell HT",
                     report.financial.totals.packageSellingPrice,
                   ],
                   [
@@ -562,11 +562,8 @@ export function ProjectFinancialDashboard({
                           className="font-medium hover:underline"
                           href={`/orders/${order.id}`}
                         >
-                          {order.packageName}
-                        </Link>
-                        <span className="text-muted-foreground block font-mono">
                           {order.orderNumber}
-                        </span>
+                        </Link>
                       </td>
                       <td className="px-3 py-2">{order.supplierName}</td>
                       {[

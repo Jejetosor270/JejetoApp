@@ -65,9 +65,11 @@ async function mount(canEdit = true, items = false) {
           </table>
         ),
         overview: <p>Financial summary</p>,
-        budget: <p>Purchase budget</p>,
-        packages: (
-          <input aria-label="Package draft" defaultValue="Original package" />
+        budget: (
+          <label>
+            Purchase budget
+            <input aria-label="Budget draft" defaultValue="100.00" />
+          </label>
         ),
         freightExpenses: <p>Freight expenses</p>,
         items: items ? (
@@ -102,10 +104,10 @@ it("shows one Related work area at a time, preserves drafts across areas and rem
       ?.hasAttribute("hidden"),
   ).toBe(true);
   const draft = document.querySelector<HTMLInputElement>(
-    '[aria-label="Package draft"]',
+    '[aria-label="Budget draft"]',
   );
-  if (!draft) throw new Error("Missing package draft");
-  draft.value = "Keep this package";
+  if (!draft) throw new Error("Missing budget draft");
+  draft.value = "150.00";
   await clickText("Freight");
   expect(panel?.hasAttribute("hidden")).toBe(true);
   await clickText("Details");
@@ -116,7 +118,7 @@ it("shows one Related work area at a time, preserves drafts across areas and rem
     )?.textContent,
   ).toBe("Freight");
   await clickText("Purchasing");
-  expect(draft.value).toBe("Keep this package");
+  expect(draft.value).toBe("150.00");
   expect(document.querySelectorAll('[role="tab"]')).toHaveLength(2);
   expect(
     document.querySelector(
@@ -183,17 +185,18 @@ it("keeps Details focused on the summary and preserves Project info and scoped r
   );
   expect(purchasing?.hasAttribute("hidden")).toBe(false);
   expect(purchasing?.textContent).toContain("Purchase budget");
+  expect(purchasing?.textContent).not.toContain("Order packages");
   const draft = document.querySelector<HTMLInputElement>(
-    '[aria-label="Package draft"]',
+    '[aria-label="Budget draft"]',
   );
-  if (!draft) throw new Error("Missing package editor");
-  draft.value = "Keep package draft";
+  if (!draft) throw new Error("Missing budget editor");
+  draft.value = "150.00";
   await clickText("Details");
   await clickText("Related");
   expect(
-    document.querySelector<HTMLInputElement>('[aria-label="Package draft"]')
+    document.querySelector<HTMLInputElement>('[aria-label="Budget draft"]')
       ?.value,
-  ).toBe("Keep package draft");
+  ).toBe("150.00");
 });
 
 it.each([
