@@ -2,6 +2,9 @@
 vi.mock("@/app/(app)/payments/record-status-actions", () => ({
   saveRecordStatusAction: vi.fn(),
 }));
+vi.mock("@/components/payments/order-term-payment-drawer", () => ({
+  OrderTermPaymentDrawer: () => null,
+}));
 const router = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 import { act } from "react";

@@ -296,6 +296,14 @@
   any required actual FX before recording cash. Payment history remains directly accessible. Paid terms offer no further
   payment or cancellation. The issued-Invoice prerequisite and authoritative cash
   transactions are unchanged.
+- Purchasing header/list payment badges are read-only. Mark as paid opens a term-selection
+  drawer, including on fully paid Orders; several terms require an explicit choice and a
+  single term is preselected. This shortcut never pays the whole Order or invents a term.
+  Mark as unpaid confirms undoing all reviewed payments on the selected term, with a reason;
+  it does not cancel the term or record a refund. An active ADMIN/MANAGER may reverse cash
+  in one serializable, audited transaction only when its exact reviewed versions still match.
+  Cash remains recoverable in Trash, credit-history guards remain enforced, and retained
+  bank matches require review when their cash source is removed.
 - Purchasing and Reports keep presentation selectors inside their filter form with
   one Apply action. Billing's standard drawer keeps linked Order allocations collapsed
   but mounted, opening them for validation errors. Lists show Next payment due
@@ -851,9 +859,10 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 
 ## Payment-status and Billing-entry refinement
 
-- ADMIN/MANAGER Paid actions on Purchasing and Billing record actual remaining cash transactionally.
+- ADMIN/MANAGER Paid actions record actual remaining cash transactionally; the Purchasing
+  header/list requires selection of the payment term rather than settling the whole Order.
   They preserve earlier partial payments and default the new actual date to today. Foreign-currency cash
-  requires employee-entered actual FX. Partially paid opens amount/date/FX entry. Status corrections
+  requires employee-entered actual FX. Purchasing partial payments use the term editor. Status corrections
   use the underlying cash records; legacy display-only override columns remain but no longer drive the UI.
 - Billing's New Billing menu exposes Import Client document and Enter manually. Manual creation
   opens the existing reviewed form and authenticated confirmation service without upload or AI calls.

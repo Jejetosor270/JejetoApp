@@ -3,18 +3,11 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveRecordStatusAction } from "@/app/(app)/payments/record-status-actions";
 import { recordPaymentStatusLabel } from "@/domain/payments/record-status";
-import { businessToday } from "@/domain/payments/dates";
-import { DateInput } from "@/components/forms/date-input";
-import {
-  Field,
-  MoneyInput,
-  inputClassName,
-} from "@/components/master-data/form-ui";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { recordStatusTone } from "@/components/ui/record-status-tone";
-import { ChevronDown } from "lucide-react";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
+import { OrderTermPaymentDrawer } from "./order-term-payment-drawer";
 
 export function RecordPaymentStatus({
   kind,
@@ -36,179 +29,76 @@ export function RecordPaymentStatus({
   onCancelled?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [paymentMode, setPaymentMode] = useState<
-    "PAID" | "PARTIALLY_PAID" | null
-  >(null);
-  const [amount, setAmount] = useState("");
-  const [paymentFx, setPaymentFx] = useState("");
-  const [paymentDate, setPaymentDate] = useState(businessToday());
   const [confirming, setConfirming] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
-  const save = (value: string) =>
+  const cancel = () =>
     startTransition(async () => {
       try {
         const result = await saveRecordStatusAction({
           kind,
           id,
-          value,
-          paymentDate,
-          paymentFx,
-          ...(value === "PARTIALLY_PAID" ? { amount } : {}),
+          value: "CANCEL",
         });
         setFeedback(result.message ?? "");
         if (result.status === "success") {
-          if (value === "CANCEL") {
-            setConfirming(false);
-            onCancelled?.();
-          } else {
-            setPaymentMode(null);
-            setOpen(false);
-          }
+          setConfirming(false);
+          onCancelled?.();
           router.refresh();
-        } else if (value === "PAID") {
-          setPaymentMode("PAID");
-          setOpen(true);
         }
       } catch {
-        setFeedback("Status could not be saved. Your selection is retained.");
+        setFeedback("Cancellation could not be saved. Please try again.");
       }
     });
   return (
     <div className="space-y-2 text-xs">
-      {canEdit && !cancelled ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            aria-label="Change payment status"
-            className="gap-1 px-0 hover:bg-transparent"
-            disabled={pending}
-            onClick={() => {
-              setFeedback("");
-              setOpen(true);
-            }}
-          >
-            <Badge variant={recordStatusTone(automatic)}>
-              {recordPaymentStatusLabel(automatic)}
-            </Badge>
-            <ChevronDown
-              aria-hidden="true"
-              className="text-muted-foreground size-3"
-            />
-          </Button>
-          {automatic !== "PAID" && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={pending}
-              onClick={() => save("PAID")}
-            >
-              Mark as paid
-            </Button>
-          )}
-          {showCancel && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={pending}
-              onClick={() => {
-                setFeedback("");
-                setConfirming(true);
-              }}
-            >
-              Cancel {kind === "order" ? "Order" : "Billing"}
-            </Button>
-          )}
-        </div>
-      ) : (
+      <div className="flex flex-wrap items-center gap-2">
         <Badge variant={recordStatusTone(cancelled ? "CANCELLED" : automatic)}>
           {recordPaymentStatusLabel(automatic, override, cancelled)}
         </Badge>
-      )}
-      {open && (
-        <EditorDrawer
-          open
-          size="compact"
-          title="Purchasing payment status"
-          onOpenChange={(open) => {
-            if (!pending) setOpen(open);
-          }}
-        >
-          <div className="space-y-4">
-            <Field label="Payment status">
-              <select
-                name="status"
-                aria-label="Payment status"
-                className={inputClassName}
-                value={paymentMode ?? "AUTO"}
+        {canEdit && !cancelled && (
+          <>
+            {kind === "order" && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
                 disabled={pending}
-                onChange={(event) => {
+                onClick={() => {
                   setFeedback("");
-                  const value = event.target.value;
-                  if (value === "PAID") {
-                    setPaymentMode("PAID");
-                    save("PAID");
-                  } else
-                    setPaymentMode(value === "PARTIALLY_PAID" ? value : null);
+                  setOpen(true);
                 }}
               >
-                <option value="AUTO">
-                  {recordPaymentStatusLabel(automatic)} · automatic
-                </option>
-                {automatic !== "PAID" && <option value="PAID">Paid</option>}
-                {automatic !== "PAID" && (
-                  <option value="PARTIALLY_PAID">Partially paid</option>
-                )}
-              </select>
-            </Field>
-            {!paymentMode && (
-              <p className="text-muted-foreground text-sm">
-                Payment status follows recorded payments and due dates. Marking
-                as paid records the remaining payment.
-              </p>
-            )}
-            {paymentMode === "PARTIALLY_PAID" && (
-              <Field label="Actual amount TTC">
-                <MoneyInput
-                  name="amount"
-                  value={amount}
-                  onValueChange={setAmount}
-                />
-              </Field>
-            )}
-            {paymentMode && (
-              <>
-                <Field label="Payment date">
-                  <DateInput
-                    value={paymentDate}
-                    onChange={(e) => setPaymentDate(e.target.value)}
-                  />
-                </Field>
-                <Field label="Actual FX (foreign currency)">
-                  <input
-                    className={inputClassName}
-                    value={paymentFx}
-                    onChange={(e) => setPaymentFx(e.target.value)}
-                  />
-                </Field>
-              </>
-            )}
-            {feedback && <p role="alert">{feedback}</p>}
-            {paymentMode && (
-              <Button disabled={pending} onClick={() => save(paymentMode)}>
-                Record payment
+                Mark as paid
               </Button>
             )}
-          </div>
-        </EditorDrawer>
+            {showCancel && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={pending}
+                onClick={() => {
+                  setFeedback("");
+                  setConfirming(true);
+                }}
+              >
+                Cancel {kind === "order" ? "Order" : "Billing"}
+              </Button>
+            )}
+          </>
+        )}
+      </div>
+      {open && kind === "order" && canEdit && !cancelled && (
+        <OrderTermPaymentDrawer
+          orderId={id}
+          open={open}
+          onOpenChange={setOpen}
+        />
       )}
       {feedback && !confirming && !open && <p role="status">{feedback}</p>}
-      {confirming && (
+      {confirming && canEdit && !cancelled && (
         <EditorDrawer
           open
           title={`Cancel ${kind === "order" ? "Order" : "Billing"}`}
@@ -229,7 +119,7 @@ export function RecordPaymentStatus({
             type="button"
             className="mt-4"
             disabled={pending}
-            onClick={() => save("CANCEL")}
+            onClick={cancel}
           >
             Confirm cancellation
           </Button>
