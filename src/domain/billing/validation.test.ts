@@ -8,6 +8,7 @@ import {
   parseBillingDocumentEdit,
   parseClientBillingConfirmation,
   parseOrderCreationBillingLink,
+  parseOrderCreationBillingLinks,
 } from "./validation";
 
 const clientId = "a12b6b9b-10e9-4e42-b93f-38796de4f65a";
@@ -120,6 +121,102 @@ describe("Billing confirmation", () => {
     if (!result.success || result.data === null) return;
     expect(result.data.allocatedAmount).toBeUndefined();
     expect(result.data.percentageRate).toBe("1.000000");
+  });
+
+  it("parses several creation allocations with exact amounts and category subsets", () => {
+    const form = new FormData();
+    form.set(
+      "billingAllocations",
+      JSON.stringify([
+        {
+          billingDocumentId: clientId,
+          basis: "FIXED_AMOUNT",
+          allocatedAmount: "1 234,56",
+          freightCoverageHt: "24,56",
+          otherCoverageHt: "10",
+          isProjectRemainderApproved: true,
+        },
+        {
+          billingDocumentId: projectId,
+          basis: "PERCENTAGE",
+          percentageRate: "0.25",
+          isProjectRemainderApproved: false,
+        },
+      ]),
+    );
+    const result = parseOrderCreationBillingLinks(form);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toEqual([
+      {
+        billingDocumentId: clientId,
+        basis: "FIXED_AMOUNT",
+        allocatedAmount: "1234.5600",
+        freightCoverageHt: "24.5600",
+        otherCoverageHt: "10.0000",
+        isProjectRemainderApproved: true,
+      },
+      {
+        billingDocumentId: projectId,
+        basis: "PERCENTAGE",
+        percentageRate: "0.250000",
+        isProjectRemainderApproved: false,
+      },
+    ]);
+  });
+
+  it("rejects duplicate Billing documents and keeps the invalid row path", () => {
+    const row = {
+      billingDocumentId: clientId,
+      basis: "FIXED_AMOUNT",
+      allocatedAmount: "20",
+      isProjectRemainderApproved: false,
+    };
+    const form = new FormData();
+    form.set("billingAllocations", JSON.stringify([row, row]));
+    const result = parseOrderCreationBillingLinks(form);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues[0]?.path).toEqual([1, "billingDocumentId"]);
+  });
+
+  it("rejects malformed, invalid and oversized allocation arrays", () => {
+    const row = {
+      billingDocumentId: clientId,
+      basis: "FIXED_AMOUNT",
+      allocatedAmount: "-1",
+      isProjectRemainderApproved: false,
+    };
+    for (const payload of [
+      "{bad",
+      "null",
+      JSON.stringify([row]),
+      JSON.stringify(Array.from({ length: 101 }, () => row)),
+    ]) {
+      const form = new FormData();
+      form.set("billingAllocations", payload);
+      expect(parseOrderCreationBillingLinks(form).success).toBe(false);
+    }
+  });
+
+  it("supports no allocations and a legacy single allocation without double submission", () => {
+    const form = new FormData();
+    expect(parseOrderCreationBillingLinks(form)).toEqual({
+      success: true,
+      data: [],
+    });
+    form.set("billingDocumentId", clientId);
+    form.set("billingAllocationBasis", "FIXED_AMOUNT");
+    form.set("billingAllocatedAmount", "40");
+    expect(parseOrderCreationBillingLinks(form)).toMatchObject({
+      success: true,
+      data: [{ allocatedAmount: "40.0000", billingDocumentId: clientId }],
+    });
+    form.set("billingAllocations", "[]");
+    expect(parseOrderCreationBillingLinks(form)).toEqual({
+      success: true,
+      data: [],
+    });
   });
 
   it("rejects inconsistent HT, VAT and TTC", () => {

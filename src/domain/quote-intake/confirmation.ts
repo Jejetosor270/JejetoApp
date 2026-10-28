@@ -10,6 +10,7 @@ import {
 } from "@/domain/vat/recoverability";
 import { optionalPercentageFraction } from "@/domain/validation/percentage";
 import { normalizeNumericText } from "@/domain/validation/numeric";
+import { orderCreationBillingLinksSchema } from "@/domain/billing/validation";
 
 function optionalString(maximum: number) {
   return z.preprocess(
@@ -165,6 +166,7 @@ const confirmationSchema = z
       .array(z.uuid())
       .refine((ids) => new Set(ids).size === ids.length),
     billingAllocatedAmount: optionalMoney,
+    billingAllocations: orderCreationBillingLinksSchema.optional(),
     billingAllocationBasis: z.enum(["PERCENTAGE", "FIXED_AMOUNT"]).optional(),
     billingDocumentId: z.preprocess(
       (value) =>
@@ -463,6 +465,15 @@ export function quoteConfirmationValues(formData: FormData): unknown {
   const approveItems = formData.get("approveItems") === "on";
   const itemsValue = stringValue(formData, "quoteItems");
   let items: unknown = [];
+  let billingAllocations: unknown;
+  if (formData.has("billingAllocations")) {
+    const value = formData.get("billingAllocations");
+    try {
+      billingAllocations = typeof value === "string" ? JSON.parse(value) : null;
+    } catch {
+      billingAllocations = null;
+    }
+  }
   if (approveItems && itemsValue) {
     try {
       items = JSON.parse(itemsValue);
@@ -488,10 +499,19 @@ export function quoteConfirmationValues(formData: FormData): unknown {
     buildingIds: formData
       .getAll("buildingIds")
       .filter((value): value is string => typeof value === "string"),
-    billingAllocatedAmount: stringValue(formData, "billingAllocatedAmount"),
-    billingAllocationBasis: stringValue(formData, "billingAllocationBasis"),
-    billingDocumentId: stringValue(formData, "billingDocumentId"),
-    billingPercentageRate: stringValue(formData, "billingPercentageRate"),
+    billingAllocations,
+    billingAllocatedAmount: formData.has("billingAllocations")
+      ? undefined
+      : stringValue(formData, "billingAllocatedAmount"),
+    billingAllocationBasis: formData.has("billingAllocations")
+      ? undefined
+      : stringValue(formData, "billingAllocationBasis"),
+    billingDocumentId: formData.has("billingAllocations")
+      ? undefined
+      : stringValue(formData, "billingDocumentId"),
+    billingPercentageRate: formData.has("billingAllocations")
+      ? undefined
+      : stringValue(formData, "billingPercentageRate"),
     billingRemainderApproved: formData.get("billingRemainderApproved") === "on",
     freight: stringValue(formData, "freight"),
     freightResaleAmount: stringValue(formData, "freightResaleAmount"),

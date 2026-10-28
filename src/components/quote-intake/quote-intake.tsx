@@ -1,7 +1,7 @@
 "use client";
 import { DocumentReviewWorkspace } from "@/components/intake/document-review-workspace";
 import { useDocumentPreview } from "@/components/intake/use-document-preview";
-import { AllocationInputs } from "@/components/billing/allocation-inputs";
+import { OrderBillingAllocations } from "@/components/billing/order-billing-allocations";
 import { calculateOrderPricingDraft } from "@/domain/finance/order-pricing";
 import { orderSellingBasisInBillingCurrency } from "@/domain/billing/calculations";
 import { DateInput } from "@/components/forms/date-input";
@@ -195,21 +195,18 @@ export function QuoteReview({
   const [sourceDocumentType, setSourceDocumentType] =
     useState<SupplierDocumentKind>("QUOTE");
   const previewVersion = useRef(0);
-  const [revisionBasis, setRevisionBasis] = useState<string | null>(null);
-  const [previewMessage, setPreviewMessage] = useState("");
+  const [revisionBases, setRevisionBases] = useState<
+    Record<string, string | null>
+  >({});
+  const [previewMessages, setPreviewMessages] = useState<
+    Record<string, string>
+  >({});
   const [previewPending, startPreview] = useTransition();
-  const [billingDocumentId, setBillingDocumentId] = useState("");
-  const [billingAllocatedAmount, setBillingAllocatedAmount] = useState("");
   const [applyFreight, setApplyFreight] = useState(financial.freight !== null);
   const [applyMiscellaneous, setApplyMiscellaneous] = useState(
     financial.miscellaneous !== null,
   );
   const [purchaseFxRate, setPurchaseFxRate] = useState("");
-  const [billingRemainderApproved, setBillingRemainderApproved] =
-    useState(false);
-  const selectedBillingDocument = options.billingDocuments.find(
-    (document) => document.id === billingDocumentId,
-  );
   const [orderCurrencyCode, setOrderCurrencyCode] = useState(
     financial.currencyCode ?? "",
   );
@@ -280,9 +277,8 @@ export function QuoteReview({
       ? formatMoney(observation.value, extractedCurrency)
       : undefined;
 
-  let reviewedOrderBasis: string | null =
-    actionType === "UPDATE" ? revisionBasis : null;
-  if (actionType === "CREATE" && project && selectedBillingDocument) {
+  let reviewedOrderSellingReporting: string | null = null;
+  if (actionType === "CREATE" && project) {
     try {
       const pricing = calculateOrderPricingDraft({
         method: "PROJECT_MARKUP",
@@ -300,12 +296,7 @@ export function QuoteReview({
         reportingCurrencyCode: project.reportingCurrencyCode,
         sellingCurrencyCode: project.reportingCurrencyCode,
       });
-      reviewedOrderBasis = orderSellingBasisInBillingCurrency({
-        billingCurrencyCode: selectedBillingDocument.currencyCode,
-        billingFxRateToReporting: selectedBillingDocument.fxRateToReporting,
-        orderSellingReporting: pricing.totalSellReporting,
-        reportingCurrencyCode: project.reportingCurrencyCode,
-      });
+      reviewedOrderSellingReporting = pricing.totalSellReporting;
     } catch {
       /* Incomplete review values cannot supply a percentage basis. */
     }
@@ -523,7 +514,7 @@ export function QuoteReview({
               if (
                 [
                   "orderId",
-                  "billingDocumentId",
+                  "action",
                   "purchaseCost",
                   "freight",
                   "miscellaneous",
@@ -536,8 +527,8 @@ export function QuoteReview({
                 ].includes(name)
               ) {
                 previewVersion.current += 1;
-                setRevisionBasis(null);
-                setPreviewMessage("");
+                setRevisionBases({});
+                setPreviewMessages({});
               }
             }
           }}
@@ -1052,135 +1043,67 @@ export function QuoteReview({
           </section>
 
           {billingDocuments.length ? (
-            <section className="bg-card rounded-lg border p-4 sm:p-5">
-              <h2 className="text-sm font-semibold">
-                Optional Billing reconciliation
-              </h2>
-              <p className="text-muted-foreground mt-1 text-xs">
-                Link the reviewed Order to an existing Billing document from
-                this Project, or skip and reconcile later.
-              </p>
-              <div className="mt-4 grid gap-3 @md:grid-cols-2 @4xl:grid-cols-2">
-                <Field label="Billing document">
-                  <select
-                    className={inputClassName}
-                    name="billingDocumentId"
-                    onChange={(event) => {
-                      const selected = options.billingDocuments.find(
-                        (document) => document.id === event.target.value,
-                      );
-                      setBillingDocumentId(event.target.value);
-                      setBillingAllocatedAmount("");
-                      setBillingRemainderApproved(
-                        selected?.isProjectRemainderApproved ?? false,
-                      );
-                    }}
-                    value={billingDocumentId}
-                  >
-                    <option value="">Skip for now</option>
-                    {billingDocuments.map((document) => (
-                      <option key={document.id} value={document.id}>
-                        {document.reference}
-                        {document.shortDescription
-                          ? ` · ${document.shortDescription}`
-                          : ""}{" "}
-                        · {formatMoney(document.totalHt, document.currencyCode)}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                {selectedBillingDocument ? (
-                  <>
-                    <input
-                      type="hidden"
-                      name="billingAllocationBasis"
-                      value="FIXED_AMOUNT"
-                    />
-                    {actionType === "UPDATE" ? (
-                      <div className="@md:col-span-2">
+            <OrderBillingAllocations
+              documents={billingDocuments}
+              fieldErrors={fieldErrors}
+              getOrderSellHt={(document) =>
+                actionType === "UPDATE"
+                  ? (revisionBases[document.id] ?? null)
+                  : project
+                    ? orderSellingBasisInBillingCurrency({
+                        billingCurrencyCode: document.currencyCode,
+                        billingFxRateToReporting: document.fxRateToReporting,
+                        orderSellingReporting: reviewedOrderSellingReporting,
+                        reportingCurrencyCode: project.reportingCurrencyCode,
+                      })
+                    : null
+              }
+              renderPreview={
+                actionType === "UPDATE"
+                  ? (document) => (
+                      <div className="space-y-2">
                         <Button
                           type="button"
                           variant="outline"
+                          size="sm"
                           disabled={previewPending}
                           onClick={(event) => {
                             const form = event.currentTarget.closest("form");
                             if (!form) return;
                             const data = new FormData(form);
+                            data.set("billingDocumentId", document.id);
                             const version = previewVersion.current;
                             startPreview(async () => {
                               const result =
                                 await previewSupplierOrderBillingAction(data);
                               if (version !== previewVersion.current) return;
-                              setRevisionBasis(result.amount);
-                              setPreviewMessage(result.message);
+                              setRevisionBases((current) => ({
+                                ...current,
+                                [document.id]: result.amount,
+                              }));
+                              setPreviewMessages((current) => ({
+                                ...current,
+                                [document.id]: result.message,
+                              }));
                             });
                           }}
                         >
                           {previewPending
                             ? "Calculating…"
-                            : "Calculate reviewed Order coverage"}
+                            : "Calculate Order basis"}
                         </Button>
                         <p
                           role="status"
-                          className="text-muted-foreground mt-2 text-xs"
+                          className="text-muted-foreground text-xs"
                         >
-                          {previewMessage ||
-                            "Calculate the revised pricing to enable the Order percentage. This does not save or call AI."}
+                          {previewMessages[document.id] ||
+                            "Calculate reviewed pricing to use the Order percentage."}
                         </p>
                       </div>
-                    ) : null}
-                    <AllocationInputs
-                      amount={billingAllocatedAmount}
-                      onAmountChange={setBillingAllocatedAmount}
-                      billingTotalHt={selectedBillingDocument.totalHt}
-                      orderSellHt={reviewedOrderBasis}
-                      currencyCode={selectedBillingDocument.currencyCode}
-                      name="billingAllocatedAmount"
-                      error={fieldErrors.billingAllocatedAmount}
-                    />
-                    <div className="bg-background grid gap-2 rounded-md border p-3 text-xs @md:col-span-2 @md:grid-cols-3 @4xl:col-span-4">
-                      <p>
-                        Billing HT:{" "}
-                        {formatMoney(
-                          selectedBillingDocument.totalHt,
-                          selectedBillingDocument.currencyCode,
-                        )}
-                      </p>
-                      <p>
-                        Already allocated:{" "}
-                        {formatMoney(
-                          selectedBillingDocument.allocatedHt,
-                          selectedBillingDocument.currencyCode,
-                        )}
-                      </p>
-                      <p>
-                        Available:{" "}
-                        {formatMoney(
-                          Decimal.max(
-                            new Decimal(selectedBillingDocument.totalHt).minus(
-                              selectedBillingDocument.allocatedHt,
-                            ),
-                            0,
-                          ).toFixed(4),
-                          selectedBillingDocument.currencyCode,
-                        )}
-                      </p>
-                    </div>
-                    <label className="flex items-center gap-2 text-xs @md:col-span-2 @4xl:col-span-4">
-                      <input
-                        checked={billingRemainderApproved}
-                        name="billingRemainderApproved"
-                        onChange={(event) =>
-                          setBillingRemainderApproved(event.target.checked)
-                        }
-                        type="checkbox"
-                      />
-                      Approve any remaining Billing HT at Project level
-                    </label>
-                  </>
-                ) : null}
-              </div>
-            </section>
+                    )
+                  : undefined
+              }
+            />
           ) : null}
 
           {options.itemsEnabled && review.itemReview ? (

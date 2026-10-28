@@ -1,7 +1,7 @@
 "use client";
 import { EditorActions } from "@/components/forms/editor-drawer";
 import { carriers } from "@/config/carriers";
-import { AllocationInputs } from "@/components/billing/allocation-inputs";
+import { OrderBillingAllocations } from "@/components/billing/order-billing-allocations";
 import { DateInput } from "@/components/forms/date-input";
 import { Button } from "@/components/ui/button";
 
@@ -121,6 +121,7 @@ export interface OrderFormOptions {
     isProjectRemainderApproved: boolean;
     projectId: string;
     reference: string;
+    shortDescription?: string | null;
     totalHt: string;
   }[];
   currencies: { code: string; name: string }[];
@@ -588,11 +589,7 @@ export function OrderForm({
     trackingReference: order?.trackingReference ?? "",
     budgetPurchaseAmountHt: order?.budgetPurchaseAmountHt ?? "",
   }));
-  const [billingDocumentId, setBillingDocumentId] = useState("");
   const [packageId, setPackageId] = useState(order?.packageId ?? "");
-  const [billingAllocatedAmount, setBillingAllocatedAmount] = useState("");
-  const [billingRemainderApproved, setBillingRemainderApproved] =
-    useState(false);
   function changeDraft<K extends keyof OrderDraft>(
     field: K,
     value: OrderDraft[K],
@@ -604,9 +601,6 @@ export function OrderForm({
   const project = options.projects.find((item) => item.id === projectId);
   const availableBillingDocuments = options.billingDocuments.filter(
     (document) => document.projectId === projectId,
-  );
-  const selectedBillingDocument = options.billingDocuments.find(
-    (document) => document.id === billingDocumentId,
   );
   const purchaseCurrency = draft.orderCurrencyCode;
   const sellingCurrency = draft.sellingCurrencyCode;
@@ -671,23 +665,6 @@ export function OrderForm({
   } catch {
     livePricing = null;
   }
-  const selectedBillingOrderBasis =
-    project && selectedBillingDocument
-      ? orderSellingBasisInBillingCurrency({
-          billingCurrencyCode: selectedBillingDocument.currencyCode,
-          billingFxRateToReporting: selectedBillingDocument.fxRateToReporting,
-          orderSellingReporting: livePricing?.totalSellReporting ?? null,
-          reportingCurrencyCode: project.reportingCurrencyCode,
-        })
-      : null;
-  const selectedBillingAvailable = selectedBillingDocument
-    ? Decimal.max(
-        new Decimal(selectedBillingDocument.totalHt).minus(
-          selectedBillingDocument.allocatedHt,
-        ),
-        0,
-      ).toFixed(4)
-    : null;
   const automaticOutputVatBase = livePricing?.totalSell ?? null;
   let automaticFreightAllowance: string | null = null;
   let effectiveFreightAllowance: string | null = null;
@@ -1015,8 +992,6 @@ export function OrderForm({
                 changeDraft("projectId", event.target.value);
                 changeDraft("budgetPurchaseAmountHt", "");
                 setPackageId("");
-                setBillingDocumentId("");
-                setBillingAllocatedAmount("");
 
                 if (!isEditing && next)
                   changeDraft(
@@ -1968,102 +1943,23 @@ export function OrderForm({
             </div>
           </div>
         </details>
-        {!isEditing && availableBillingDocuments.length ? (
-          <details className="bg-muted/20 rounded-lg border p-4">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Optional Billing link
-            </summary>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Link this new Order to an existing Billing document from the same
-              Project. You can also reconcile it later from either detail page.
-            </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-              <Field label="Billing document">
-                <select
-                  className={inputClassName}
-                  name="billingDocumentId"
-                  onChange={(event) => {
-                    const selected = options.billingDocuments.find(
-                      (document) => document.id === event.target.value,
-                    );
-                    setBillingDocumentId(event.target.value);
-                    setBillingAllocatedAmount("");
-                    setBillingRemainderApproved(
-                      selected?.isProjectRemainderApproved ?? false,
-                    );
-                  }}
-                  value={billingDocumentId}
-                >
-                  <option value="">Skip for now</option>
-                  {availableBillingDocuments.map((document) => (
-                    <option key={document.id} value={document.id}>
-                      {document.reference} · {document.documentType} ·{" "}
-                      {formatMoney(document.totalHt, document.currencyCode)}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {selectedBillingDocument ? (
-                <>
-                  <input
-                    type="hidden"
-                    name="billingAllocationBasis"
-                    value="FIXED_AMOUNT"
-                  />
-                  <AllocationInputs
-                    amount={billingAllocatedAmount}
-                    onAmountChange={setBillingAllocatedAmount}
-                    billingTotalHt={selectedBillingDocument.totalHt}
-                    orderSellHt={selectedBillingOrderBasis}
-                    currencyCode={selectedBillingDocument.currencyCode}
-                    name="billingAllocatedAmount"
-                    error={fieldErrors.billingAllocatedAmount}
-                  />
-                  <div className="bg-background grid gap-2 rounded-md border p-3 text-xs sm:col-span-2 sm:grid-cols-4 xl:col-span-2">
-                    <p>
-                      Order Sell HT:{" "}
-                      {formatMoney(
-                        selectedBillingOrderBasis,
-                        selectedBillingDocument.currencyCode,
-                      )}
-                    </p>
-                    <p>
-                      Billing HT:{" "}
-                      {formatMoney(
-                        selectedBillingDocument.totalHt,
-                        selectedBillingDocument.currencyCode,
-                      )}
-                    </p>
-                    <p>
-                      Already allocated:{" "}
-                      {formatMoney(
-                        selectedBillingDocument.allocatedHt,
-                        selectedBillingDocument.currencyCode,
-                      )}
-                    </p>
-                    <p>
-                      Available:{" "}
-                      {formatMoney(
-                        selectedBillingAvailable,
-                        selectedBillingDocument.currencyCode,
-                      )}
-                    </p>
-                  </div>
-                  <label className="flex items-center gap-2 text-xs sm:col-span-2 xl:col-span-2">
-                    <input
-                      checked={billingRemainderApproved}
-                      name="billingRemainderApproved"
-                      onChange={(event) =>
-                        setBillingRemainderApproved(event.target.checked)
-                      }
-                      type="checkbox"
-                    />
-                    Approve any remaining Billing HT at Project level
-                  </label>
-                </>
-              ) : null}
-            </div>
-          </details>
+        {!isEditing ? (
+          <OrderBillingAllocations
+            key={projectId}
+            documents={availableBillingDocuments}
+            fieldErrors={fieldErrors}
+            getOrderSellHt={(document) =>
+              project
+                ? orderSellingBasisInBillingCurrency({
+                    billingCurrencyCode: document.currencyCode,
+                    billingFxRateToReporting: document.fxRateToReporting,
+                    orderSellingReporting:
+                      livePricing?.totalSellReporting ?? null,
+                    reportingCurrencyCode: project.reportingCurrencyCode,
+                  })
+                : null
+            }
+          />
         ) : null}
         <EditorActions>
           <SubmitButton pending={pending}>

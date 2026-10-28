@@ -445,6 +445,8 @@ export const orderBillingLinkSchema = z
 export const orderCreationBillingLinkSchema = z
   .object({
     allocatedAmount: money.optional(),
+    freightCoverageHt: money.optional(),
+    otherCoverageHt: money.optional(),
     basis: z.enum(ClientBillingAllocationBasis),
     billingDocumentId: requiredUuid("Select a valid billing document."),
     isProjectRemainderApproved: z.boolean(),
@@ -469,6 +471,22 @@ export const orderCreationBillingLinkSchema = z
         message: "Enter an allocation amount.",
         path: ["allocatedAmount"],
       });
+  });
+
+export const orderCreationBillingLinksSchema = z
+  .array(orderCreationBillingLinkSchema)
+  .max(100, "Add no more than 100 Billing allocations.")
+  .superRefine((links, context) => {
+    const selected = new Set<string>();
+    for (const [index, link] of links.entries()) {
+      if (selected.has(link.billingDocumentId))
+        context.addIssue({
+          code: "custom",
+          path: [index, "billingDocumentId"],
+          message: "Choose each Billing document only once.",
+        });
+      selected.add(link.billingDocumentId);
+    }
   });
 
 function parsedJsonArray(value: FormDataEntryValue | null): unknown {
@@ -528,6 +546,19 @@ export function parseOrderCreationBillingLink(formData: FormData) {
       formData.get("billingRemainderApproved") === "on",
     percentageRate: raw.billingPercentageRate || undefined,
   });
+}
+
+export function parseOrderCreationBillingLinks(formData: FormData) {
+  if (formData.has("billingAllocations"))
+    return orderCreationBillingLinksSchema.safeParse(
+      parsedJsonArray(formData.get("billingAllocations")),
+    );
+  // Retain compatibility with a creation form opened before the multiple-row UI.
+  const legacy = parseOrderCreationBillingLink(formData);
+  if (!legacy.success) return legacy;
+  return orderCreationBillingLinksSchema.safeParse(
+    legacy.data ? [legacy.data] : [],
+  );
 }
 
 export type ClientBillingConfirmation = z.infer<

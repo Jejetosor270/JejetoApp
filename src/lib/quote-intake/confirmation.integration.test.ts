@@ -338,8 +338,103 @@ describe("reviewed quote confirmation persistence", () => {
         orderId,
         percentageRate: "0.400000",
       }),
+      { createOnly: true },
     );
     expect(database.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists each reviewed Billing allocation inside the Order transaction", async () => {
+    const form = commonForm("CREATE");
+    form.set("applyCurrency", "on");
+    form.set("orderCurrencyCode", "EUR");
+    form.set("orderNumber", "MULTI-BILLING");
+    const rows = [
+      {
+        billingDocumentId: projectId,
+        basis: "FIXED_AMOUNT",
+        allocatedAmount: "60",
+        isProjectRemainderApproved: false,
+      },
+      {
+        billingDocumentId: supplierId,
+        basis: "FIXED_AMOUNT",
+        allocatedAmount: "40",
+        freightCoverageHt: "10",
+        isProjectRemainderApproved: true,
+      },
+    ];
+    form.set("billingAllocations", JSON.stringify(rows));
+    orderMocks.createOrderInTransaction.mockResolvedValue(orderId);
+
+    await confirmSupplierQuote("actor-1", parsed(form));
+
+    expect(database.$transaction).toHaveBeenCalledTimes(1);
+    expect(database.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "Serializable",
+    });
+    expect(
+      billingMocks.updateOrderBillingLinkInTransaction,
+    ).toHaveBeenCalledTimes(2);
+    expect(
+      billingMocks.updateOrderBillingLinkInTransaction,
+    ).toHaveBeenNthCalledWith(
+      1,
+      transaction,
+      "actor-1",
+      { ...rows[0], allocatedAmount: "60.0000", orderId, remove: false },
+      { createOnly: true },
+    );
+    expect(
+      billingMocks.updateOrderBillingLinkInTransaction,
+    ).toHaveBeenNthCalledWith(
+      2,
+      transaction,
+      "actor-1",
+      {
+        ...rows[1],
+        allocatedAmount: "40.0000",
+        freightCoverageHt: "10.0000",
+        orderId,
+        remove: false,
+      },
+      { createOnly: true },
+    );
+  });
+
+  it("rejects the entire confirmation when a later allocation fails", async () => {
+    const form = commonForm("UPDATE");
+    form.set("orderId", orderId);
+    form.set(
+      "billingAllocations",
+      JSON.stringify([
+        {
+          billingDocumentId: projectId,
+          basis: "FIXED_AMOUNT",
+          allocatedAmount: "60",
+          isProjectRemainderApproved: false,
+        },
+        {
+          billingDocumentId: supplierId,
+          basis: "FIXED_AMOUNT",
+          allocatedAmount: "40",
+          isProjectRemainderApproved: true,
+        },
+      ]),
+    );
+    orderMocks.getOrderInTransaction.mockResolvedValue(existingOrder());
+    billingMocks.updateOrderBillingLinkInTransaction
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(
+        new Error("Allocation exceeds the remaining Billing document amount."),
+      );
+
+    await expect(confirmSupplierQuote("actor-1", parsed(form))).rejects.toThrow(
+      "Allocation exceeds",
+    );
+
+    expect(database.$transaction).toHaveBeenCalledTimes(1);
+    expect(transaction.supplierQuoteImport.create).not.toHaveBeenCalled();
+    expect(transaction.paymentInstallment.createMany).not.toHaveBeenCalled();
   });
 
   it("creates a Order from an Invoice without optional schedule, Items, or Billing allocation", async () => {

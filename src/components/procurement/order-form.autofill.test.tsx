@@ -109,6 +109,52 @@ it("prefills Added date for new Orders without inventing a Supplier date", async
   expect(value("invoiceDate")).toBe("");
   expect(value("quoteDate")).toBe("");
 });
+it("supports several draft Billing allocations and clears them when changing Project", async () => {
+  const project = options.projects[0];
+  if (!project) throw new Error("Missing Project fixture");
+  const billing = (id: string, projectId = "project") => ({
+    id,
+    projectId,
+    allocatedHt: "0",
+    currencyCode: "EUR",
+    documentType: "INVOICE",
+    fxRateToReporting: null,
+    isProjectRemainderApproved: false,
+    reference: `INV-${id}`,
+    shortDescription: `Description ${id}`,
+    totalHt: "1000",
+  });
+  view = await mountForm(
+    <OrderForm
+      options={{
+        ...options,
+        projects: [
+          ...options.projects,
+          { ...project, id: "another", name: "Another Project" },
+        ],
+        billingDocuments: [billing("a"), billing("b"), billing("c", "another")],
+      }}
+    />,
+  );
+  await clickText("Add allocation");
+  await enter("billingAllocations.0.billingDocumentId", "a");
+  await enter("billingAllocations.0.allocatedAmount", "100");
+  await clickText("Add allocation");
+  await enter("billingAllocations.1.billingDocumentId", "b");
+  await enter("billingAllocations.1.allocatedAmount", "200");
+  await enter("purchaseCost", "300");
+  expect(JSON.parse(String(value("billingAllocations")))).toEqual([
+    expect.objectContaining({ billingDocumentId: "a", allocatedAmount: "100" }),
+    expect.objectContaining({ billingDocumentId: "b", allocatedAmount: "200" }),
+  ]);
+  expect(view.container.textContent).toContain("Description a");
+  expect(view.container.querySelector('option[value="c"]')).toBeNull();
+  await enter("projectId", "another");
+  expect(JSON.parse(String(value("billingAllocations")))).toEqual([]);
+  await clickText("Add allocation");
+  expect(view.container.querySelector('option[value="c"]')).not.toBeNull();
+  expect(view.container.querySelector('option[value="a"]')).toBeNull();
+});
 it("edits Added date independently and retains hidden historical grouping", async () => {
   view = await mountForm(
     <OrderForm

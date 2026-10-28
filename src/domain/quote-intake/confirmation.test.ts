@@ -151,4 +151,71 @@ describe("quote confirmation validation", () => {
     expect(result.data.billingAllocatedAmount).toBeUndefined();
     expect(result.data.billingRemainderApproved).toBe(true);
   });
+
+  it("validates multiple intake allocations and does not resubmit legacy fields", () => {
+    const form = baseForm();
+    form.set("applyCurrency", "on");
+    form.set("billingDocumentId", "stale-selection");
+    form.set("billingAllocatedAmount", "invalid-legacy-value");
+    form.set(
+      "billingAllocations",
+      JSON.stringify([
+        {
+          billingDocumentId: projectId,
+          basis: "FIXED_AMOUNT",
+          allocatedAmount: "60",
+          isProjectRemainderApproved: false,
+        },
+        {
+          billingDocumentId: supplierId,
+          basis: "FIXED_AMOUNT",
+          allocatedAmount: "40",
+          freightCoverageHt: "10",
+          isProjectRemainderApproved: true,
+        },
+      ]),
+    );
+    const result = parseQuoteConfirmation(form);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.billingDocumentId).toBeUndefined();
+    expect(result.data.billingAllocatedAmount).toBeUndefined();
+    expect(result.data.billingAllocations).toEqual([
+      {
+        billingDocumentId: projectId,
+        basis: "FIXED_AMOUNT",
+        allocatedAmount: "60.0000",
+        isProjectRemainderApproved: false,
+      },
+      {
+        billingDocumentId: supplierId,
+        basis: "FIXED_AMOUNT",
+        allocatedAmount: "40.0000",
+        freightCoverageHt: "10.0000",
+        isProjectRemainderApproved: true,
+      },
+    ]);
+  });
+
+  it("reports duplicate allocation rows and malformed arrays without ignoring them", () => {
+    const form = baseForm();
+    form.set("applyCurrency", "on");
+    const row = {
+      billingDocumentId: projectId,
+      basis: "FIXED_AMOUNT",
+      allocatedAmount: "60",
+      isProjectRemainderApproved: false,
+    };
+    form.set("billingAllocations", JSON.stringify([row, row]));
+    const result = parseQuoteConfirmation(form);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues[0]?.path).toEqual([
+      "billingAllocations",
+      1,
+      "billingDocumentId",
+    ]);
+    form.set("billingAllocations", "broken");
+    expect(parseQuoteConfirmation(form).success).toBe(false);
+  });
 });

@@ -543,25 +543,33 @@ export async function confirmSupplierQuote(
       } else {
         orderId = await createOrderInTransaction(transaction, actorId, values);
       }
-      if (
-        input.billingDocumentId &&
+      const billingAllocations =
+        input.billingAllocations ??
+        (input.billingDocumentId &&
         input.billingAllocationBasis &&
         (input.billingAllocatedAmount ||
           input.billingPercentageRate !== undefined)
-      )
-        await updateOrderBillingLinkInTransaction(transaction, actorId, {
-          ...(input.billingAllocatedAmount
-            ? { allocatedAmount: input.billingAllocatedAmount }
-            : {}),
-          basis: input.billingAllocationBasis,
-          billingDocumentId: input.billingDocumentId,
-          isProjectRemainderApproved: input.billingRemainderApproved,
-          orderId,
-          ...(input.billingPercentageRate
-            ? { percentageRate: input.billingPercentageRate }
-            : {}),
-          remove: false,
-        });
+          ? [
+              {
+                ...(input.billingAllocatedAmount
+                  ? { allocatedAmount: input.billingAllocatedAmount }
+                  : {}),
+                basis: input.billingAllocationBasis,
+                billingDocumentId: input.billingDocumentId,
+                isProjectRemainderApproved: input.billingRemainderApproved,
+                ...(input.billingPercentageRate
+                  ? { percentageRate: input.billingPercentageRate }
+                  : {}),
+              },
+            ]
+          : []);
+      for (const allocation of billingAllocations)
+        await updateOrderBillingLinkInTransaction(
+          transaction,
+          actorId,
+          { ...allocation, orderId, remove: false },
+          { createOnly: true },
+        );
       await createApprovedSchedule(
         transaction,
         actorId,

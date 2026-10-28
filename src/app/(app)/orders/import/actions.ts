@@ -364,6 +364,7 @@ export async function previewSupplierOrderBillingAction(
   await requireMasterDataEditor();
   const billing = z.uuid().safeParse(formData.get("billingDocumentId"));
   formData.set("billingDocumentId", "");
+  formData.set("billingAllocations", "[]");
   formData.set("approveItems", "");
   const parsed = parseQuoteConfirmation(formData);
   if (!billing.success || !parsed.success)

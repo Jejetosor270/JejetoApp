@@ -132,7 +132,7 @@ describe("actual V2 review → FormData → action → Order/VAT/audit confirmat
       const form = control("orderNumber").form;
       expect(form).not.toBeNull();
       const data = new FormData(form ?? undefined);
-      expect(data.get("billingDocumentId")).toBe("");
+      expect(data.get("billingAllocations")).toBe("[]");
       await clickText("Confirm and save Order");
       expect(view.container.textContent).toContain("Order import saved");
       expect(
@@ -169,8 +169,9 @@ describe("actual V2 review → FormData → action → Order/VAT/audit confirmat
   it("preserves the entire edited draft on server validation failure, without another extraction", async () => {
     await review(true, true, true);
     await enter("supplierQuoteReference", "Employee reference");
-    await enter("billingDocumentId", reviewBillingId);
-    await enter("billingAllocatedAmount", "1234.50");
+    await clickText("Add allocation");
+    await enter("billingAllocations.0.billingDocumentId", reviewBillingId);
+    await enter("billingAllocations.0.allocatedAmount", "1234.50");
     await enter("payment.0.label", "Employee payment proposal");
     await enter("inputVatAmount", "bad amount");
     const form = control("orderNumber").form;

@@ -11,7 +11,7 @@ import {
   inlineOrderInputSchema,
   updateOrderInputSchema,
 } from "@/domain/procurement/validation";
-import { parseOrderCreationBillingLink } from "@/domain/billing/validation";
+import { parseOrderCreationBillingLinks } from "@/domain/billing/validation";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import { BulkDeletionError, deleteOrders } from "@/lib/deletion/bulk";
 import {
@@ -82,25 +82,27 @@ export async function createOrderAction(
       message: "Review the highlighted fields and try again.",
       status: "error",
     };
-  const billingLink = parseOrderCreationBillingLink(formData);
+  const billingLink = parseOrderCreationBillingLinks(formData);
   if (!billingLink.success)
     return {
       fieldErrors: Object.fromEntries(
         billingLink.error.issues.map((issue) => [
-          issue.path[0] === "allocatedAmount"
-            ? "billingAllocatedAmount"
-            : issue.path[0] === "percentageRate"
-              ? "billingPercentageRate"
-              : String(issue.path[0] ?? "billingDocumentId"),
+          formData.has("billingAllocations")
+            ? ["billingAllocations", ...issue.path].join(".")
+            : issue.path[0] === "allocatedAmount"
+              ? "billingAllocatedAmount"
+              : issue.path[0] === "percentageRate"
+                ? "billingPercentageRate"
+                : String(issue.path[0] ?? "billingDocumentId"),
           issue.message,
         ]),
       ),
-      formError: "Check the optional Billing allocation.",
-      message: "Check the optional Billing allocation.",
+      formError: "Check the Billing allocations.",
+      message: "Check the Billing allocations.",
       status: "error",
     };
   try {
-    const orderId = billingLink.data
+    const orderId = billingLink.data.length
       ? await getDatabase().$transaction(
           async (transaction) => {
             const createdOrderId = await createOrderInTransaction(
@@ -108,11 +110,13 @@ export async function createOrderAction(
               actor.id,
               input.data,
             );
-            await updateOrderBillingLinkInTransaction(transaction, actor.id, {
-              ...billingLink.data,
-              orderId: createdOrderId,
-              remove: false,
-            });
+            for (const link of billingLink.data)
+              await updateOrderBillingLinkInTransaction(
+                transaction,
+                actor.id,
+                { ...link, orderId: createdOrderId, remove: false },
+                { createOnly: true },
+              );
             return createdOrderId;
           },
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

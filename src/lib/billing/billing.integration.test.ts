@@ -5,6 +5,7 @@ import {
   ClientBillingAllocationBasis,
   ClientBillingDocumentType,
   InstallmentBasis,
+  type Prisma,
 } from "@/generated/prisma/client";
 import { clientBillingConfirmationSchema } from "@/domain/billing/validation";
 
@@ -83,6 +84,7 @@ import {
   updateClientBillingInline,
   updateClientReceipt,
   updateOrderBillingLink,
+  updateOrderBillingLinkInTransaction,
 } from "./billing";
 import { getProjectsClientBillingSummaries } from "./reporting";
 import {
@@ -1510,6 +1512,130 @@ describe("Billing persistence", () => {
       transaction.clientBillingAllocation.createMany,
     ).not.toHaveBeenCalled();
     expect(audit.writeAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("never replaces an existing allocation through Purchasing creation or intake", async () => {
+    transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      allocations: [
+        { orderId: firstOrderId, allocatedAmount: new Decimal("40") },
+      ],
+      id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+    });
+    await expect(
+      updateOrderBillingLinkInTransaction(
+        transaction as unknown as Prisma.TransactionClient,
+        "actor-1",
+        {
+          basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+          allocatedAmount: "20.0000",
+          billingDocumentId: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+          isProjectRemainderApproved: false,
+          orderId: firstOrderId,
+          remove: false,
+        },
+        { createOnly: true },
+      ),
+    ).rejects.toThrow("already allocated");
+    expect(
+      transaction.clientBillingAllocation.createMany,
+    ).not.toHaveBeenCalled();
+    expect(transaction.clientBillingAllocation.update).not.toHaveBeenCalled();
+    expect(
+      transaction.clientBillingAllocation.deleteMany,
+    ).not.toHaveBeenCalled();
+    expect(audit.writeAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ isCancelled: true }, "cancelled Billing document"],
+    [{ projectId: secondOrderId }, "Billing document Project"],
+    [{ currencyCode: "USD", fxRateToReporting: null }, "FX rate is missing"],
+    [{ totalHt: new Decimal("10") }, "remaining Billing document amount"],
+  ])(
+    "retains allocation safeguards for new links: %j",
+    async (overrides, message) => {
+      transaction.clientBillingDocument.findUnique.mockResolvedValue({
+        allocations: [],
+        currencyCode: "EUR",
+        fxRateToReporting: null,
+        id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+        isCancelled: false,
+        isProjectRemainderApproved: false,
+        projectId,
+        reference: "INV-1",
+        totalHt: new Decimal("100"),
+        ...overrides,
+      });
+      await expect(
+        updateOrderBillingLinkInTransaction(
+          transaction as unknown as Prisma.TransactionClient,
+          "actor-1",
+          {
+            basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+            allocatedAmount: "20.0000",
+            billingDocumentId: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+            isProjectRemainderApproved: true,
+            orderId: firstOrderId,
+            remove: false,
+          },
+          { createOnly: true },
+        ),
+      ).rejects.toThrow(message);
+      expect(
+        transaction.clientBillingAllocation.createMany,
+      ).not.toHaveBeenCalled();
+      expect(audit.writeAuditEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it("preserves other Order allocations when intake adds a link", async () => {
+    transaction.clientBillingDocument.findUnique.mockResolvedValue({
+      allocations: [
+        {
+          id: "keep-allocation",
+          orderId: secondOrderId,
+          allocatedAmount: new Decimal("60"),
+          basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+          percentageRate: null,
+        },
+      ],
+      currencyCode: "EUR",
+      fxRateToReporting: null,
+      id: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      isCancelled: false,
+      isProjectRemainderApproved: true,
+      projectId,
+      reference: "INV-1",
+      totalHt: new Decimal("100"),
+    });
+    transaction.procurementOrder.count.mockResolvedValue(2);
+    await updateOrderBillingLinkInTransaction(
+      transaction as unknown as Prisma.TransactionClient,
+      "actor-1",
+      {
+        basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+        allocatedAmount: "20.0000",
+        billingDocumentId: "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+        isProjectRemainderApproved: true,
+        orderId: firstOrderId,
+        remove: false,
+      },
+      { createOnly: true },
+    );
+    expect(transaction.clientBillingAllocation.createMany).toHaveBeenCalledWith(
+      {
+        data: [
+          expect.objectContaining({
+            orderId: firstOrderId,
+            allocatedAmount: "20.0000",
+          }),
+        ],
+      },
+    );
+    expect(transaction.clientBillingAllocation.update).not.toHaveBeenCalled();
+    expect(
+      transaction.clientBillingAllocation.deleteMany,
+    ).not.toHaveBeenCalled();
   });
 
   it("rejects cross-Project allocations and unsafe Billing Project changes", async () => {

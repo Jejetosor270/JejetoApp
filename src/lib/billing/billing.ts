@@ -1971,6 +1971,7 @@ export async function updateOrderBillingLinkInTransaction(
   transaction: Prisma.TransactionClient,
   actorId: string,
   input: OrderBillingLinkInput,
+  options?: { createOnly: boolean },
 ) {
   const [document, order] = await Promise.all([
     transaction.clientBillingDocument.findUnique({
@@ -1992,6 +1993,15 @@ export async function updateOrderBillingLinkInTransaction(
     getOrderInTransaction(transaction, input.orderId),
   ]);
   if (!document) throw new ClientBillingNotFoundError();
+  if (
+    options?.createOnly &&
+    document.allocations.some(
+      (allocation) => allocation.orderId === input.orderId,
+    )
+  )
+    throw new ClientBillingValidationError(
+      "This Order is already allocated to that Billing document. Edit the existing allocation from Related.",
+    );
   if (input.expectedVersion) {
     const snapshot = await transaction.clientBillingDocument.findUniqueOrThrow({
       where: { id: input.billingDocumentId },

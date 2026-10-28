@@ -625,8 +625,16 @@ legacy Supplier review drafts without model metadata are recorded as unknown.
 Aggregate Order review must work without Items Beta. A recognized optional
 Item-provider failure becomes a warning; it must not discard successful aggregate
 extraction. Billing allocation and reviewed payment-term proposals are optional.
-Initialize Billing selection state before any dependent lookup in `QuoteReview`;
-preserve its rendering regressions and draft-preserving confirmation flow.
+Manual Order creation and Supplier intake support multiple reviewed Billing allocations
+through the same Add/Remove editor. Each Billing document appears at most once, belongs
+to the selected Project, and retains its own currency, allocation amount and category
+subsets. Amounts stay blank until entered; adding a row never repeats the full Order
+selling amount automatically. Allocation percentages reuse the authoritative Order sell
+basis and manual FX. Update-intake previews are independent for each Billing document.
+The Order and all submitted allocations save atomically using existing allocation
+validation/auditing. An invalid row preserves the complete draft. Intake adds links;
+an existing allocation must be changed in its dedicated editor, never overwritten by
+another import. Source files remain temporary. No schema or migration is required.
 
 Items (Beta) is optional and disabling it preserves data. Supplier intake, Billing,
 profitability, cash, VAT, and Funding Coverage must remain usable without Items.
