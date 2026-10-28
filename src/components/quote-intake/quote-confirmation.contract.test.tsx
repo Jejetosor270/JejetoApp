@@ -45,6 +45,14 @@ const framework = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
   requireMasterDataEditor: vi.fn(),
 }));
+const billing = vi.hoisted(() => ({
+  createOrderBillingLinksInTransaction: vi.fn(),
+}));
+vi.mock("@/lib/billing/billing", async (original) => ({
+  ...(await original<typeof import("@/lib/billing/billing")>()),
+  createOrderBillingLinksInTransaction:
+    billing.createOrderBillingLinksInTransaction,
+}));
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: framework.revalidatePath }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
@@ -69,6 +77,7 @@ describe("actual V2 review → FormData → action → Order/VAT/audit confirmat
   });
   beforeEach(() => {
     vi.clearAllMocks();
+    billing.createOrderBillingLinksInTransaction.mockReset();
     vi.spyOn(console, "info").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -190,6 +199,81 @@ describe("actual V2 review → FormData → action → Order/VAT/audit confirmat
     expect(storage.$transaction).not.toHaveBeenCalled();
     expect(view.container.querySelector('input[type="file"]')).toBeNull();
   });
+
+  it.each([false, true])(
+    "submits two allocations and preserves the draft on transaction failure=%s",
+    async (fail) => {
+      const options = intakeOptions();
+      const first = options.billingDocuments[0];
+      if (!first) throw new Error("Missing fictional Billing");
+      first.isProjectRemainderApproved = true;
+      const secondId = "f12b6b9b-10e9-4e42-b93f-38796de4f65a";
+      options.billingDocuments.push({
+        ...first,
+        id: secondId,
+        reference: "FICTIONAL-INV-2",
+      });
+      view = await mountForm(
+        createElement(QuoteReview, { options, review: intakeReview(false) }),
+      );
+      await enter("orderNumber", "PO-FICTIONAL-MULTI");
+      await enter("inputVatTreatment", "EXEMPT");
+      await clickText("Add allocation");
+      await enter("billingAllocations.0.billingDocumentId", reviewBillingId);
+      await enter("billingAllocations.0.allocatedAmount", "20000");
+      await clickText("Add allocation");
+      await enter("billingAllocations.1.billingDocumentId", secondId);
+      await enter("billingAllocations.1.allocatedAmount", "37500");
+      const form = control("orderNumber").form;
+      expect(form?.checkValidity()).toBe(true);
+      const formSnapshot = [...new FormData(form ?? undefined)];
+      if (fail)
+        billing.createOrderBillingLinksInTransaction.mockRejectedValueOnce(
+          new Prisma.PrismaClientKnownRequestError(
+            "Transaction already closed",
+            {
+              code: "P2028",
+              clientVersion: "test",
+            },
+          ),
+        );
+      await clickText("Confirm and save Order");
+      if (fail) {
+        expect(view.container.textContent).toContain(
+          "Your review is still available",
+        );
+        expect([...new FormData(form ?? undefined)]).toEqual(formSnapshot);
+        expect(storage.supplierQuoteImport.create).not.toHaveBeenCalled();
+        expect(console.error).toHaveBeenCalledWith(
+          "supplier_order_import.failed",
+          expect.objectContaining({
+            databaseErrorCode: "P2028",
+            errorClassification: "database_transaction",
+          }),
+        );
+        return;
+      }
+      expect(view.container.textContent).toContain("Order import saved");
+      expect(
+        billing.createOrderBillingLinksInTransaction,
+      ).toHaveBeenCalledOnce();
+      expect(billing.createOrderBillingLinksInTransaction).toHaveBeenCalledWith(
+        storage,
+        reviewSupplierId,
+        reviewOrderId,
+        [
+          expect.objectContaining({
+            billingDocumentId: reviewBillingId,
+            allocatedAmount: "20000.0000",
+          }),
+          expect.objectContaining({
+            billingDocumentId: secondId,
+            allocatedAmount: "37500.0000",
+          }),
+        ],
+      );
+    },
+  );
 
   it("ignores stale Item approval when Beta has been disabled, while confirming the aggregate Order", async () => {
     await review(false, true, true);

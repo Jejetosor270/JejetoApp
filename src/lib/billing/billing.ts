@@ -63,6 +63,7 @@ import type {
   ClientReceiptUpdateInput,
   InlineClientBillingInput,
   OrderBillingLinkInput,
+  OrderCreationBillingLinkInput,
 } from "@/domain/billing/validation";
 import { reportingAmount } from "@/domain/finance/calculations";
 import {
@@ -1973,6 +1974,44 @@ export async function updateOrderBillingLinkInTransaction(
   input: OrderBillingLinkInput,
   options?: { createOnly: boolean },
 ) {
+  return writeOrderBillingLinkInTransaction(
+    transaction,
+    actorId,
+    input,
+    options,
+  );
+}
+
+/** Reuse the freshly saved Order's pricing while keeping every allocation atomic. */
+export async function createOrderBillingLinksInTransaction(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  orderId: string,
+  links: readonly OrderCreationBillingLinkInput[],
+): Promise<void> {
+  if (links.length === 0) return;
+  const order = await getOrderInTransaction(transaction, orderId);
+  if (!order || order.id !== orderId)
+    throw new ClientBillingValidationError(
+      "The selected Order no longer exists.",
+    );
+  for (const link of links)
+    await writeOrderBillingLinkInTransaction(
+      transaction,
+      actorId,
+      { ...link, orderId, remove: false },
+      { createOnly: true },
+      order,
+    );
+}
+
+async function writeOrderBillingLinkInTransaction(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  input: OrderBillingLinkInput,
+  options?: { createOnly: boolean },
+  savedOrder?: NonNullable<Awaited<ReturnType<typeof getOrderInTransaction>>>,
+) {
   const [document, order] = await Promise.all([
     transaction.clientBillingDocument.findUnique({
       where: { id: input.billingDocumentId },
@@ -1990,7 +2029,7 @@ export async function updateOrderBillingLinkInTransaction(
         totalHt: true,
       },
     }),
-    getOrderInTransaction(transaction, input.orderId),
+    savedOrder ?? getOrderInTransaction(transaction, input.orderId),
   ]);
   if (!document) throw new ClientBillingNotFoundError();
   if (

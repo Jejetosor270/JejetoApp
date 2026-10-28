@@ -34,7 +34,7 @@ const orderMocks = vi.hoisted(() => ({
   updateOrderInTransaction: vi.fn(),
 }));
 const billingMocks = vi.hoisted(() => ({
-  updateOrderBillingLinkInTransaction: vi.fn(),
+  createOrderBillingLinksInTransaction: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -330,16 +330,10 @@ describe("reviewed quote confirmation persistence", () => {
     });
     expect(transaction.supplierQuoteImport.create).toHaveBeenCalledTimes(1);
     expect(
-      billingMocks.updateOrderBillingLinkInTransaction,
-    ).toHaveBeenCalledWith(
-      transaction,
-      "actor-1",
-      expect.objectContaining({
-        orderId,
-        percentageRate: "0.400000",
-      }),
-      { createOnly: true },
-    );
+      billingMocks.createOrderBillingLinksInTransaction,
+    ).toHaveBeenCalledWith(transaction, "actor-1", orderId, [
+      expect.objectContaining({ percentageRate: "0.400000" }),
+    ]);
     expect(database.$transaction).toHaveBeenCalledTimes(1);
   });
 
@@ -371,34 +365,21 @@ describe("reviewed quote confirmation persistence", () => {
     expect(database.$transaction).toHaveBeenCalledTimes(1);
     expect(database.$transaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: "Serializable",
+      timeout: 30_000,
     });
     expect(
-      billingMocks.updateOrderBillingLinkInTransaction,
-    ).toHaveBeenCalledTimes(2);
+      billingMocks.createOrderBillingLinksInTransaction,
+    ).toHaveBeenCalledTimes(1);
     expect(
-      billingMocks.updateOrderBillingLinkInTransaction,
-    ).toHaveBeenNthCalledWith(
-      1,
-      transaction,
-      "actor-1",
-      { ...rows[0], allocatedAmount: "60.0000", orderId, remove: false },
-      { createOnly: true },
-    );
-    expect(
-      billingMocks.updateOrderBillingLinkInTransaction,
-    ).toHaveBeenNthCalledWith(
-      2,
-      transaction,
-      "actor-1",
+      billingMocks.createOrderBillingLinksInTransaction,
+    ).toHaveBeenCalledWith(transaction, "actor-1", orderId, [
+      { ...rows[0], allocatedAmount: "60.0000" },
       {
         ...rows[1],
         allocatedAmount: "40.0000",
         freightCoverageHt: "10.0000",
-        orderId,
-        remove: false,
       },
-      { createOnly: true },
-    );
+    ]);
   });
 
   it("rejects the entire confirmation when a later allocation fails", async () => {
@@ -422,11 +403,9 @@ describe("reviewed quote confirmation persistence", () => {
       ]),
     );
     orderMocks.getOrderInTransaction.mockResolvedValue(existingOrder());
-    billingMocks.updateOrderBillingLinkInTransaction
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(
-        new Error("Allocation exceeds the remaining Billing document amount."),
-      );
+    billingMocks.createOrderBillingLinksInTransaction.mockRejectedValueOnce(
+      new Error("Allocation exceeds the remaining Billing document amount."),
+    );
 
     await expect(confirmSupplierQuote("actor-1", parsed(form))).rejects.toThrow(
       "Allocation exceeds",
@@ -474,7 +453,7 @@ describe("reviewed quote confirmation persistence", () => {
     expect(transaction.paymentInstallment.createMany).not.toHaveBeenCalled();
     expect(transaction.itemImport.create).not.toHaveBeenCalled();
     expect(
-      billingMocks.updateOrderBillingLinkInTransaction,
+      billingMocks.createOrderBillingLinksInTransaction,
     ).not.toHaveBeenCalled();
     expect(transaction.supplierQuoteImport.create).toHaveBeenCalledWith({
       data: expect.objectContaining({

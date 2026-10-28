@@ -72,6 +72,7 @@ vi.mock("@/lib/procurement/orders", () => procurementOrders);
 
 import {
   ClientBillingValidationError,
+  createOrderBillingLinksInTransaction,
   updateBillingFreightCoverage,
   confirmClientBillingDocument,
   createClientBillingInstallment,
@@ -210,6 +211,7 @@ describe("Billing persistence", () => {
       reportingCurrencyCode: "EUR",
     });
     procurementOrders.getOrderInTransaction.mockResolvedValue({
+      id: firstOrderId,
       costs: { reportingSellingRevenue: "80000" },
       project: { id: projectId, reportingCurrencyCode: "EUR" },
     });
@@ -1544,6 +1546,129 @@ describe("Billing persistence", () => {
       transaction.clientBillingAllocation.deleteMany,
     ).not.toHaveBeenCalled();
     expect(audit.writeAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("persists two intake allocations with one fresh Order read", async () => {
+    const billingIds = [
+      "f12b6b9b-10e9-4e42-b93f-38796de4f65a",
+      "912b6b9b-10e9-4e42-b93f-38796de4f65a",
+    ];
+    transaction.clientBillingDocument.findUnique.mockImplementation(
+      async ({ where }: { where: { id: string } }) => ({
+        allocations: [],
+        credits: [],
+        currencyCode: "EUR",
+        fxRateToReporting: null,
+        id: where.id,
+        isCancelled: false,
+        isProjectRemainderApproved: true,
+        projectId,
+        reference: "FICTIONAL-INV",
+        totalHt: new Decimal("100"),
+      }),
+    );
+    transaction.procurementOrder.count.mockResolvedValue(1);
+    await createOrderBillingLinksInTransaction(
+      transaction as unknown as Prisma.TransactionClient,
+      "actor-1",
+      firstOrderId,
+      billingIds.map((billingDocumentId) => ({
+        basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+        allocatedAmount: "20.0000",
+        billingDocumentId,
+        isProjectRemainderApproved: true,
+      })),
+    );
+    expect(
+      procurementOrders.getOrderInTransaction,
+    ).toHaveBeenCalledExactlyOnceWith(transaction, firstOrderId);
+    expect(
+      transaction.clientBillingAllocation.createMany,
+    ).toHaveBeenCalledTimes(2);
+    for (const [index, billingDocumentId] of billingIds.entries())
+      expect(
+        transaction.clientBillingAllocation.createMany,
+      ).toHaveBeenNthCalledWith(index + 1, {
+        data: [
+          expect.objectContaining({
+            billingDocumentId,
+            orderId: firstOrderId,
+            allocatedAmount: "20.0000",
+          }),
+        ],
+      });
+    expect(audit.writeAuditEvent).toHaveBeenCalledTimes(2);
+    expect(transaction.clientBillingAllocation.update).not.toHaveBeenCalled();
+    expect(
+      transaction.clientBillingAllocation.deleteMany,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("propagates a later allocation failure so its caller rolls back the batch", async () => {
+    transaction.clientBillingDocument.findUnique.mockImplementation(
+      async ({ where }: { where: { id: string } }) => ({
+        allocations: [],
+        credits: [],
+        currencyCode: "EUR",
+        fxRateToReporting: null,
+        id: where.id,
+        isCancelled: false,
+        isProjectRemainderApproved: true,
+        projectId,
+        reference: "FICTIONAL-INV",
+        totalHt: new Decimal("100"),
+      }),
+    );
+    transaction.procurementOrder.count.mockResolvedValue(1);
+    await expect(
+      createOrderBillingLinksInTransaction(
+        transaction as unknown as Prisma.TransactionClient,
+        "actor-1",
+        firstOrderId,
+        [
+          { billingDocumentId: "billing-a", allocatedAmount: "20.0000" },
+          { billingDocumentId: "billing-b", allocatedAmount: "120.0000" },
+        ].map((link) => ({
+          ...link,
+          basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+          isProjectRemainderApproved: true,
+        })),
+      ),
+    ).rejects.toThrow("remaining Billing document amount");
+    expect(procurementOrders.getOrderInTransaction).toHaveBeenCalledTimes(1);
+    expect(
+      transaction.clientBillingAllocation.createMany,
+    ).toHaveBeenCalledTimes(1);
+    expect(audit.writeAuditEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips an empty allocation batch and rejects mismatched saved Order context", async () => {
+    await createOrderBillingLinksInTransaction(
+      transaction as unknown as Prisma.TransactionClient,
+      "actor-1",
+      firstOrderId,
+      [],
+    );
+    expect(procurementOrders.getOrderInTransaction).not.toHaveBeenCalled();
+    await expect(
+      createOrderBillingLinksInTransaction(
+        transaction as unknown as Prisma.TransactionClient,
+        "actor-1",
+        secondOrderId,
+        [
+          {
+            billingDocumentId: "billing-a",
+            allocatedAmount: "20.0000",
+            basis: ClientBillingAllocationBasis.FIXED_AMOUNT,
+            isProjectRemainderApproved: true,
+          },
+        ],
+      ),
+    ).rejects.toThrow("selected Order no longer exists");
+    expect(transaction.clientBillingDocument.findUnique).not.toHaveBeenCalled();
+    expect(
+      transaction.clientBillingAllocation.createMany,
+    ).not.toHaveBeenCalled();
   });
 
   it.each([

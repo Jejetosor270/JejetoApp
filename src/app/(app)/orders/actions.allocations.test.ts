@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   requireMasterDataEditor: vi.fn(),
   createOrder: vi.fn(),
   createOrderInTransaction: vi.fn(),
-  updateOrderBillingLinkInTransaction: vi.fn(),
+  createOrderBillingLinksInTransaction: vi.fn(),
   transaction: {},
   runTransaction: vi.fn(),
 }));
@@ -26,8 +26,8 @@ vi.mock("@/lib/procurement/orders", () => ({
 }));
 vi.mock("@/lib/billing/billing", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/billing/billing")>()),
-  updateOrderBillingLinkInTransaction:
-    mocks.updateOrderBillingLinkInTransaction,
+  createOrderBillingLinksInTransaction:
+    mocks.createOrderBillingLinksInTransaction,
 }));
 
 import { createOrderAction } from "./actions";
@@ -92,43 +92,33 @@ describe("Purchasing creation Billing allocations", () => {
     expect(mocks.runTransaction).toHaveBeenCalledTimes(1);
     expect(mocks.runTransaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: "Serializable",
+      timeout: 30_000,
     });
-    expect(mocks.updateOrderBillingLinkInTransaction).toHaveBeenCalledTimes(2);
-    expect(mocks.updateOrderBillingLinkInTransaction).toHaveBeenNthCalledWith(
-      1,
+    expect(mocks.createOrderBillingLinksInTransaction).toHaveBeenCalledTimes(1);
+    expect(mocks.createOrderBillingLinksInTransaction).toHaveBeenCalledWith(
       mocks.transaction,
       "actor",
-      expect.objectContaining({
-        billingDocumentId: firstBillingId,
-        allocatedAmount: "60.0000",
-        orderId,
-        remove: false,
-      }),
-      { createOnly: true },
-    );
-    expect(mocks.updateOrderBillingLinkInTransaction).toHaveBeenNthCalledWith(
-      2,
-      mocks.transaction,
-      "actor",
-      expect.objectContaining({
-        billingDocumentId: secondBillingId,
-        allocatedAmount: "40.0000",
-        orderId,
-        remove: false,
-      }),
-      { createOnly: true },
+      orderId,
+      [
+        expect.objectContaining({
+          billingDocumentId: firstBillingId,
+          allocatedAmount: "60.0000",
+        }),
+        expect.objectContaining({
+          billingDocumentId: secondBillingId,
+          allocatedAmount: "40.0000",
+        }),
+      ],
     );
     expect(mocks.createOrder).not.toHaveBeenCalled();
   });
 
   it("rejects the transaction when a later allocation fails and returns the draft error", async () => {
-    mocks.updateOrderBillingLinkInTransaction
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(
-        new ClientBillingValidationError(
-          "Allocation exceeds the remaining Billing document amount.",
-        ),
-      );
+    mocks.createOrderBillingLinksInTransaction.mockRejectedValueOnce(
+      new ClientBillingValidationError(
+        "Allocation exceeds the remaining Billing document amount.",
+      ),
+    );
     const result = await createOrderAction({}, creationForm());
     expect(result).toMatchObject({
       status: "error",
@@ -137,6 +127,43 @@ describe("Purchasing creation Billing allocations", () => {
     expect(result.orderId).toBeUndefined();
     expect(mocks.createOrder).not.toHaveBeenCalled();
     expect(mocks.runTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows an atomic allocation save to complete beyond the old five-second limit", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.createOrderBillingLinksInTransaction.mockImplementationOnce(
+        () => new Promise((resolve) => setTimeout(resolve, 6_000)),
+      );
+      // Model Prisma's transaction deadline, retaining its five-second default.
+      mocks.runTransaction.mockImplementationOnce(
+        async (
+          callback: (transaction: object) => Promise<unknown>,
+          options?: { timeout?: number },
+        ) => {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            return await Promise.race([
+              callback(mocks.transaction),
+              new Promise((_, reject) => {
+                timer = setTimeout(
+                  () => reject(new Error("Transaction expired")),
+                  options?.timeout ?? 5_000,
+                );
+              }),
+            ]);
+          } finally {
+            clearTimeout(timer);
+          }
+        },
+      );
+      const result = createOrderAction({}, creationForm());
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(await result).toMatchObject({ status: "success", orderId });
+      expect(mocks.runTransaction).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("returns row-specific validation errors before creating anything", async () => {

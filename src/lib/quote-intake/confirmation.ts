@@ -12,7 +12,6 @@ import {
   InstallmentBasis,
   PaymentDirection,
   PricingMode,
-  Prisma,
   ProcurementOrderStatus,
   SupplierQuoteImportAction,
 } from "@/generated/prisma/client";
@@ -33,7 +32,9 @@ import {
   type OrderSummary,
   updateOrderInTransaction,
 } from "@/lib/procurement/orders";
-import { updateOrderBillingLinkInTransaction } from "@/lib/billing/billing";
+import { createOrderBillingLinksInTransaction } from "@/lib/billing/billing";
+import { ORDER_INTAKE_TRANSACTION_OPTIONS } from "@/lib/procurement/intake-transaction";
+import type { Prisma } from "@/generated/prisma/client";
 
 export class QuoteConfirmationError extends Error {}
 
@@ -496,134 +497,131 @@ export async function confirmSupplierQuote(
   actorId: string,
   input: QuoteConfirmationInput,
 ): Promise<string> {
-  return getDatabase().$transaction(
-    async (transaction) => {
-      const [project, supplier] = await Promise.all([
-        transaction.project.findUnique({
-          where: { id: input.projectId },
-          select: { reportingCurrencyCode: true },
-        }),
-        transaction.supplier.findFirst({
-          where: { id: input.supplierId, isActive: true },
-          select: { id: true },
-        }),
-      ]);
-      if (!project)
-        throw new QuoteConfirmationError("The Project no longer exists.");
-      if (!supplier) {
-        throw new QuoteConfirmationError("Choose an active existing Supplier.");
-      }
-      const existing = input.orderId
-        ? await getOrderInTransaction(transaction, input.orderId)
-        : null;
-      if (input.action === "UPDATE") {
-        if (!existing) {
-          throw new QuoteConfirmationError(
-            "The selected Order no longer exists.",
-          );
-        }
-        if (existing.project.id !== input.projectId) {
-          throw new QuoteConfirmationError(
-            "The selected Order must belong to the locked Project.",
-          );
-        }
-      }
-      const values = reviewedOrderValues(
-        input,
-        project.reportingCurrencyCode,
-        existing,
-      );
-      let orderId: string;
-      if (input.action === "UPDATE" && input.orderId) {
-        await updateOrderInTransaction(transaction, actorId, {
-          ...values,
-          id: input.orderId,
-        });
-        orderId = input.orderId;
-      } else {
-        orderId = await createOrderInTransaction(transaction, actorId, values);
-      }
-      const billingAllocations =
-        input.billingAllocations ??
-        (input.billingDocumentId &&
-        input.billingAllocationBasis &&
-        (input.billingAllocatedAmount ||
-          input.billingPercentageRate !== undefined)
-          ? [
-              {
-                ...(input.billingAllocatedAmount
-                  ? { allocatedAmount: input.billingAllocatedAmount }
-                  : {}),
-                basis: input.billingAllocationBasis,
-                billingDocumentId: input.billingDocumentId,
-                isProjectRemainderApproved: input.billingRemainderApproved,
-                ...(input.billingPercentageRate
-                  ? { percentageRate: input.billingPercentageRate }
-                  : {}),
-              },
-            ]
-          : []);
-      for (const allocation of billingAllocations)
-        await updateOrderBillingLinkInTransaction(
-          transaction,
-          actorId,
-          { ...allocation, orderId, remove: false },
-          { createOnly: true },
+  return getDatabase().$transaction(async (transaction) => {
+    const [project, supplier] = await Promise.all([
+      transaction.project.findUnique({
+        where: { id: input.projectId },
+        select: { reportingCurrencyCode: true },
+      }),
+      transaction.supplier.findFirst({
+        where: { id: input.supplierId, isActive: true },
+        select: { id: true },
+      }),
+    ]);
+    if (!project)
+      throw new QuoteConfirmationError("The Project no longer exists.");
+    if (!supplier) {
+      throw new QuoteConfirmationError("Choose an active existing Supplier.");
+    }
+    const existing = input.orderId
+      ? await getOrderInTransaction(transaction, input.orderId)
+      : null;
+    if (input.action === "UPDATE") {
+      if (!existing) {
+        throw new QuoteConfirmationError(
+          "The selected Order no longer exists.",
         );
-      await createApprovedSchedule(
+      }
+      if (existing.project.id !== input.projectId) {
+        throw new QuoteConfirmationError(
+          "The selected Order must belong to the locked Project.",
+        );
+      }
+    }
+    const values = reviewedOrderValues(
+      input,
+      project.reportingCurrencyCode,
+      existing,
+    );
+    let orderId: string;
+    if (input.action === "UPDATE" && input.orderId) {
+      await updateOrderInTransaction(transaction, actorId, {
+        ...values,
+        id: input.orderId,
+      });
+      orderId = input.orderId;
+    } else {
+      orderId = await createOrderInTransaction(transaction, actorId, values);
+    }
+    const billingAllocations =
+      input.billingAllocations ??
+      (input.billingDocumentId &&
+      input.billingAllocationBasis &&
+      (input.billingAllocatedAmount ||
+        input.billingPercentageRate !== undefined)
+        ? [
+            {
+              ...(input.billingAllocatedAmount
+                ? { allocatedAmount: input.billingAllocatedAmount }
+                : {}),
+              basis: input.billingAllocationBasis,
+              billingDocumentId: input.billingDocumentId,
+              isProjectRemainderApproved: input.billingRemainderApproved,
+              ...(input.billingPercentageRate
+                ? { percentageRate: input.billingPercentageRate }
+                : {}),
+            },
+          ]
+        : []);
+    if (billingAllocations.length)
+      await createOrderBillingLinksInTransaction(
         transaction,
         actorId,
         orderId,
-        values,
-        project.reportingCurrencyCode,
-        input,
+        billingAllocations,
       );
-      await persistApprovedItems(transaction, actorId, orderId, values, input);
-      await transaction.supplierQuoteImport.create({
-        data: {
-          action:
-            input.action === "CREATE"
-              ? SupplierQuoteImportAction.CREATED_ORDER
-              : SupplierQuoteImportAction.UPDATED_ORDER,
-          extractionModel: input.extractionModel ?? "unknown",
-          extractionProvider: QUOTE_EXTRACTION_PROVIDER,
-          leadTimeRaw: input.leadTimeRaw ?? null,
-          orderId,
-          originalFilename: input.originalFilename,
-          paymentTermsRaw: input.paymentTermsRaw ?? null,
-          processedById: actorId,
-          projectId: input.projectId,
-          quoteDate:
-            input.sourceDocumentType === "QUOTE" &&
-            input.applyQuoteDate &&
-            input.quoteDate
-              ? dateOnlyToDate(input.quoteDate)
-              : null,
-          supplierId: input.supplierId,
-          supplierQuoteReference: values.supplierQuoteReference ?? null,
-        },
-      });
-      await writeAuditEvent(transaction, actorId, {
-        action: "IMPORTED",
-        entityId: orderId,
-        entityReference: values.orderNumber,
-        entityType: "QUOTE_IMPORT",
-        metadata: {
-          action: input.action,
-          sourceDocumentType: input.sourceDocumentType,
-          documentDate: input.applyQuoteDate ? (input.quoteDate ?? null) : null,
-          paymentScheduleApproved: input.approveSchedule,
-          provider: QUOTE_EXTRACTION_PROVIDER,
-        },
-        summary:
+    await createApprovedSchedule(
+      transaction,
+      actorId,
+      orderId,
+      values,
+      project.reportingCurrencyCode,
+      input,
+    );
+    await persistApprovedItems(transaction, actorId, orderId, values, input);
+    await transaction.supplierQuoteImport.create({
+      data: {
+        action:
           input.action === "CREATE"
-            ? `Created an Order from an employee-approved Supplier ${input.sourceDocumentType === "INVOICE" ? "Invoice" : "Quote"}.`
-            : `Updated an Order from an employee-approved Supplier ${input.sourceDocumentType === "INVOICE" ? "Invoice" : "Quote"}.`,
-      });
-      return orderId;
-    },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  );
+            ? SupplierQuoteImportAction.CREATED_ORDER
+            : SupplierQuoteImportAction.UPDATED_ORDER,
+        extractionModel: input.extractionModel ?? "unknown",
+        extractionProvider: QUOTE_EXTRACTION_PROVIDER,
+        leadTimeRaw: input.leadTimeRaw ?? null,
+        orderId,
+        originalFilename: input.originalFilename,
+        paymentTermsRaw: input.paymentTermsRaw ?? null,
+        processedById: actorId,
+        projectId: input.projectId,
+        quoteDate:
+          input.sourceDocumentType === "QUOTE" &&
+          input.applyQuoteDate &&
+          input.quoteDate
+            ? dateOnlyToDate(input.quoteDate)
+            : null,
+        supplierId: input.supplierId,
+        supplierQuoteReference: values.supplierQuoteReference ?? null,
+      },
+    });
+    await writeAuditEvent(transaction, actorId, {
+      action: "IMPORTED",
+      entityId: orderId,
+      entityReference: values.orderNumber,
+      entityType: "QUOTE_IMPORT",
+      metadata: {
+        action: input.action,
+        sourceDocumentType: input.sourceDocumentType,
+        documentDate: input.applyQuoteDate ? (input.quoteDate ?? null) : null,
+        paymentScheduleApproved: input.approveSchedule,
+        provider: QUOTE_EXTRACTION_PROVIDER,
+      },
+      summary:
+        input.action === "CREATE"
+          ? `Created an Order from an employee-approved Supplier ${input.sourceDocumentType === "INVOICE" ? "Invoice" : "Quote"}.`
+          : `Updated an Order from an employee-approved Supplier ${input.sourceDocumentType === "INVOICE" ? "Invoice" : "Quote"}.`,
+    });
+    return orderId;
+  }, ORDER_INTAKE_TRANSACTION_OPTIONS);
 }
 
 /** Read-only preview shares exactly the candidate and pricing helpers used at confirmation. */

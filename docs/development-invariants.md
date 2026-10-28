@@ -631,6 +631,9 @@ to the selected Project, and retains its own currency, allocation amount and cat
 subsets. Amounts stay blank until entered; adding a row never repeats the full Order
 selling amount automatically. Allocation percentages reuse the authoritative Order sell
 basis and manual FX. Update-intake previews are independent for each Billing document.
+Intake and manual creation with Billing allocations use a bounded 30-second
+serializable transaction; the saved Order financial context is read once for the
+allocation batch. A failed batch rolls back together and preserves the review.
 The Order and all submitted allocations save atomically using existing allocation
 validation/auditing. An invalid row preserves the complete draft. Intake adds links;
 an existing allocation must be changed in its dedicated editor, never overwritten by

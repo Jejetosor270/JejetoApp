@@ -304,22 +304,27 @@ export async function confirmSupplierQuoteAction(
       status: "success",
     };
   } catch (error) {
+    const transactionFailure =
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2028";
     const vatConstraintMismatch =
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.message.includes("order_vat_entries_recoverability_check");
-    const errorClassification = vatConstraintMismatch
-      ? "vat_recoverability_constraint"
-      : isDuplicateOrderReferenceError(error)
-        ? "duplicate_order_reference"
-        : error instanceof QuoteConfirmationError
-          ? "confirmation_business_rule"
-          : error instanceof ProcurementRelationError ||
-              error instanceof ProcurementNotFoundError
-            ? "order_relation"
-            : error instanceof ClientBillingValidationError ||
-                error instanceof ClientBillingNotFoundError
-              ? "optional_billing_link"
-              : "unexpected";
+    const errorClassification = transactionFailure
+      ? "database_transaction"
+      : vatConstraintMismatch
+        ? "vat_recoverability_constraint"
+        : isDuplicateOrderReferenceError(error)
+          ? "duplicate_order_reference"
+          : error instanceof QuoteConfirmationError
+            ? "confirmation_business_rule"
+            : error instanceof ProcurementRelationError ||
+                error instanceof ProcurementNotFoundError
+              ? "order_relation"
+              : error instanceof ClientBillingValidationError ||
+                  error instanceof ClientBillingNotFoundError
+                ? "optional_billing_link"
+                : "unexpected";
     logSupplierOrderImportLifecycle("supplier_order_import.failed", {
       errorClassification,
       ...(error instanceof Prisma.PrismaClientKnownRequestError
@@ -328,6 +333,13 @@ export async function confirmSupplierQuoteAction(
       requestId,
       stage: "confirmation",
     });
+    if (transactionFailure) {
+      return {
+        status: "error",
+        message:
+          "The database could not complete this save. Your review is still available; please try again.",
+      };
+    }
     if (vatConstraintMismatch) {
       return {
         status: "error",

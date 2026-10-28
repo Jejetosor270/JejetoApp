@@ -28,10 +28,10 @@ import { orderFieldErrors } from "@/domain/procurement/action-errors";
 import {
   ClientBillingNotFoundError,
   ClientBillingValidationError,
-  updateOrderBillingLinkInTransaction,
+  createOrderBillingLinksInTransaction,
 } from "@/lib/billing/billing";
 import { getDatabase } from "@/lib/db";
-import { Prisma } from "@/generated/prisma/client";
+import { ORDER_INTAKE_TRANSACTION_OPTIONS } from "@/lib/procurement/intake-transaction";
 import { revalidateProjectFinancialViews } from "@/lib/reporting/revalidation";
 
 function errorState(error: unknown): OrderActionState {
@@ -103,24 +103,20 @@ export async function createOrderAction(
     };
   try {
     const orderId = billingLink.data.length
-      ? await getDatabase().$transaction(
-          async (transaction) => {
-            const createdOrderId = await createOrderInTransaction(
-              transaction,
-              actor.id,
-              input.data,
-            );
-            for (const link of billingLink.data)
-              await updateOrderBillingLinkInTransaction(
-                transaction,
-                actor.id,
-                { ...link, orderId: createdOrderId, remove: false },
-                { createOnly: true },
-              );
-            return createdOrderId;
-          },
-          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-        )
+      ? await getDatabase().$transaction(async (transaction) => {
+          const createdOrderId = await createOrderInTransaction(
+            transaction,
+            actor.id,
+            input.data,
+          );
+          await createOrderBillingLinksInTransaction(
+            transaction,
+            actor.id,
+            createdOrderId,
+            billingLink.data,
+          );
+          return createdOrderId;
+        }, ORDER_INTAKE_TRANSACTION_OPTIONS)
       : await createOrder(actor.id, input.data);
     revalidatePath("/orders");
     revalidatePath("/calendar");
