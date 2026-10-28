@@ -67,7 +67,7 @@ describe("Billing operational navigation", () => {
     expect(paymentManager).not.toContain('label="Received TTC"');
     expect(detail).toContain('label: "Outstanding"');
     expect(paymentManager).toContain("RelatedCashCreate");
-    expect(paymentManager).toContain("TermPaymentActions");
+    expect(paymentManager).toContain("BillingTermActions");
   });
 
   it("routes Billing search results to the same detail page", () => {

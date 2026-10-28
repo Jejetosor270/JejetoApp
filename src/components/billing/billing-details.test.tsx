@@ -1,6 +1,9 @@
 vi.mock("@/app/(app)/billing/status-actions", () => ({
   changeBillingStatusAction: actions.status,
 }));
+vi.mock("@/components/payments/payment-term-editor", () => ({
+  PaymentTermEditor: () => null,
+}));
 // @vitest-environment happy-dom
 import { act, type ComponentProps } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";

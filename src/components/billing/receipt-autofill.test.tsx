@@ -33,6 +33,7 @@ afterEach(async () => {
 it("marks a term paid from its exact remaining balance and preserves a rejected partial-payment draft", async () => {
   const document = {
     id: "bill",
+    status: "INVOICED",
     documentType: "INVOICE",
     currencyCode: "EUR",
     project: { reportingCurrencyCode: "EUR" },
@@ -60,11 +61,14 @@ it("marks a term paid from its exact remaining balance and preserves a rejected 
   );
   expect(view.container.textContent).toContain("Date needed · Partially paid");
   expect(view.container.querySelector("details")?.open).toBe(false);
-  await clickText("Edit");
-  await clickText("Mark paid");
+  await clickText("Mark as paid");
+  expect(paid).not.toHaveBeenCalled();
+  expect(documentBody()).toContain("20 000.00 EUR");
+  await clickText("Confirm payment");
   expect(paid).toHaveBeenCalledWith(
     expect.objectContaining({ kind: "client", id: "term", documentId: "bill" }),
   );
+  await clickText("Edit");
   await clickText("Record partial payment");
   expect(control("amount").value).toBe("");
   expect(control("installmentId").value).toBe("term");

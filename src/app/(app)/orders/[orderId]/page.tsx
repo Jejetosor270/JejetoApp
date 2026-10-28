@@ -365,6 +365,7 @@ export default async function OrderPage({
                 <div className="space-y-4">
                   <PaymentSchedule
                     canEdit={canEditMasterData(user.role)}
+                    canPay={order.status !== "CANCELLED"}
                     currencies={options.currencies}
                     direction="SUPPLIER_PAYMENT"
                     orderId={order.id}

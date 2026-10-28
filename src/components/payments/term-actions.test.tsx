@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { mountForm, clickText, enter, control } from "@/test/dom-form";
 import type { ClientBillingView } from "@/lib/billing/billing";
@@ -36,11 +36,29 @@ vi.mock("@/components/layout/related-records", () => ({
   ),
 }));
 vi.mock("./payment-forms", () => ({
-  InstallmentForm: () => (
-    <input aria-label="Term draft" defaultValue="Deposit" />
+  InstallmentForm: ({ onSaved }: { onSaved?: () => void }) => (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSaved?.();
+      }}
+    >
+      <input aria-label="Term draft" defaultValue="Deposit" />
+      <button type="submit">Save term</button>
+    </form>
   ),
   PresetForm: () => null,
-  SettlementForm: () => <input aria-label="Payment draft" defaultValue="" />,
+  SettlementForm: ({ onSaved }: { onSaved?: () => void }) => (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSaved?.();
+      }}
+    >
+      <input aria-label="Payment draft" defaultValue="" />
+      <button type="submit">Save partial payment</button>
+    </form>
+  ),
   SettlementCorrection: () => <button>Correct payment</button>,
 }));
 vi.mock("./related-cash-create", () => ({
@@ -50,8 +68,16 @@ vi.mock("./related-cash-create", () => ({
   ),
 }));
 vi.mock("@/components/billing/billing-term-form", () => ({
-  BillingTermForm: () => (
-    <input aria-label="Term draft" defaultValue="Deposit" />
+  BillingTermForm: ({ onSaved }: { onSaved?: () => void }) => (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSaved?.();
+      }}
+    >
+      <input aria-label="Term draft" defaultValue="Deposit" />
+      <button type="submit">Save term</button>
+    </form>
   ),
 }));
 vi.mock("@/components/billing/billing-receipt-editor", () => ({
@@ -61,6 +87,7 @@ vi.mock("@/components/billing/receipt-term-assignment", () => ({
   ReceiptTermAssignment: () => <button>Assign to term</button>,
 }));
 import { PaymentSchedule } from "./payment-schedule";
+import { TermPaymentActions } from "./term-payment-actions";
 import { BillingScheduleManager } from "@/components/billing/billing-schedule-manager";
 
 let view: Awaited<ReturnType<typeof mountForm>>;
@@ -72,13 +99,19 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
-function supplier(paid = "20", cancelled = false): PaymentInstallmentView {
+function supplier(
+  paid = "20",
+  cancelled = false,
+  currencyCode = "EUR",
+): PaymentInstallmentView {
   return {
     id: "term",
     label: "Deposit",
     scheduledAmount: "100",
     outstandingAmount: "80",
-    currencyCode: "EUR",
+    currencyCode,
+    reportingCurrencyCode: "EUR",
+    direction: "SUPPLIER_PAYMENT",
     isCancelled: cancelled,
     dueDate: null,
     settlements: [
@@ -91,8 +124,13 @@ function supplier(paid = "20", cancelled = false): PaymentInstallmentView {
     ],
   } as unknown as PaymentInstallmentView;
 }
-async function mountSupplier(paid = "20", cancelled = false, canEdit = true) {
-  const term = supplier(paid, cancelled);
+async function mountSupplier(
+  paid = "20",
+  cancelled = false,
+  canEdit = true,
+  currencyCode = "EUR",
+) {
+  const term = supplier(paid, cancelled, currencyCode);
   view = await mountForm(
     <PaymentSchedule
       canEdit={canEdit}
@@ -152,12 +190,25 @@ async function mountBilling(
   );
 }
 it.each(["supplier", "billing"])(
-  "offers one Edit entry point with the full form and payment actions for %s",
+  "offers one Edit action and direct per-term payment confirmation for %s",
   async (kind) => {
     if (kind === "supplier") await mountSupplier();
     else await mountBilling();
     expect(document.body.textContent).not.toContain("More actions");
-    expect(document.body.textContent).not.toContain("Mark paid");
+    expect(document.body.textContent).toContain("Mark as paid");
+    await clickText("Mark as paid");
+    expect(mocks.paid).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("Deposit");
+    expect(document.body.textContent).toContain("80.00 EUR");
+    expect(document.querySelector('[name="paymentFx"]')).toBeNull();
+    await clickText("Confirm payment");
+    expect(mocks.paid).toHaveBeenCalledOnce();
+    expect(mocks.paid).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: kind === "supplier" ? "supplier" : "client",
+        id: "term",
+      }),
+    );
     expect(
       [...document.querySelectorAll("button")].filter(
         (node) => node.textContent === "Edit",
@@ -167,8 +218,13 @@ it.each(["supplier", "billing"])(
     expect(document.querySelector('[aria-label="Term draft"]')).not.toBeNull();
     expect(document.body.textContent).toContain("Record partial payment");
     expect(document.body.textContent).toContain("Cancel remaining term");
-    await clickText("Mark paid");
-    expect(mocks.paid).toHaveBeenCalledOnce();
+    expect(
+      [...document.querySelectorAll('[role="dialog"] button')].some(
+        (button) => button.textContent === "Mark as paid",
+      ),
+    ).toBe(false);
+    await clickText("Save term");
+    expect(document.querySelector('[aria-label="Term draft"]')).toBeNull();
   },
 );
 
@@ -178,7 +234,7 @@ it.each(["supplier", "billing"])(
     if (kind === "supplier") await mountSupplier("100");
     else await mountBilling("PAID", "100");
     await clickText("Edit");
-    expect(document.body.textContent).not.toContain("Mark paid");
+    expect(document.body.textContent).not.toContain("Mark as paid");
     expect(document.body.textContent).not.toContain("Record partial payment");
     expect(document.body.textContent).not.toContain("Cancel remaining term");
     expect(document.querySelector('[aria-label="Term draft"]')).not.toBeNull();
@@ -195,7 +251,7 @@ it.each(["supplier", "billing"])(
     if (kind === "supplier") await mountSupplier("20", true);
     else await mountBilling("INVOICED", "20", true);
     await clickText("Edit");
-    expect(document.body.textContent).not.toContain("Mark paid");
+    expect(document.body.textContent).not.toContain("Mark as paid");
     expect(document.body.textContent).not.toContain("Record partial payment");
     expect(document.body.textContent).not.toContain("Cancel remaining term");
     expect(document.body.textContent).toContain("Reactivate term");
@@ -207,7 +263,7 @@ it.each(["DRAFT", "TO_BE_INVOICED", "CANCELLED"])(
   async (status) => {
     await mountBilling(status);
     await clickText("Edit");
-    expect(document.body.textContent).not.toContain("Mark paid");
+    expect(document.body.textContent).not.toContain("Mark as paid");
     expect(document.body.textContent).not.toContain("Record partial payment");
     expect(mocks.paid).not.toHaveBeenCalled();
   },
@@ -219,7 +275,7 @@ it.each(["supplier", "billing"])(
     if (kind === "supplier") await mountSupplier("20", false, false);
     else await mountBilling("INVOICED", "20", false, false);
     expect(document.body.textContent).not.toContain("More actions");
-    expect(document.body.textContent).not.toContain("Mark paid");
+    expect(document.body.textContent).not.toContain("Mark as paid");
     expect(document.body.textContent).toContain("Payment history (1)");
   },
 );
@@ -237,17 +293,53 @@ it("keeps the term draft while opening a partial-payment drawer", async () => {
     document.querySelector<HTMLInputElement>('[aria-label="Term draft"]')
       ?.value,
   ).toBe("Changed deposit");
+  await clickText("Save partial payment");
+  expect(document.querySelector('[aria-label="Payment draft"]')).toBeNull();
+  expect(
+    document.querySelector<HTMLInputElement>('[aria-label="Term draft"]')
+      ?.value,
+  ).toBe("Changed deposit");
+  expect(mocks.refresh).toHaveBeenCalledOnce();
+});
+
+it("uses a controlled editor without duplicate row controls and closes after save", async () => {
+  const onOpenChange = vi.fn();
+  function Harness() {
+    const [open, setOpen] = useState(true);
+    return (
+      <TermPaymentActions
+        supplier={supplier()}
+        label="Deposit"
+        open={open}
+        onOpenChange={(value) => {
+          onOpenChange(value);
+          setOpen(value);
+        }}
+        editor={(onSaved) => <button onClick={onSaved}>Save term</button>}
+      />
+    );
+  }
+  view = await mountForm(<Harness />);
+  expect(
+    [...document.querySelectorAll("button")].some(
+      (button) => button.textContent === "Edit",
+    ),
+  ).toBe(false);
+  expect(document.body.textContent).not.toContain("Mark as paid");
+  await clickText("Save term");
+  expect(onOpenChange).toHaveBeenCalledWith(false);
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(mocks.refresh).toHaveBeenCalledOnce();
 });
 
 it("retains date and actual FX in the payment drawer after a rejected save", async () => {
   mocks.paid.mockResolvedValue({ error: "Review actual payment FX" });
-  await mountSupplier();
-  await clickText("Edit");
-  await clickText("Mark paid");
-  expect(document.body.textContent).toContain("Review actual payment FX");
+  await mountSupplier("20", false, true, "USD");
+  await clickText("Mark as paid");
+  expect(mocks.paid).not.toHaveBeenCalled();
   await enter("paymentDate", "2026-10-01");
   await enter("paymentFx", "0.85");
-  await clickText("Record remaining payment");
+  await clickText("Confirm payment");
   expect(mocks.paid).toHaveBeenLastCalledWith({
     kind: "supplier",
     id: "term",

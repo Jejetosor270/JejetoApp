@@ -290,9 +290,10 @@
   with selectable Related sections. Editors remain mounted across sections, preserving
   drafts and existing section/tab/fragment links. Optional Items never creates an empty
   default work area when its Beta module is disabled.
-- Payment terms expose one primary Mark paid action for eligible outstanding balances.
-  More actions groups partial payments, term editing and cancellation/reactivation;
-  actual payment history remains directly accessible. Paid terms offer no further
+- Payment terms expose Edit and Mark as paid directly on eligible outstanding rows.
+  Edit opens the same full form as creation; partial payments and cancellation/reactivation
+  remain inside that editor. Mark as paid confirms the remaining TTC, actual date and
+  any required actual FX before recording cash. Payment history remains directly accessible. Paid terms offer no further
   payment or cancellation. The issued-Invoice prerequisite and authoritative cash
   transactions are unchanged.
 - Purchasing and Reports keep presentation selectors inside their filter form with
@@ -833,7 +834,7 @@ Migration `20260915000000_unassigned_relationships` must be applied separately b
 ## Simplified payment terms
 
 - New Billing/Order records create reviewed terms, otherwise one 100% term when the payable is positive. Billing's creation-time Payment due seeds that default term only; explicit split terms retain their own dates. Absent dates remain null and display Date needed. Existing records are never silently rescheduled. Quote/Invoice matches retain one forecast.
-- Terms support inline label/date/amount edits, detailed edits, full/partial payment recording and cancellation. Status derives from cash and dates; overdue partial payments show both facts. Actual cash dates, currency and independent FX remain authoritative. Cancelling a term removes its remaining forecast while retaining cash history.
+- Terms use one full creation/edit form across Purchasing, Billing, Projects, Related tables and individual term pages; reduced inline term editors are no longer exposed in those views. Embedded terms use individual cancellation rather than bulk unlinking. Full/partial payment recording preserves actual cash history and existing edit drafts. Status derives from cash and dates; overdue partial payments show both facts. Actual cash dates, currency and independent FX remain authoritative. Cancelling a term removes its remaining forecast while retaining cash history.
 - Project and parent collection status use unpaid term dates. Overdue Client amounts include only overdue term balances, capped by Invoice outstanding. Payment terms are the sole due-date authority for reporting, calendar, status and cash forecasts; no runtime fallback to the historical Billing document date is permitted. Undated terms remain in all-remaining commitments without a calendar event.
 - Settings Empty Trash is an ADMIN-only explicit permanent deletion, with typed confirmation and audit retention. It deletes only trashed business rows and dependent supporting data transactionally, rejecting active dependencies. Normal deletion remains recoverable Trash. Never invoke Empty Trash as part of development or verification against live data.
 - Requires `20260917000000_optional_payment_term_dates`, prepared only; applying it is a separate controlled step.

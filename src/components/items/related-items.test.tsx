@@ -1,4 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
+vi.mock("@/components/payments/payment-term-editor", () => ({
+  PaymentTermEditor: () => null,
+}));
 const mock = vi.hoisted(() => ({
   user: vi.fn(),
   settings: vi.fn(),

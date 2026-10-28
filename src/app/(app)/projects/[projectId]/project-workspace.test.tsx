@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import Link from "next/link";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+vi.mock("@/components/payments/payment-term-editor", () => ({
+  PaymentTermEditor: () => null,
+}));
 import { clickText, mountForm } from "@/test/dom-form";
 import { projectEditorFixture } from "@/test/project-editor-fixture";
 import { ProjectDetail } from "./project-detail";

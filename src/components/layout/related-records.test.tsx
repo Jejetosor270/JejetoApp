@@ -15,6 +15,13 @@ const actions = vi.hoisted(() => ({
   remove: vi.fn(),
   trash: vi.fn(),
 }));
+vi.mock("@/components/payments/payment-term-editor", () => ({
+  PaymentTermEditor: ({ kind, id }: { kind: string; id: string }) => (
+    <button data-term-kind={kind} data-term-id={id}>
+      Edit term
+    </button>
+  ),
+}));
 vi.mock("@/app/(app)/related-records/actions", () => ({
   editRelatedNameAction: actions.edit,
   removeOptionalLinksAction: actions.remove,
@@ -111,6 +118,27 @@ it("keeps actions independent of row navigation", async () => {
   await clickText("Edit allocation");
   expect(push).not.toHaveBeenCalled();
 });
+
+it.each([
+  ["supplier-installment", "supplier"],
+  ["client-installment", "client"],
+] as const)(
+  "opens the full editor for %s instead of inline fields",
+  async (editKind, kind) => {
+    view = await mountForm(
+      <RelatedRecordTable
+        table={{ ...table, editKind, rows: table.rows.slice(0, 1) }}
+      />,
+    );
+    const editor = document.querySelector("button[data-term-kind]");
+    expect(editor?.getAttribute("data-term-kind")).toBe(kind);
+    expect(editor?.getAttribute("data-term-id")).toBe("0");
+    await clickText("Edit term");
+    expect(document.querySelector("tbody input")).toBeNull();
+    expect(document.querySelectorAll("tbody button")).toHaveLength(1);
+    expect(push).not.toHaveBeenCalled();
+  },
+);
 
 it("shows an explicit empty table, not a missing section", async () => {
   view = await mountForm(<RelatedRecordTable table={{ ...table, rows: [] }} />);

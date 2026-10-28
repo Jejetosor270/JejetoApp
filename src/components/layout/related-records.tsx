@@ -32,6 +32,7 @@ import {
 } from "@/components/inline-editing/inline-edit";
 import { editRelatedFinancialRowAction } from "@/app/(app)/related-records/inline-actions";
 import { trashSelectedAction } from "@/app/(app)/settings/trash/actions";
+import { PaymentTermEditor } from "@/components/payments/payment-term-editor";
 
 const PAGE_SIZE = 10;
 
@@ -65,6 +66,12 @@ export function RelatedRecordTable({
   pageSize?: number;
 }) {
   const router = useRouter();
+  const termKind =
+    table.editKind === "supplier-installment"
+      ? "supplier"
+      : table.editKind === "client-installment"
+        ? "client"
+        : null;
   const [page, setPage] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -264,7 +271,9 @@ export function RelatedRecordTable({
                 ))}
                 {rowActions || table.editKind ? (
                   <td className="px-3 py-2 text-right">
-                    {table.editKind && (
+                    {termKind ? (
+                      <PaymentTermEditor kind={termKind} id={row.id} />
+                    ) : table.editKind ? (
                       <InlineEditActions
                         editing={editingId === row.id}
                         pending={
@@ -295,7 +304,7 @@ export function RelatedRecordTable({
                           setFeedback("");
                         }}
                       />
-                    )}
+                    ) : null}
                     {rowActions?.[row.id]}
                   </td>
                 ) : null}

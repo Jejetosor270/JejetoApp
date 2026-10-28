@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { afterEach, expect, it, vi } from "vitest";
+vi.mock("@/components/payments/payment-term-editor", () => ({
+  PaymentTermEditor: () => null,
+}));
 import { mountForm, clickText, enter, control } from "@/test/dom-form";
 const mocks = vi.hoisted(() => ({
   trash: vi.fn(),

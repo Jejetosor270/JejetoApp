@@ -1,6 +1,9 @@
 vi.mock("@/app/(app)/billing/status-actions", () => ({
   changeBillingStatusAction: vi.fn(),
 }));
+vi.mock("@/components/payments/payment-term-editor", () => ({
+  PaymentTermEditor: () => null,
+}));
 // @vitest-environment happy-dom
 vi.mock("@/app/(app)/payments/record-status-actions", () => ({
   saveRecordStatusAction: vi.fn(),

@@ -1,4 +1,3 @@
-import { TermStatusAction } from "./term-status-action";
 import Decimal from "decimal.js";
 import { RelatedRecordTable } from "@/components/layout/related-records";
 import { EditorDrawer } from "@/components/forms/editor-drawer";
@@ -16,10 +15,11 @@ import {
   SettlementForm,
   SettlementCorrection,
 } from "./payment-forms";
-import { TermPaymentActions } from "./term-payment-actions";
+import { SupplierTermActions } from "./supplier-term-actions";
 
 export function PaymentSchedule({
   canEdit,
+  canPay = true,
   currencies,
   direction,
   orderId,
@@ -28,6 +28,7 @@ export function PaymentSchedule({
   today,
 }: {
   canEdit: boolean;
+  canPay?: boolean;
   currencies: readonly { code: string }[];
   direction: "SUPPLIER_PAYMENT" | "CLIENT_RECEIPT";
   orderId: string;
@@ -42,15 +43,6 @@ export function PaymentSchedule({
     description: supplier
       ? "Edit terms here. Record full or partial payments against each term."
       : "Historical planning only.",
-    ...(canEdit
-      ? ({
-          removal: {
-            kind: "assignment",
-            relation: "supplier-installment-order",
-            parentId: orderId,
-          },
-        } as const)
-      : {}),
     columns: [
       "Payment term",
       "Due date",
@@ -75,7 +67,6 @@ export function PaymentSchedule({
       );
       return {
         id: term.id,
-        editValue: term.label,
         cells: [
           term.label,
           term.dueDate ? formatDateOnly(term.dueDate) : "Date needed",
@@ -88,16 +79,6 @@ export function PaymentSchedule({
           term.percentageRate
             ? formatRate(term.percentageRate)
             : "Fixed amount",
-        ],
-        editFields: [
-          { column: 1, name: "date", type: "date", value: term.dueDate ?? "" },
-          {
-            column: 2,
-            name: "amount",
-            type: "money",
-            value: term.scheduledAmount,
-            currency: term.currencyCode,
-          },
         ],
       };
     }),
@@ -133,7 +114,7 @@ export function PaymentSchedule({
         table={table}
         actions={
           canEdit && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <EditorDrawer title="Add payment term">
                 <InstallmentForm
                   baseAmount={summary.baseAmount}
@@ -158,44 +139,16 @@ export function PaymentSchedule({
         }
         rowActions={Object.fromEntries(
           summary.installments.map((term) => {
-            const state = paymentTermState({
-              amount: term.scheduledAmount,
-              payments: term.settlements,
-              dueDate: term.dueDate,
-              cancelled: term.isCancelled,
-              today,
-            });
-            const remaining = paymentAmountToRecord(
-              state.remaining,
-              term.outstandingAmount,
-            );
             return [
               term.id,
               <div key={term.id} className="payment-term-actions">
                 {canEdit && (
-                  <TermPaymentActions
-                    supplier={{ ...term, outstandingAmount: remaining }}
-                    canPay={supplier && !term.isCancelled && remaining !== "0"}
-                    editor={
-                      <InstallmentForm
-                        baseAmount={summary.baseAmount}
-                        currencies={currencies}
-                        defaultCurrencyCode={term.currencyCode}
-                        direction={direction}
-                        orderId={orderId}
-                        reportingCurrencyCode={reportingCurrencyCode}
-                        installment={term}
-                      />
-                    }
-                  >
-                    {(term.isCancelled || state.remaining !== "0") && (
-                      <TermStatusAction
-                        id={term.id}
-                        kind="supplier"
-                        cancelled={term.isCancelled}
-                      />
-                    )}
-                  </TermPaymentActions>
+                  <SupplierTermActions
+                    installment={term}
+                    baseAmount={summary.baseAmount}
+                    currencies={currencies}
+                    canPay={supplier && canPay}
+                  />
                 )}
                 <details>
                   <summary className="cursor-pointer text-xs">

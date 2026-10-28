@@ -1,16 +1,13 @@
 "use client";
 import { financialLabels } from "@/domain/presentation/labels";
-import { TermStatusAction } from "@/components/payments/term-status-action";
 import { RelatedRecordTable } from "@/components/layout/related-records";
 import { RelatedCashCreate } from "@/components/payments/related-cash-create";
-import { TermPaymentActions } from "@/components/payments/term-payment-actions";
 import { BillingReceiptEditor } from "./billing-receipt-editor";
-import { BillingTermForm } from "./billing-term-form";
+import { BillingTermActions } from "./billing-term-actions";
 import { ReceiptTermAssignment } from "./receipt-term-assignment";
 import { billingTermPresentation } from "@/domain/billing/term-presentation";
 import { businessToday, formatDateOnly } from "@/domain/payments/dates";
 import { formatMoney, formatRate } from "@/domain/procurement/presentation";
-import { paymentAmountToRecord } from "@/domain/payments/terms";
 import type { ClientBillingView } from "@/lib/billing/billing";
 import type { RelatedTableData } from "@/lib/related-records/types";
 
@@ -30,15 +27,6 @@ export function BillingScheduleManager({
       document.documentType === "QUOTE"
         ? "Planned collections. Confirm an Invoice before recording actual payments."
         : "Record full or partial payments directly against each term.",
-    ...(editable
-      ? ({
-          removal: {
-            kind: "assignment",
-            relation: "client-installment-billing",
-            parentId: document.id,
-          },
-        } as const)
-      : {}),
     columns: [
       "Payment term",
       "Payment due",
@@ -62,7 +50,6 @@ export function BillingScheduleManager({
       });
       return {
         id: term.id,
-        editValue: term.label,
         ...(state.partialInvoiceCoverage && state.invoiceCoverage
           ? {
               secondaryText: `${formatMoney(state.invoiceCoverage, term.currencyCode)} ${document.creditPosition ? "Invoice/credit adjustment" : "covered at Invoice level"}`,
@@ -84,16 +71,6 @@ export function BillingScheduleManager({
           term.percentageRate
             ? formatRate(term.percentageRate)
             : "Fixed amount",
-        ],
-        editFields: [
-          { column: 1, name: "date", type: "date", value: term.dueDate ?? "" },
-          {
-            column: 2,
-            name: "amount",
-            type: "money",
-            currency: term.currencyCode,
-            value: term.scheduledAmount,
-          },
         ],
       };
     }),
@@ -149,50 +126,11 @@ export function BillingScheduleManager({
         }
         rowActions={Object.fromEntries(
           document.paymentInstallments.map((term) => {
-            const state = billingTermPresentation({
-              amount: term.scheduledAmount,
-              payments: term.receipts,
-              dueDate: term.dueDate,
-              cancelled: term.isCancelled || document.isCancelled,
-              today,
-              cappedRemaining: term.creditOutstandingAmount,
-              balanceReviewRequired: term.balanceReviewRequired,
-              hasCredits: Boolean(document.creditPosition),
-            });
-            const remaining = paymentAmountToRecord(
-              state.remaining ?? "0",
-              document.outstanding,
-            );
             return [
               term.id,
               <div key={term.id} className="payment-term-actions">
                 {canEdit && (
-                  <TermPaymentActions
-                    document={document}
-                    termId={term.id}
-                    remaining={remaining}
-                    editor={
-                      <BillingTermForm document={document} installment={term} />
-                    }
-                    canPay={
-                      !document.isCancelled &&
-                      !term.isCancelled &&
-                      remaining !== "0" &&
-                      document.documentType === "INVOICE" &&
-                      !["DRAFT", "TO_BE_INVOICED", "CANCELLED"].includes(
-                        document.status,
-                      )
-                    }
-                  >
-                    {!document.isCancelled &&
-                      (term.isCancelled || remaining !== "0") && (
-                        <TermStatusAction
-                          id={term.id}
-                          kind="client"
-                          cancelled={term.isCancelled}
-                        />
-                      )}
-                  </TermPaymentActions>
+                  <BillingTermActions document={document} term={term} />
                 )}
                 {history(term.receipts)}
               </div>,
