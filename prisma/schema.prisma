@@ -234,11 +234,18 @@ model User {
   @@map("users")
 }
 
-/// Personal, read-only ERP connection credentials. Raw tokens are never stored.
+enum ErpConnectionScope {
+  READ_ONLY
+  CASH_WRITE
+}
+
+/// Personal, scoped ERP connection credentials. Raw tokens/private approval keys are never stored.
 model ErpConnectionToken {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String?  @db.Uuid
   tokenHash String   @unique @db.Char(64)
+  scope     ErpConnectionScope @default(READ_ONLY)
+  approvalPublicKey String? @db.VarChar(200)
   createdAt DateTime @default(now())
   expiresAt DateTime
   revokedAt DateTime?
@@ -246,8 +253,53 @@ model ErpConnectionToken {
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId, revokedAt])
-  // The migration also enforces one unrevoked key per user through a partial unique index.
+  // The migration also enforces one unrevoked key per user and scope through a partial unique index.
   @@map("erp_connection_tokens")
+}
+
+/// Expiring, immutable cash commands and approval evidence; never a second cash ledger.
+/// Actor/token/source IDs are immutable audit references and intentionally survive deletion.
+model ErpCashChangeProposal {
+  id String @id @default(uuid()) @db.Uuid
+  actorId String @db.Uuid
+  tokenId String @db.Uuid
+  action String @db.VarChar(40)
+  targetId String @db.Uuid
+  documentId String @db.Uuid
+  installmentId String? @db.Uuid
+  projectId String @db.Uuid
+  projectName String @db.VarChar(200)
+  partyName String @db.VarChar(200)
+  recordReference String @db.VarChar(200)
+  termLabel String? @db.VarChar(200)
+  amount Decimal @db.Decimal(19, 4)
+  currencyCode String @db.Char(3)
+  reportingCurrencyCode String @db.Char(3)
+  cashDate DateTime @db.Date
+  fxRate Decimal? @db.Decimal(20, 10)
+  reference String? @db.VarChar(120)
+  notes String? @db.Text
+  reason String? @db.VarChar(500)
+  previousAmount Decimal? @db.Decimal(19, 4)
+  previousDate DateTime? @db.Date
+  previousFxRate Decimal? @db.Decimal(20, 10)
+  previousReference String? @db.VarChar(120)
+  previousNotes String? @db.Text
+  remainingBefore Decimal @db.Decimal(19, 4)
+  remainingAfter Decimal @db.Decimal(19, 4)
+  stateHash String @db.Char(64)
+  digest String @db.Char(64)
+  nonce String @db.Uuid
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  approvedAt DateTime?
+  approvalSignature String? @db.VarChar(86)
+  executedAt DateTime?
+  resultId String? @db.Uuid
+
+  @@index([actorId, createdAt])
+  @@index([tokenId, expiresAt])
+  @@map("erp_cash_change_proposals")
 }
 
 // Personal reminder preferences only; financial issues remain derived from source records.

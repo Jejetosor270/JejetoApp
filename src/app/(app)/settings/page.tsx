@@ -27,12 +27,16 @@ export const metadata: Metadata = { title: "Settings" };
 export default async function SettingsPage() {
   const user = await requireMasterDataEditor();
   const connectionOwner = isErpConnectionOwner(user);
-  const [settings, locations, models, connectionStatus] = await Promise.all([
-    getApplicationSettings(),
-    listLogisticsLocations(),
-    getAiProcessingModels(),
-    connectionOwner ? getConnectionStatus(user.id) : Promise.resolve(null),
-  ]);
+  const [settings, locations, models, connectionStatus, cashConnectionStatus] =
+    await Promise.all([
+      getApplicationSettings(),
+      listLogisticsLocations(),
+      getAiProcessingModels(),
+      connectionOwner ? getConnectionStatus(user.id) : Promise.resolve(null),
+      connectionOwner
+        ? getConnectionStatus(user.id, "CASH_WRITE")
+        : Promise.resolve(null),
+    ]);
   const connectionOrigin = getErpMcpOrigin();
   return (
     <div className="space-y-6">
@@ -141,19 +145,30 @@ export default async function SettingsPage() {
                     <section className="record-surface">
                       <h2 className="section-title">AI connection</h2>
                       <div className="mt-4">
-                        {connectionStatus ? (
-                          <ConnectionPanel
-                            initialStatus={connectionStatus}
-                            endpoint={
-                              connectionOrigin
-                                ? `${connectionOrigin}/api/mcp`
-                                : null
-                            }
-                          />
+                        {connectionStatus && cashConnectionStatus ? (
+                          <div className="space-y-6 divide-y [&>div+div]:pt-6">
+                            <ConnectionPanel
+                              initialStatus={connectionStatus}
+                              endpoint={
+                                connectionOrigin
+                                  ? `${connectionOrigin}/api/mcp`
+                                  : null
+                              }
+                            />
+                            <ConnectionPanel
+                              scope="CASH_WRITE"
+                              initialStatus={cashConnectionStatus}
+                              endpoint={
+                                connectionOrigin
+                                  ? `${connectionOrigin}/api/erp-cash`
+                                  : null
+                              }
+                            />
+                          </div>
                         ) : (
                           <div className="text-muted-foreground space-y-2 text-sm">
                             <p>
-                              Private read access is reserved for one configured
+                              Private access is reserved for one configured
                               administrator.
                             </p>
                             <p>

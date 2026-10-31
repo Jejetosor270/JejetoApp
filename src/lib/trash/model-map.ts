@@ -8,6 +8,11 @@ export interface ModelMetadata {
   >;
 }
 export const modelMap: Record<string, ModelMetadata> = {
+  ErpCashChangeProposal: {
+    table: "erp_cash_change_proposals",
+    trash: false,
+    relations: {},
+  },
   ErpConnectionToken: {
     table: "erp_connection_tokens",
     trash: false,

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
 import { z } from "zod";
 
 import type { Prisma } from "@/generated/prisma/client";
@@ -9,8 +9,11 @@ import { writeAuditEvent } from "@/lib/audit/events";
 import { getDatabase } from "@/lib/db";
 
 const TOKEN_DAYS = 30;
-const TOKEN_PREFIX = "mberp_read_";
-const tokenPattern = /^Bearer (mberp_read_[A-Za-z0-9_-]{43})$/;
+export type ErpConnectionScope = "READ_ONLY" | "CASH_WRITE";
+const tokenPatterns = {
+  READ_ONLY: /^Bearer (mberp_read_[A-Za-z0-9_-]{43})$/,
+  CASH_WRITE: /^Bearer (mberp_cash_[A-Za-z0-9_-]{43})$/,
+};
 const employeeIdSchema = z.uuid();
 
 export class ConnectionAccessError extends Error {
@@ -80,12 +83,14 @@ export interface ConnectionStatus {
 
 export async function getConnectionStatus(
   actorId: string,
+  scope: ErpConnectionScope = "READ_ONLY",
 ): Promise<ConnectionStatus> {
+  assertScope(scope);
   if (!ownerId()) return { enabled: false, token: null };
   const database = getDatabase();
   await requireConnectionOwner(database, actorId);
   const token = await database.erpConnectionToken.findFirst({
-    where: { userId: actorId },
+    where: { userId: actorId, scope },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: { id: true, createdAt: true, expiresAt: true, revokedAt: true },
   });
@@ -106,6 +111,11 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex");
 }
 
+function assertScope(scope: ErpConnectionScope) {
+  if (scope !== "READ_ONLY" && scope !== "CASH_WRITE")
+    throw new ConnectionAccessError();
+}
+
 function rethrowChangeError(error: unknown): never {
   if (
     error !== null &&
@@ -119,14 +129,26 @@ function rethrowChangeError(error: unknown): never {
 }
 
 /** Rotates the owner's key; the raw credential is returned exactly once. */
-export async function createConnectionToken(actorId: string): Promise<{
+export async function createConnectionToken(
+  actorId: string,
+  scope: ErpConnectionScope = "READ_ONLY",
+): Promise<{
   token: string;
   id: string;
   createdAt: string;
   expiresAt: string;
+  approvalPrivateKey?: string;
 }> {
+  assertScope(scope);
   if (actorId !== ownerId()) throw new ConnectionAccessError();
-  const token = `${TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
+  const token = `mberp_${scope === "CASH_WRITE" ? "cash" : "read"}_${randomBytes(32).toString("base64url")}`;
+  const approvalKeys =
+    scope === "CASH_WRITE"
+      ? generateKeyPairSync("ed25519", {
+          publicKeyEncoding: { type: "spki", format: "pem" },
+          privateKeyEncoding: { type: "pkcs8", format: "pem" },
+        })
+      : null;
   const now = new Date();
   const expiresAt = new Date(now.getTime() + TOKEN_DAYS * 24 * 60 * 60 * 1000);
   try {
@@ -134,13 +156,15 @@ export async function createConnectionToken(actorId: string): Promise<{
       async (transaction) => {
         await requireConnectionOwner(transaction, actorId);
         await transaction.erpConnectionToken.updateMany({
-          where: { userId: actorId, revokedAt: null },
+          where: { userId: actorId, scope, revokedAt: null },
           data: { revokedAt: now },
         });
         const stored = await transaction.erpConnectionToken.create({
           data: {
             userId: actorId,
             tokenHash: hashToken(token),
+            scope,
+            approvalPublicKey: approvalKeys?.publicKey ?? null,
             createdAt: now,
             expiresAt,
           },
@@ -150,10 +174,13 @@ export async function createConnectionToken(actorId: string): Promise<{
           action: "CREATED",
           entityId: stored.id,
           entityType: "SETTING",
-          entityReference: "ERP read-only connection",
+          entityReference:
+            scope === "CASH_WRITE"
+              ? "ERP approved cash connection"
+              : "ERP read-only connection",
           summary:
-            "Issued a read-only connection key and revoked earlier keys.",
-          metadata: { expiresAt: expiresAt.toISOString(), access: "READ_ONLY" },
+            "Issued a connection key and revoked earlier keys with the same scope.",
+          metadata: { expiresAt: expiresAt.toISOString(), access: scope },
         });
         return stored.id;
       },
@@ -164,6 +191,7 @@ export async function createConnectionToken(actorId: string): Promise<{
       id,
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),
+      ...(approvalKeys ? { approvalPrivateKey: approvalKeys.privateKey } : {}),
     };
   } catch (error) {
     rethrowChangeError(error);
@@ -189,8 +217,8 @@ export async function revokeConnectionToken(
           action: "DEACTIVATED",
           entityId: id,
           entityType: "SETTING",
-          entityReference: "ERP read-only connection",
-          summary: "Revoked the read-only connection key.",
+          entityReference: "ERP connection",
+          summary: "Revoked the selected connection key.",
         });
       },
       { isolationLevel: "Serializable" },
@@ -204,6 +232,65 @@ export async function revokeConnectionToken(
 export async function authenticateConnection(
   authorizationHeader: string | null,
 ): Promise<AuthenticatedUser | null> {
+  const connection = await authenticateScopedConnection(
+    authorizationHeader,
+    "READ_ONLY",
+  );
+  return connection?.actor ?? null;
+}
+
+export interface CashConnection {
+  actor: AuthenticatedUser;
+  tokenId: string;
+  approvalPublicKey: string;
+}
+
+export async function authenticateCashConnection(
+  authorizationHeader: string | null,
+): Promise<CashConnection | null> {
+  const connection = await authenticateScopedConnection(
+    authorizationHeader,
+    "CASH_WRITE",
+  );
+  return connection?.approvalPublicKey
+    ? { ...connection, approvalPublicKey: connection.approvalPublicKey }
+    : null;
+}
+
+/** Recheck the exact credential inside the financial mutation transaction. */
+export async function requireCashConnection(
+  transaction: Pick<Prisma.TransactionClient, "user" | "erpConnectionToken">,
+  actorId: string,
+  tokenId: string,
+): Promise<CashConnection> {
+  if (actorId !== ownerId()) throw new ConnectionAccessError();
+  const stored = await transaction.erpConnectionToken.findUnique({
+    where: { id: employeeIdSchema.parse(tokenId) },
+    select: {
+      userId: true,
+      scope: true,
+      expiresAt: true,
+      revokedAt: true,
+      approvalPublicKey: true,
+    },
+  });
+  if (
+    !stored ||
+    stored.userId !== actorId ||
+    stored.scope !== "CASH_WRITE" ||
+    stored.revokedAt ||
+    stored.expiresAt.getTime() <= Date.now() ||
+    !stored.approvalPublicKey
+  )
+    throw new ConnectionAccessError();
+  const actor = await requireConnectionOwner(transaction, actorId);
+  return { actor, tokenId, approvalPublicKey: stored.approvalPublicKey };
+}
+
+async function authenticateScopedConnection(
+  authorizationHeader: string | null,
+  scope: ErpConnectionScope,
+) {
   const configuredOwner = ownerId();
   if (
     !configuredOwner ||
@@ -212,15 +299,23 @@ export async function authenticateConnection(
   ) {
     return null;
   }
-  const token = tokenPattern.exec(authorizationHeader)?.[1];
+  const token = tokenPatterns[scope].exec(authorizationHeader)?.[1];
   if (!token) return null;
   const database = getDatabase();
   const stored = await database.erpConnectionToken.findUnique({
     where: { tokenHash: hashToken(token) },
-    select: { userId: true, expiresAt: true, revokedAt: true },
+    select: {
+      id: true,
+      userId: true,
+      scope: true,
+      approvalPublicKey: true,
+      expiresAt: true,
+      revokedAt: true,
+    },
   });
   if (
     !stored ||
+    stored.scope !== scope ||
     stored.userId !== configuredOwner ||
     stored.revokedAt !== null ||
     stored.expiresAt.getTime() <= Date.now()
@@ -228,7 +323,12 @@ export async function authenticateConnection(
     return null;
   }
   try {
-    return await requireConnectionOwner(database, configuredOwner);
+    const actor = await requireConnectionOwner(database, configuredOwner);
+    return {
+      actor,
+      tokenId: stored.id,
+      approvalPublicKey: stored.approvalPublicKey,
+    };
   } catch (error) {
     if (error instanceof ConnectionAccessError) return null;
     throw error;

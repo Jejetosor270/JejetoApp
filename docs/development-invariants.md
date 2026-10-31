@@ -20,9 +20,36 @@
   formulas, sources, schemas or workflows are replaced.
 - Migration `20261031000000_erp_read_connection` adds only hashed connection-key
   metadata, expiry/revocation, an employee link and one-active-key protection.
-  It is prepared, not applied; rollout and owner configuration are separate.
-  Live desktop connection/approval verification requires deployment and cannot
-  be inferred from local SDK tests. See `docs/erp-ai-connection.md`.
+  The production read connection was activated and verified on 2026-10-31;
+  other environments still require their own migration/configuration checks.
+  See `docs/erp-ai-connection.md`.
+
+## Private ERP connection — Phase 2 cash approval
+
+- Read keys remain `READ_ONLY`. Separate `CASH_WRITE` credentials are owner-only,
+  independently revocable and expire after 30 days. The cash credential bundle
+  contains a bearer token and Ed25519 private approval key returned once; only
+  the bearer hash and public verification key persist on the server.
+- A local STDIO bridge exposes `prepare_cash_change` and `approve_cash_change`.
+  It uses `/api/erp-cash`, separate from the stateless read MCP endpoint. Native
+  form acceptance plus an explicitly checked confirmation is required before
+  signing. Chat text, tool permission and model-supplied approval flags do not
+  execute cash changes. The local bridge, host and private key are trusted.
+- Proposals expire after 15 minutes and bind the exact actor, credential, record,
+  amount, currency, actual date/FX and financial context. Execution rechecks
+  access, signature, source versions and remaining balances in the same
+  serializable transaction as the cash write and audit. Retrying a saved
+  proposal returns its result without a second entry.
+- Supported actions record/correct/cancel Supplier payments on explicit Order
+  terms and Client receipts on issued Invoices. Corrections preserve assignment;
+  cancellations use recoverable Trash with a reason. Existing Decimal, credit,
+  payment and audit services remain authoritative. Foreign actual cash requires
+  explicit FX; expected FX is never reused. These actions do not transfer money,
+  create refunds, Orders, Billing, allocations or payment terms.
+- Migration `20261031010000_erp_cash_connection` adds scoped credentials and typed
+  pending/approved proposal records. It is prepared, not applied. Deployment,
+  cash-key creation, secure bridge setup and a real desktop approval check remain
+  rollout steps; local tests do not establish live activation.
 
 ## Billing allocation profitability
 

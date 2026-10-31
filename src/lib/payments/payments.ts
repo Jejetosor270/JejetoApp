@@ -826,7 +826,7 @@ export async function recordSettlementInTransaction(
   actorId: string,
   input: SettlementInput,
   context?: { projectId: string; orderId: string },
-): Promise<void> {
+): Promise<string> {
   const installment = await transaction.paymentInstallment.findUnique({
     where: { id: input.installmentId },
     include: {
@@ -914,6 +914,7 @@ export async function recordSettlementInTransaction(
     },
     summary: "Recorded a payment or receipt settlement.",
   });
+  return settlement.id;
 }
 
 export async function updateSettlement(
@@ -921,95 +922,98 @@ export async function updateSettlement(
   input: UpdateSettlementInput,
 ): Promise<void> {
   await getDatabase().$transaction(
-    async (transaction) => {
-      const record = await transaction.paymentSettlement.findUnique({
-        where: { id: input.id },
+    (transaction) => updateSettlementInTransaction(transaction, actorId, input),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
+/** Reuse the existing cash correction inside a caller-owned transaction. */
+export async function updateSettlementInTransaction(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  input: UpdateSettlementInput,
+): Promise<void> {
+  const record = await transaction.paymentSettlement.findUnique({
+    where: { id: input.id },
+    include: {
+      installment: {
         include: {
-          installment: {
-            include: {
-              settlements: { select: { id: true, amount: true } },
-              order: {
-                select: {
-                  detachedReportingCurrencyCode: true,
-                  project: { select: { reportingCurrencyCode: true } },
-                },
-              },
+          settlements: { select: { id: true, amount: true } },
+          order: {
+            select: {
+              detachedReportingCurrencyCode: true,
+              project: { select: { reportingCurrencyCode: true } },
             },
           },
         },
-      });
-      if (!record) throw new PaymentNotFoundError();
-      if (
-        !paymentVersionMatches(input.expectedVersion, cashEditVersion(record))
-      )
-        throw new PaymentValidationError(stalePaymentMessage);
-      await assertCreditSafeMutation(transaction, "PaymentSettlement", [
-        record.id,
-      ]);
-      const installment = record.installment;
-      if (installment.id !== input.installmentId)
-        throw new PaymentValidationError(
-          "The payment must remain with its original installment.",
-        );
-      if (installment.isCancelled)
-        throw new PaymentValidationError(
-          "A cancelled installment cannot be settled.",
-        );
-      const otherPaid = installment.settlements.reduce(
-        (sum, row) => (row.id === record.id ? sum : sum.plus(row.amount)),
-        new Decimal(0),
-      );
-      if (otherPaid.plus(input.amount).greaterThan(installment.scheduledAmount))
-        throw new PaymentValidationError(
-          "This entry would exceed the scheduled installment amount.",
-        );
-      const data = {
-        amount: input.amount,
-        settledAt: dateOnlyToDate(input.settledAt),
-        reference: input.reference ?? null,
-        notes: input.notes ?? null,
-        fxRateToReporting:
-          installment.currencyCode ===
-          retainedCurrency(
-            installment.order?.project?.reportingCurrencyCode,
-            installment.order?.detachedReportingCurrencyCode ??
-              installment.detachedReportingCurrencyCode,
-          )
-            ? null
-            : (input.fxRate ?? null),
-        updatedById: actorId,
-      };
-      await transaction.paymentSettlement.update({
-        where: { id: record.id },
-        data,
-      });
-      await writeAuditEvent(transaction, actorId, {
-        action: "UPDATED",
-        entityId: record.id,
-        entityReference: installment.label,
-        entityType: "SETTLEMENT",
-        summary: "Updated a payment settlement.",
-        metadata: {
-          previous: {
-            amount: record.amount.toString(),
-            settledAt: dateToDateOnly(record.settledAt),
-            reference: record.reference,
-            notes: record.notes,
-            fxRate: record.fxRateToReporting?.toString() ?? null,
-          },
-          next: {
-            amount: input.amount,
-            settledAt: input.settledAt,
-            reference: data.reference,
-            notes: data.notes,
-            fxRate: data.fxRateToReporting,
-          },
-          currency: installment.currencyCode,
-        },
-      });
+      },
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  });
+  if (!record) throw new PaymentNotFoundError();
+  if (!paymentVersionMatches(input.expectedVersion, cashEditVersion(record)))
+    throw new PaymentValidationError(stalePaymentMessage);
+  await assertCreditSafeMutation(transaction, "PaymentSettlement", [record.id]);
+  const installment = record.installment;
+  if (installment.id !== input.installmentId)
+    throw new PaymentValidationError(
+      "The payment must remain with its original installment.",
+    );
+  if (installment.isCancelled)
+    throw new PaymentValidationError(
+      "A cancelled installment cannot be settled.",
+    );
+  const otherPaid = installment.settlements.reduce(
+    (sum, row) => (row.id === record.id ? sum : sum.plus(row.amount)),
+    new Decimal(0),
   );
+  if (otherPaid.plus(input.amount).greaterThan(installment.scheduledAmount))
+    throw new PaymentValidationError(
+      "This entry would exceed the scheduled installment amount.",
+    );
+  const data = {
+    amount: input.amount,
+    settledAt: dateOnlyToDate(input.settledAt),
+    reference: input.reference ?? null,
+    notes: input.notes ?? null,
+    fxRateToReporting:
+      installment.currencyCode ===
+      retainedCurrency(
+        installment.order?.project?.reportingCurrencyCode,
+        installment.order?.detachedReportingCurrencyCode ??
+          installment.detachedReportingCurrencyCode,
+      )
+        ? null
+        : (input.fxRate ?? null),
+    updatedById: actorId,
+  };
+  await transaction.paymentSettlement.update({
+    where: { id: record.id },
+    data,
+  });
+  await writeAuditEvent(transaction, actorId, {
+    action: "UPDATED",
+    entityId: record.id,
+    entityReference: installment.label,
+    entityType: "SETTLEMENT",
+    summary: "Updated a payment settlement.",
+    metadata: {
+      previous: {
+        amount: record.amount.toString(),
+        settledAt: dateToDateOnly(record.settledAt),
+        reference: record.reference,
+        notes: record.notes,
+        fxRate: record.fxRateToReporting?.toString() ?? null,
+      },
+      next: {
+        amount: input.amount,
+        settledAt: input.settledAt,
+        reference: data.reference,
+        notes: data.notes,
+        fxRate: data.fxRateToReporting,
+      },
+      currency: installment.currencyCode,
+    },
+  });
 }
 
 export async function markInstallmentSettled(
@@ -1025,25 +1029,9 @@ export async function removeSettlement(
   settlementId: string,
 ): Promise<void> {
   try {
-    await getDatabase().$transaction(async (transaction) => {
-      const settlement = await transaction.paymentSettlement.findUniqueOrThrow({
-        where: { id: settlementId },
-        select: {
-          id: true,
-          installment: { select: { label: true } },
-        },
-      });
-      await trashInTransaction(transaction, actorId, "PaymentSettlement", [
-        settlement.id,
-      ]);
-      await writeAuditEvent(transaction, actorId, {
-        action: "DELETED",
-        entityId: settlement.id,
-        entityReference: settlement.installment.label,
-        entityType: "SETTLEMENT",
-        summary: "Deleted a settlement correction.",
-      });
-    });
+    await getDatabase().$transaction((transaction) =>
+      deleteSettlementInTransaction(transaction, actorId, settlementId),
+    );
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -1053,6 +1041,36 @@ export async function removeSettlement(
     }
     throw error;
   }
+}
+
+/** Undo a reviewed cash row through recoverable Trash, preserving its history. */
+export async function deleteSettlementInTransaction(
+  transaction: Prisma.TransactionClient,
+  actorId: string,
+  settlementId: string,
+  expectedVersion?: string,
+): Promise<void> {
+  const settlement = await transaction.paymentSettlement.findUniqueOrThrow({
+    where: { id: settlementId },
+    include: {
+      installment: { select: { label: true } },
+    },
+  });
+  if (
+    expectedVersion !== undefined &&
+    !paymentVersionMatches(expectedVersion, cashEditVersion(settlement))
+  )
+    throw new PaymentValidationError(stalePaymentMessage);
+  await trashInTransaction(transaction, actorId, "PaymentSettlement", [
+    settlement.id,
+  ]);
+  await writeAuditEvent(transaction, actorId, {
+    action: "DELETED",
+    entityId: settlement.id,
+    entityReference: settlement.installment.label,
+    entityType: "SETTLEMENT",
+    summary: "Deleted a settlement correction.",
+  });
 }
 
 export async function cancelInstallment(

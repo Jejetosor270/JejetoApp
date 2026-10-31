@@ -16,13 +16,18 @@ export async function manageErpConnectionAction(raw: unknown) {
   const parsed = z
     .discriminatedUnion("action", [
       z
-        .object({ action: z.literal("create"), confirmed: z.literal(true) })
+        .object({
+          action: z.literal("create"),
+          confirmed: z.literal(true),
+          scope: z.enum(["READ_ONLY", "CASH_WRITE"]).default("READ_ONLY"),
+        })
         .strict(),
       z
         .object({
           action: z.literal("revoke"),
           tokenId: z.uuid(),
           confirmed: z.literal(true),
+          scope: z.enum(["READ_ONLY", "CASH_WRITE"]).default("READ_ONLY"),
         })
         .strict(),
     ])
@@ -33,10 +38,16 @@ export async function manageErpConnectionAction(raw: unknown) {
     if (parsed.data.action === "create") {
       if (!getErpMcpOrigin())
         return { error: "Configure the connection address first." };
-      const created = await createConnectionToken(actor.id);
+      const created = await createConnectionToken(actor.id, parsed.data.scope);
       revalidatePath("/settings");
       return {
-        secret: created.token,
+        secret:
+          parsed.data.scope === "CASH_WRITE"
+            ? JSON.stringify({
+                token: created.token,
+                approvalPrivateKey: created.approvalPrivateKey,
+              })
+            : created.token,
         status: {
           enabled: true,
           token: {
@@ -49,7 +60,7 @@ export async function manageErpConnectionAction(raw: unknown) {
       };
     }
     await revokeConnectionToken(actor.id, parsed.data.tokenId);
-    const status = await getConnectionStatus(actor.id);
+    const status = await getConnectionStatus(actor.id, parsed.data.scope);
     revalidatePath("/settings");
     return { status };
   } catch (error) {

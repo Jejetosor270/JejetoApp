@@ -42,6 +42,7 @@ describe("private connection management", () => {
     { action: "create", confirmed: true, actorId: "forged" },
     { action: "revoke", confirmed: true, tokenId: "bad" },
     { action: "write", confirmed: true },
+    { action: "create", confirmed: true, scope: "ALL" },
   ])("rejects missing confirmation and unrecognized input", async (input) => {
     expect(await manageErpConnectionAction(input)).toHaveProperty("error");
     expect(mocks.createConnectionToken).not.toHaveBeenCalled();
@@ -68,7 +69,10 @@ describe("private connection management", () => {
       action: "create",
       confirmed: true,
     });
-    expect(mocks.createConnectionToken).toHaveBeenCalledWith("owner");
+    expect(mocks.createConnectionToken).toHaveBeenCalledWith(
+      "owner",
+      "READ_ONLY",
+    );
     expect(result).toMatchObject({
       secret: created.token,
       status: { enabled: true, token: { id: created.id, revokedAt: null } },
@@ -96,5 +100,41 @@ describe("private connection management", () => {
     });
     expect(result.error).toContain("could not be updated");
     expect(JSON.stringify(result)).not.toContain("private database");
+  });
+
+  it("returns cash credentials once as a bundle without upgrading read-only keys", async () => {
+    mocks.createConnectionToken.mockResolvedValue({
+      id: "11111111-1111-4111-8111-111111111111",
+      token: "fixture-cash-key",
+      approvalPrivateKey: "fixture-approval-key",
+      createdAt: "2026-10-31T10:00:00Z",
+      expiresAt: "2026-11-30T10:00:00Z",
+    });
+    const result = await manageErpConnectionAction({
+      action: "create",
+      confirmed: true,
+      scope: "CASH_WRITE",
+    });
+    expect(mocks.createConnectionToken).toHaveBeenCalledWith(
+      "owner",
+      "CASH_WRITE",
+    );
+    expect(result.secret && JSON.parse(result.secret)).toEqual({
+      token: "fixture-cash-key",
+      approvalPrivateKey: "fixture-approval-key",
+    });
+    expect(JSON.stringify(result.status)).not.toContain("fixture");
+    mocks.getConnectionStatus.mockResolvedValue({ enabled: true, token: null });
+    const revoked = await manageErpConnectionAction({
+      action: "revoke",
+      confirmed: true,
+      scope: "CASH_WRITE",
+      tokenId: "11111111-1111-4111-8111-111111111111",
+    });
+    expect(mocks.getConnectionStatus).toHaveBeenCalledWith(
+      "owner",
+      "CASH_WRITE",
+    );
+    expect(revoked).not.toHaveProperty("secret");
   });
 });

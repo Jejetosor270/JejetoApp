@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field, inputClassName } from "@/components/master-data/form-ui";
 import { manageErpConnectionAction } from "./connection-actions";
 import { formatTimestamp } from "@/domain/payments/dates";
+import type { ErpConnectionScope } from "@/lib/erp-connection/auth";
 
 interface ConnectionStatus {
   enabled: boolean;
@@ -19,10 +20,13 @@ interface ConnectionStatus {
 export function ConnectionPanel({
   initialStatus,
   endpoint,
+  scope = "READ_ONLY",
 }: {
   initialStatus: ConnectionStatus;
   endpoint: string | null;
+  scope?: ErpConnectionScope;
 }) {
+  const cashAccess = scope === "CASH_WRITE";
   const [status, setStatus] = useState(initialStatus);
   const [secret, setSecret] = useState("");
   const [revealed, setRevealed] = useState(false);
@@ -48,8 +52,8 @@ export function ConnectionPanel({
     try {
       const result = await manageErpConnectionAction(
         action === "create"
-          ? { action, confirmed }
-          : { action, confirmed: true, tokenId: token?.id },
+          ? { action, confirmed, scope }
+          : { action, confirmed: true, tokenId: token?.id, scope },
       );
       if (result.error) {
         setError(result.error);
@@ -63,7 +67,7 @@ export function ConnectionPanel({
       setRevokeConfirmation(false);
       setMessage(
         action === "create"
-          ? "Key created. Copy it before leaving this page."
+          ? "Credentials created. Copy them before leaving this page."
           : "Access revoked.",
       );
     } catch {
@@ -79,7 +83,9 @@ export function ConnectionPanel({
   async function copySecret() {
     try {
       await navigator.clipboard.writeText(secret);
-      setMessage("Key copied. Keep it out of chats and source files.");
+      setMessage(
+        "Credentials copied. Keep them out of chats and source files.",
+      );
     } catch {
       setRevealed(true);
       setError("Copy is unavailable. Select the key and copy it manually.");
@@ -88,13 +94,18 @@ export function ConnectionPanel({
 
   return (
     <div className="max-w-3xl space-y-4">
+      <h3 className="font-medium">
+        {cashAccess ? "Approved cash actions" : "Read access"}
+      </h3>
       <p className="text-muted-foreground text-sm">
-        Connect your Codex desktop to ERP records and financial reports.
-        Selected data will enter your AI conversation. This connection cannot
-        change records or record payments.
+        {cashAccess
+          ? "Record or correct supplier payments and client receipts after reviewing and approving each change. Bank transfers are not enabled. Your read-only key remains separate."
+          : "Connect your Codex desktop to ERP records and financial reports. Selected data will enter your AI conversation. This connection cannot change records or record payments."}
       </p>
       {endpoint ? (
-        <Field label="Connection address">
+        <Field
+          label={cashAccess ? "Cash service address" : "Connection address"}
+        >
           <input className={inputClassName} readOnly value={endpoint} />
         </Field>
       ) : (
@@ -108,7 +119,11 @@ export function ConnectionPanel({
       </p>
       {secret ? (
         <div className="bg-muted/40 space-y-3 rounded-md border p-4">
-          <Field label="Private access key">
+          <Field
+            label={
+              cashAccess ? "Private credential bundle" : "Private access key"
+            }
+          >
             <input
               className={`${inputClassName} font-mono`}
               type={revealed ? "text" : "password"}
@@ -120,7 +135,10 @@ export function ConnectionPanel({
           </Field>
           <p className="text-muted-foreground text-xs">
             Available here only once. It expires after 30 days. Replacing it
-            revokes the previous key.
+            revokes only the previous key for this access type.
+            {cashAccess
+              ? " The bundle includes the private approval key for your desktop connection; never paste it into a chat."
+              : ""}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={copySecret}>
@@ -162,8 +180,9 @@ export function ConnectionPanel({
             onChange={(event) => setConfirmed(event.target.checked)}
           />
           <span>
-            Allow read access to ERP records. Replace any existing connection
-            key.
+            {cashAccess
+              ? "Allow approved cash actions. Replace only the existing cash-action credentials."
+              : "Allow read access to ERP records. Replace only the existing read-only key."}
           </span>
         </label>
         <div className="flex flex-wrap gap-2">
@@ -218,8 +237,9 @@ export function ConnectionPanel({
         </p>
       ) : null}
       <p className="text-muted-foreground text-xs">
-        Codex desktop only for this version. Browser ChatGPT login and approved
-        financial actions are not enabled.
+        {cashAccess
+          ? "Uses the local approval bridge, not a direct remote MCP connection. Each change needs a fresh approval; creating credentials does not record any payment."
+          : "Codex desktop only for this version. Browser ChatGPT login is not enabled."}
       </p>
     </div>
   );

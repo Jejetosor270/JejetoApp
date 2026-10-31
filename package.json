@@ -35,6 +35,7 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "users:bootstrap-admin": "tsx prisma/bootstrap-admin.ts",
+    "erp:cash-bridge": "tsx scripts/erp-cash-bridge.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

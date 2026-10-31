@@ -49,6 +49,7 @@ describe("connection Settings panel", () => {
       expect(change).toHaveBeenCalledWith({
         action: "create",
         confirmed: true,
+        scope: "READ_ONLY",
       });
       expect(checkbox?.checked).toBe(true);
       expect(view.container.textContent).toContain("Please retry.");
@@ -120,8 +121,60 @@ describe("connection Settings panel", () => {
         action: "revoke",
         tokenId: token.id,
         confirmed: true,
+        scope: "READ_ONLY",
       });
       expect(view.container.textContent).toContain("No active key");
+    } finally {
+      await view.unmount();
+    }
+  });
+
+  it("keeps cash credentials masked and separates cash consent from read access", async () => {
+    const store = vi.spyOn(Storage.prototype, "setItem");
+    const bundle = JSON.stringify({
+      token: "fixture-cash-key",
+      approvalPrivateKey: "fixture-approval-key",
+    });
+    change.mockResolvedValue({
+      secret: bundle,
+      status: { enabled: true, token },
+    });
+    const view = await mountForm(
+      <ConnectionPanel
+        scope="CASH_WRITE"
+        endpoint="https://erp.example.test/api/erp-cash"
+        initialStatus={{ enabled: true, token: null }}
+      />,
+    );
+    try {
+      expect(view.container.textContent).toContain("Approved cash actions");
+      expect(view.container.textContent).toContain(
+        "read-only key remains separate",
+      );
+      await act(async () =>
+        view.container
+          .querySelector<HTMLInputElement>('input[type="checkbox"]')
+          ?.click(),
+      );
+      await act(async () =>
+        view.container
+          .querySelector("form")
+          ?.dispatchEvent(
+            new Event("submit", { bubbles: true, cancelable: true }),
+          ),
+      );
+      expect(change).toHaveBeenCalledWith({
+        action: "create",
+        confirmed: true,
+        scope: "CASH_WRITE",
+      });
+      expect(
+        view.container.querySelector<HTMLInputElement>('input[type="password"]')
+          ?.value,
+      ).toBe(bundle);
+      expect(store).not.toHaveBeenCalled();
+      await clickText("Dismiss key");
+      expect(view.container.querySelector('input[type="password"]')).toBeNull();
     } finally {
       await view.unmount();
     }
