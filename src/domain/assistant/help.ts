@@ -27,8 +27,8 @@ const helpEntries: Record<AssistantHelpTopic, AssistantHelpEntry> = {
       "Supplier payments are money out. Client receipts are money in. Both record actual cash; changing a due date or payment term does not record cash.",
     ],
     steps: [
-      "Supplier: open the Order in Purchasing, then Related → Payment terms. On the term, choose More actions → Record partial payment.",
-      "Client: open the Invoice in Billing. If it is Draft or To be invoiced, change its status to Invoiced and save first. Then open Related → Payment terms → More actions → Record partial payment.",
+      "Supplier: open the Order in Purchasing, then Related → Payment terms. On the term, choose Edit → Record partial payment.",
+      "Client: open the Invoice in Billing. If it is Draft or To be invoiced, change its status to Invoiced and save first. Then open Related → Payment terms → Edit → Record partial payment.",
       "Enter the actual amount and payment date, plus actual FX when the currency differs from the Project currency. Save the payment or receipt; the remaining balance and status update automatically.",
     ],
     links: [
@@ -40,12 +40,12 @@ const helpEntries: Record<AssistantHelpTopic, AssistantHelpEntry> = {
     title: "Mark paid",
     paragraphs: [
       "Mark paid records the full remaining balance as actual cash. It preserves earlier partial payments; it is not a display-only status change.",
-      "The payment-term shortcut uses today's payment date and can save immediately. If actual FX or another required value is missing, it opens a drawer. Use Record partial payment to enter an amount and date explicitly, or correct an existing transaction through Payment history.",
+      "The payment-term shortcut opens a confirmation drawer with the remaining amount, payment date and actual FX when required. The Purchasing header or list action first asks which term to pay when several exist. It never settles every term silently.",
     ],
     steps: [
       "Open the Order or Billing Invoice, then Related → Payment terms. Review the remaining balance before choosing Mark paid on a term.",
       "A Draft or To be invoiced Client Invoice must first be saved as Invoiced. Issuing the Invoice alone does not record a receipt. Quotes are plans, not issued Invoices.",
-      "After recording, review Payment history. If the amount was smaller than the remaining balance, use More actions → Record partial payment instead.",
+      "After recording, review Payment history. If the amount was smaller than the remaining balance, use Edit → Record partial payment instead. In Purchasing, Mark as unpaid on the selected term reverses its recorded cash only after a reason and confirmation; the original records remain recoverable.",
     ],
     links: [
       { label: "Open Purchasing", href: "/orders" },
@@ -84,7 +84,7 @@ const helpEntries: Record<AssistantHelpTopic, AssistantHelpEntry> = {
     title: "VAT & FX",
     paragraphs: [
       "Purchase VAT and output VAT are independent. Deductible input VAT does not increase economic cost; the non-deductible portion does. Output VAT is not revenue or profit. VAT treatments and recoverability require employee review, not an AI or country-based assumption.",
-      "Purchase VAT can propose Product purchase HT until you edit its taxable base; Use purchase HT resumes that proposal. Output VAT defaults to total selling HT unless a manual base is set. Explicit saved bases, including zero, remain meaningful.",
+      "Purchase VAT proposes the sum of reviewed taxable Product, Freight, Customs/duties and Miscellaneous components, preserving manual taxable-base overrides. Output VAT defaults to total selling HT unless a manual base is set. Explicit saved bases, including zero, remain meaningful.",
       "Manual FX means one transaction-currency unit equals the entered amount in Project currency. Order/Billing FX, expected payment FX and actual cash FX are independent. Missing required FX makes reporting incomplete; it never means zero.",
     ],
     steps: [

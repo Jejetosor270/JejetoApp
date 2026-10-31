@@ -54,7 +54,7 @@ describe("curated JejetoBot help", () => {
     expect(content).toContain("Supplier payments are money out");
     expect(content).toContain("Client receipts are money in");
     expect(content).toContain("Invoiced and save first");
-    expect(content).toContain("More actions → Record partial payment");
+    expect(content).toContain("Edit → Record partial payment");
     expect(content).toContain("actual FX");
   });
 
@@ -62,7 +62,9 @@ describe("curated JejetoBot help", () => {
     const content = text(getAssistantHelp("mark_paid", "MANAGER"));
     expect(content).toContain("full remaining balance as actual cash");
     expect(content).toContain("preserves earlier partial payments");
-    expect(content).toContain("can save immediately");
+    expect(content).toContain("opens a confirmation drawer");
+    expect(content).toContain("which term to pay");
+    expect(content).toContain("Mark as unpaid");
     expect(content).toContain("first be saved as Invoiced");
     expect(content).toContain("Payment history");
   });
@@ -92,6 +94,8 @@ describe("curated JejetoBot help", () => {
     expect(content).toContain("Output VAT is not revenue or profit");
     expect(content).toContain("non-deductible portion does");
     expect(content).toContain("including zero");
+    expect(content).toContain("reviewed taxable Product, Freight");
+    expect(content).toContain("preserving manual taxable-base overrides");
     expect(content).toContain("actual cash FX are independent");
     expect(content).toContain("reporting incomplete; it never means zero");
   });

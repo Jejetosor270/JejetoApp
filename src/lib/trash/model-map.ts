@@ -8,6 +8,18 @@ export interface ModelMetadata {
   >;
 }
 export const modelMap: Record<string, ModelMetadata> = {
+  ErpConnectionToken: {
+    table: "erp_connection_tokens",
+    trash: false,
+    relations: {
+      user: {
+        model: "User",
+        many: false,
+        optional: true,
+        fields: ["userId"],
+      },
+    },
+  },
   FinancialCredit: {
     table: "financial_credits",
     trash: false,
@@ -210,6 +222,12 @@ export const modelMap: Record<string, ModelMetadata> = {
     table: "users",
     trash: false,
     relations: {
+      erpConnectionTokens: {
+        model: "ErpConnectionToken",
+        many: true,
+        optional: false,
+        fields: [],
+      },
       createdFinancialCredits: {
         model: "FinancialCredit",
         many: true,

@@ -15,16 +15,25 @@ import { getAiProcessingModels } from "@/lib/settings/ai-processing-settings";
 import { requireMasterDataEditor } from "@/lib/auth/current-user";
 import { listLogisticsLocations } from "@/lib/items/items";
 import { getApplicationSettings } from "@/lib/settings/application-settings";
+import { ConnectionPanel } from "./connection-panel";
+import {
+  getConnectionStatus,
+  isErpConnectionOwner,
+} from "@/lib/erp-connection/auth";
+import { getErpMcpOrigin } from "@/lib/erp-connection/config";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const user = await requireMasterDataEditor();
-  const [settings, locations, models] = await Promise.all([
+  const connectionOwner = isErpConnectionOwner(user);
+  const [settings, locations, models, connectionStatus] = await Promise.all([
     getApplicationSettings(),
     listLogisticsLocations(),
     getAiProcessingModels(),
+    connectionOwner ? getConnectionStatus(user.id) : Promise.resolve(null),
   ]);
+  const connectionOrigin = getErpMcpOrigin();
   return (
     <div className="space-y-6">
       <SettingsNavigation role={user.role} />
@@ -123,6 +132,50 @@ export default async function SettingsPage() {
               </section>
             ),
           },
+          ...(user.role === "ADMIN"
+            ? [
+                {
+                  id: "connection",
+                  label: "AI connection",
+                  content: (
+                    <section className="record-surface">
+                      <h2 className="section-title">AI connection</h2>
+                      <div className="mt-4">
+                        {connectionStatus ? (
+                          <ConnectionPanel
+                            initialStatus={connectionStatus}
+                            endpoint={
+                              connectionOrigin
+                                ? `${connectionOrigin}/api/mcp`
+                                : null
+                            }
+                          />
+                        ) : (
+                          <div className="text-muted-foreground space-y-2 text-sm">
+                            <p>
+                              Private read access is reserved for one configured
+                              administrator.
+                            </p>
+                            <p>
+                              To enable your account, set ERP_MCP_OWNER_ID to
+                              your employee ID and ERP_MCP_ORIGIN to the HTTPS
+                              application address after deploying the connection
+                              migration.
+                            </p>
+                            <p>
+                              Your employee ID:{" "}
+                              <span className="font-mono break-all">
+                                {user.id}
+                              </span>
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  ),
+                },
+              ]
+            : []),
         ]}
       />
     </div>

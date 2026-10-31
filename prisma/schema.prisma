@@ -172,6 +172,7 @@ model User {
   /// and cannot establish an employee session.
   passwordHash String?  @db.VarChar(255)
   authSubject  String?  @unique @db.VarChar(255)
+  erpConnectionTokens ErpConnectionToken[]
   role         UserRole @default(USER)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -231,6 +232,22 @@ model User {
 
   @@index([isActive])
   @@map("users")
+}
+
+/// Personal, read-only ERP connection credentials. Raw tokens are never stored.
+model ErpConnectionToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  tokenHash String   @unique @db.Char(64)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, revokedAt])
+  // The migration also enforces one unrevoked key per user through a partial unique index.
+  @@map("erp_connection_tokens")
 }
 
 // Personal reminder preferences only; financial issues remain derived from source records.

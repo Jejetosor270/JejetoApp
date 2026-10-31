@@ -1,5 +1,29 @@
 # Development invariants
 
+## Private ERP connection — Phase 1
+
+- `/api/mcp` is a separate, owner-only read connection for Codex desktop, not a
+  replacement for JejetoBot. Strict allowlisted tools reuse canonical search,
+  lists, Project financials, payment terms, forecasts and attention. Selected
+  result data enters the external conversation; never claim JejetoBot's
+  planner-only privacy boundary for this connector.
+- `ERP_MCP_OWNER_ID` pins one active credentialed ADMIN; `ERP_MCP_ORIGIN` is the
+  canonical HTTPS origin. Settings → AI connection issues a random read-only key
+  once, expires it after 30 days, and provides audited replacement/revocation.
+  Only its hash persists. Every request/tool and slow-result return rechecks
+  access. Cookie sessions, query credentials and model-supplied actor IDs never
+  authorize external tools. No write tool, OAuth server or financial approval
+  mechanism exists in Phase 1, and these keys must never silently gain writes.
+- Stateless MCP uses the official SDK, bounded arguments/results and per-instance
+  burst guards. Decimal strings, currency, completeness, bounded evidence and
+  source links remain explicit. Record content is untrusted data. No financial
+  formulas, sources, schemas or workflows are replaced.
+- Migration `20261031000000_erp_read_connection` adds only hashed connection-key
+  metadata, expiry/revocation, an employee link and one-active-key protection.
+  It is prepared, not applied; rollout and owner configuration are separate.
+  Live desktop connection/approval verification requires deployment and cannot
+  be inferred from local SDK tests. See `docs/erp-ai-connection.md`.
+
 ## Billing allocation profitability
 
 - Billing Details retains Merchandise, Freight and Other/services and adds Total. Agreed markup uses current Project category defaults. Expected profit is the portion embedded in net Billing HT: category HT minus category HT / (1 + category markup). It is distinct from allocated profit; the Total rate is derived from summed implied costs and profit, never averaged rates.
